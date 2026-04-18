@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "ORBII",
+    "slug": "orbii",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#FF0000"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.orbii.app",
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "ORBII needs access to your photo library to set your profile picture.",
+        "NSCameraUsageDescription": "ORBII needs camera access to take your profile picture.",
+        "NSLocationWhenInUseUsageDescription": "ORBII uses your location during emergencies to dispatch helpers and alert authorities.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ORBII uses your location during emergencies to dispatch helpers and alert authorities."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF0000"
+      },
+      "package": "com.orbii.app",
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ORBII needs access to your photos to set your profile picture.",
+          "cameraPermission": "ORBII needs camera access to take your profile picture."
+        }
+      ],
+      "expo-asset"
+    ]
+  }
+}

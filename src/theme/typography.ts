@@ -1,0 +1,54 @@
+import { TextStyle } from 'react-native';
+
+export const fontFamilies = {
+  poppinsBold: 'Poppins_700Bold',
+  poppinsSemiBold: 'Poppins_600SemiBold',
+  poppinsMedium: 'Poppins_500Medium',
+  poppinsRegular: 'Poppins_400Regular',
+  interRegular: 'Inter_400Regular',
+  interMedium: 'Inter_500Medium',
+  interLight: 'Inter_300Light',
+} as const;
+
+export const typography: Record<string, TextStyle> = {
+  h1: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 32,
+    lineHeight: 40,
+  },
+  h2: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
+    lineHeight: 32,
+  },
+  h3: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 20,
+    lineHeight: 28,
+  },
+  body: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  bodyMedium: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  caption: {
+    fontFamily: fontFamilies.interLight,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  button: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    lineHeight: 20,
+  },
+  label: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+};
