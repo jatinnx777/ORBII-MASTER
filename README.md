@@ -35,3 +35,5 @@ src/
   types/             — shared TS types
   utils/             — validation helpers
 ```
+
+i improved the sos service in ORBII
