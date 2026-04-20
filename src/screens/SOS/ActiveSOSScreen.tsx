@@ -1,9 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Animated,
-  Easing,
   Platform,
   Pressable,
   ScrollView,
@@ -11,11 +9,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, {
-  Marker,
-  Polyline,
-  PROVIDER_DEFAULT,
-} from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
@@ -23,7 +16,15 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
 import { HelperCard, HelperCardData } from './components/HelperCard';
-import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
+import { OSMMapView, type OSMMarker, type OSMPolyline } from '@/components/common';
+import {
+  colors,
+  fontFamilies,
+  radius,
+  shadows,
+  spacing,
+  typography,
+} from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   sosCancelled,
@@ -31,30 +32,41 @@ import {
   sosResolved,
 } from '@/redux/slices/sosSlice';
 import { historyRecordAdded } from '@/redux/slices/historySlice';
-import { startSOSSimulation, SimulatedHelper } from '@/services/sosSimulator';
 import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
+import { subscribeLiveLocation } from '@/services/live-location';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
-const NO_HELPER_TIMEOUT_MS = 120_000;
+// Auto-resolve when the nearest responder closes to within 40m — they're
+// physically with the victim at that point.
+const ARRIVAL_RADIUS_M = 40;
+const STALE_PING_MS = 45_000;
+const NO_HELPER_WARN_MS = 120_000;
+
+type LiveResponder = {
+  id: string;
+  name: string;
+  photoUri: string | null;
+  phone: string | null;
+  point: GeoPoint;
+  lastSeenAt: number;
+  firstSeenAt: number;
+};
 
 export function ActiveSOSScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const activeSOS = useAppSelector((s) => s.sos.activeSOS);
 
-  const [helpers, setHelpers] = useState<SimulatedHelper[]>([]);
+  const [responders, setResponders] = useState<Record<string, LiveResponder>>({});
   const [resolved, setResolved] = useState(false);
-  const [resolvedBy, setResolvedBy] = useState<SimulatedHelper | null>(null);
+  const [resolvedBy, setResolvedBy] = useState<LiveResponder | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [noHelperWarned, setNoHelperWarned] = useState(false);
-
-  const mapRef = useRef<MapView | null>(null);
-  const stopSimRef = useRef<() => void>(() => undefined);
 
   const userLocation: GeoPoint | null = activeSOS
     ? {
@@ -63,24 +75,70 @@ export function ActiveSOSScreen() {
       }
     : null;
 
+  // Subscribe to the SOS's live-location channel. Every responder who is
+  // actively navigating to this SOS broadcasts their GPS here. We upsert
+  // by responder id so multiple helpers can show up simultaneously.
   useEffect(() => {
-    if (!userLocation) return;
-    stopSimRef.current = startSOSSimulation(userLocation, {
-      onState: ({ helpers: nextHelpers, resolved: nextResolved, resolvedBy: by }) => {
-        setHelpers(nextHelpers);
-        if (nextResolved && !resolved) {
-          setResolved(true);
-          setResolvedBy(by);
-          fireLocalNotification(
-            'Help has arrived',
-            `${by?.name ?? 'Your helper'} is with you now.`,
-          );
-        }
-      },
+    if (!activeSOS?.id) return;
+    const sub = subscribeLiveLocation(activeSOS.id, (payload) => {
+      setResponders((prev) => {
+        const existing = prev[payload.responder.id];
+        return {
+          ...prev,
+          [payload.responder.id]: {
+            id: payload.responder.id,
+            name: payload.responder.name,
+            photoUri: payload.responder.photoUri,
+            phone: payload.responder.phone,
+            point: payload.point,
+            lastSeenAt: payload.at,
+            firstSeenAt: existing?.firstSeenAt ?? payload.at,
+          },
+        };
+      });
     });
-    return () => stopSimRef.current();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => sub.unsubscribe();
   }, [activeSOS?.id]);
+
+  // Prune stale responders that haven't pinged in 45s (app closed, lost
+  // signal, gave up). Keeps the card list honest.
+  useEffect(() => {
+    const id = setInterval(() => {
+      setResponders((prev) => {
+        const cutoff = Date.now() - STALE_PING_MS;
+        const next: Record<string, LiveResponder> = {};
+        Object.values(prev).forEach((r) => {
+          if (r.lastSeenAt >= cutoff) next[r.id] = r;
+        });
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Arrival detection: the closest responder within ARRIVAL_RADIUS_M of
+  // the victim ends the SOS.
+  useEffect(() => {
+    if (resolved || !userLocation) return;
+    const list = Object.values(responders);
+    if (list.length === 0) return;
+    const closest = list.reduce<LiveResponder | null>((best, r) => {
+      if (!best) return r;
+      return haversineMeters(r.point, userLocation) <
+        haversineMeters(best.point, userLocation)
+        ? r
+        : best;
+    }, null);
+    if (!closest) return;
+    if (haversineMeters(closest.point, userLocation) <= ARRIVAL_RADIUS_M) {
+      setResolved(true);
+      setResolvedBy(closest);
+      fireLocalNotification(
+        'Help has arrived',
+        `${closest.name ?? 'Your helper'} is with you now.`,
+      );
+    }
+  }, [responders, userLocation, resolved]);
 
   useEffect(() => {
     if (resolved) return;
@@ -88,40 +146,41 @@ export function ActiveSOSScreen() {
     return () => clearInterval(id);
   }, [resolved]);
 
+  const responderList = useMemo(() => Object.values(responders), [responders]);
+
   useEffect(() => {
-    if (noHelperWarned || helpers.length > 0 || resolved) return;
+    if (noHelperWarned || responderList.length > 0 || resolved) return;
     const id = setTimeout(() => {
       setNoHelperWarned(true);
       Alert.alert(
-        'Expanding search',
-        'No helpers accepted yet. Expanding to 5km and escalating to police control.',
+        'Still searching',
+        'No one has responded yet. Your SOS is still broadcasting to every ORBII user within 2km.',
       );
-    }, NO_HELPER_TIMEOUT_MS);
+    }, NO_HELPER_WARN_MS);
     return () => clearTimeout(id);
-  }, [helpers.length, resolved, noHelperWarned]);
+  }, [responderList.length, resolved, noHelperWarned]);
 
   const helperSummaries = useMemo<HelperSummary[]>(
     () =>
-      helpers.map((h) => ({
-        id: h.id,
-        name: h.name,
-        photoUri: h.photoUri,
-        rating: h.rating,
+      responderList.map((r) => ({
+        id: r.id,
+        name: r.name,
+        photoUri: r.photoUri,
+        rating: 0,
       })),
-    [helpers],
+    [responderList],
   );
 
   const handleCancel = useCallback(() => {
     Alert.alert(
       'Cancel SOS?',
-      'Helpers are on the way. Only cancel if you are truly safe.',
+      'Helpers may be on the way. Only cancel if you are truly safe.',
       [
         { text: 'Keep active', style: 'cancel' },
         {
           text: 'Cancel SOS',
           style: 'destructive',
           onPress: () => {
-            stopSimRef.current();
             if (activeSOS) {
               trackEvent('sos_cancelled', { sosId: activeSOS.id });
               dispatch(sosCancelled());
@@ -147,14 +206,13 @@ export function ActiveSOSScreen() {
 
   const handleResolved = useCallback(
     (rating: number) => {
-      stopSimRef.current();
       if (activeSOS) {
         const responder = resolvedBy
           ? {
               id: resolvedBy.id,
               name: resolvedBy.name,
               photoUri: resolvedBy.photoUri,
-              rating: resolvedBy.rating,
+              rating: 0,
             }
           : null;
         trackEvent('sos_resolved', {
@@ -185,19 +243,55 @@ export function ActiveSOSScreen() {
 
   const helperCards: HelperCardData[] = useMemo(() => {
     if (!userLocation) return [];
-    return helpers.map((h) => {
-      const dist = haversineMeters(h.location, userLocation);
+    return responderList.map((r) => {
+      const dist = haversineMeters(r.point, userLocation);
       return {
-        id: h.id,
-        name: h.name,
-        photoUri: h.photoUri,
-        rating: h.rating,
-        phone: h.phone,
+        id: r.id,
+        name: r.name,
+        photoUri: r.photoUri,
+        rating: 0,
+        phone: r.phone ?? '',
         distanceMeters: dist,
         etaSeconds: etaSeconds(dist),
       };
     });
-  }, [helpers, userLocation]);
+  }, [responderList, userLocation]);
+
+  const mapMarkers: OSMMarker[] = useMemo(() => {
+    if (!userLocation) return [];
+    const list: OSMMarker[] = [
+      { id: 'me', coordinate: userLocation, kind: 'user', pulse: !resolved },
+    ];
+    responderList.forEach((r) => {
+      const initial = r.name.charAt(0).toUpperCase() || '?';
+      list.push({
+        id: r.id,
+        coordinate: r.point,
+        html: `
+          <div style="
+            width:40px;height:40px;border-radius:20px;
+            background:#00C853;border:3px solid #fff;
+            display:flex;align-items:center;justify-content:center;
+            color:#fff;font-family:-apple-system,Roboto,sans-serif;
+            font-weight:700;font-size:16px;
+            box-shadow:0 4px 12px rgba(0,0,0,0.35);
+          ">${initial}</div>
+        `,
+        pulse: true,
+      });
+    });
+    return list;
+  }, [userLocation, responderList, resolved]);
+
+  const mapPolylines: OSMPolyline[] = useMemo(() => {
+    if (!userLocation || resolved) return [];
+    return responderList.map((r) => ({
+      id: `line-${r.id}`,
+      coordinates: [r.point, userLocation],
+      color: '#00C853',
+      width: 4,
+    }));
+  }, [userLocation, responderList, resolved]);
 
   if (!userLocation || !activeSOS) {
     return <MissingRecord navigation={navigation} />;
@@ -216,57 +310,30 @@ export function ActiveSOSScreen() {
       </View>
 
       <View style={styles.mapWrap}>
-        <MapView
-          ref={mapRef}
-          provider={PROVIDER_DEFAULT}
+        <OSMMapView
           style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: userLocation.latitude,
-            longitude: userLocation.longitude,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          }}
-          showsUserLocation={false}
-          showsMyLocationButton={false}
-          showsCompass={false}
-          toolbarEnabled={false}
-        >
-          <UserPin coordinate={userLocation} />
-
-          {helpers.map((h) => (
-            <React.Fragment key={h.id}>
-              <Polyline
-                coordinates={[h.location, userLocation]}
-                strokeColor={colors.primary}
-                strokeWidth={2.5}
-                lineDashPattern={[6, 6]}
-              />
-              <Marker
-                coordinate={h.location}
-                anchor={{ x: 0.5, y: 0.5 }}
-                tracksViewChanges={!resolved}
-              >
-                <HelperPin name={h.name} photoUri={h.photoUri} />
-              </Marker>
-            </React.Fragment>
-          ))}
-        </MapView>
-
-        <View pointerEvents="none" style={styles.mapShade} />
+          center={userLocation}
+          zoom={15}
+          fitAll={responderList.length > 0}
+          markers={mapMarkers}
+          polylines={mapPolylines}
+        />
       </View>
 
       <View style={styles.sheet}>
         <View style={styles.sheetHandle} />
         <Text style={styles.sheetTitle}>
           {helperCards.length > 0
-            ? `${helperCards.length} helper${helperCards.length === 1 ? '' : 's'} responding`
-            : 'Helpers Responding'}
+            ? `${helperCards.length} responder${helperCards.length === 1 ? '' : 's'} heading to you`
+            : 'Broadcasting SOS…'}
         </Text>
 
         {helperCards.length === 0 ? (
           <View style={styles.findingRow}>
             <ActivityIndicator color={colors.primary} />
-            <Text style={styles.findingText}>Finding helpers nearby…</Text>
+            <Text style={styles.findingText}>
+              Alerting every ORBII user within 2km
+            </Text>
           </View>
         ) : (
           <ScrollView
@@ -302,119 +369,6 @@ export function ActiveSOSScreen() {
     </View>
   );
 }
-
-function UserPin({ coordinate }: { coordinate: GeoPoint }) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(0.5)).current;
-
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(scale, {
-            toValue: 2.2,
-            duration: 1400,
-            easing: Easing.out(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(opacity, {
-            toValue: 0,
-            duration: 1400,
-            useNativeDriver: true,
-          }),
-          Animated.timing(opacity, { toValue: 0.5, duration: 0, useNativeDriver: true }),
-        ]),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [scale, opacity]);
-
-  return (
-    <Marker coordinate={coordinate} anchor={{ x: 0.5, y: 0.5 }}>
-      <View style={userPinStyles.wrap}>
-        <Animated.View
-          style={[
-            userPinStyles.ripple,
-            { transform: [{ scale }], opacity },
-          ]}
-        />
-        <View style={userPinStyles.dot} />
-      </View>
-    </Marker>
-  );
-}
-
-const userPinStyles = StyleSheet.create({
-  wrap: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  ripple: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-  },
-  dot: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary,
-    borderWidth: 3,
-    borderColor: colors.textInverse,
-  },
-});
-
-function HelperPin({ name, photoUri }: { name: string; photoUri: string | null }) {
-  const initial = name.trim().charAt(0).toUpperCase();
-  return (
-    <View style={helperPinStyles.wrap}>
-      <View style={helperPinStyles.bubble}>
-        {photoUri ? null : <Text style={helperPinStyles.initial}>{initial}</Text>}
-      </View>
-      <View style={helperPinStyles.tail} />
-    </View>
-  );
-}
-
-const helperPinStyles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-  },
-  bubble: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1976D2',
-    borderWidth: 2.5,
-    borderColor: colors.textInverse,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  initial: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
-    color: colors.textInverse,
-  },
-  tail: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 5,
-    borderRightWidth: 5,
-    borderTopWidth: 7,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: '#1976D2',
-    marginTop: -2,
-  },
-});
 
 function MissingRecord({ navigation }: { navigation: Nav }) {
   return (
@@ -473,23 +427,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#E3E8EE',
   },
-  mapShade: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'transparent',
-  },
   sheet: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     minHeight: `${SHEET_HEIGHT_PCT * 100}%`,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 12,
+    ...shadows.sheet,
     gap: spacing.sm,
   },
   sheetHandle: {

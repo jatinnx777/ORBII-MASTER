@@ -34,6 +34,10 @@ function makeMockProfile(phone: string): UserProfile {
     isHelper: false,
     isPremium: false,
     createdAt: Date.now(),
+    idKind: null,
+    idNumber: null,
+    idPhotoUri: null,
+    idVerification: 'unverified',
   };
 }
 

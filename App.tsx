@@ -2,7 +2,11 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { NavigationContainer } from '@react-navigation/native';
+import * as Notifications from 'expo-notifications';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { Provider } from 'react-redux';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
@@ -25,7 +29,14 @@ import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
 import { OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
+import {
+  hidePinnedSOSShortcut,
+  showPinnedSOSShortcut,
+} from '@/services/notifications';
+import { prewarmBroadcastChannel } from '@/services/community';
 import { colors } from '@/theme';
+
+const navigationRef = createNavigationContainerRef();
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* ignore */
@@ -35,6 +46,18 @@ function RootNavigator() {
   const status = useAppSelector((s) => s.user.status);
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
+
+  // Show / hide the persistent lock-screen SOS shortcut as the user
+  // signs in / out. Best-effort — not all platforms keep ongoing
+  // notifications truly un-dismissable, but this gives a one-tap path
+  // even from the lock screen on most Android devices.
+  useEffect(() => {
+    if (status === 'authenticated') {
+      showPinnedSOSShortcut().catch(() => undefined);
+    } else {
+      hidePinnedSOSShortcut().catch(() => undefined);
+    }
+  }, [status]);
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
@@ -60,6 +83,10 @@ export default function App() {
       .finally(() => {
         trackEvent('app_opened');
         setHydrated(true);
+        // Open the realtime broadcast WebSocket immediately. The first SOS
+        // a user ever sends pays the WS handshake cost (3–8s on a cold
+        // mobile network) — pre-warming at launch eliminates that latency.
+        prewarmBroadcastChannel();
       });
   }, []);
 
@@ -77,6 +104,32 @@ export default function App() {
     onReady();
   }, [onReady]);
 
+  // Listen for taps on the persistent notification's action buttons. This
+  // works whether the app is foregrounded, backgrounded, or cold-launched
+  // from the notification — expo-notifications replays the response on next
+  // mount in the cold-launch case.
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((res) => {
+      const actionId = res.actionIdentifier;
+      const data = res.notification.request.content.data ?? {};
+      if (data.kind !== 'sos_shortcut' && data.kind !== 'community_alert') return;
+      // The default tap (no action button) opens the app to its current
+      // screen. Only fire SOS on the explicit action.
+      if (actionId === 'send-sos') {
+        if (navigationRef.isReady()) {
+          // @ts-expect-error - SOSCountdown is in the AppStack only.
+          navigationRef.navigate('SOSCountdown');
+        }
+      } else if (actionId === 'im-safe') {
+        // No-op — the user just confirmed they're safe.
+      } else if (data.kind === 'community_alert' && navigationRef.isReady()) {
+        // @ts-expect-error - CommunityAlerts is in the AppStack only.
+        navigationRef.navigate('CommunityAlerts');
+      }
+    });
+    return () => sub.remove();
+  }, []);
+
   if (!ready) {
     return null;
   }
@@ -87,7 +140,7 @@ export default function App() {
         <View style={styles.root} onLayout={onReady}>
           <StatusBar style="dark" />
           <OfflineBanner />
-          <NavigationContainer>
+          <NavigationContainer ref={navigationRef}>
             <RootNavigator />
           </NavigationContainer>
         </View>

@@ -5,6 +5,14 @@ export type EmergencyContact = {
   relation: string;
 };
 
+export type IdDocumentKind = 'aadhaar' | 'pan';
+
+export type IdVerificationStatus =
+  | 'unverified'
+  | 'pending'
+  | 'verified'
+  | 'rejected';
+
 export type UserProfile = {
   uid: string;
   phone: string;
@@ -14,6 +22,10 @@ export type UserProfile = {
   isHelper: boolean;
   isPremium: boolean;
   createdAt: number;
+  idKind: IdDocumentKind | null;
+  idNumber: string | null;
+  idPhotoUri: string | null;
+  idVerification: IdVerificationStatus;
 };
 
 export type AuthStatus =
@@ -92,6 +104,24 @@ export type HelperJob = {
   etaSeconds: number;
   reward: number;
   createdAt: number;
+};
+
+// CommunityAlert = an active SOS that any nearby user (not just verified
+// helpers) can respond to. This is the "good samaritan" flow — if there are
+// N users near a victim, any of them can step up.
+export type CommunityAlert = {
+  id: string;
+  victim: {
+    id: string;
+    name: string;
+    photoUri: string | null;
+    phone: string | null;
+  };
+  location: SOSLocation;
+  distanceMeters: number;
+  etaSeconds: number;
+  createdAt: number;
+  respondersCount: number;
 };
 
 export type HelperState = {

@@ -19,7 +19,9 @@
         "NSPhotoLibraryUsageDescription": "ORBII needs access to your photo library to set your profile picture.",
         "NSCameraUsageDescription": "ORBII needs camera access to take your profile picture.",
         "NSLocationWhenInUseUsageDescription": "ORBII uses your location during emergencies to dispatch helpers and alert authorities.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "ORBII uses your location during emergencies to dispatch helpers and alert authorities."
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ORBII uses your location during emergencies to dispatch helpers and alert authorities.",
+        "NSMicrophoneUsageDescription": "ORBII listens for trigger words like \"help\" or \"bachao\" to fire an SOS hands-free during an emergency.",
+        "NSSpeechRecognitionUsageDescription": "ORBII uses on-device speech recognition to detect emergency trigger words without sending your audio anywhere."
       }
     },
     "android": {
@@ -29,10 +31,11 @@
       },
       "package": "com.orbii.app",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_MEDIA_IMAGES"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "plugins": [
@@ -43,7 +46,20 @@
           "cameraPermission": "ORBII needs camera access to take your profile picture."
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "ORBII listens for trigger words like \"help\" or \"bachao\" to fire an SOS hands-free.",
+          "speechRecognitionPermission": "ORBII uses on-device speech recognition to detect emergency trigger words without sending your audio anywhere.",
+          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+        }
+      ],
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "9a0c1b10-4897-4093-8dae-aec5e8461a6b"
+      }
+    }
   }
 }

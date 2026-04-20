@@ -60,3 +60,28 @@ export async function getSOSLocation(point: GeoPoint): Promise<SOSLocation> {
   const address = await reverseGeocode(point);
   return { ...point, address };
 }
+
+export type LocationWatcher = { remove: () => void };
+
+// Continuous GPS stream. Emits a new point whenever the device moves more
+// than `distanceIntervalMeters` or `timeIntervalMs` elapses — whichever
+// comes first. Used for Swiggy-style live tracking of a responder.
+export async function watchLocation(
+  onUpdate: (point: GeoPoint) => void,
+  opts: { distanceIntervalMeters?: number; timeIntervalMs?: number } = {},
+): Promise<LocationWatcher> {
+  const sub = await Location.watchPositionAsync(
+    {
+      accuracy: Location.Accuracy.High,
+      distanceInterval: opts.distanceIntervalMeters ?? 8,
+      timeInterval: opts.timeIntervalMs ?? 4000,
+    },
+    (position) => {
+      onUpdate({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      });
+    },
+  );
+  return { remove: () => sub.remove() };
+}

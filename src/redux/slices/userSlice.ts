@@ -1,5 +1,11 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import type { AuthStatus, EmergencyContact, UserProfile } from '@/types';
+import type {
+  AuthStatus,
+  EmergencyContact,
+  IdDocumentKind,
+  IdVerificationStatus,
+  UserProfile,
+} from '@/types';
 
 type UserState = {
   status: AuthStatus;
@@ -83,6 +89,31 @@ const userSlice = createSlice({
     helperModeToggled(state, action: PayloadAction<boolean>) {
       if (state.profile) state.profile.isHelper = action.payload;
     },
+    userIdSubmitted(
+      state,
+      action: PayloadAction<{
+        kind: IdDocumentKind;
+        number: string;
+        photoUri: string;
+      }>,
+    ) {
+      if (state.profile) {
+        state.profile.idKind = action.payload.kind;
+        state.profile.idNumber = action.payload.number;
+        state.profile.idPhotoUri = action.payload.photoUri;
+        state.profile.idVerification = 'pending';
+      }
+    },
+    userIdVerificationChanged(
+      state,
+      action: PayloadAction<IdVerificationStatus>,
+    ) {
+      if (state.profile) state.profile.idVerification = action.payload;
+    },
+    profileHydrated(state, action: PayloadAction<UserProfile>) {
+      state.profile = action.payload;
+      state.status = 'authenticated';
+    },
     signedOut() {
       return initialState;
     },
@@ -108,6 +139,9 @@ export const {
   contactRemoved,
   premiumUpgraded,
   helperModeToggled,
+  userIdSubmitted,
+  userIdVerificationChanged,
+  profileHydrated,
   signedOut,
   errorCleared,
 } = userSlice.actions;

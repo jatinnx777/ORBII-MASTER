@@ -13,6 +13,11 @@ import { HelperDashboardScreen } from '@/screens/Helper/HelperDashboardScreen';
 import { AcceptSOSScreen } from '@/screens/Helper/AcceptSOSScreen';
 import { HelperNavigationScreen } from '@/screens/Helper/HelperNavigationScreen';
 import { WithdrawScreen } from '@/screens/Helper/WithdrawScreen';
+import { IdVerificationScreen } from '@/screens/Auth/IdVerificationScreen';
+import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen';
+import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
+import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
+import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -111,6 +116,34 @@ export function AppNavigator() {
         name="Withdraw"
         component={WithdrawScreen}
         options={withHeader('Withdraw earnings')}
+      />
+      <Stack.Screen
+        name="IdVerification"
+        component={IdVerificationScreen}
+        options={withHeader('Verify your identity')}
+      />
+      <Stack.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={withHeader('Notifications')}
+      />
+      <Stack.Screen
+        name="SafeJourneyStart"
+        component={SafeJourneyStartScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="SafeJourneyActive"
+        component={SafeJourneyActiveScreen}
+        options={{
+          headerShown: false,
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="CommunityAlerts"
+        component={CommunityAlertsScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

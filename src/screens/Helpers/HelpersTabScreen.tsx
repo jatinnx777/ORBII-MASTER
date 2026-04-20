@@ -1,62 +1,97 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  ActivityIndicator,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Card,
+  EmptyState,
+  OSMMapView,
   ScreenContainer,
   StarRating,
+  type OSMMarker,
 } from '@/components/common';
-import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
+import {
+  colors,
+  fontFamilies,
+  radius,
+  shadows,
+  spacing,
+  typography,
+} from '@/theme';
 import { useAppSelector } from '@/redux/store';
-import { formatDistance, haversineMeters, offsetPoint } from '@/utils/geo';
+import { formatDistance } from '@/utils/geo';
+import { findNearestHelpers, type NearestHelper } from '@/services/helpers';
 import type { GeoPoint } from '@/types';
 
 type Mode = 'map' | 'list';
 
-const DEMO_HELPERS = [
-  { id: 'h1', name: 'Priya Sharma', rating: 4.9, jobs: 47, bearing: 30, distance: 320 },
-  { id: 'h2', name: 'Rahul Verma', rating: 4.7, jobs: 28, bearing: 120, distance: 610 },
-  { id: 'h3', name: 'Anjali Rao', rating: 5.0, jobs: 12, bearing: 220, distance: 890 },
-  { id: 'h4', name: 'Neha Kapoor', rating: 4.8, jobs: 34, bearing: 300, distance: 1250 },
-  { id: 'h5', name: 'Farhan Ali', rating: 4.6, jobs: 18, bearing: 75, distance: 1480 },
-];
+const DEFAULT_CENTER: GeoPoint = { latitude: 12.8236, longitude: 80.0444 };
 
 export function HelpersTabScreen() {
   const currentLocation = useAppSelector((s) => s.sos.currentLocation);
   const [mode, setMode] = useState<Mode>('map');
+  const [helpers, setHelpers] = useState<NearestHelper[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const base: GeoPoint = currentLocation ?? {
-    latitude: 12.8236,
-    longitude: 80.0444,
-  };
+  const base: GeoPoint = currentLocation ?? DEFAULT_CENTER;
 
-  const helpers = useMemo(
-    () =>
-      DEMO_HELPERS.map((h) => {
-        const point = offsetPoint(base, h.distance, (h.bearing * Math.PI) / 180);
-        return {
-          ...h,
-          point,
-          distanceMeters: haversineMeters(point, base),
-        };
-      }).sort((a, b) => a.distanceMeters - b.distanceMeters),
-    [base],
-  );
+  const load = useCallback(async () => {
+    setLoading(true);
+    const list = await findNearestHelpers(base, 5, 20);
+    setHelpers(list);
+    setLoading(false);
+  }, [base]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const mapMarkers: OSMMarker[] = useMemo(() => {
+    const list: OSMMarker[] = [
+      {
+        id: 'me',
+        coordinate: base,
+        kind: 'user',
+        pulse: true,
+      },
+    ];
+    helpers.forEach((h) => {
+      const initial = h.name.charAt(0).toUpperCase();
+      list.push({
+        id: h.userId,
+        coordinate: h.location,
+        html: `
+          <div style="
+            width:36px;height:36px;border-radius:18px;
+            background:#1976D2;border:2.5px solid #fff;
+            display:flex;align-items:center;justify-content:center;
+            color:#fff;font-family:-apple-system,Roboto,sans-serif;
+            font-weight:700;font-size:14px;
+            box-shadow:0 2px 10px rgba(0,0,0,0.3);
+          ">${initial}</div>
+        `,
+      });
+    });
+    return list;
+  }, [base, helpers]);
 
   return (
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
-        <Text style={styles.title}>Helpers nearby</Text>
-        <Text style={styles.subtitle}>
-          {helpers.length} verified helpers within 2 km
-        </Text>
+        <View>
+          <Text style={styles.title}>Helpers nearby</Text>
+          <Text style={styles.subtitle}>
+            {loading
+              ? 'Searching…'
+              : `${helpers.length} verified within 5 km`}
+          </Text>
+        </View>
 
         <View style={styles.toggleWrap}>
           <Pressable
@@ -68,14 +103,6 @@ export function HelpersTabScreen() {
               size={16}
               color={mode === 'map' ? colors.textInverse : colors.textPrimary}
             />
-            <Text
-              style={[
-                styles.toggleText,
-                mode === 'map' && styles.toggleTextActive,
-              ]}
-            >
-              Map
-            </Text>
           </Pressable>
           <Pressable
             style={[styles.toggleBtn, mode === 'list' && styles.toggleActive]}
@@ -86,52 +113,41 @@ export function HelpersTabScreen() {
               size={16}
               color={mode === 'list' ? colors.textInverse : colors.textPrimary}
             />
-            <Text
-              style={[
-                styles.toggleText,
-                mode === 'list' && styles.toggleTextActive,
-              ]}
-            >
-              List
-            </Text>
           </Pressable>
         </View>
       </View>
 
       {mode === 'map' ? (
         <View style={styles.mapWrap}>
-          <MapView
-            provider={PROVIDER_DEFAULT}
+          <OSMMapView
             style={StyleSheet.absoluteFill}
-            initialRegion={{
-              latitude: base.latitude,
-              longitude: base.longitude,
-              latitudeDelta: 0.04,
-              longitudeDelta: 0.04,
-            }}
-            showsUserLocation
-            showsMyLocationButton={false}
-            toolbarEnabled={false}
-          >
-            {helpers.map((h) => (
-              <Marker
-                key={h.id}
-                coordinate={h.point}
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <View style={styles.pin}>
-                  <Text style={styles.pinInitial}>
-                    {h.name.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              </Marker>
-            ))}
-          </MapView>
+            center={base}
+            zoom={14}
+            fitAll={helpers.length > 0}
+            markers={mapMarkers}
+          />
+        </View>
+      ) : loading ? (
+        <View style={styles.loading}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : helpers.length === 0 ? (
+        <View style={styles.empty}>
+          <EmptyState
+            icon="people-outline"
+            title="No helpers nearby"
+            body="No verified helpers are online within 5 km right now. Pull to refresh."
+          />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.listContent}>
+        <ScrollView
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl refreshing={loading} onRefresh={load} />
+          }
+        >
           {helpers.map((h) => (
-            <Card key={h.id} style={styles.item}>
+            <View key={h.userId} style={styles.item}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
                   {h.name.charAt(0).toUpperCase()}
@@ -146,12 +162,10 @@ export function HelpersTabScreen() {
                   <Text style={styles.meta}>
                     {formatDistance(h.distanceMeters)}
                   </Text>
-                  <Text style={styles.dot}>•</Text>
-                  <Text style={styles.meta}>{h.jobs} jobs</Text>
                 </View>
               </View>
               <View style={styles.onlineDot} />
-            </Card>
+            </View>
           ))}
         </ScrollView>
       )}
@@ -161,79 +175,74 @@ export function HelpersTabScreen() {
 
 const styles = StyleSheet.create({
   header: {
-    padding: spacing.lg,
-    gap: spacing.xs,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    fontSize: 24,
     color: colors.textPrimary,
+    letterSpacing: -0.3,
   },
   subtitle: {
     ...typography.caption,
     color: colors.textSecondary,
-    marginBottom: spacing.sm,
+    marginTop: 2,
   },
   toggleWrap: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
     borderRadius: radius.sm,
-    padding: 4,
-    alignSelf: 'flex-start',
+    padding: 3,
     gap: 2,
   },
   toggleBtn: {
-    flexDirection: 'row',
+    width: 40,
+    height: 36,
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
+    justifyContent: 'center',
+    borderRadius: radius.sm - 2,
   },
   toggleActive: {
-    backgroundColor: colors.primary,
-  },
-  toggleText: {
-    ...typography.bodyMedium,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  toggleTextActive: {
-    color: colors.textInverse,
+    backgroundColor: colors.textPrimary,
   },
   mapWrap: {
     flex: 1,
     marginHorizontal: spacing.lg,
-    borderRadius: radius.md,
+    marginBottom: spacing.lg,
+    borderRadius: radius.lg,
     overflow: 'hidden',
     backgroundColor: '#E3E8EE',
-    marginBottom: spacing.lg,
-  },
-  pin: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#1976D2',
-    borderWidth: 2.5,
-    borderColor: colors.textInverse,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pinInitial: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
-    color: colors.textInverse,
+    ...shadows.card,
   },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
     gap: spacing.sm,
   },
+  loading: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  empty: {
+    flex: 1,
+    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+  },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     padding: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   avatar: {
     width: 48,

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
   Alert,
   Pressable,
@@ -12,7 +12,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  Button,
   Card,
   ScreenContainer,
   StarRating,
@@ -25,62 +24,119 @@ import {
 } from '@/redux/slices/helperSlice';
 import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
-import { offsetPoint } from '@/utils/geo';
+import { supabase } from '@/services/supabase';
+import { haversineMeters, etaSeconds } from '@/utils/geo';
 import type { HelperJob } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'HelperDashboard'>;
 
-const DEMO_USERS = [
-  { name: 'Anya Rao', phone: '+919000000021' },
-  { name: 'Meera Iyer', phone: '+919000000022' },
-  { name: 'Zara Khan', phone: '+919000000023' },
-];
+const HELPER_RADIUS_M = 2000;
 
 export function HelperDashboardScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const helper = useAppSelector((s) => s.helper);
+  const profile = useAppSelector((s) => s.user.profile);
   const currentLocation = useAppSelector((s) => s.sos.currentLocation);
-  const [demoTimeoutId, setDemoTimeoutId] = useState<number | null>(null);
-  const stopRef = useRef<() => void>(() => undefined);
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    return () => stopRef.current();
-  }, []);
+    if (!helper.mode || !profile || !currentLocation) return;
+
+    const upsert = () =>
+      supabase
+        .from('helpers_live')
+        .upsert({
+          user_id: profile.uid,
+          lat: currentLocation.latitude,
+          lng: currentLocation.longitude,
+          is_online: true,
+          updated_at: new Date().toISOString(),
+        })
+        .then(({ error }) => {
+          if (error) console.warn('[helper] upsert failed', error);
+        });
+
+    upsert();
+    heartbeatRef.current = setInterval(upsert, 30_000);
+
+    return () => {
+      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+      supabase
+        .from('helpers_live')
+        .update({ is_online: false })
+        .eq('user_id', profile.uid)
+        .then(({ error }) => {
+          if (error) console.warn('[helper] offline update failed', error);
+        });
+    };
+  }, [helper.mode, profile, currentLocation]);
 
   useEffect(() => {
-    if (!helper.mode) return;
-    if (helper.currentJob) return;
-    const timer = setTimeout(() => {
-      const base = currentLocation ?? { latitude: 12.8236, longitude: 80.0444 };
-      const bearing = Math.random() * 2 * Math.PI;
-      const user = DEMO_USERS[Math.floor(Math.random() * DEMO_USERS.length)];
-      const point = offsetPoint(base, 520, bearing);
-      const job: HelperJob = {
-        id: `job_${Date.now()}`,
-        user: {
-          id: `u_${Date.now()}`,
-          name: user.name,
-          photoUri: null,
-          phone: user.phone,
+    if (!helper.mode || helper.currentJob) return;
+
+    const channel = supabase
+      .channel('sos_incoming')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'sos_events' },
+        (payload) => {
+          const row = payload.new as {
+            id: string;
+            user_id: string;
+            lat: number;
+            lng: number;
+            address: string | null;
+            status: string;
+          };
+          if (row.status !== 'active') return;
+          const base = currentLocation;
+          if (!base) return;
+          const distance = haversineMeters(base, {
+            latitude: row.lat,
+            longitude: row.lng,
+          });
+          if (distance > HELPER_RADIUS_M) return;
+
+          supabase
+            .from('profiles')
+            .select('name, photo_url, phone')
+            .eq('id', row.user_id)
+            .single()
+            .then(({ data }) => {
+              const job: HelperJob = {
+                id: row.id,
+                user: {
+                  id: row.user_id,
+                  name: data?.name ?? 'A nearby user',
+                  photoUri: data?.photo_url ?? null,
+                  phone: data?.phone ?? '',
+                },
+                location: {
+                  latitude: row.lat,
+                  longitude: row.lng,
+                  address: row.address ?? null,
+                },
+                distanceMeters: Math.round(distance),
+                etaSeconds: etaSeconds(distance),
+                reward: 100,
+                createdAt: Date.now(),
+              };
+              dispatch(incomingJobReceived(job));
+              fireLocalNotification(
+                'SOS nearby!',
+                `${job.user.name} needs help ${Math.round(distance)}m away`,
+              );
+              navigation.navigate('AcceptSOS');
+            });
         },
-        location: { ...point, address: 'Nearby street, demo city' },
-        distanceMeters: 520,
-        etaSeconds: 240,
-        reward: 100,
-        createdAt: Date.now(),
-      };
-      dispatch(incomingJobReceived(job));
-      fireLocalNotification(
-        'SOS nearby!',
-        `${user.name} needs help 520m away · ₹100 reward`,
-      );
-      navigation.navigate('AcceptSOS');
-    }, 8000);
-    setDemoTimeoutId(timer as unknown as number);
-    stopRef.current = () => clearTimeout(timer);
-    return () => clearTimeout(timer);
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [helper.mode, helper.currentJob, currentLocation, dispatch, navigation]);
 
   const handleToggle = (next: boolean) => {
@@ -100,7 +156,6 @@ export function HelperDashboardScreen() {
     }
     dispatch(helperModeSet(next));
     if (next) trackEvent('helper_mode_enabled');
-    if (!next && demoTimeoutId) clearTimeout(demoTimeoutId);
   };
 
   return (

@@ -5,6 +5,7 @@ import sosReducer from './slices/sosSlice';
 import historyReducer from './slices/historySlice';
 import helperReducer from './slices/helperSlice';
 import appReducer from './slices/appSlice';
+import communityReducer from './slices/communitySlice';
 
 export const store = configureStore({
   reducer: {
@@ -13,6 +14,7 @@ export const store = configureStore({
     history: historyReducer,
     helper: helperReducer,
     app: appReducer,
+    community: communityReducer,
   },
 });
 

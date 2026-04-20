@@ -1,8 +1,10 @@
 export { Button } from './Button';
 export { Card } from './Card';
 export { EmptyState } from './EmptyState';
+export { OSMMapView, type OSMMarker, type OSMPolyline } from './OSMMapView';
 export { Input } from './Input';
 export { OfflineBanner } from './OfflineBanner';
+export { PrivacyPolicyModal } from './PrivacyPolicyModal';
 export { Row } from './Row';
 export { ScreenContainer } from './ScreenContainer';
 export { SectionHeader } from './SectionHeader';

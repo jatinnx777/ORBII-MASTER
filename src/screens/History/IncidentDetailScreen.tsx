@@ -6,12 +6,12 @@ import {
   Text,
   View,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_DEFAULT } from 'react-native-maps';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import {
   Button,
   Card,
+  OSMMapView,
   SectionHeader,
   StarRating,
 } from '@/components/common';
@@ -70,19 +70,19 @@ export function IncidentDetailScreen() {
       </View>
 
       <View style={styles.mapWrap}>
-        <MapView
-          provider={PROVIDER_DEFAULT}
+        <OSMMapView
           style={StyleSheet.absoluteFill}
-          initialRegion={{
-            latitude: record.location.latitude,
-            longitude: record.location.longitude,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          }}
-          pointerEvents="none"
-        >
-          <Marker coordinate={record.location} />
-        </MapView>
+          center={record.location}
+          zoom={16}
+          interactive={false}
+          markers={[
+            {
+              id: 'inc',
+              coordinate: record.location,
+              kind: 'destination',
+            },
+          ]}
+        />
       </View>
 
       <SectionHeader title="Location" />
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   mapWrap: {
-    height: 180,
+    height: 200,
     marginHorizontal: spacing.lg,
     marginTop: spacing.md,
     borderRadius: radius.md,

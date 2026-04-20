@@ -6,6 +6,8 @@ const KEYS = {
   helperEarnings: 'orbii:helper:earnings',
   helperVerified: 'orbii:helper:verified',
   settings: 'orbii:settings',
+  profile: 'orbii:profile',
+  notifications: 'orbii:notifications',
 } as const;
 
 export const storageKeys = KEYS;

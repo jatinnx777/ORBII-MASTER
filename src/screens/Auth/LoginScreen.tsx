@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Button, Input, ScreenContainer } from '@/components/common';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  Button,
+  Input,
+  PrivacyPolicyModal,
+  ScreenContainer,
+} from '@/components/common';
 import { colors, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -8,6 +14,7 @@ import {
   otpSendStarted,
   otpSendSucceeded,
 } from '@/redux/slices/userSlice';
+import { policyAccepted } from '@/redux/slices/appSlice';
 import { sendOtp, DEV_AUTH } from '@/services/auth';
 import { formatPhoneForDisplay, isValidIndianPhone } from '@/utils/validation';
 import type { AuthScreenProps } from '@/navigation/types';
@@ -15,13 +22,17 @@ import type { AuthScreenProps } from '@/navigation/types';
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.user.status);
+  const policyAcceptedAt = useAppSelector((s) => s.app.policyAcceptedAt);
   const isSending = status === 'sending_otp';
 
   const [phoneInput, setPhoneInput] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   const rawDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
-  const canSubmit = isValidIndianPhone(rawDigits) && !isSending;
+  const phoneValid = isValidIndianPhone(rawDigits);
+  const policyOk = policyAcceptedAt !== null;
+  const canSubmit = phoneValid && policyOk && !isSending;
 
   const handleChange = (value: string) => {
     const next = value.replace(/\D/g, '').slice(0, 10);
@@ -30,8 +41,12 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   };
 
   const handleSubmit = async () => {
-    if (!canSubmit) {
+    if (!phoneValid) {
       setLocalError('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
+    if (!policyOk) {
+      setPolicyOpen(true);
       return;
     }
     dispatch(otpSendStarted({ phone: rawDigits }));
@@ -45,6 +60,27 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       dispatch(otpSendFailed({ error: message }));
       Alert.alert('Could not send OTP', message);
     }
+  };
+
+  const handleCheckboxPress = () => {
+    if (policyOk) {
+      setPolicyOpen(true);
+      return;
+    }
+    setPolicyOpen(true);
+  };
+
+  const handleAccept = () => {
+    dispatch(policyAccepted());
+    setPolicyOpen(false);
+  };
+
+  const handleDecline = () => {
+    setPolicyOpen(false);
+    Alert.alert(
+      'Policy required',
+      'ORBII needs your consent to create an account. You can review the policy anytime from Profile → Settings.',
+    );
   };
 
   return (
@@ -80,6 +116,34 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           containerStyle={styles.input}
         />
 
+        <Pressable
+          onPress={handleCheckboxPress}
+          style={styles.policyRow}
+          hitSlop={8}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: policyOk }}
+        >
+          <View style={[styles.checkbox, policyOk && styles.checkboxChecked]}>
+            {policyOk ? (
+              <Ionicons
+                name="checkmark"
+                size={14}
+                color={colors.textInverse}
+              />
+            ) : null}
+          </View>
+          <Text style={styles.policyText}>
+            I agree to ORBII's{' '}
+            <Text
+              style={styles.policyLink}
+              onPress={() => setPolicyOpen(true)}
+            >
+              Privacy Policy and Terms
+            </Text>
+            .
+          </Text>
+        </Pressable>
+
         <Button
           label="Send OTP"
           onPress={handleSubmit}
@@ -87,11 +151,13 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           disabled={!canSubmit}
           style={styles.submit}
         />
-
-        <Text style={styles.terms}>
-          By continuing you agree to ORBII's Terms and Privacy Policy.
-        </Text>
       </View>
+
+      <PrivacyPolicyModal
+        visible={policyOpen}
+        onAccept={handleAccept}
+        onDecline={handleDecline}
+      />
     </ScreenContainer>
   );
 }
@@ -132,13 +198,37 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.textPrimary,
   },
+  policyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  checkboxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  policyText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  policyLink: {
+    fontFamily: typography.bodyMedium.fontFamily,
+    color: colors.primary,
+  },
   submit: {
     marginTop: spacing.sm,
-  },
-  terms: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.lg,
   },
 });

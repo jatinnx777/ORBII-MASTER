@@ -14,7 +14,13 @@ type EventName =
   | 'premium_purchased'
   | 'contact_added'
   | 'contact_removed'
-  | 'voice_trigger_fired';
+  | 'voice_trigger_fired'
+  | 'route_fetched'
+  | 'silent_sos_toggled'
+  | 'safe_journey_started'
+  | 'safe_journey_ended'
+  | 'community_alerts_viewed'
+  | 'community_responded';
 
 export function trackEvent(name: EventName, params: Record<string, unknown> = {}) {
   if (__DEV__) {

@@ -30,9 +30,14 @@ export type AppStackParamList = {
   PremiumUpgrade: undefined;
   HelperVerification: undefined;
   HelperDashboard: undefined;
+  IdVerification: undefined;
+  Notifications: undefined;
   AcceptSOS: undefined;
   HelperNavigation: undefined;
   Withdraw: undefined;
+  SafeJourneyStart: undefined;
+  SafeJourneyActive: undefined;
+  CommunityAlerts: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

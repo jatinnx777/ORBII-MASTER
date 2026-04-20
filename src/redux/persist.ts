@@ -1,26 +1,48 @@
 import { store } from './store';
-import { getItem, setItem, storageKeys } from '@/services/storage';
+import { getItem, setItem, storageKeys, removeItem } from '@/services/storage';
 import { historyHydrated } from './slices/historySlice';
 import { helperHydrated } from './slices/helperSlice';
 import { appHydrated } from './slices/appSlice';
-import type { HelperState, SOSRecord } from '@/types';
+import { profileHydrated } from './slices/userSlice';
+import {
+  clearSession,
+  isSessionExpired,
+  touchSession,
+} from '@/services/session';
+import type { HelperState, SOSRecord, UserProfile } from '@/types';
 
 type PersistedApp = {
   onboarded?: boolean;
   voiceDetection?: boolean;
   pushEnabled?: boolean;
+  silentSOS?: boolean;
+  policyAcceptedAt?: number | null;
 };
 
 export async function hydrateStore() {
-  const [history, helper, appSettings] = await Promise.all([
+  const expired = await isSessionExpired();
+  if (expired) {
+    // 2-week TTL burned. Drop the stale profile so user is sent back to auth.
+    await Promise.all([
+      removeItem(storageKeys.profile),
+      clearSession(),
+    ]);
+  }
+
+  const [history, helper, appSettings, profile] = await Promise.all([
     getItem<SOSRecord[]>(storageKeys.history),
     getItem<HelperState>(storageKeys.helperEarnings),
     getItem<PersistedApp>(storageKeys.settings),
+    expired ? Promise.resolve(null) : getItem<UserProfile>(storageKeys.profile),
   ]);
 
   store.dispatch(historyHydrated(history ?? []));
   if (helper) store.dispatch(helperHydrated(helper));
   store.dispatch(appHydrated(appSettings ?? {}));
+  if (profile) {
+    store.dispatch(profileHydrated(profile));
+    await touchSession();
+  }
 
   subscribePersist();
 }
@@ -38,13 +60,26 @@ function subscribePersist() {
     if (
       next.app.onboarded !== prev.app.onboarded ||
       next.app.voiceDetection !== prev.app.voiceDetection ||
-      next.app.pushEnabled !== prev.app.pushEnabled
+      next.app.pushEnabled !== prev.app.pushEnabled ||
+      next.app.silentSOS !== prev.app.silentSOS ||
+      next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
       setItem<PersistedApp>(storageKeys.settings, {
         onboarded: next.app.onboarded,
         voiceDetection: next.app.voiceDetection,
         pushEnabled: next.app.pushEnabled,
+        silentSOS: next.app.silentSOS,
+        policyAcceptedAt: next.app.policyAcceptedAt,
       });
+    }
+    if (next.user.profile !== prev.user.profile) {
+      if (next.user.profile) {
+        setItem(storageKeys.profile, next.user.profile);
+        touchSession();
+      } else {
+        removeItem(storageKeys.profile);
+        clearSession();
+      }
     }
     prev = next;
   });
