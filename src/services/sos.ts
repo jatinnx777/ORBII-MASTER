@@ -1,4 +1,4 @@
-import type { SOSLocation, SOSRecord, UserProfile } from '@/types';
+import type { SOSKind, SOSLocation, SOSRecord, UserProfile } from '@/types';
 import { supabase } from './supabase';
 import { broadcastAlert, type AlertBroadcast } from './community';
 
@@ -8,12 +8,13 @@ import { broadcastAlert, type AlertBroadcast } from './community';
 //   2. Broadcasts the alert on the shared `orbii:alerts` realtime channel
 //      so every app currently open receives it in real time.
 //
-// The broadcast is the *real* delivery mechanism for nearby responders —
-// it doesn't depend on the DB insert succeeding, so it works for users
-// who are signed in via DEV_AUTH_MODE and have no Supabase auth session.
+// `kind: 'test'` skips both the DB write and the broadcast — a practice run
+// that only writes a local history record, so the user can rehearse the
+// flow without notifying real helpers.
 export async function createSOS(
   user: UserProfile,
   location: SOSLocation,
+  kind: SOSKind = 'real',
 ): Promise<SOSRecord> {
   const localId = `sos_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const record: SOSRecord = {
@@ -24,6 +25,7 @@ export async function createSOS(
     location,
     timestamp: Date.now(),
     status: 'active',
+    kind,
     helpers: [],
     responder: null,
     responseTime: null,
@@ -31,24 +33,15 @@ export async function createSOS(
     rating: null,
   };
 
-  try {
-    const { data, error } = await supabase
-      .from('sos_events')
-      .insert({
-        user_id: user.uid,
-        lat: location.latitude,
-        lng: location.longitude,
-        address: location.address,
-        status: 'active',
-      })
-      .select('id')
-      .single();
-    if (error) throw error;
-    if (data?.id) record.id = data.id;
-  } catch (err) {
-    console.warn('[sos] supabase insert failed, using local id', err);
+  if (kind === 'test') {
+    // No DB write, no broadcast. Real users hear nothing.
+    return record;
   }
 
+  // CRITICAL PATH: fire the broadcast immediately on the local id. This is
+  // what notifies every nearby phone, and it's what actually saves time.
+  // The Supabase write happens in parallel so we don't pay its latency
+  // before alerting helpers.
   const broadcast: AlertBroadcast = {
     id: record.id,
     victim: {
@@ -64,5 +57,30 @@ export async function createSOS(
     console.warn('[sos] broadcast failed', err),
   );
 
+  // Fire-and-forget DB write. We never await it on the critical path. If it
+  // returns a real id we'll log it; the local id continues to drive every
+  // realtime channel keyed off this SOS, so a DB failure is non-fatal.
+  void persistSOS(user, location);
+
   return record;
+}
+
+async function persistSOS(user: UserProfile, location: SOSLocation): Promise<void> {
+  try {
+    const { data, error } = await supabase
+      .from('sos_events')
+      .insert({
+        user_id: user.uid,
+        lat: location.latitude,
+        lng: location.longitude,
+        address: location.address,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    if (error) console.warn('[sos] supabase insert failed', error);
+    else if (data?.id) console.log('[sos] persisted with id', data.id);
+  } catch (err) {
+    console.warn('[sos] supabase insert threw', err);
+  }
 }

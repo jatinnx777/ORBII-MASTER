@@ -22,12 +22,15 @@ type AppState = {
   onboarded: boolean;
   isOnline: boolean;
   voiceDetection: boolean;
+  // Always-on listening: keeps the speech recognizer running even when the
+  // app is backgrounded. Backed by a sticky foreground notification so
+  // Android doesn't kill the process. When a trigger word is heard we wake
+  // the screen via a full-screen-intent notification. Costs battery — opt-in.
+  backgroundVoice: boolean;
+  // Buzz the phone when an SOS broadcast lands within 2 km. On by default.
+  alertVibration: boolean;
   pushEnabled: boolean;
   hydrated: boolean;
-  // Silent SOS: when true, the countdown fires SOS with no alarm sound and
-  // no red flashing UI. Just a discreet haptic buzz + backend alert. Useful
-  // when the user is in earshot of the attacker.
-  silentSOS: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.
   safeJourney: SafeJourney | null;
   // Privacy policy + terms acceptance (timestamp ms when accepted, null = not
@@ -39,9 +42,10 @@ const initialState: AppState = {
   onboarded: false,
   isOnline: true,
   voiceDetection: false,
+  backgroundVoice: false,
+  alertVibration: true,
   pushEnabled: false,
   hydrated: false,
-  silentSOS: false,
   safeJourney: null,
   policyAcceptedAt: null,
 };
@@ -65,11 +69,11 @@ const appSlice = createSlice({
     voiceDetectionToggled(state, action: PayloadAction<boolean>) {
       state.voiceDetection = action.payload;
     },
+    backgroundVoiceToggled(state, action: PayloadAction<boolean>) {
+      state.backgroundVoice = action.payload;
+    },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
-    },
-    silentSOSToggled(state, action: PayloadAction<boolean>) {
-      state.silentSOS = action.payload;
     },
     safeJourneyStarted(
       state,
@@ -102,8 +106,8 @@ export const {
   onboardingCompleted,
   connectionChanged,
   voiceDetectionToggled,
+  backgroundVoiceToggled,
   pushEnabledSet,
-  silentSOSToggled,
   safeJourneyStarted,
   safeJourneyEnded,
   policyAccepted,

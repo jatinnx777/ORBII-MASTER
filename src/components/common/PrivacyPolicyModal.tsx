@@ -102,7 +102,7 @@ export function PrivacyPolicyModal({ visible, onAccept, onDecline }: Props) {
             <Text style={styles.body}>
               Location, microphone (voice-trigger only), notifications, and
               photo access for your profile picture. You can revoke any
-              permission in your phone settings — some safety features will
+              permission in your phone settings, but some safety features will
               stop working without them.
             </Text>
 

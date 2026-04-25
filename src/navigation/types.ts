@@ -4,7 +4,6 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 
 export type AuthStackParamList = {
   Login: undefined;
-  OTP: { phone: string };
   ProfileSetup: undefined;
 };
 
@@ -13,15 +12,14 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 
 export type TabParamList = {
   Home: undefined;
-  Helpers: undefined;
+  Driving: undefined;
   History: undefined;
-  Profile: undefined;
   Settings: undefined;
 };
 
 export type AppStackParamList = {
   Tabs: { screen?: keyof TabParamList } | undefined;
-  SOSCountdown: undefined;
+  SOSCountdown: { instant?: boolean; test?: boolean } | undefined;
   ActiveSOS: undefined;
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
@@ -38,6 +36,8 @@ export type AppStackParamList = {
   SafeJourneyStart: undefined;
   SafeJourneyActive: undefined;
   CommunityAlerts: undefined;
+  Profile: undefined;
+  Friends: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

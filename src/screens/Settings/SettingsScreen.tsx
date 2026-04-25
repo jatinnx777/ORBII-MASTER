@@ -21,10 +21,12 @@ import {
 import { colors, fontFamilies, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
+  backgroundVoiceToggled,
   pushEnabledSet,
   voiceDetectionToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
+import { signOutFromGoogle } from '@/services/auth';
 import { trackEvent } from '@/services/analytics';
 import {
   fireLocalNotification,
@@ -42,6 +44,7 @@ export function SettingsScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const voice = useAppSelector((s) => s.app.voiceDetection);
+  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
   const push = useAppSelector((s) => s.app.pushEnabled);
 
   const handleVoice = (next: boolean) => {
@@ -62,6 +65,24 @@ export function SettingsScreen() {
     dispatch(voiceDetectionToggled(next));
   };
 
+  const handleBackgroundVoice = (next: boolean) => {
+    if (next) {
+      Alert.alert(
+        'Run ORBII in the background?',
+        'ORBII will keep listening for "help", "bachao", or "madad" while the app is closed. A persistent notification stays in the tray so Android doesn\'t kill the listener. This uses extra battery.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Turn on',
+            onPress: () => dispatch(backgroundVoiceToggled(true)),
+          },
+        ],
+      );
+      return;
+    }
+    dispatch(backgroundVoiceToggled(false));
+  };
+
   const handlePush = async (next: boolean) => {
     if (next) {
       const ok = await requestNotificationPermission();
@@ -77,8 +98,17 @@ export function SettingsScreen() {
   };
 
   const handleTestSOS = () => {
-    trackEvent('voice_trigger_fired', { source: 'manual_test' });
-    navigation.navigate('SOSCountdown');
+    Alert.alert(
+      'Practice SOS?',
+      'Runs the full SOS flow without sending real alerts. The incident shows up in your history tagged "PRACTICE".',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Start practice',
+          onPress: () => navigation.navigate('SOSCountdown', { test: true }),
+        },
+      ],
+    );
   };
 
   const handleTestNotif = async () => {
@@ -94,12 +124,15 @@ export function SettingsScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign out?', 'You can sign back in with your phone number.', [
+    Alert.alert('Sign out?', 'You can sign back in with your Google account.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Sign out',
         style: 'destructive',
-        onPress: () => dispatch(signedOut()),
+        onPress: async () => {
+          await signOutFromGoogle();
+          dispatch(signedOut());
+        },
       },
     ]);
   };
@@ -123,6 +156,23 @@ export function SettingsScreen() {
               <Switch
                 value={voice}
                 onValueChange={handleVoice}
+                trackColor={{ true: colors.primary, false: colors.border }}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            icon="radio"
+            label="Background Voice SOS"
+            value={
+              backgroundVoice
+                ? 'Listening even when app is closed'
+                : 'Off, only listens with app open'
+            }
+            right={
+              <Switch
+                value={backgroundVoice}
+                onValueChange={handleBackgroundVoice}
                 trackColor={{ true: colors.primary, false: colors.border }}
               />
             }
@@ -175,7 +225,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="ribbon"
-            label={profile?.isPremium ? 'Manage Premium' : 'Go Premium'}
+            label="ORBII plans"
             onPress={() => navigation.navigate('PremiumUpgrade')}
           />
           <Divider />

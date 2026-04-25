@@ -35,13 +35,13 @@ const slides: Slide[] = [
     id: 'network',
     icon: 'people-circle',
     title: 'A verified network of women',
-    body: 'Helpers are verified with Aadhaar and come to you — from nearby students, working women, and safety volunteers.',
+    body: 'Helpers are verified with Aadhaar and come to you. Nearby students, working women, and safety volunteers.',
   },
   {
     id: 'always',
     icon: 'shield-checkmark',
     title: 'Always-on protection',
-    body: 'Voice triggers, silent alerts, background location — even if your phone is locked, ORBII has your back.',
+    body: 'Voice triggers, lock-screen SOS shortcut, background location. Even if your phone is locked, ORBII has your back.',
   },
 ];
 

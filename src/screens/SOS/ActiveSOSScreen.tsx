@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Platform,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
-import { HelperCard, HelperCardData } from './components/HelperCard';
 import { OSMMapView, type OSMMarker, type OSMPolyline } from '@/components/common';
 import {
   colors,
@@ -41,8 +40,7 @@ import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
-// Auto-resolve when the nearest responder closes to within 40m — they're
-// physically with the victim at that point.
+// Auto-resolve when the nearest responder closes to within 40m of the user.
 const ARRIVAL_RADIUS_M = 40;
 const STALE_PING_MS = 45_000;
 const NO_HELPER_WARN_MS = 120_000;
@@ -75,9 +73,6 @@ export function ActiveSOSScreen() {
       }
     : null;
 
-  // Subscribe to the SOS's live-location channel. Every responder who is
-  // actively navigating to this SOS broadcasts their GPS here. We upsert
-  // by responder id so multiple helpers can show up simultaneously.
   useEffect(() => {
     if (!activeSOS?.id) return;
     const sub = subscribeLiveLocation(activeSOS.id, (payload) => {
@@ -100,8 +95,6 @@ export function ActiveSOSScreen() {
     return () => sub.unsubscribe();
   }, [activeSOS?.id]);
 
-  // Prune stale responders that haven't pinged in 45s (app closed, lost
-  // signal, gave up). Keeps the card list honest.
   useEffect(() => {
     const id = setInterval(() => {
       setResponders((prev) => {
@@ -116,8 +109,6 @@ export function ActiveSOSScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // Arrival detection: the closest responder within ARRIVAL_RADIUS_M of
-  // the victim ends the SOS.
   useEffect(() => {
     if (resolved || !userLocation) return;
     const list = Object.values(responders);
@@ -154,7 +145,7 @@ export function ActiveSOSScreen() {
       setNoHelperWarned(true);
       Alert.alert(
         'Still searching',
-        'No one has responded yet. Your SOS is still broadcasting to every ORBII user within 2km.',
+        'No one has responded yet. Your SOS is still broadcasting to every ORBII user within 2 km.',
       );
     }, NO_HELPER_WARN_MS);
     return () => clearTimeout(id);
@@ -170,6 +161,22 @@ export function ActiveSOSScreen() {
       })),
     [responderList],
   );
+
+  // Closest responder is the "primary" helper we render in the doorstep card.
+  const primary = useMemo<LiveResponder | null>(() => {
+    if (!userLocation || responderList.length === 0) return null;
+    return responderList.reduce<LiveResponder | null>((best, r) => {
+      if (!best) return r;
+      return haversineMeters(r.point, userLocation) <
+        haversineMeters(best.point, userLocation)
+        ? r
+        : best;
+    }, null);
+  }, [responderList, userLocation]);
+
+  const primaryDistance =
+    primary && userLocation ? haversineMeters(primary.point, userLocation) : null;
+  const primaryEta = primaryDistance != null ? etaSeconds(primaryDistance) : null;
 
   const handleCancel = useCallback(() => {
     Alert.alert(
@@ -220,9 +227,7 @@ export function ActiveSOSScreen() {
           rating,
           responderId: responder?.id ?? null,
         });
-        dispatch(
-          sosResolved({ responderId: responder?.id ?? null, rating }),
-        );
+        dispatch(sosResolved({ responderId: responder?.id ?? null, rating }));
         dispatch(
           historyRecordAdded({
             ...activeSOS,
@@ -241,41 +246,49 @@ export function ActiveSOSScreen() {
     [activeSOS, dispatch, helperSummaries, navigation, resolvedBy],
   );
 
-  const helperCards: HelperCardData[] = useMemo(() => {
-    if (!userLocation) return [];
-    return responderList.map((r) => {
-      const dist = haversineMeters(r.point, userLocation);
-      return {
-        id: r.id,
-        name: r.name,
-        photoUri: r.photoUri,
-        rating: 0,
-        phone: r.phone ?? '',
-        distanceMeters: dist,
-        etaSeconds: etaSeconds(dist),
-      };
-    });
-  }, [responderList, userLocation]);
+  const handleCallHelper = () => {
+    if (!primary?.phone) {
+      Alert.alert('No number shared', 'This helper has not shared a phone number.');
+      return;
+    }
+    Linking.openURL(`tel:${primary.phone}`).catch(() => undefined);
+  };
+
+  const handleTip = (amount: number | 'other') => {
+    Alert.alert(
+      'Tip recorded',
+      amount === 'other'
+        ? 'A custom tip will be available once payments are live.'
+        : `₹${amount} tip queued. We will charge it once payments are live.`,
+    );
+  };
 
   const mapMarkers: OSMMarker[] = useMemo(() => {
     if (!userLocation) return [];
     const list: OSMMarker[] = [
-      { id: 'me', coordinate: userLocation, kind: 'user', pulse: !resolved },
+      {
+        id: 'me',
+        coordinate: userLocation,
+        html: `
+          <div style="position:relative;width:40px;height:48px;display:flex;align-items:flex-end;justify-content:center;">
+            <div style="position:absolute;top:0;width:32px;height:32px;border-radius:16px;background:#fff;border:2px solid #1a1a1a;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">
+              <span style="font-size:16px;">🏠</span>
+            </div>
+            <div style="position:absolute;bottom:2px;width:10px;height:10px;border-radius:5px;background:#FF0000;border:2px solid #fff;"></div>
+          </div>
+        `,
+        kind: 'destination',
+        pulse: !resolved,
+      },
     ];
     responderList.forEach((r) => {
-      const initial = r.name.charAt(0).toUpperCase() || '?';
       list.push({
         id: r.id,
         coordinate: r.point,
         html: `
-          <div style="
-            width:40px;height:40px;border-radius:20px;
-            background:#00C853;border:3px solid #fff;
-            display:flex;align-items:center;justify-content:center;
-            color:#fff;font-family:-apple-system,Roboto,sans-serif;
-            font-weight:700;font-size:16px;
-            box-shadow:0 4px 12px rgba(0,0,0,0.35);
-          ">${initial}</div>
+          <div style="width:36px;height:36px;border-radius:18px;background:#1a1a1a;border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-family:-apple-system,Roboto,sans-serif;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
+            <span>🛵</span>
+          </div>
         `,
         pulse: true,
       });
@@ -288,8 +301,9 @@ export function ActiveSOSScreen() {
     return responderList.map((r) => ({
       id: `line-${r.id}`,
       coordinates: [r.point, userLocation],
-      color: '#00C853',
-      width: 4,
+      color: '#1a1a1a',
+      width: 3,
+      dashed: true,
     }));
   }, [userLocation, responderList, resolved]);
 
@@ -297,69 +311,131 @@ export function ActiveSOSScreen() {
     return <MissingRecord navigation={navigation} />;
   }
 
+  const headerTitle = primary
+    ? primaryDistance != null && primaryDistance <= 80
+      ? 'Almost at your location'
+      : 'Helper is on the way'
+    : 'Broadcasting your SOS';
+  const headerSub = primary ? 'Hold tight, help is closing in' : 'We are alerting everyone nearby';
+  const statusBannerText = !primary
+    ? 'No one has accepted yet. Still broadcasting.'
+    : primaryDistance != null && primaryDistance <= 80
+      ? 'Your helper is at your location'
+      : primaryDistance != null && primaryDistance <= 300
+        ? 'Your helper is very close'
+        : `ETA about ${Math.max(1, Math.round((primaryEta ?? 0) / 60))} min`;
+
   return (
     <View style={styles.container}>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
-      <View style={styles.topBar}>
-        <View style={styles.topRow}>
-          <View style={styles.liveDot} />
-          <Text style={styles.topLabel}>Help requested</Text>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.headerRow}>
+          <Pressable
+            onPress={handleCancel}
+            hitSlop={12}
+            style={styles.backBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel SOS"
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+          </Pressable>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={styles.headerSub}>{headerSub}</Text>
+            <Text style={styles.headerTitle}>{headerTitle}</Text>
+          </View>
+          <View style={styles.elapsedPill}>
+            <View style={styles.liveDot} />
+            <Text style={styles.elapsedText}>{formatElapsed(elapsed)}</Text>
+          </View>
         </View>
-        <Text style={styles.topTimer}>{formatElapsed(elapsed)}</Text>
-      </View>
 
-      <View style={styles.mapWrap}>
-        <OSMMapView
-          style={StyleSheet.absoluteFill}
-          center={userLocation}
-          zoom={15}
-          fitAll={responderList.length > 0}
-          markers={mapMarkers}
-          polylines={mapPolylines}
-        />
-      </View>
+        <View style={styles.statusBanner}>
+          <Text style={styles.statusBannerText}>{statusBannerText}</Text>
+        </View>
 
-      <View style={styles.sheet}>
-        <View style={styles.sheetHandle} />
-        <Text style={styles.sheetTitle}>
-          {helperCards.length > 0
-            ? `${helperCards.length} responder${helperCards.length === 1 ? '' : 's'} heading to you`
-            : 'Broadcasting SOS…'}
-        </Text>
+        <View style={styles.mapCard}>
+          <OSMMapView
+            style={styles.map}
+            center={primary ? primary.point : userLocation}
+            zoom={16}
+            fitAll={responderList.length > 0}
+            markers={mapMarkers}
+            polylines={mapPolylines}
+          />
+        </View>
 
-        {helperCards.length === 0 ? (
-          <View style={styles.findingRow}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.findingText}>
-              Alerting every ORBII user within 2km
-            </Text>
+        {primary ? (
+          <View style={styles.helperCard}>
+            <HelperAvatar />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.helperGreeting}>I'm {primary.name},</Text>
+              <Text style={styles.helperRole}>your helper</Text>
+            </View>
+            <Pressable
+              onPress={handleCallHelper}
+              style={styles.callBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Call helper"
+            >
+              <Ionicons name="call" size={18} color={colors.primary} />
+            </Pressable>
           </View>
         ) : (
-          <ScrollView
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {helperCards.map((card) => (
-              <HelperCard key={card.id} data={card} />
-            ))}
-          </ScrollView>
+          <View style={styles.searchingCard}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.searchingText}>
+              Alerting every ORBII user within 2 km
+            </Text>
+          </View>
         )}
+
+        {primary ? (
+          <View style={styles.subStatus}>
+            <Text style={styles.subStatusText}>
+              {primaryDistance != null && primaryDistance <= 300
+                ? "I'm near your location and will reach you very soon"
+                : "I'm on my way, share your spot if anything changes"}
+            </Text>
+          </View>
+        ) : null}
+
+        <View style={styles.tipCard}>
+          <View style={styles.tipCardLeft}>
+            <Text style={styles.tipTitle}>Thank your helper</Text>
+            <Text style={styles.tipSub}>A small tip goes a long way</Text>
+          </View>
+          <ThankYouArt />
+        </View>
+
+        <View style={styles.tipRow}>
+          <TipPill emoji="🤞" label="₹20" onPress={() => handleTip(20)} />
+          <TipPill emoji="💌" label="₹50" onPress={() => handleTip(50)} />
+          <TipPill emoji="❤️" label="₹100" onPress={() => handleTip(100)} highlight />
+          <TipPill emoji="👏" label="Other" onPress={() => handleTip('other')} />
+        </View>
+
+        <View style={styles.tipFootnote}>
+          <Ionicons name="shield-checkmark" size={14} color={colors.success} />
+          <Text style={styles.tipFootnoteText}>
+            Stay on this screen until your helper arrives. Police and emergency
+            contacts have already been notified.
+          </Text>
+        </View>
 
         <Pressable
           onPress={handleCancel}
+          style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel="Cancel SOS"
-          style={({ pressed }) => [
-            styles.cancelBtn,
-            pressed && styles.cancelPressed,
-          ]}
         >
-          <Ionicons name="close-circle-outline" size={20} color={colors.primary} />
-          <Text style={styles.cancelText}>Cancel SOS</Text>
+          <Ionicons name="close-circle-outline" size={18} color={colors.primary} />
+          <Text style={styles.cancelText}>I'm safe, cancel SOS</Text>
         </Pressable>
-      </View>
+      </ScrollView>
 
       <ResolvedModal
         visible={resolved}
@@ -367,6 +443,65 @@ export function ActiveSOSScreen() {
         onSubmit={handleResolved}
       />
     </View>
+  );
+}
+
+// Stylised "cartoon" helper avatar built from layered Views. Black helmet,
+// red shirt, white face. No external assets so the bundle stays small.
+function HelperAvatar() {
+  return (
+    <View style={avatar.wrap}>
+      <View style={avatar.helmet} />
+      <View style={avatar.face} />
+      <View style={avatar.shirt} />
+    </View>
+  );
+}
+
+// "Thank you" cartoon: scooter helper + waving home recipient, suggested
+// with shapes and emoji rather than imported art.
+function ThankYouArt() {
+  return (
+    <View style={art.wrap}>
+      <View style={art.house}>
+        <Text style={art.houseEmoji}>🏠</Text>
+      </View>
+      <View style={art.helperBlock}>
+        <View style={art.helperHelmet} />
+        <View style={art.helperBody} />
+        <Text style={art.scooterEmoji}>🛵</Text>
+      </View>
+    </View>
+  );
+}
+
+function TipPill({
+  emoji,
+  label,
+  onPress,
+  highlight,
+}: {
+  emoji: string;
+  label: string;
+  onPress: () => void;
+  highlight?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tipPill,
+        highlight && styles.tipPillHighlight,
+        pressed && { opacity: 0.85 },
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`Tip ${label}`}
+    >
+      <Text style={styles.tipPillEmoji}>{emoji}</Text>
+      <Text style={[styles.tipPillLabel, highlight && styles.tipPillLabelHighlight]}>
+        {label}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -385,95 +520,318 @@ function MissingRecord({ navigation }: { navigation: Nav }) {
   );
 }
 
-const SHEET_HEIGHT_PCT = 0.38;
+const avatar = StyleSheet.create({
+  wrap: {
+    width: 56,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  helmet: {
+    position: 'absolute',
+    top: 0,
+    width: 36,
+    height: 26,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: '#1a1a1a',
+    zIndex: 2,
+  },
+  face: {
+    position: 'absolute',
+    top: 16,
+    width: 28,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: '#F4C28E',
+    zIndex: 1,
+  },
+  shirt: {
+    position: 'absolute',
+    bottom: 0,
+    width: 56,
+    height: 30,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    backgroundColor: colors.primary,
+  },
+});
+
+const art = StyleSheet.create({
+  wrap: {
+    width: 110,
+    height: 78,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+  house: {
+    position: 'absolute',
+    right: 0,
+    bottom: 6,
+    width: 50,
+    height: 60,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1a1a1a',
+  },
+  houseEmoji: {
+    fontSize: 28,
+  },
+  helperBlock: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    width: 64,
+    height: 70,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  helperHelmet: {
+    position: 'absolute',
+    top: 4,
+    width: 24,
+    height: 18,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    backgroundColor: '#1a1a1a',
+    zIndex: 3,
+  },
+  helperBody: {
+    position: 'absolute',
+    top: 18,
+    width: 30,
+    height: 28,
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
+    backgroundColor: colors.primary,
+    zIndex: 2,
+  },
+  scooterEmoji: {
+    fontSize: 30,
+    zIndex: 4,
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  topBar: {
-    backgroundColor: colors.primary,
-    paddingTop: Platform.OS === 'ios' ? 56 : 36,
-    paddingBottom: spacing.md,
-    paddingHorizontal: spacing.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  scroll: {
+    paddingHorizontal: spacing.md,
+    paddingTop: 56,
+    paddingBottom: spacing.xl,
+    gap: spacing.md,
   },
-  topRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
   },
-  liveDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.textInverse,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  topLabel: {
-    ...typography.bodyMedium,
-    color: colors.textInverse,
-    letterSpacing: 0.5,
+  headerSub: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
   },
-  topTimer: {
+  headerTitle: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 22,
-    color: colors.textInverse,
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  elapsedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.primary,
+  },
+  elapsedText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
   },
-  mapWrap: {
-    flex: 1,
-    backgroundColor: '#E3E8EE',
+  statusBanner: {
+    backgroundColor: '#FFEDD5',
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    alignItems: 'center',
   },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.lg,
-    minHeight: `${SHEET_HEIGHT_PCT * 100}%`,
-    ...shadows.sheet,
-    gap: spacing.sm,
-  },
-  sheetHandle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginTop: 4,
-    marginBottom: spacing.sm,
-  },
-  sheetTitle: {
+  statusBannerText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
-    color: colors.textPrimary,
+    fontSize: 13,
+    color: '#B45309',
+    letterSpacing: 0.2,
   },
-  findingRow: {
+  mapCard: {
+    height: 280,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: '#E3E8EE',
+    ...shadows.card,
+  },
+  map: {
+    flex: 1,
+  },
+  helperCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.lg,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    ...shadows.card,
   },
-  findingText: { ...typography.body, color: colors.textSecondary },
-  list: { flexGrow: 0 },
-  listContent: { paddingBottom: spacing.sm },
+  helperGreeting: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 17,
+    color: colors.textPrimary,
+  },
+  helperRole: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  callBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchingCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  searchingText: {
+    ...typography.body,
+    color: colors.textSecondary,
+    flex: 1,
+  },
+  subStatus: {
+    backgroundColor: '#FFEDD5',
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+  },
+  subStatusText: {
+    ...typography.body,
+    color: '#B45309',
+    fontSize: 13,
+    fontFamily: fontFamilies.poppinsMedium,
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF6EC',
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingLeft: spacing.md,
+    paddingRight: spacing.sm,
+    gap: spacing.md,
+  },
+  tipCardLeft: {
+    flex: 1,
+    gap: 2,
+  },
+  tipTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+  tipSub: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  tipRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: -spacing.sm,
+  },
+  tipPill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tipPillHighlight: {
+    borderColor: colors.primary,
+    backgroundColor: '#FFF7F7',
+  },
+  tipPillEmoji: {
+    fontSize: 14,
+  },
+  tipPillLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  tipPillLabelHighlight: {
+    color: colors.primary,
+  },
+  tipFootnote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  tipFootnoteText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 16,
+  },
   cancelBtn: {
-    marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.md,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.primary,
     backgroundColor: colors.background,
+    marginTop: spacing.sm,
   },
-  cancelPressed: { opacity: 0.85 },
   cancelText: {
     ...typography.button,
     color: colors.primary,

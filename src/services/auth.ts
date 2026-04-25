@@ -1,36 +1,75 @@
+import Constants from 'expo-constants';
 import type { UserProfile } from '@/types';
-import { toE164India } from '@/utils/validation';
 
-// ORBII auth service.
+// Lazy-loaded native module. Importing `@react-native-google-signin/...` at
+// the top level triggers a TurboModule lookup that crashes Expo Go (the
+// native side isn't there). We only require() it when DEV_AUTH_MODE is off.
+type GoogleSigninLib = typeof import('@react-native-google-signin/google-signin');
+let googleLib: GoogleSigninLib | null = null;
+
+function loadGoogleLib(): GoogleSigninLib {
+  if (googleLib) return googleLib;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  googleLib = require('@react-native-google-signin/google-signin') as GoogleSigninLib;
+  return googleLib;
+}
+
+// ORBII auth service — Google Sign-In.
 //
-// MVP strategy: a dev-mode mock that accepts any valid 10-digit Indian number
-// and the OTP "123456". This lets us build and demo the entire flow without
-// waiting on Firebase phone-auth reCAPTCHA setup (which requires a custom
-// Expo dev-client build).
+// We replaced phone+OTP with Google Sign-In to skip Firebase phone auth's
+// reCAPTCHA pain and to give the user a one-tap sign-in. The Google account
+// gives us a verified identity (email, name, photo) for free.
 //
-// When ready for real Firebase phone auth, flip DEV_AUTH_MODE to false and
-// implement the Firebase path in sendOtp/verifyOtp. For Expo, the current
-// recommended route is @react-native-firebase/auth via a dev-client build,
-// since the web firebase SDK's PhoneAuthProvider requires reCAPTCHA.
+// One-time setup the project owner must do in Google Cloud Console:
+//   1. Create OAuth 2.0 client of type "Web application" — copy the Client ID
+//      into app.json -> extra.googleWebClientId.
+//   2. Create OAuth 2.0 client of type "Android" — package name `com.orbii.app`
+//      and the SHA-1 fingerprint of the release keystore.
+//   3. Enable the "Google Identity Services" API.
+// Without those, signInWithGoogle() will throw `DEVELOPER_ERROR`.
+//
+// While Google Cloud is being set up we keep DEV_AUTH_MODE = true so the UI
+// flow still works on a developer build with a fake profile. Sign-in returns
+// a local-only profile — no Google call, no real identity, no backend.
 const DEV_AUTH_MODE = true;
-const DEV_OTP = '123456';
 
-export type SendOtpResult = {
-  verificationId: string;
-};
+const webClientId =
+  (Constants.expoConfig?.extra as { googleWebClientId?: string } | undefined)
+    ?.googleWebClientId ?? '';
 
-export type VerifyOtpResult = {
+let googleConfigured = false;
+
+function ensureGoogleConfigured() {
+  if (googleConfigured) return;
+  const { GoogleSignin } = loadGoogleLib();
+  GoogleSignin.configure({
+    webClientId,
+    offlineAccess: false,
+    scopes: ['profile', 'email'],
+  });
+  googleConfigured = true;
+}
+
+export type SignInResult = {
   profile: UserProfile;
   needsProfile: boolean;
 };
 
-function makeMockProfile(phone: string): UserProfile {
+function profileFromGoogle(args: {
+  uid: string;
+  email: string;
+  name: string | null;
+  photo: string | null;
+}): UserProfile {
   return {
-    uid: `dev_${phone.replace(/\D/g, '')}`,
-    phone: toE164India(phone),
-    name: null,
-    photoUri: null,
+    uid: args.uid,
+    email: args.email,
+    phone: null,
+    name: args.name,
+    username: null,
+    photoUri: args.photo,
     emergencyContacts: [],
+    friends: [],
     isHelper: false,
     isPremium: false,
     createdAt: Date.now(),
@@ -41,48 +80,93 @@ function makeMockProfile(phone: string): UserProfile {
   };
 }
 
-export async function sendOtp(phone: string): Promise<SendOtpResult> {
+export async function signInWithGoogle(): Promise<SignInResult> {
   if (DEV_AUTH_MODE) {
-    await delay(600);
-    console.log(`[auth:dev] OTP for ${toE164India(phone)} is ${DEV_OTP}`);
-    return { verificationId: `dev_${Date.now()}` };
+    await delay(400);
+    // Empty email + name in dev mode so any pre-fill (waitlist sheets,
+    // edit-profile) starts blank rather than showing a placeholder dev
+    // address from the source.
+    const profile = profileFromGoogle({
+      uid: `dev_${Date.now()}`,
+      email: '',
+      name: null,
+      photo: null,
+    });
+    return { profile, needsProfile: true };
   }
-  throw new Error(
-    'Real Firebase phone auth is not wired up yet. ' +
-      'Implement via @react-native-firebase/auth in a dev-client build.',
-  );
+
+  if (!webClientId || webClientId.startsWith('REPLACE_')) {
+    throw new Error(
+      'Google sign-in is not configured yet. Ask the project owner to set ' +
+        'extra.googleWebClientId in app.json with the Web OAuth Client ID ' +
+        'from Google Cloud Console.',
+    );
+  }
+
+  ensureGoogleConfigured();
+  const { GoogleSignin, statusCodes } = loadGoogleLib();
+
+  try {
+    await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+    const result = await GoogleSignin.signIn();
+    // RNGS v13+ returns { type: 'success'|'cancelled', data?: User }.
+    // Older builds returned the user directly. Handle both shapes.
+    const user =
+      // @ts-expect-error — runtime shape check across library versions.
+      result?.data?.user ?? result?.user ?? result;
+    if (!user || !user.id) {
+      throw new Error('Google sign-in was cancelled.');
+    }
+    const profile = profileFromGoogle({
+      uid: `google_${user.id}`,
+      email: user.email ?? '',
+      name: user.name ?? null,
+      photo: user.photo ?? null,
+    });
+    return { profile, needsProfile: !user.name };
+  } catch (err: unknown) {
+    const e = err as { code?: string; message?: string };
+    if (e?.code === statusCodes.SIGN_IN_CANCELLED) {
+      throw new Error('Sign-in cancelled.');
+    }
+    if (e?.code === statusCodes.IN_PROGRESS) {
+      throw new Error('Sign-in already in progress.');
+    }
+    if (e?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+      throw new Error('Google Play Services not available on this device.');
+    }
+    if (e?.code === 'DEVELOPER_ERROR') {
+      throw new Error(
+        "Google sign-in misconfigured. The app's SHA-1 fingerprint or " +
+          'package name does not match the OAuth client in Google Cloud ' +
+          'Console.',
+      );
+    }
+    throw new Error(e?.message ?? 'Google sign-in failed.');
+  }
 }
 
-export async function verifyOtp(
-  phone: string,
-  code: string,
-  _verificationId: string,
-): Promise<VerifyOtpResult> {
-  if (DEV_AUTH_MODE) {
-    await delay(500);
-    if (code !== DEV_OTP) {
-      throw new Error('Incorrect OTP. Try 123456 in dev mode.');
-    }
-    return {
-      profile: makeMockProfile(phone),
-      needsProfile: true,
-    };
+export async function signOutFromGoogle(): Promise<void> {
+  if (DEV_AUTH_MODE) return;
+  try {
+    ensureGoogleConfigured();
+    const { GoogleSignin } = loadGoogleLib();
+    await GoogleSignin.signOut();
+  } catch {
+    // Ignore — sign-out best effort.
   }
-  throw new Error(
-    'Real Firebase phone auth is not wired up yet. ' +
-      'Implement via @react-native-firebase/auth in a dev-client build.',
-  );
 }
 
 export async function updateProfile(
   current: UserProfile,
-  updates: { name: string; photoUri: string | null },
+  updates: { name: string; photoUri: string | null; username?: string | null },
 ): Promise<UserProfile> {
   await delay(300);
   return {
     ...current,
     name: updates.name.trim(),
     photoUri: updates.photoUri,
+    username: updates.username !== undefined ? updates.username : current.username,
   };
 }
 
@@ -92,5 +176,4 @@ function delay(ms: number): Promise<void> {
 
 export const DEV_AUTH = {
   enabled: DEV_AUTH_MODE,
-  otp: DEV_OTP,
 };

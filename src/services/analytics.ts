@@ -4,6 +4,7 @@ type EventName =
   | 'login_started'
   | 'login_completed'
   | 'sos_triggered'
+  | 'sos_instant_long_press'
   | 'sos_cancelled'
   | 'sos_resolved'
   | 'helper_accepted'

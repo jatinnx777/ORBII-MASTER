@@ -8,6 +8,7 @@ const KEYS = {
   settings: 'orbii:settings',
   profile: 'orbii:profile',
   notifications: 'orbii:notifications',
+  premiumWaitlist: 'orbii:premium:waitlist',
 } as const;
 
 export const storageKeys = KEYS;

@@ -20,11 +20,15 @@ export function ProfileSetupScreen() {
   const profile = useAppSelector((s) => s.user.profile);
 
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  const canSubmit = isValidName(name) && !isSaving;
+  // 3-20 chars, lowercase letters/numbers/underscore. Friends look you up
+  // by typing this exact string, so we keep the format strict.
+  const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
+  const canSubmit = isValidName(name) && usernameValid && !isSaving;
 
   const pickPhoto = async () => {
     try {
@@ -58,8 +62,14 @@ export function ProfileSetupScreen() {
       setError('Session expired. Please sign in again.');
       return;
     }
-    if (!canSubmit) {
-      setError('Enter your full name (2–50 characters).');
+    if (!isValidName(name)) {
+      setError('Enter your full name (2 to 50 characters).');
+      return;
+    }
+    if (!usernameValid) {
+      setError(
+        'Username must be 3 to 20 lowercase letters, numbers, or underscores.',
+      );
       return;
     }
     setIsSaving(true);
@@ -68,6 +78,7 @@ export function ProfileSetupScreen() {
       const updated = await updateProfile(profile, {
         name,
         photoUri,
+        username,
       });
       dispatch(profileUpdated(updated));
     } catch (err) {
@@ -125,6 +136,21 @@ export function ProfileSetupScreen() {
           }}
           placeholder="e.g. Jatin Kumar"
           maxLength={50}
+          containerStyle={styles.input}
+        />
+
+        <Input
+          label="Username"
+          autoCapitalize="none"
+          autoCorrect={false}
+          value={username}
+          onChangeText={(v) => {
+            setUsername(v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+            if (error) setError(null);
+          }}
+          placeholder="e.g. jatin_k"
+          maxLength={20}
+          hint="Friends will add you to their safety circle by this username."
           error={error ?? undefined}
           containerStyle={styles.input}
         />

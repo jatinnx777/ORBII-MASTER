@@ -1,214 +1,391 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, Card, ScreenContainer } from '@/components/common';
-import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
-import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { premiumUpgraded } from '@/redux/slices/userSlice';
+import { Button, ScreenContainer } from '@/components/common';
+import {
+  colors,
+  fontFamilies,
+  radius,
+  spacing,
+  typography,
+} from '@/theme';
+import { useAppSelector } from '@/redux/store';
 import { trackEvent } from '@/services/analytics';
-import type { AppStackParamList } from '@/navigation/types';
+import { getItem, setItem, storageKeys } from '@/services/storage';
 
-type Nav = NativeStackNavigationProp<AppStackParamList, 'PremiumUpgrade'>;
+// 3-tier plan structure. We don't ship Razorpay yet — the "Upgrade" button
+// captures interest into a local waitlist instead, so we have a list of
+// people to email when payments go live.
+type PlanId = 'free' | 'premium' | 'premium_plus';
 
-const perks = [
-  { icon: 'people' as const, text: 'Up to 20 emergency contacts' },
-  { icon: 'mic' as const, text: 'Voice-activated SOS detection' },
-  { icon: 'videocam' as const, text: 'Auto audio + video recording during SOS' },
-  { icon: 'shield-checkmark' as const, text: 'Priority police & helper dispatch' },
-  { icon: 'notifications' as const, text: 'Family live location sharing' },
+type Plan = {
+  id: PlanId;
+  name: string;
+  priceLabel: string;
+  perMonth: string;
+  badge?: string;
+  highlight?: boolean;
+  pitch: string;
+  features: Array<{ supported: boolean; label: string }>;
+};
+
+const PLANS: Plan[] = [
+  {
+    id: 'free',
+    name: 'Free',
+    priceLabel: '₹0',
+    perMonth: 'forever',
+    pitch: 'Everything you need to send help in 2 minutes.',
+    features: [
+      { supported: true, label: '2 SOS per month' },
+      { supported: true, label: 'Standard helper dispatch' },
+      { supported: true, label: 'Up to 3 emergency contacts' },
+      { supported: true, label: '30-day SOS history' },
+      { supported: false, label: 'Voice detection' },
+      { supported: false, label: 'Priority dispatch' },
+      { supported: false, label: 'Family dashboard' },
+      { supported: false, label: 'Safe zones' },
+    ],
+  },
+  {
+    id: 'premium',
+    name: 'Premium',
+    priceLabel: '₹99',
+    perMonth: 'per month',
+    badge: 'Most popular',
+    highlight: true,
+    pitch: 'For people who want voice triggers and priority help.',
+    features: [
+      { supported: true, label: 'Unlimited SOS' },
+      { supported: true, label: 'Priority dispatch, helpers see you first' },
+      { supported: true, label: 'Up to 5 emergency contacts' },
+      { supported: true, label: 'Full SOS history (forever)' },
+      { supported: true, label: 'Voice detection: "help" or "bachao"' },
+      { supported: true, label: 'Safe zones with arrival/leave alerts' },
+      { supported: true, label: 'Monthly safety report' },
+      { supported: true, label: 'No ads' },
+    ],
+  },
+  {
+    id: 'premium_plus',
+    name: 'Premium Plus',
+    priceLabel: '₹299',
+    perMonth: 'per month',
+    pitch: 'Watch over your family, all in one dashboard.',
+    features: [
+      { supported: true, label: 'Everything in Premium' },
+      { supported: true, label: 'Family dashboard: track up to 5 members' },
+      { supported: true, label: 'Live location sharing 24/7' },
+      { supported: true, label: 'Geofencing alerts' },
+      { supported: true, label: 'Unlimited custom safe zones' },
+      { supported: true, label: 'Priority 24/7 helpline' },
+      { supported: true, label: 'Monthly family safety report' },
+    ],
+  },
 ];
 
-type Plan = 'monthly' | 'yearly';
+type WaitlistEntry = {
+  email: string;
+  plan: PlanId;
+  createdAt: number;
+};
+
+async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
+  const existing = (await getItem<WaitlistEntry[]>(storageKeys.premiumWaitlist)) ?? [];
+  // De-dupe on (email, plan) so multiple taps don't bloat the list.
+  const filtered = existing.filter(
+    (e) => !(e.email === entry.email && e.plan === entry.plan),
+  );
+  filtered.unshift(entry);
+  await setItem(storageKeys.premiumWaitlist, filtered);
+}
 
 export function PremiumUpgradeScreen() {
-  const navigation = useNavigation<Nav>();
-  const dispatch = useAppDispatch();
-  const isPremium = useAppSelector((s) => s.user.profile?.isPremium ?? false);
-  const [plan, setPlan] = useState<Plan>('yearly');
-  const [paying, setPaying] = useState(false);
+  const profile = useAppSelector((s) => s.user.profile);
+  const isPremium = profile?.isPremium ?? false;
+  const currentPlanId: PlanId = isPremium ? 'premium' : 'free';
+  const [waitlistOpen, setWaitlistOpen] = useState<PlanId | null>(null);
+  const [email, setEmail] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     trackEvent('premium_viewed');
   }, []);
 
-  const handleUpgrade = () => {
-    setPaying(true);
-    // TODO: swap to Razorpay
-    //   import { RazorpayCheckout } from 'react-native-razorpay';
-    //   const order = await fetch('/api/razorpay/order', { method: 'POST', ... });
-    //   RazorpayCheckout.open({ key, order_id, amount, currency, prefill });
-    setTimeout(() => {
-      setPaying(false);
-      trackEvent('premium_purchased', { plan });
-      dispatch(premiumUpgraded());
-      Alert.alert(
-        'Welcome to ORBII Premium',
-        'You now have access to all premium features.',
-        [{ text: 'Great', onPress: () => navigation.goBack() }],
-      );
-    }, 900);
+  const currentPlanLabel = useMemo(
+    () => PLANS.find((p) => p.id === currentPlanId)?.name ?? 'Free',
+    [currentPlanId],
+  );
+
+  const handleUpgradePress = (planId: PlanId) => {
+    if (planId === currentPlanId) return;
+    setWaitlistOpen(planId);
   };
 
-  if (isPremium) {
-    return (
-      <ScreenContainer>
-        <View style={styles.heroWrap}>
-          <Ionicons name="ribbon" size={64} color={colors.accent} />
-          <Text style={styles.heroTitle}>You're on Premium</Text>
-          <Text style={styles.heroBody}>
-            All premium features are unlocked. Next renewal: 2026-05-18.
-          </Text>
-        </View>
-      </ScreenContainer>
-    );
-  }
+  const submitWaitlist = async () => {
+    const planId = waitlistOpen;
+    if (!planId) return;
+    const trimmed = email.trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(trimmed)) {
+      Alert.alert('Invalid email', 'Enter a valid email so we can reach you.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await joinWaitlist({
+        email: trimmed,
+        plan: planId,
+        createdAt: Date.now(),
+      });
+      trackEvent('premium_purchased', { plan: planId, waitlist: true });
+      setWaitlistOpen(null);
+      Alert.alert(
+        "You're on the list",
+        "We'll email you the moment paid plans go live. Thanks for backing ORBII early.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   return (
     <ScreenContainer padded={false}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.heroWrap}>
-          <View style={styles.badge}>
-            <Ionicons name="ribbon" size={26} color={colors.accent} />
-            <Text style={styles.badgeText}>ORBII PREMIUM</Text>
+          <View style={styles.currentPill}>
+            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
+            <Text style={styles.currentPillText}>
+              You're on {currentPlanLabel}
+            </Text>
           </View>
-          <Text style={styles.heroTitle}>More protection. More peace of mind.</Text>
+          <Text style={styles.heroTitle}>Choose your plan</Text>
           <Text style={styles.heroBody}>
-            Everything in Basic, plus voice triggers, auto-recording, and priority dispatch.
+            Payments aren't live yet. Join the waitlist on any paid plan and
+            we'll email you when they switch on.
           </Text>
         </View>
 
-        <View style={styles.perks}>
-          {perks.map((p) => (
-            <View key={p.text} style={styles.perkRow}>
-              <Ionicons name={p.icon} size={20} color={colors.success} />
-              <Text style={styles.perkText}>{p.text}</Text>
-            </View>
+        <View style={styles.plansList}>
+          {PLANS.map((plan) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              isCurrent={plan.id === currentPlanId}
+              onPress={() => handleUpgradePress(plan.id)}
+            />
           ))}
-        </View>
-
-        <View style={styles.plans}>
-          <PlanCard
-            title="Yearly"
-            price="₹999"
-            subtitle="₹83/mo — save 16%"
-            active={plan === 'yearly'}
-            onPress={() => setPlan('yearly')}
-            badge="Best value"
-          />
-          <PlanCard
-            title="Monthly"
-            price="₹99"
-            subtitle="Cancel anytime"
-            active={plan === 'monthly'}
-            onPress={() => setPlan('monthly')}
-          />
         </View>
       </ScrollView>
 
-      <View style={styles.footer}>
-        <Button
-          label={paying ? 'Processing…' : `Subscribe · ${plan === 'yearly' ? '₹999/yr' : '₹99/mo'}`}
-          onPress={handleUpgrade}
-          loading={paying}
-        />
-        <Text style={styles.disclaimer}>
-          Billed through Razorpay. This is a demo checkout — no card charged.
-        </Text>
-      </View>
+      <WaitlistModal
+        visible={waitlistOpen !== null}
+        plan={waitlistOpen ? PLANS.find((p) => p.id === waitlistOpen) ?? null : null}
+        email={email}
+        onChangeEmail={setEmail}
+        submitting={submitting}
+        onClose={() => setWaitlistOpen(null)}
+        onSubmit={submitWaitlist}
+      />
     </ScreenContainer>
   );
 }
 
 function PlanCard({
-  title,
-  price,
-  subtitle,
-  active,
+  plan,
+  isCurrent,
   onPress,
-  badge,
 }: {
-  title: string;
-  price: string;
-  subtitle: string;
-  active: boolean;
+  plan: Plan;
+  isCurrent: boolean;
   onPress: () => void;
-  badge?: string;
 }) {
   return (
-    <Card
+    <View
       style={[
-        planStyles.card,
-        active && { borderColor: colors.primary, borderWidth: 2 },
+        styles.planCard,
+        plan.highlight && styles.planCardHighlight,
       ]}
     >
-      <View style={planStyles.row}>
-        <View style={{ flex: 1 }}>
-          <View style={planStyles.titleRow}>
-            <Text style={planStyles.title}>{title}</Text>
-            {badge ? (
-              <View style={planStyles.badge}>
-                <Text style={planStyles.badgeText}>{badge}</Text>
-              </View>
-            ) : null}
-          </View>
-          <Text style={planStyles.subtitle}>{subtitle}</Text>
+      {plan.badge ? (
+        <View style={styles.planBadge}>
+          <Text style={styles.planBadgeText}>{plan.badge}</Text>
         </View>
-        <Text style={planStyles.price}>{price}</Text>
+      ) : null}
+
+      <View style={styles.planHeader}>
+        <Text style={styles.planName}>{plan.name}</Text>
+        <View style={styles.priceRow}>
+          <Text
+            style={[
+              styles.planPrice,
+              plan.highlight && { color: colors.primary },
+            ]}
+          >
+            {plan.priceLabel}
+          </Text>
+          <Text style={styles.planPriceMeta}>{plan.perMonth}</Text>
+        </View>
       </View>
-      <View style={planStyles.picker}>
+
+      <Text style={styles.planPitch}>{plan.pitch}</Text>
+
+      <View style={styles.featureList}>
+        {plan.features.map((feat) => (
+          <View key={feat.label} style={styles.featureRow}>
+            <Ionicons
+              name={feat.supported ? 'checkmark-circle' : 'close-circle'}
+              size={16}
+              color={feat.supported ? colors.success : colors.textMuted}
+            />
+            <Text
+              style={[
+                styles.featureText,
+                !feat.supported && { color: colors.textMuted },
+              ]}
+            >
+              {feat.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+
+      {isCurrent ? (
+        <View style={styles.currentBtn}>
+          <Text style={styles.currentBtnText}>Current plan</Text>
+        </View>
+      ) : (
         <Button
-          label={active ? 'Selected' : 'Select'}
-          variant={active ? 'primary' : 'outline'}
+          label={plan.id === 'free' ? 'Stay on Free' : 'Join waitlist'}
           onPress={onPress}
-          fullWidth={false}
+          variant={plan.highlight ? 'primary' : 'outline'}
         />
-      </View>
-    </Card>
+      )}
+    </View>
   );
 }
 
-const planStyles = StyleSheet.create({
-  card: {
-    padding: spacing.md,
+function WaitlistModal({
+  visible,
+  plan,
+  email,
+  onChangeEmail,
+  submitting,
+  onClose,
+  onSubmit,
+}: {
+  visible: boolean;
+  plan: Plan | null;
+  email: string;
+  onChangeEmail: (s: string) => void;
+  submitting: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+    >
+      <View style={modalStyles.backdrop}>
+        <View style={modalStyles.sheet}>
+          <View style={modalStyles.headerRow}>
+            <Text style={modalStyles.title}>
+              {plan?.id === 'free' ? 'Stay on Free' : `${plan?.name ?? ''} waitlist`}
+            </Text>
+            <Pressable
+              onPress={onClose}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Ionicons name="close" size={22} color={colors.textSecondary} />
+            </Pressable>
+          </View>
+
+          {plan?.id === 'free' ? (
+            <Text style={modalStyles.body}>
+              No action needed. You're already on Free. You can switch to a
+              paid plan anytime.
+            </Text>
+          ) : (
+            <>
+              <Text style={modalStyles.body}>
+                Payments aren't live yet. Drop your email and we'll be in
+                touch the moment {plan?.name} is available.
+              </Text>
+              <TextInput
+                value={email}
+                onChangeText={onChangeEmail}
+                placeholder="you@example.com"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={modalStyles.input}
+              />
+              <Button
+                label={submitting ? 'Saving…' : 'Join waitlist'}
+                onPress={onSubmit}
+                loading={submitting}
+                disabled={submitting}
+              />
+            </>
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const modalStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: colors.background,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xl,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     gap: spacing.md,
   },
-  row: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 18,
     color: colors.textPrimary,
   },
-  subtitle: {
-    ...typography.caption,
+  body: {
+    ...typography.body,
     color: colors.textSecondary,
   },
-  price: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    color: colors.primary,
-  },
-  picker: { alignItems: 'flex-start' },
-  badge: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-  },
-  badgeText: {
-    ...typography.caption,
-    color: colors.dark,
-    fontFamily: fontFamilies.poppinsMedium,
+  input: {
+    ...typography.body,
+    color: colors.textPrimary,
+    backgroundColor: colors.inputBackground,
+    borderColor: colors.inputBorder,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
 });
 
@@ -220,23 +397,22 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   heroWrap: {
-    alignItems: 'center',
     gap: spacing.sm,
+    alignItems: 'center',
   },
-  badge: {
+  currentPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 6,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.circle,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
   },
-  badgeText: {
+  currentPillText: {
     ...typography.caption,
     fontFamily: fontFamilies.poppinsMedium,
     color: colors.textPrimary,
-    letterSpacing: 1,
   },
   heroTitle: {
     fontFamily: fontFamilies.poppinsBold,
@@ -250,32 +426,90 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
-  perks: {
+  plansList: {
+    gap: spacing.md,
+  },
+  planCard: {
+    backgroundColor: colors.background,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    gap: spacing.md,
+  },
+  planCardHighlight: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  planBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.sm,
+  },
+  planBadgeText: {
+    ...typography.caption,
+    fontFamily: fontFamilies.poppinsBold,
+    color: colors.textInverse,
+    fontSize: 10,
+    letterSpacing: 1,
+  },
+  planHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  perkRow: {
+  planName: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 20,
+    color: colors.textPrimary,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  planPrice: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+  },
+  planPriceMeta: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  planPitch: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+  },
+  featureList: {
+    gap: 8,
+  },
+  featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-  },
-  perkText: {
-    ...typography.body,
-    color: colors.textPrimary,
-    flex: 1,
-  },
-  plans: {
-    gap: spacing.md,
-  },
-  footer: {
-    padding: spacing.lg,
-    backgroundColor: colors.background,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
     gap: spacing.sm,
   },
-  disclaimer: {
-    ...typography.caption,
-    color: colors.textMuted,
-    textAlign: 'center',
+  featureText: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontSize: 13,
+    flex: 1,
+  },
+  currentBtn: {
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  currentBtnText: {
+    ...typography.body,
+    fontFamily: fontFamilies.poppinsBold,
+    color: colors.textSecondary,
+    fontSize: 13,
+    letterSpacing: 1,
   },
 });

@@ -14,8 +14,8 @@ import type { HelperState, SOSRecord, UserProfile } from '@/types';
 type PersistedApp = {
   onboarded?: boolean;
   voiceDetection?: boolean;
+  backgroundVoice?: boolean;
   pushEnabled?: boolean;
-  silentSOS?: boolean;
   policyAcceptedAt?: number | null;
 };
 
@@ -60,15 +60,15 @@ function subscribePersist() {
     if (
       next.app.onboarded !== prev.app.onboarded ||
       next.app.voiceDetection !== prev.app.voiceDetection ||
+      next.app.backgroundVoice !== prev.app.backgroundVoice ||
       next.app.pushEnabled !== prev.app.pushEnabled ||
-      next.app.silentSOS !== prev.app.silentSOS ||
       next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
       setItem<PersistedApp>(storageKeys.settings, {
         onboarded: next.app.onboarded,
         voiceDetection: next.app.voiceDetection,
+        backgroundVoice: next.app.backgroundVoice,
         pushEnabled: next.app.pushEnabled,
-        silentSOS: next.app.silentSOS,
         policyAcceptedAt: next.app.policyAcceptedAt,
       });
     }

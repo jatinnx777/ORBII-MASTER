@@ -1,73 +1,57 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  Button,
-  Input,
   PrivacyPolicyModal,
   ScreenContainer,
 } from '@/components/common';
-import { colors, spacing, typography } from '@/theme';
+import { colors, fontFamilies, radius, spacing, touchTarget, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
-  otpSendFailed,
-  otpSendStarted,
-  otpSendSucceeded,
+  signInFailed,
+  signInStarted,
+  signInSucceeded,
 } from '@/redux/slices/userSlice';
 import { policyAccepted } from '@/redux/slices/appSlice';
-import { sendOtp, DEV_AUTH } from '@/services/auth';
-import { formatPhoneForDisplay, isValidIndianPhone } from '@/utils/validation';
+import { signInWithGoogle, DEV_AUTH } from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
 
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.user.status);
   const policyAcceptedAt = useAppSelector((s) => s.app.policyAcceptedAt);
-  const isSending = status === 'sending_otp';
+  const isSigningIn = status === 'signing_in';
 
-  const [phoneInput, setPhoneInput] = useState('');
-  const [localError, setLocalError] = useState<string | null>(null);
   const [policyOpen, setPolicyOpen] = useState(false);
-
-  const rawDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
-  const phoneValid = isValidIndianPhone(rawDigits);
   const policyOk = policyAcceptedAt !== null;
-  const canSubmit = phoneValid && policyOk && !isSending;
 
-  const handleChange = (value: string) => {
-    const next = value.replace(/\D/g, '').slice(0, 10);
-    setPhoneInput(formatPhoneForDisplay(next));
-    if (localError) setLocalError(null);
-  };
-
-  const handleSubmit = async () => {
-    if (!phoneValid) {
-      setLocalError('Enter a valid 10-digit Indian mobile number.');
-      return;
-    }
+  const handleSignIn = async () => {
     if (!policyOk) {
       setPolicyOpen(true);
       return;
     }
-    dispatch(otpSendStarted({ phone: rawDigits }));
+    dispatch(signInStarted());
     try {
-      const { verificationId } = await sendOtp(rawDigits);
-      dispatch(otpSendSucceeded({ verificationId }));
-      navigation.navigate('OTP', { phone: rawDigits });
+      const { profile, needsProfile } = await signInWithGoogle();
+      dispatch(signInSucceeded({ profile, needsProfile }));
+      if (needsProfile) {
+        navigation.reset({ index: 0, routes: [{ name: 'ProfileSetup' }] });
+      }
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : 'Could not send OTP.';
-      dispatch(otpSendFailed({ error: message }));
-      Alert.alert('Could not send OTP', message);
+        err instanceof Error ? err.message : 'Google sign-in failed.';
+      dispatch(signInFailed({ error: message }));
+      if (!/cancel/i.test(message)) {
+        Alert.alert("Couldn't sign in", message);
+      }
     }
-  };
-
-  const handleCheckboxPress = () => {
-    if (policyOk) {
-      setPolicyOpen(true);
-      return;
-    }
-    setPolicyOpen(true);
   };
 
   const handleAccept = () => {
@@ -91,33 +75,32 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
       </View>
 
       <View style={styles.body}>
-        <Text style={styles.title}>Enter your mobile number</Text>
+        <Text style={styles.title}>Welcome to ORBII</Text>
         <Text style={styles.subtitle}>
-          We'll text you a 6-digit code to verify it's you.
+          Tap below to get started. You can set up your profile in the next
+          step so nearby helpers can recognise you in an emergency.
         </Text>
 
-        <Input
-          label="Mobile number"
-          keyboardType="number-pad"
-          autoFocus
-          autoComplete="tel"
-          textContentType="telephoneNumber"
-          maxLength={11}
-          value={phoneInput}
-          onChangeText={handleChange}
-          placeholder="98765 43210"
-          leftAdornment={<Text style={styles.countryCode}>+91</Text>}
-          error={localError ?? undefined}
-          hint={
-            DEV_AUTH.enabled
-              ? `Dev mode — any valid number works. OTP is ${DEV_AUTH.otp}.`
-              : 'Standard SMS rates may apply.'
-          }
-          containerStyle={styles.input}
-        />
+        <Pressable
+          onPress={handleSignIn}
+          disabled={isSigningIn}
+          style={({ pressed }) => [
+            styles.continueBtn,
+            pressed && styles.continueBtnPressed,
+            isSigningIn && styles.continueBtnDisabled,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Continue"
+        >
+          {isSigningIn ? (
+            <ActivityIndicator color={colors.textInverse} />
+          ) : (
+            <Text style={styles.continueLabel}>Continue</Text>
+          )}
+        </Pressable>
 
         <Pressable
-          onPress={handleCheckboxPress}
+          onPress={() => setPolicyOpen(true)}
           style={styles.policyRow}
           hitSlop={8}
           accessibilityRole="checkbox"
@@ -144,13 +127,12 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           </Text>
         </Pressable>
 
-        <Button
-          label="Send OTP"
-          onPress={handleSubmit}
-          loading={isSending}
-          disabled={!canSubmit}
-          style={styles.submit}
-        />
+        {DEV_AUTH.enabled ? (
+          <Text style={styles.devHint}>
+            Sign-in is off in this build. Your profile lives only on this
+            device.
+          </Text>
+        ) : null}
       </View>
 
       <PrivacyPolicyModal
@@ -189,20 +171,33 @@ const styles = StyleSheet.create({
   subtitle: {
     ...typography.body,
     color: colors.textSecondary,
-    marginBottom: spacing.xl,
+    marginBottom: spacing.xxl,
   },
-  input: {
-    marginBottom: spacing.lg,
+  continueBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: touchTarget.comfortable,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
   },
-  countryCode: {
-    ...typography.bodyMedium,
-    color: colors.textPrimary,
+  continueBtnPressed: {
+    opacity: 0.88,
+  },
+  continueBtnDisabled: {
+    opacity: 0.6,
+  },
+  continueLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 16,
+    color: colors.textInverse,
+    letterSpacing: 0.4,
   },
   policyRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
-    marginBottom: spacing.lg,
+    marginTop: spacing.xl,
   },
   checkbox: {
     width: 22,
@@ -228,7 +223,10 @@ const styles = StyleSheet.create({
     fontFamily: typography.bodyMedium.fontFamily,
     color: colors.primary,
   },
-  submit: {
-    marginTop: spacing.sm,
+  devHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
+    textAlign: 'center',
   },
 });

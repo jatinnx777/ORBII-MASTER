@@ -51,7 +51,9 @@
         {
           "microphonePermission": "ORBII listens for trigger words like \"help\" or \"bachao\" to fire an SOS hands-free.",
           "speechRecognitionPermission": "ORBII uses on-device speech recognition to detect emergency trigger words without sending your audio anywhere.",
-          "androidSpeechServicePackages": ["com.google.android.googlequicksearchbox"]
+          "androidSpeechServicePackages": [
+            "com.google.android.googlequicksearchbox"
+          ]
         }
       ],
       "expo-asset"
@@ -59,7 +61,8 @@
     "extra": {
       "eas": {
         "projectId": "9a0c1b10-4897-4093-8dae-aec5e8461a6b"
-      }
+      },
+      "googleWebClientId": "REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
     }
   }
 }

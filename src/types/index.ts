@@ -13,12 +13,24 @@ export type IdVerificationStatus =
   | 'verified'
   | 'rejected';
 
+export type Friend = {
+  username: string;
+  addedAt: number;
+};
+
 export type UserProfile = {
   uid: string;
-  phone: string;
+  email: string;
+  phone: string | null;
   name: string | null;
+  // Public handle the user picks during profile setup. Other users add
+  // each other to their safety circle by typing this username.
+  username: string | null;
   photoUri: string | null;
   emergencyContacts: EmergencyContact[];
+  // Friends added by username. Stored locally for now; once a Supabase
+  // profiles table exists we can resolve these to real user records.
+  friends: Friend[];
   isHelper: boolean;
   isPremium: boolean;
   createdAt: number;
@@ -30,9 +42,7 @@ export type UserProfile = {
 
 export type AuthStatus =
   | 'idle'
-  | 'sending_otp'
-  | 'otp_sent'
-  | 'verifying_otp'
+  | 'signing_in'
   | 'authenticated'
   | 'needs_profile'
   | 'error';
@@ -47,6 +57,10 @@ export type SOSLocation = GeoPoint & {
 };
 
 export type SOSStatus = 'active' | 'resolved' | 'cancelled';
+
+// 'real' = the user pressed the SOS button. Helpers were notified.
+// 'test' = the user fired a practice SOS from Settings. NO helpers notified.
+export type SOSKind = 'real' | 'test';
 
 export type HelperSummary = {
   id: string;
@@ -63,6 +77,10 @@ export type SOSRecord = {
   location: SOSLocation;
   timestamp: number;
   status: SOSStatus;
+  // 'test' SOS records originate from Settings → Trigger test SOS. No real
+  // helpers are notified. Defaults to 'real' for backwards compat with
+  // already-persisted history rows.
+  kind?: SOSKind;
   helpers: HelperSummary[];
   responder: HelperSummary | null;
   responseTime: number | null;

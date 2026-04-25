@@ -9,9 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import {
   Card,
   Row,
@@ -21,12 +19,10 @@ import {
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
-import type { AppStackParamList, TabParamList } from '@/navigation/types';
+import { signOutFromGoogle } from '@/services/auth';
+import type { AppStackParamList } from '@/navigation/types';
 
-type Nav = CompositeNavigationProp<
-  BottomTabNavigationProp<TabParamList, 'Profile'>,
-  NativeStackNavigationProp<AppStackParamList>
->;
+type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
@@ -37,13 +33,20 @@ export function ProfileScreen() {
 
   if (!profile) return null;
 
-  const initial = (profile.name || profile.phone).charAt(0).toUpperCase();
+  const initial = (profile.name || profile.email || 'O').charAt(0).toUpperCase();
   const sosCount = history.length;
 
   const handleSignOut = () => {
-    Alert.alert('Sign out?', 'You can sign back in with your phone number.', [
+    Alert.alert('Sign out?', 'You can sign back in with your Google account.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => dispatch(signedOut()) },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await signOutFromGoogle();
+          dispatch(signedOut());
+        },
+      },
     ]);
   };
 
@@ -67,7 +70,7 @@ export function ProfileScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.name}>{profile.name ?? 'ORBII user'}</Text>
-            <Text style={styles.phone}>{profile.phone}</Text>
+            <Text style={styles.phone}>{profile.email || profile.phone || ''}</Text>
             <View style={styles.heroStats}>
               <StatPill label="SOS sent" value={String(sosCount)} />
               <StatPill
@@ -86,14 +89,18 @@ export function ProfileScreen() {
           <Row
             icon="people"
             label="Emergency contacts"
-            value={`${profile.emergencyContacts.length} added`}
+            value={
+              profile.emergencyContacts.length === 0
+                ? 'Add trusted people to notify in an emergency'
+                : `${profile.emergencyContacts.length} added`
+            }
             onPress={() => navigation.navigate('EmergencyContacts')}
           />
           <Divider />
           <Row
             icon="ribbon"
-            label={profile.isPremium ? 'Manage Premium' : 'Upgrade to Premium'}
-            value={profile.isPremium ? 'Active' : 'Voice triggers, auto-record + more'}
+            label="ORBII plans"
+            value="See what's in Free, Premium and Premium Plus"
             onPress={() => navigation.navigate('PremiumUpgrade')}
           />
           <Divider />

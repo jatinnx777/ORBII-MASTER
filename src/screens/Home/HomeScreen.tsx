@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Animated,
   Easing,
@@ -16,7 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
-import { ScreenContainer } from '@/components/common';
+import { OSMMapView, ScreenContainer, type OSMMarker } from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -32,7 +33,6 @@ import {
   locationPermissionChanged,
   locationUpdated,
 } from '@/redux/slices/sosSlice';
-import { silentSOSToggled } from '@/redux/slices/appSlice';
 import {
   getCurrentLocation,
   getCurrentPermission,
@@ -46,6 +46,7 @@ import {
   listNearbyAlerts,
   subscribePresence,
   subscribeToAlerts,
+  type PresencePeer,
 } from '@/services/community';
 import { alertReceived, alertsLoaded } from '@/redux/slices/communitySlice';
 import {
@@ -66,24 +67,50 @@ import type { AppStackParamList } from '@/navigation/types';
 import type { GeoPoint } from '@/types';
 
 const HELPER_REFRESH_MS = 30_000;
+const MAP_RADIUS_KM = 5;
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
+
+// Marker HTML used by the home map. We hand-roll the icons so we can colour
+// them by status (red user, yellow verified, green standard) and show a
+// soft halo on the user's pin so it always pops against the OSM tiles.
+function userPinHtml(): string {
+  return `
+    <div style="position:relative;width:42px;height:42px;display:flex;align-items:center;justify-content:center;">
+      <div style="position:absolute;width:42px;height:42px;border-radius:21px;background:rgba(255,0,0,0.18);animation:halo 1.6s ease-out infinite;"></div>
+      <div style="position:relative;width:18px;height:18px;border-radius:9px;background:#FF0000;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>
+    </div>
+    <style>@keyframes halo{0%{transform:scale(0.8);opacity:0.7}100%{transform:scale(1.6);opacity:0}}</style>
+  `;
+}
+
+function helperPinHtml(verified: boolean): string {
+  const color = verified ? '#FFD600' : '#00C853';
+  const ring = verified ? '#B58F00' : '#00873E';
+  return `
+    <div style="width:18px;height:18px;border-radius:9px;background:${color};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.25);outline:1px solid ${ring};"></div>
+  `;
+}
 
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const { locationPermission, helpersNearby } = useAppSelector((s) => s.sos);
-  const silentSOS = useAppSelector((s) => s.app.silentSOS);
   const safeJourney = useAppSelector((s) => s.app.safeJourney);
+  const helperVerified = useAppSelector(
+    (s) => s.helper.verification === 'verified' && s.helper.mode,
+  );
   const nearbyAlerts = useAppSelector((s) => s.community.alerts);
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenAlertIds = useRef<Set<string>>(new Set());
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>('idle');
+  const [helpersScanState, setHelpersScanState] = useState<'scanning' | 'resolved'>(
+    'scanning',
+  );
+  const [presencePeers, setPresencePeers] = useState<PresencePeer[]>([]);
 
-  // Subscription callback captures location via ref so we can subscribe once
-  // on mount and never miss an alert while waiting for the GPS fix.
   const currentLocation = useAppSelector((s) => s.sos.currentLocation);
   const currentLocationRef = useRef(currentLocation);
   useEffect(() => {
@@ -99,9 +126,6 @@ export function HomeScreen() {
     try {
       const point = await getCurrentLocation();
       dispatch(locationUpdated(point));
-      // Helpers count = number of presence peers within 5km. The DB-backed
-      // `countHelpersNearby` is kept as a fallback only — if the realtime
-      // count is 0 we don't overwrite the presence count.
       const presenceCount = countPresenceNearby(point, profile?.uid ?? null, 5);
       dispatch(helpersNearbyUpdated(presenceCount));
       countHelpersNearby(point)
@@ -110,16 +134,23 @@ export function HomeScreen() {
             dispatch(helpersNearbyUpdated(dbCount));
           }
         })
-        .catch(() => undefined);
-      // Backfill any active alerts (best-effort; merged with live broadcasts).
+        .catch(() => undefined)
+        .finally(() => setHelpersScanState('resolved'));
       const alerts = await listNearbyAlerts(point, 2, profile?.uid ?? null);
       dispatch(alertsLoaded(alerts));
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not read location.';
       dispatch(locationErrored(message));
+      setHelpersScanState('resolved');
     }
   }, [dispatch, profile?.uid]);
+
+  useEffect(() => {
+    if (helpersScanState !== 'scanning') return;
+    const id = setTimeout(() => setHelpersScanState('resolved'), 3000);
+    return () => clearTimeout(id);
+  }, [helpersScanState]);
 
   const bootstrapPermission = useCallback(async () => {
     const existing = await getCurrentPermission();
@@ -139,14 +170,10 @@ export function HomeScreen() {
     bootstrapPermission();
   }, [bootstrapPermission]);
 
-  // Ask for notification permission up-front so we can alert the user when
-  // someone nearby triggers an SOS while they have the app backgrounded.
   useEffect(() => {
     requestNotificationPermission().catch(() => undefined);
   }, []);
 
-  // Fire a local push whenever a new community alert appears within 2km
-  // (i.e. an alert id we haven't shown a notification for yet).
   useEffect(() => {
     if (nearbyAlerts.length === 0) return;
     const fresh = nearbyAlerts.filter((a) => !seenAlertIds.current.has(a.id));
@@ -155,7 +182,7 @@ export function HomeScreen() {
       seenAlertIds.current.add(a.id);
       fireLocalNotification(
         'Someone nearby needs help',
-        `${a.victim.name} · ${formatDistance(a.distanceMeters)} away. Tap to respond.`,
+        `${a.victim.name} is ${formatDistance(a.distanceMeters)} away. Tap to respond.`,
         { kind: 'community_alert', alertId: a.id },
         'sos',
       );
@@ -172,11 +199,6 @@ export function HomeScreen() {
     };
   }, [locationPermission, loadLocationAndHelpers]);
 
-  // Realtime: listen for any SOS broadcast on the global channel. Subscribe
-  // on mount unconditionally — we don't need the user's location to receive
-  // alerts, only to compute distance. Previously we gated on currentLocation,
-  // which meant the first alert after app launch was silently missed while
-  // GPS was still being acquired.
   useEffect(() => {
     const sub = subscribeToAlerts((broadcast) => {
       const alert = alertFromBroadcast(
@@ -186,10 +208,6 @@ export function HomeScreen() {
       );
       if (!alert) return;
       dispatch(alertReceived(alert));
-      // Hard 3-second vibration so the responder notices even if the phone
-      // is in a pocket. Pattern: 800ms buzz, 200ms gap, repeat. Plus a
-      // synchronous heavy haptic up-front — Android's Vibration API takes
-      // ~100ms to schedule, the haptic kicks in instantly.
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
         () => undefined,
       );
@@ -198,10 +216,8 @@ export function HomeScreen() {
     return () => sub.unsubscribe();
   }, [dispatch]);
 
-  // Join presence channel so we appear as a "helper nearby" for everyone
-  // else, and keep our entry's location fresh as the GPS updates.
   const presenceHandleRef = useRef<{
-    update: (loc: GeoPoint) => void;
+    update: (loc: GeoPoint, isVerified?: boolean) => void;
     leave: () => void;
   } | null>(null);
   useEffect(() => {
@@ -211,61 +227,62 @@ export function HomeScreen() {
       name: profile.name ?? 'Someone',
       photoUri: profile.photoUri ?? null,
       location: currentLocation ?? null,
+      isVerified: helperVerified,
     });
     return () => {
       presenceHandleRef.current?.leave();
       presenceHandleRef.current = null;
     };
-  }, [profile?.uid, profile?.name, profile?.photoUri]);
+  }, [profile?.uid, profile?.name, profile?.photoUri, helperVerified]);
 
   useEffect(() => {
-    if (currentLocation) presenceHandleRef.current?.update(currentLocation);
-  }, [currentLocation]);
+    if (currentLocation) presenceHandleRef.current?.update(currentLocation, helperVerified);
+  }, [currentLocation, helperVerified]);
 
-  // Re-count whenever the presence roster changes.
   useEffect(() => {
     const unsub = subscribePresence((peers) => {
       const me = profileRef.current?.uid ?? null;
+      const others = peers.filter((p) => !me || p.userId !== me);
+      setPresencePeers(others);
       const here = currentLocationRef.current;
       if (!here) {
-        // No GPS yet — show the raw count of online users (minus self).
-        dispatch(
-          helpersNearbyUpdated(
-            peers.filter((p) => !me || p.userId !== me).length,
-          ),
-        );
+        dispatch(helpersNearbyUpdated(others.length));
         return;
       }
-      const count = peers.filter((p) => {
-        if (me && p.userId === me) return false;
+      const count = others.filter((p) => {
         if (!p.location) return false;
-        return haversineMeters(here, p.location) <= 5000;
+        return haversineMeters(here, p.location) <= MAP_RADIUS_KM * 1000;
       }).length;
       dispatch(helpersNearbyUpdated(count));
     });
     return unsub;
   }, [dispatch]);
 
+  const ensureLocationOrPrompt = (): boolean => {
+    if (locationPermission === 'granted') return true;
+    Alert.alert(
+      'Enable location',
+      'ORBII needs your location to dispatch helpers during an emergency.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Open settings',
+          onPress: () => Linking.openSettings().catch(() => undefined),
+        },
+      ],
+    );
+    return false;
+  };
+
   const handleSOSPress = () => {
-    if (locationPermission !== 'granted') {
-      Alert.alert(
-        'Enable location',
-        'ORBII needs your location to dispatch helpers during an emergency.',
-        [
-          { text: 'Not now', style: 'cancel' },
-          {
-            text: 'Open settings',
-            onPress: () => Linking.openSettings().catch(() => undefined),
-          },
-        ],
-      );
-      return;
-    }
-    // Identity verification was previously gated here. Removed for the
-    // current MVP — letting trusted-contact users send help is more
-    // important than catching prank alerts when our verification backend
-    // isn't wired yet. Re-add when Aadhaar/PAN verification is live.
+    if (!ensureLocationOrPrompt()) return;
     navigation.navigate('SOSCountdown');
+  };
+
+  const handleSOSLongPress = () => {
+    if (!ensureLocationOrPrompt()) return;
+    trackEvent('sos_instant_long_press');
+    navigation.navigate('SOSCountdown', { instant: true });
   };
 
   const toggleListening = useCallback(async () => {
@@ -314,16 +331,11 @@ export function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       return () => {
-        stopListening();
+        // Voice listener keeps running across navigation. Only an explicit
+        // toggle stops it.
       };
     }, []),
   );
-
-  const handleToggleSilent = () => {
-    Haptics.selectionAsync().catch(() => undefined);
-    dispatch(silentSOSToggled(!silentSOS));
-    trackEvent('silent_sos_toggled', { enabled: !silentSOS });
-  };
 
   const handleSafeModePress = () => {
     Haptics.selectionAsync().catch(() => undefined);
@@ -335,51 +347,88 @@ export function HomeScreen() {
   };
 
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
-  const greeting = getGreeting();
-  const firstName = (profile?.name ?? '').trim().split(' ')[0] || 'there';
+  const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
+
+  // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
+  // the user so the map stays focused on their immediate neighbourhood.
+  const mapMarkers: OSMMarker[] = useMemo(() => {
+    const out: OSMMarker[] = [];
+    if (currentLocation) {
+      out.push({
+        id: 'me',
+        coordinate: currentLocation,
+        html: userPinHtml(),
+        kind: 'user',
+      });
+    }
+    const here = currentLocation;
+    presencePeers.forEach((peer) => {
+      if (!peer.location) return;
+      if (here) {
+        const d = haversineMeters(here, peer.location);
+        if (d > MAP_RADIUS_KM * 1000) return;
+      }
+      out.push({
+        id: `peer:${peer.userId}`,
+        coordinate: peer.location,
+        html: helperPinHtml(!!peer.isVerified),
+        kind: 'helper',
+      });
+    });
+    return out;
+  }, [currentLocation, presencePeers]);
+
+  const verifiedCount = useMemo(
+    () =>
+      presencePeers.filter(
+        (p) =>
+          p.isVerified &&
+          p.location &&
+          (!currentLocation ||
+            haversineMeters(currentLocation, p.location) <= MAP_RADIUS_KM * 1000),
+      ).length,
+    [presencePeers, currentLocation],
+  );
 
   return (
     <ScreenContainer padded={false}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>{greeting},</Text>
-          <Text style={styles.nameLine}>{firstName}</Text>
+        <Pressable
+          style={styles.avatarWrap}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+          hitSlop={8}
+          onPress={() => navigation.navigate('Profile')}
+        >
+          <View style={styles.avatar}>
+            {profile?.photoUri ? (
+              <Image
+                source={{ uri: profile.photoUri }}
+                style={styles.avatarImage}
+              />
+            ) : initial ? (
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            ) : (
+              <Ionicons name="person" size={18} color={colors.textMuted} />
+            )}
+          </View>
+        </Pressable>
+        <View style={styles.brandWrap}>
+          <Text style={styles.brand}>ORBII</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Pressable
-            style={styles.iconChip}
-            accessibilityRole="button"
-            accessibilityLabel="Notifications"
-            hitSlop={8}
-            onPress={() => navigation.navigate('Notifications')}
-          >
-            <Ionicons
-              name="notifications-outline"
-              size={20}
-              color={colors.textPrimary}
-            />
-          </Pressable>
-          <Pressable
-            style={styles.avatarWrap}
-            accessibilityRole="button"
-            accessibilityLabel="Open profile"
-            hitSlop={8}
-            onPress={() => navigation.navigate('Tabs', { screen: 'Profile' })}
-          >
-            <View style={styles.avatar}>
-              {profile?.photoUri ? (
-                <Image
-                  source={{ uri: profile.photoUri }}
-                  style={styles.avatarImage}
-                />
-              ) : initial ? (
-                <Text style={styles.avatarInitial}>{initial}</Text>
-              ) : (
-                <Ionicons name="person" size={18} color={colors.textMuted} />
-              )}
-            </View>
-          </Pressable>
-        </View>
+        <Pressable
+          style={styles.iconChip}
+          accessibilityRole="button"
+          accessibilityLabel="Friends"
+          hitSlop={8}
+          onPress={() => navigation.navigate('Friends')}
+        >
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={20}
+            color={colors.textPrimary}
+          />
+        </Pressable>
       </View>
 
       <View style={styles.content}>
@@ -397,164 +446,127 @@ export function HomeScreen() {
           </Pressable>
         ) : null}
 
-        <View style={styles.statsRow}>
-          <View style={styles.statCell}>
-            <CountUp value={helpersNearby} style={styles.statValue} />
-            <Text style={styles.statLabel}>Helpers nearby</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCell}>
-            <Text style={styles.statValue}>
-              {voiceStatus === 'listening' ? 'ON' : 'OFF'}
-            </Text>
-            <Text style={styles.statLabel}>Voice SOS</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCell}>
-            <Text style={styles.statValue}>
-              {safeJourney ? 'ON' : 'OFF'}
-            </Text>
-            <Text style={styles.statLabel}>Safe Mode</Text>
-          </View>
-        </View>
-
-        <View style={styles.sosSection}>
-          <SOSButton onPress={handleSOSPress} />
-          <Text style={styles.sosHint}>
-            {silentSOS ? 'Silent mode · discreet alert' : 'Tap for 5-second countdown'}
-          </Text>
-        </View>
-
-        <Pressable onPress={toggleListening} style={styles.voiceRow}>
-          <View
-            style={[
-              styles.voiceDot,
-              voiceStatus === 'listening' && styles.voiceDotActive,
-            ]}
-          >
-            <AudioWave active={voiceStatus === 'listening'} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.voiceTitle}>
-              {voiceStatus === 'listening'
-                ? 'Listening for "Help", "Bachao", "Madad"'
-                : voiceStatus === 'starting' || voiceStatus === 'requesting-permission'
-                  ? 'Starting voice detection…'
-                  : 'Hands-free Voice SOS'}
-            </Text>
-            <Text style={styles.voiceMeta}>
-              {voiceStatus === 'listening'
-                ? 'Tap to stop'
-                : 'Tap to start'}
-            </Text>
-          </View>
-          <View
-            style={[
-              styles.pill,
-              voiceStatus === 'listening' && styles.pillActive,
-            ]}
-          >
-            <Text
-              style={[
-                styles.pillText,
-                voiceStatus === 'listening' && styles.pillTextActive,
-              ]}
-            >
-              {voiceStatus === 'listening' ? 'ON' : 'OFF'}
-            </Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.cardRow}>
-          <Pressable
-            onPress={handleToggleSilent}
-            style={[styles.featureCard, silentSOS && styles.featureCardOnDark]}
-          >
-            <View style={styles.featureHead}>
-              <Ionicons
-                name={silentSOS ? 'eye-off' : 'eye-off-outline'}
-                size={20}
-                color={silentSOS ? colors.textInverse : colors.textPrimary}
-              />
-              <View
-                style={[
-                  styles.miniPill,
-                  silentSOS && styles.miniPillOn,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.miniPillText,
-                    silentSOS && styles.miniPillTextOn,
-                  ]}
-                >
-                  {silentSOS ? 'ON' : 'OFF'}
-                </Text>
-              </View>
+        <View style={styles.mapWrap}>
+          {currentLocation ? (
+            <OSMMapView
+              center={currentLocation}
+              zoom={15}
+              markers={mapMarkers}
+              interactive
+              style={styles.map}
+            />
+          ) : (
+            <View style={[styles.map, styles.mapPlaceholder]}>
+              <ActivityIndicator color={colors.primary} />
+              <Text style={styles.mapPlaceholderText}>Loading map…</Text>
             </View>
-            <Text
-              style={[
-                styles.featureTitle,
-                silentSOS && { color: colors.textInverse },
-              ]}
-            >
-              Silent SOS
-            </Text>
-            <Text
-              style={[
-                styles.featureMeta,
-                silentSOS && { color: 'rgba(255,255,255,0.7)' },
-              ]}
-            >
-              Discreet alert
-            </Text>
-          </Pressable>
+          )}
+
+          <View style={styles.mapLegend}>
+            <LegendDot color={colors.primary} label="You" />
+            <LegendDot color="#FFD600" label="Verified" />
+            <LegendDot color={colors.success} label="Helpers" />
+          </View>
 
           <Pressable
             onPress={handleSafeModePress}
             style={[
-              styles.featureCard,
-              !!safeJourney && styles.featureCardOnGreen,
+              styles.safeModeFab,
+              !!safeJourney && styles.safeModeFabActive,
             ]}
+            accessibilityRole="button"
+            accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
           >
-            <View style={styles.featureHead}>
-              <Ionicons
-                name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
-                size={20}
-                color={safeJourney ? colors.textInverse : colors.textPrimary}
-              />
-              <View
-                style={[
-                  styles.miniPill,
-                  !!safeJourney && styles.miniPillOnGreen,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.miniPillText,
-                    !!safeJourney && styles.miniPillTextOn,
-                  ]}
-                >
-                  {safeJourney ? 'LIVE' : 'OFF'}
-                </Text>
-              </View>
-            </View>
+            <Ionicons
+              name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
+              size={16}
+              color={safeJourney ? colors.textInverse : colors.textPrimary}
+            />
             <Text
               style={[
-                styles.featureTitle,
+                styles.safeModeFabText,
                 !!safeJourney && { color: colors.textInverse },
               ]}
             >
-              Safe Mode
+              {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
             </Text>
-            <Text
+          </Pressable>
+        </View>
+
+        {helpersScanState === 'scanning' ? (
+          <View style={styles.helperChip}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.helperChipText}>Scanning your area…</Text>
+          </View>
+        ) : helpersNearby > 0 ? (
+          <View style={styles.helperChip}>
+            <View style={styles.helperDot} />
+            <CountUp value={helpersNearby} style={styles.helperChipNumber} />
+            <Text style={styles.helperChipText}>
+              within 5 km{verifiedCount > 0 ? ` · ${verifiedCount} verified` : ''}
+            </Text>
+          </View>
+        ) : (
+          <Pressable
+            onPress={() => navigation.navigate('HelperVerification')}
+            style={styles.helperChipZero}
+            accessibilityRole="button"
+          >
+            <View style={[styles.helperDot, styles.helperDotIdle]} />
+            <Text style={styles.helperChipText}>0 helpers nearby ·</Text>
+            <Text style={styles.helperChipCta}>Be the first</Text>
+            <Ionicons name="arrow-forward" size={12} color={colors.primary} />
+          </Pressable>
+        )}
+
+        <View style={styles.actionRow}>
+          <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
+          <Pressable
+            onPress={toggleListening}
+            style={({ pressed }) => [
+              styles.voiceCard,
+              voiceListening && styles.voiceCardActive,
+              pressed && { opacity: 0.9 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={voiceListening ? 'Stop listening' : 'Start hands-free SOS'}
+          >
+            <View
               style={[
-                styles.featureMeta,
-                !!safeJourney && { color: 'rgba(255,255,255,0.85)' },
+                styles.voiceIcon,
+                voiceListening && styles.voiceIconActive,
               ]}
             >
-              {safeJourney ? safeJourney.label : 'Journey guard'}
+              <Ionicons
+                name={voiceListening ? 'mic' : 'mic-outline'}
+                size={20}
+                color={voiceListening ? colors.textInverse : colors.textPrimary}
+              />
+            </View>
+            <Text
+              style={[
+                styles.voiceCardLabel,
+                voiceListening && styles.voiceCardLabelActive,
+              ]}
+              numberOfLines={1}
+            >
+              Voice SOS
             </Text>
+            <View
+              style={[
+                styles.tinyPill,
+                voiceListening && styles.tinyPillActive,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.tinyPillText,
+                  voiceListening && styles.tinyPillTextActive,
+                ]}
+              >
+                {voiceListening ? 'LISTENING' : 'TAP TO START'}
+              </Text>
+            </View>
           </Pressable>
         </View>
 
@@ -563,24 +575,7 @@ export function HomeScreen() {
             count={nearbyAlerts.length}
             onPress={() => navigation.navigate('CommunityAlerts')}
           />
-        ) : (
-          <Pressable
-            onPress={() => navigation.navigate('CommunityAlerts')}
-            style={styles.communityQuiet}
-            accessibilityRole="button"
-          >
-            <View style={styles.communityIcon}>
-              <Ionicons name="heart-outline" size={16} color={colors.textPrimary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.communityQuietText}>Help someone nearby</Text>
-              <Text style={styles.communityQuietMeta}>
-                0 alerts · you'll be notified within 2km
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-        )}
+        ) : null}
       </View>
     </ScreenContainer>
   );
@@ -595,9 +590,15 @@ function getGreeting(): string {
   return 'Good night';
 }
 
-// Count-up text — interpolates between the previous value and the next over
-// 600ms. Fast enough to feel responsive, slow enough that the eye notices
-// the helpers count change.
+function LegendDot({ color, label }: { color: string; label: string }) {
+  return (
+    <View style={legendStyles.row}>
+      <View style={[legendStyles.dot, { backgroundColor: color }]} />
+      <Text style={legendStyles.text}>{label}</Text>
+    </View>
+  );
+}
+
 function CountUp({
   value,
   style,
@@ -628,8 +629,6 @@ function CountUp({
   return <Text style={style}>{display}</Text>;
 }
 
-// The community alerts banner. Slides up + fades in on first appearance, and
-// the badge softly pulses to draw the eye without being alarming.
 function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }) {
   const enter = useRef(new Animated.Value(0)).current;
   const pulse = useRef(new Animated.Value(0)).current;
@@ -695,7 +694,7 @@ function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }
               ? 'Someone nearby needs help'
               : `${count} people nearby need help`}
           </Text>
-          <Text style={styles.alertsMeta}>Tap to respond · within 2km</Text>
+          <Text style={styles.alertsMeta}>Tap to respond, within 2 km</Text>
         </View>
         <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
       </Pressable>
@@ -703,73 +702,25 @@ function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }
   );
 }
 
-function AudioWave({ active }: { active: boolean }) {
-  const bars = useRef([0, 1, 2].map(() => new Animated.Value(0.4))).current;
-
-  useEffect(() => {
-    if (!active) {
-      bars.forEach((bar) => bar.setValue(0.3));
-      return;
-    }
-    const loops = bars.map((bar, i) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(bar, {
-            toValue: 1,
-            duration: 380 + i * 90,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-          Animated.timing(bar, {
-            toValue: 0.3,
-            duration: 380 + i * 70,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: false,
-          }),
-        ]),
-      ),
-    );
-    loops.forEach((l) => l.start());
-    return () => loops.forEach((l) => l.stop());
-  }, [active, bars]);
-
-  return (
-    <View style={waveStyles.row}>
-      {bars.map((v, i) => (
-        <Animated.View
-          key={i}
-          style={[
-            waveStyles.bar,
-            active && waveStyles.barActive,
-            {
-              height: v.interpolate({
-                inputRange: [0, 1],
-                outputRange: [4, 14],
-              }),
-            },
-          ]}
-        />
-      ))}
-    </View>
-  );
-}
-
-const waveStyles = StyleSheet.create({
+const legendStyles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    height: 16,
+    gap: 4,
   },
-  bar: {
-    width: 2.5,
-    borderRadius: 2,
-    backgroundColor: colors.textMuted,
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  barActive: {
-    backgroundColor: colors.primary,
+  text: {
+    ...typography.caption,
+    color: colors.textPrimary,
+    fontSize: 11,
   },
 });
+
+const MAP_HEIGHT = 440;
 
 const styles = StyleSheet.create({
   header: {
@@ -778,23 +729,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    paddingBottom: spacing.xs,
   },
-  greeting: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  nameLine: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    color: colors.textPrimary,
-    letterSpacing: -0.4,
-  },
-  headerRight: {
-    flexDirection: 'row',
+  brandWrap: {
+    flex: 1,
     alignItems: 'center',
-    gap: 10,
+  },
+  brand: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 18,
+    color: colors.primary,
+    letterSpacing: 3,
   },
   iconChip: {
     width: 40,
@@ -832,6 +777,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
+    gap: spacing.sm,
   },
   permissionBanner: {
     flexDirection: 'row',
@@ -842,44 +788,166 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF4F4',
     borderWidth: 1,
     borderColor: '#FFD3D3',
-    marginBottom: spacing.md,
   },
   permissionText: {
     ...typography.bodyMedium,
     color: colors.textPrimary,
     flex: 1,
   },
-  statsRow: {
+  mapWrap: {
+    height: MAP_HEIGHT,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  map: {
+    flex: 1,
+  },
+  mapPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  mapPlaceholderText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+  },
+  mapLegend: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.circle,
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  safeModeFab: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.circle,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    ...shadows.card,
   },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
+  safeModeFabActive: {
+    backgroundColor: colors.success,
   },
-  statValue: {
+  safeModeFabText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    fontSize: 12,
     color: colors.textPrimary,
-    letterSpacing: -0.5,
-  },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 11,
     letterSpacing: 0.3,
   },
-  statDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: colors.border,
+  helperChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+  },
+  helperChipZero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+  },
+  helperDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  helperDotIdle: {
+    backgroundColor: colors.textMuted,
+  },
+  helperChipNumber: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  helperChipText: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  helperChipCta: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.primary,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  voiceCard: {
+    flex: 1,
+    minHeight: 110,
+    borderRadius: radius.lg,
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: 6,
+  },
+  voiceCardActive: {
+    borderColor: colors.primary,
+    backgroundColor: '#FFF6F6',
+  },
+  voiceIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceIconActive: {
+    backgroundColor: colors.primary,
+  },
+  voiceCardLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+    letterSpacing: 0.5,
+  },
+  voiceCardLabelActive: {
+    color: colors.primary,
+  },
+  tinyPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+  },
+  tinyPillActive: {
+    backgroundColor: colors.primary,
+  },
+  tinyPillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: colors.textMuted,
+  },
+  tinyPillTextActive: {
+    color: colors.textInverse,
   },
   alertsBanner: {
     flexDirection: 'row',
@@ -888,7 +956,6 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.primary,
-    marginTop: spacing.sm,
     ...shadows.hero,
   },
   alertsBadge: {
@@ -913,158 +980,6 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: 'rgba(255,255,255,0.88)',
     marginTop: 2,
-    fontSize: 12,
-  },
-  communityQuiet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: spacing.sm,
-  },
-  communityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  communityQuietText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    color: colors.textPrimary,
-    fontSize: 14,
-  },
-  communityQuietMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 1,
-  },
-  sosSection: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
-  sosHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  voiceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: spacing.sm,
-  },
-  voiceDot: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  voiceDotActive: {
-    backgroundColor: '#FFEAEA',
-  },
-  voiceTitle: {
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  voiceMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  pill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
-  },
-  pillActive: {
-    backgroundColor: colors.primary,
-  },
-  pillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: colors.textMuted,
-  },
-  pillTextActive: {
-    color: colors.textInverse,
-  },
-  cardRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  featureCard: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    gap: 10,
-    minHeight: 104,
-    justifyContent: 'space-between',
-  },
-  featureCardOnDark: {
-    backgroundColor: colors.textPrimary,
-    borderColor: colors.textPrimary,
-    ...shadows.card,
-  },
-  featureCardOnGreen: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-    ...shadows.card,
-  },
-  featureHead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  miniPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
-  },
-  miniPillOn: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  miniPillOnGreen: {
-    backgroundColor: 'rgba(255,255,255,0.22)',
-  },
-  miniPillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 9,
-    letterSpacing: 1,
-    color: colors.textMuted,
-  },
-  miniPillTextOn: {
-    color: colors.textInverse,
-  },
-  featureTitle: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  featureMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
     fontSize: 12,
   },
 });

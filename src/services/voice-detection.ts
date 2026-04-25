@@ -156,8 +156,7 @@ function cleanupSubs() {
 function scheduleRestart(delayMs = 250) {
   if (restartTimer) clearTimeout(restartTimer);
   if (!shouldBeListening) return;
-  // Short delay so the native engine can tear down before we reopen. We
-  // keep this tight because the user expects the trigger to work *now*.
+  // Short delay so the native engine can tear down before we reopen.
   restartTimer = setTimeout(() => {
     if (shouldBeListening) startNativeSession();
   }, delayMs);

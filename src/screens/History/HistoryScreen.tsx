@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
-  FlatList,
   Pressable,
+  SectionList,
   StyleSheet,
   Text,
   View,
@@ -18,7 +18,7 @@ import {
 } from '@/components/common';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
-import type { SOSRecord } from '@/types';
+import type { SOSKind, SOSRecord } from '@/types';
 import type { AppStackParamList, TabParamList } from '@/navigation/types';
 
 type Nav = CompositeNavigationProp<
@@ -26,9 +26,27 @@ type Nav = CompositeNavigationProp<
   NativeStackNavigationProp<AppStackParamList>
 >;
 
+type Section = {
+  title: string;
+  data: SOSRecord[];
+};
+
+function recordKind(r: SOSRecord): SOSKind {
+  return r.kind ?? 'real';
+}
+
 export function HistoryScreen() {
   const navigation = useNavigation<Nav>();
   const records = useAppSelector((s) => s.history.records);
+
+  const sections: Section[] = useMemo(() => {
+    const real = records.filter((r) => recordKind(r) === 'real');
+    const test = records.filter((r) => recordKind(r) === 'test');
+    const out: Section[] = [];
+    if (real.length > 0) out.push({ title: 'Real alerts', data: real });
+    if (test.length > 0) out.push({ title: 'Practice runs', data: test });
+    return out;
+  }, [records]);
 
   if (records.length === 0) {
     return (
@@ -54,11 +72,15 @@ export function HistoryScreen() {
         </Text>
       </View>
 
-      <FlatList
-        data={records}
+      <SectionList
+        sections={sections}
         keyExtractor={(r) => r.id}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        SectionSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        renderSectionHeader={({ section }) => (
+          <Text style={styles.sectionHeader}>{section.title}</Text>
+        )}
         renderItem={({ item }) => (
           <Pressable
             onPress={() =>
@@ -73,19 +95,8 @@ export function HistoryScreen() {
                   {item.location.address ?? formatLatLng(item)}
                 </Text>
                 <View style={styles.metaRow}>
-                  <StatusPill status={item.status} />
-                  <Text style={styles.meta}>
-                    {item.helpers.length} helper
-                    {item.helpers.length === 1 ? '' : 's'}
-                  </Text>
-                  {item.responseTime != null ? (
-                    <>
-                      <Text style={styles.dot}>•</Text>
-                      <Text style={styles.meta}>
-                        {formatResponseTime(item.responseTime)}
-                      </Text>
-                    </>
-                  ) : null}
+                  <StatusPill record={item} />
+                  <Text style={styles.meta}>{describeOutcome(item)}</Text>
                 </View>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -98,6 +109,13 @@ export function HistoryScreen() {
 }
 
 function StatusIcon({ record }: { record: SOSRecord }) {
+  if (recordKind(record) === 'test') {
+    return (
+      <View style={styles.iconWrap}>
+        <Ionicons name="flask-outline" size={28} color={colors.textMuted} />
+      </View>
+    );
+  }
   const map = {
     active: { icon: 'alert-circle' as const, color: colors.primary },
     resolved: { icon: 'checkmark-circle' as const, color: colors.success },
@@ -111,18 +129,54 @@ function StatusIcon({ record }: { record: SOSRecord }) {
   );
 }
 
-function StatusPill({ status }: { status: SOSRecord['status'] }) {
-  const map = {
-    active: { label: 'Active', bg: colors.primary, fg: colors.textInverse },
-    resolved: { label: 'Resolved', bg: colors.success, fg: colors.textInverse },
-    cancelled: { label: 'Cancelled', bg: colors.surface, fg: colors.textSecondary },
-  };
-  const m = map[status];
+// One pill per record — surfaces the most informative thing about it.
+//   Test record           → "PRACTICE"
+//   Cancelled before send → "CANCELLED"
+//   Resolved with helper  → "RESOLVED"
+//   Real, 0 responders    → "NO RESPONSE"
+//   Real, helpers but unresolved → "ACTIVE"
+function StatusPill({ record }: { record: SOSRecord }) {
+  const tone = pillTone(record);
   return (
-    <View style={[styles.pill, { backgroundColor: m.bg }]}>
-      <Text style={[styles.pillText, { color: m.fg }]}>{m.label}</Text>
+    <View style={[styles.pill, { backgroundColor: tone.bg }]}>
+      <Text style={[styles.pillText, { color: tone.fg }]}>{tone.label}</Text>
     </View>
   );
+}
+
+function pillTone(record: SOSRecord): {
+  label: string;
+  bg: string;
+  fg: string;
+} {
+  if (recordKind(record) === 'test') {
+    return { label: 'PRACTICE', bg: colors.surface, fg: colors.textSecondary };
+  }
+  if (record.status === 'cancelled') {
+    return { label: 'CANCELLED', bg: colors.surface, fg: colors.textSecondary };
+  }
+  if (record.status === 'resolved') {
+    return { label: 'RESOLVED', bg: colors.success, fg: colors.textInverse };
+  }
+  // status === 'active'
+  if (record.helpers.length === 0) {
+    return { label: 'NO RESPONSE', bg: colors.warning, fg: colors.dark };
+  }
+  return { label: 'ACTIVE', bg: colors.primary, fg: colors.textInverse };
+}
+
+// Outcome line: never shows a response time when there were no helpers,
+// never shows a helper count for cancelled/test runs.
+function describeOutcome(record: SOSRecord): string {
+  if (recordKind(record) === 'test') return 'No real alerts sent';
+  if (record.status === 'cancelled') return 'Cancelled during countdown';
+  const helpers = record.helpers.length;
+  if (helpers === 0) return 'No helpers responded';
+  const helperText = `${helpers} helper${helpers === 1 ? '' : 's'}`;
+  if (record.responseTime != null) {
+    return `${helperText} · ${formatResponseTime(record.responseTime)}`;
+  }
+  return helperText;
 }
 
 function formatDateTime(ts: number) {
@@ -160,6 +214,17 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
   },
+  sectionHeader: {
+    ...typography.caption,
+    fontFamily: fontFamilies.poppinsBold,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    fontSize: 11,
+    paddingHorizontal: spacing.lg,
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+    textTransform: 'uppercase',
+  },
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.xl,
@@ -193,10 +258,6 @@ const styles = StyleSheet.create({
   meta: {
     ...typography.caption,
     color: colors.textSecondary,
-  },
-  dot: {
-    ...typography.caption,
-    color: colors.textMuted,
   },
   pill: {
     paddingHorizontal: spacing.sm,

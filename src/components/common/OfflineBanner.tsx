@@ -23,7 +23,7 @@ export function OfflineBanner() {
     <View style={styles.wrap} accessibilityRole="alert">
       <Ionicons name="cloud-offline" size={16} color={colors.textInverse} />
       <Text style={styles.text}>
-        Offline — SOS will queue and send when you reconnect.
+        Offline. SOS will queue and send when you reconnect.
       </Text>
     </View>
   );

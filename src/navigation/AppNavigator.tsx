@@ -18,6 +18,8 @@ import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen
 import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
+import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
+import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -144,6 +146,16 @@ export function AppNavigator() {
         name="CommunityAlerts"
         component={CommunityAlertsScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={withHeader('Profile')}
+      />
+      <Stack.Screen
+        name="Friends"
+        component={FriendsScreen}
+        options={withHeader('Friends')}
       />
     </Stack.Navigator>
   );

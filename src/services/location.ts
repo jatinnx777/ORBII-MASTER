@@ -38,6 +38,35 @@ export async function getCurrentLocation(): Promise<GeoPoint> {
   };
 }
 
+// Optimised for the SOS critical path: returns the cached fix instantly if
+// one is available (every modern Android caches the last GPS read for ~3s),
+// then falls back to a Balanced-accuracy live read which is ~3x faster than
+// High-accuracy. Use this when latency matters more than the last 5m of
+// precision; reverse-geocoding can be done off the critical path.
+export async function getFastLocation(): Promise<GeoPoint> {
+  try {
+    const cached = await Location.getLastKnownPositionAsync({
+      maxAge: 30_000,
+      requiredAccuracy: 100,
+    });
+    if (cached) {
+      return {
+        latitude: cached.coords.latitude,
+        longitude: cached.coords.longitude,
+      };
+    }
+  } catch {
+    // ignore, fall through to live read
+  }
+  const live = await Location.getCurrentPositionAsync({
+    accuracy: Location.Accuracy.Balanced,
+  });
+  return {
+    latitude: live.coords.latitude,
+    longitude: live.coords.longitude,
+  };
+}
+
 export async function reverseGeocode(point: GeoPoint): Promise<string | null> {
   try {
     const results = await Location.reverseGeocodeAsync(point);

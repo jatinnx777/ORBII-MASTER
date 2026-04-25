@@ -45,6 +45,9 @@ export type PresencePeer = {
   name: string;
   photoUri: string | null;
   location: GeoPoint | null;
+  // True when the user has completed Aadhaar/ID verification AND turned
+  // helper mode on. Drives pin color on the home map (yellow vs green).
+  isVerified?: boolean;
   at: number;
 };
 
@@ -76,14 +79,15 @@ export function joinPresence(self: {
   name: string;
   photoUri: string | null;
   location: GeoPoint | null;
-}): { update: (loc: GeoPoint) => void; leave: () => void } {
+  isVerified?: boolean;
+}): { update: (loc: GeoPoint, isVerified?: boolean) => void; leave: () => void } {
   if (presenceChannel) {
-    // Already joined — just push a fresh track.
     presenceChannel.track({
       userId: self.userId,
       name: self.name,
       photoUri: self.photoUri,
       location: self.location,
+      isVerified: !!self.isVerified,
       at: Date.now(),
     });
   } else {
@@ -112,6 +116,7 @@ export function joinPresence(self: {
           name: self.name,
           photoUri: self.photoUri,
           location: self.location,
+          isVerified: !!self.isVerified,
           at: Date.now(),
         });
       }
@@ -120,13 +125,14 @@ export function joinPresence(self: {
   }
 
   return {
-    update: (loc: GeoPoint) => {
+    update: (loc: GeoPoint, isVerified?: boolean) => {
       if (!presenceChannel) return;
       presenceChannel.track({
         userId: self.userId,
         name: self.name,
         photoUri: self.photoUri,
         location: loc,
+        isVerified: isVerified ?? !!self.isVerified,
         at: Date.now(),
       });
     },

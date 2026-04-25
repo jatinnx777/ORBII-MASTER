@@ -115,7 +115,7 @@ export function SafeJourneyActiveScreen() {
     try {
       const point = await getCurrentLocation();
       const mapsUrl = `https://maps.google.com/?q=${point.latitude},${point.longitude}`;
-      const msg = `ORBII Safe Mode — I'm on a "${journey.label}" trip. Live location: ${mapsUrl}`;
+      const msg = `ORBII Safe Mode: I'm on a "${journey.label}" trip. Live location: ${mapsUrl}`;
       if (contact) {
         const sms =
           Platform.OS === 'ios'
@@ -231,7 +231,7 @@ export function SafeJourneyActiveScreen() {
       <View style={{ flex: 1 }} />
 
       <View style={{ gap: spacing.sm }}>
-        <Button label="I'm safe — end Safe Mode" onPress={handleEnd} />
+        <Button label="I'm safe, end Safe Mode" onPress={handleEnd} />
         <Text style={styles.footerHint}>
           If you don't end Safe Mode before the timer runs out, ORBII will
           auto-fire SOS and alert {contact?.name ?? 'your contacts'}.

@@ -70,6 +70,7 @@ export function IdVerificationScreen() {
         .from('profiles')
         .upsert({
           id: profile.uid,
+          email: profile.email,
           phone: profile.phone,
           id_kind: kind,
           id_number: number.trim().toUpperCase(),

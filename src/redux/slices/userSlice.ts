@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import type {
   AuthStatus,
   EmergencyContact,
+  Friend,
   IdDocumentKind,
   IdVerificationStatus,
   UserProfile,
@@ -9,16 +10,12 @@ import type {
 
 type UserState = {
   status: AuthStatus;
-  pendingPhone: string | null;
-  verificationId: string | null;
   profile: UserProfile | null;
   error: string | null;
 };
 
 const initialState: UserState = {
   status: 'idle',
-  pendingPhone: null,
-  verificationId: null,
   profile: null,
   error: null,
 };
@@ -27,24 +24,11 @@ const userSlice = createSlice({
   name: 'user',
   initialState,
   reducers: {
-    otpSendStarted(state, action: PayloadAction<{ phone: string }>) {
-      state.status = 'sending_otp';
-      state.pendingPhone = action.payload.phone;
+    signInStarted(state) {
+      state.status = 'signing_in';
       state.error = null;
     },
-    otpSendSucceeded(state, action: PayloadAction<{ verificationId: string }>) {
-      state.status = 'otp_sent';
-      state.verificationId = action.payload.verificationId;
-    },
-    otpSendFailed(state, action: PayloadAction<{ error: string }>) {
-      state.status = 'error';
-      state.error = action.payload.error;
-    },
-    otpVerifyStarted(state) {
-      state.status = 'verifying_otp';
-      state.error = null;
-    },
-    otpVerifySucceeded(
+    signInSucceeded(
       state,
       action: PayloadAction<{ profile: UserProfile; needsProfile: boolean }>,
     ) {
@@ -53,7 +37,7 @@ const userSlice = createSlice({
         ? 'needs_profile'
         : 'authenticated';
     },
-    otpVerifyFailed(state, action: PayloadAction<{ error: string }>) {
+    signInFailed(state, action: PayloadAction<{ error: string }>) {
       state.status = 'error';
       state.error = action.payload.error;
     },
@@ -82,6 +66,22 @@ const userSlice = createSlice({
           (c) => c.id !== action.payload,
         );
       }
+    },
+    usernameSet(state, action: PayloadAction<string>) {
+      if (state.profile) state.profile.username = action.payload;
+    },
+    friendAdded(state, action: PayloadAction<Friend>) {
+      if (!state.profile) return;
+      const list = state.profile.friends ?? [];
+      const exists = list.some((f) => f.username === action.payload.username);
+      if (exists) return;
+      state.profile.friends = [action.payload, ...list];
+    },
+    friendRemoved(state, action: PayloadAction<string>) {
+      if (!state.profile) return;
+      state.profile.friends = (state.profile.friends ?? []).filter(
+        (f) => f.username !== action.payload,
+      );
     },
     premiumUpgraded(state) {
       if (state.profile) state.profile.isPremium = true;
@@ -120,23 +120,23 @@ const userSlice = createSlice({
     errorCleared(state) {
       state.error = null;
       if (state.status === 'error') {
-        state.status = state.verificationId ? 'otp_sent' : 'idle';
+        state.status = 'idle';
       }
     },
   },
 });
 
 export const {
-  otpSendStarted,
-  otpSendSucceeded,
-  otpSendFailed,
-  otpVerifyStarted,
-  otpVerifySucceeded,
-  otpVerifyFailed,
+  signInStarted,
+  signInSucceeded,
+  signInFailed,
   profileUpdated,
   contactAdded,
   contactUpdated,
   contactRemoved,
+  usernameSet,
+  friendAdded,
+  friendRemoved,
   premiumUpgraded,
   helperModeToggled,
   userIdSubmitted,

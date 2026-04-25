@@ -5,6 +5,8 @@ import { addNotification } from './notification-inbox';
 let configured = false;
 const PINNED_SHORTCUT_ID = 'orbii-sos-shortcut';
 const PINNED_SHORTCUT_CATEGORY = 'orbii-sos-shortcut';
+const LISTENING_BADGE_ID = 'orbii-voice-listening';
+const VOICE_WAKE_ID = 'orbii-voice-wake';
 
 function configure() {
   if (configured) return;
@@ -37,6 +39,20 @@ function configure() {
       name: 'Quick SOS shortcut',
       description: 'Always-visible button to fire an SOS in one tap.',
       importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0],
+      enableVibrate: false,
+      sound: null,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: false,
+    }).catch(() => undefined);
+    // "Listening" badge channel — silent, low-importance ongoing notification
+    // posted while always-on Voice SOS is active. Its primary purpose is to
+    // give Android a visible reason to keep our process alive in the
+    // background (battery-optimization carve-out for foreground-state apps).
+    Notifications.setNotificationChannelAsync('voice-listening', {
+      name: 'Voice SOS listening',
+      description: 'Shown while ORBII is listening for help in the background.',
+      importance: Notifications.AndroidImportance.LOW,
       vibrationPattern: [0],
       enableVibrate: false,
       sound: null,
@@ -122,5 +138,74 @@ export async function hidePinnedSOSShortcut(): Promise<void> {
     await Notifications.dismissNotificationAsync(PINNED_SHORTCUT_ID);
   } catch {
     // ignore — may already be gone
+  }
+}
+
+// Silent ongoing notification shown while always-on Voice SOS is enabled.
+// Android treats apps with a foreground-style ongoing notification as more
+// important than fully-backgrounded ones, which is what keeps the speech
+// recognizer process alive when the screen is off.
+export async function showListeningBadge(): Promise<void> {
+  configure();
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: LISTENING_BADGE_ID,
+      content: {
+        title: 'ORBII is listening',
+        body: 'Say "help", "bachao", or "madad" to fire an SOS.',
+        data: { kind: 'voice_listening' },
+        sticky: true,
+        autoDismiss: false,
+        ...(Platform.OS === 'android'
+          ? {
+              priority: Notifications.AndroidNotificationPriority.LOW,
+              color: '#FF0000',
+            }
+          : {}),
+      },
+      trigger: Platform.OS === 'android'
+        ? ({ channelId: 'voice-listening' } as Notifications.NotificationTriggerInput)
+        : null,
+    });
+  } catch (err) {
+    console.warn('[notifications] listening badge failed', err);
+  }
+}
+
+export async function hideListeningBadge(): Promise<void> {
+  try {
+    await Notifications.dismissNotificationAsync(LISTENING_BADGE_ID);
+  } catch {
+    // ignore
+  }
+}
+
+// Hard wake-up notification for when a trigger word is heard while the phone
+// is locked / app is backgrounded. Uses the high-priority SOS channel so the
+// device vibrates aggressively, plays a sound, and shows the alert over the
+// lock screen. Tapping it opens the app to the SOS countdown.
+export async function fireVoiceWakeNotification(keyword: string): Promise<void> {
+  configure();
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: VOICE_WAKE_ID,
+      content: {
+        title: `Heard "${keyword}", opening SOS`,
+        body: 'Tap to confirm or cancel the 5-second countdown.',
+        data: { kind: 'voice_trigger', keyword },
+        sound: 'default',
+        ...(Platform.OS === 'android'
+          ? {
+              priority: Notifications.AndroidNotificationPriority.MAX,
+              color: '#FF0000',
+            }
+          : {}),
+      },
+      trigger: Platform.OS === 'android'
+        ? ({ channelId: 'sos' } as Notifications.NotificationTriggerInput)
+        : null,
+    });
+  } catch (err) {
+    console.warn('[notifications] voice wake failed', err);
   }
 }

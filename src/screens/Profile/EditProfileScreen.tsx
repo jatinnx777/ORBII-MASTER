@@ -85,10 +85,10 @@ export function EditProfileScreen() {
           autoCapitalize="words"
         />
         <Input
-          label="Phone"
-          value={profile?.phone ?? ''}
+          label="Email"
+          value={profile?.email ?? ''}
           editable={false}
-          hint="Phone number can't be changed. Contact support if needed."
+          hint="Email comes from your Google account and can't be changed here."
         />
       </View>
 

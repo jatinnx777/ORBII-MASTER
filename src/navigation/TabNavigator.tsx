@@ -3,9 +3,8 @@ import { Platform, StyleSheet } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
-import { HelpersTabScreen } from '@/screens/Helpers/HelpersTabScreen';
+import { DrivingScreen } from '@/screens/Driving/DrivingScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
-import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { TabParamList } from './types';
@@ -19,9 +18,8 @@ const icons: Record<
   { active: IoniconsName; inactive: IoniconsName }
 > = {
   Home: { active: 'home', inactive: 'home-outline' },
-  Helpers: { active: 'people', inactive: 'people-outline' },
+  Driving: { active: 'car-sport', inactive: 'car-sport-outline' },
   History: { active: 'time', inactive: 'time-outline' },
-  Profile: { active: 'person-circle', inactive: 'person-circle-outline' },
   Settings: { active: 'settings', inactive: 'settings-outline' },
 };
 
@@ -43,9 +41,8 @@ export function TabNavigator() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Helpers" component={HelpersTabScreen} />
+      <Tab.Screen name="Driving" component={DrivingScreen} />
       <Tab.Screen name="History" component={HistoryScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );

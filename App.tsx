@@ -30,10 +30,18 @@ import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
 import { OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
+  fireVoiceWakeNotification,
+  hideListeningBadge,
   hidePinnedSOSShortcut,
+  showListeningBadge,
   showPinnedSOSShortcut,
 } from '@/services/notifications';
 import { prewarmBroadcastChannel } from '@/services/community';
+import {
+  startListening,
+  stopListening,
+  subscribeKeyword,
+} from '@/services/voice-detection';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
@@ -46,11 +54,10 @@ function RootNavigator() {
   const status = useAppSelector((s) => s.user.status);
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
+  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
-  // signs in / out. Best-effort — not all platforms keep ongoing
-  // notifications truly un-dismissable, but this gives a one-tap path
-  // even from the lock screen on most Android devices.
+  // signs in / out.
   useEffect(() => {
     if (status === 'authenticated') {
       showPinnedSOSShortcut().catch(() => undefined);
@@ -58,6 +65,31 @@ function RootNavigator() {
       hidePinnedSOSShortcut().catch(() => undefined);
     }
   }, [status]);
+
+  // Always-on Voice SOS — when enabled, kick the listener and post a sticky
+  // "listening" notification so Android keeps the process alive while the
+  // app is backgrounded / the screen is off.
+  useEffect(() => {
+    if (status !== 'authenticated' || !backgroundVoice) {
+      hideListeningBadge().catch(() => undefined);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const result = await startListening();
+      if (cancelled) return;
+      if (result.ok) {
+        showListeningBadge().catch(() => undefined);
+      } else {
+        hideListeningBadge().catch(() => undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+      hideListeningBadge().catch(() => undefined);
+      stopListening();
+    };
+  }, [status, backgroundVoice]);
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
@@ -112,22 +144,40 @@ export default function App() {
     const sub = Notifications.addNotificationResponseReceivedListener((res) => {
       const actionId = res.actionIdentifier;
       const data = res.notification.request.content.data ?? {};
-      if (data.kind !== 'sos_shortcut' && data.kind !== 'community_alert') return;
-      // The default tap (no action button) opens the app to its current
-      // screen. Only fire SOS on the explicit action.
-      if (actionId === 'send-sos') {
-        if (navigationRef.isReady()) {
+      if (data.kind === 'sos_shortcut') {
+        if (actionId === 'send-sos' && navigationRef.isReady()) {
           // @ts-expect-error - SOSCountdown is in the AppStack only.
           navigationRef.navigate('SOSCountdown');
         }
-      } else if (actionId === 'im-safe') {
-        // No-op — the user just confirmed they're safe.
-      } else if (data.kind === 'community_alert' && navigationRef.isReady()) {
+        return;
+      }
+      if (data.kind === 'community_alert' && navigationRef.isReady()) {
         // @ts-expect-error - CommunityAlerts is in the AppStack only.
         navigationRef.navigate('CommunityAlerts');
+        return;
+      }
+      if (data.kind === 'voice_trigger' && navigationRef.isReady()) {
+        // Tapping the wake notification jumps straight into the countdown.
+        // @ts-expect-error - SOSCountdown is in the AppStack only.
+        navigationRef.navigate('SOSCountdown');
       }
     });
     return () => sub.remove();
+  }, []);
+
+  // Global voice trigger handler — fires whether the keyword is heard from
+  // the foreground HomeScreen listener OR the always-on background listener.
+  // The wake notification ensures the screen lights up and the SOS flow opens
+  // even if the phone was locked.
+  useEffect(() => {
+    const unsub = subscribeKeyword((keyword) => {
+      fireVoiceWakeNotification(keyword).catch(() => undefined);
+      if (navigationRef.isReady()) {
+        // @ts-expect-error - SOSCountdown is in the AppStack only.
+        navigationRef.navigate('SOSCountdown');
+      }
+    });
+    return unsub;
   }, []);
 
   if (!ready) {
