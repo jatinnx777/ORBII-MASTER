@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Vibration, View } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
@@ -36,7 +37,12 @@ import {
   showListeningBadge,
   showPinnedSOSShortcut,
 } from '@/services/notifications';
-import { prewarmBroadcastChannel } from '@/services/community';
+import {
+  alertFromBroadcast,
+  prewarmBroadcastChannel,
+  subscribeToAlerts,
+} from '@/services/community';
+import { alertReceived } from '@/redux/slices/communitySlice';
 import {
   startListening,
   stopListening,
@@ -178,6 +184,37 @@ export default function App() {
       }
     });
     return unsub;
+  }, []);
+
+  // Global SOS broadcast receiver. When ANY user nearby fires an SOS we
+  // shove the alert into the community slice and buzz the phone hard so
+  // the responder notices even from a pocket. Settings → "Alert vibration"
+  // toggles it. Subscribing here (not on a screen) means the buzz fires
+  // regardless of which tab the responder is on.
+  useEffect(() => {
+    const seen = new Set<string>();
+    const sub = subscribeToAlerts((broadcast) => {
+      const state = store.getState();
+      const me = state.user.profile?.uid ?? null;
+      const here = state.sos.currentLocation;
+      const alert = alertFromBroadcast(broadcast, here, me);
+      if (!alert) return;
+      // Dedup if the same broadcast lands twice (Supabase resends after
+      // socket recovery).
+      if (seen.has(alert.id)) return;
+      seen.add(alert.id);
+      store.dispatch(alertReceived(alert));
+      if (state.app.alertVibration) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+          () => undefined,
+        );
+        // 6 buzzes, ~600ms each with 200ms gaps. Total ~5s, distinctive
+        // enough that even a pocketed phone feels different from a normal
+        // notification.
+        Vibration.vibrate([0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]);
+      }
+    });
+    return () => sub.unsubscribe();
   }, []);
 
   if (!ready) {

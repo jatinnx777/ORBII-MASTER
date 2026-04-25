@@ -72,6 +72,9 @@ const appSlice = createSlice({
     backgroundVoiceToggled(state, action: PayloadAction<boolean>) {
       state.backgroundVoice = action.payload;
     },
+    alertVibrationToggled(state, action: PayloadAction<boolean>) {
+      state.alertVibration = action.payload;
+    },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
     },
@@ -107,6 +110,7 @@ export const {
   connectionChanged,
   voiceDetectionToggled,
   backgroundVoiceToggled,
+  alertVibrationToggled,
   pushEnabledSet,
   safeJourneyStarted,
   safeJourneyEnded,

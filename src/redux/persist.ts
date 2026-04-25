@@ -15,6 +15,7 @@ type PersistedApp = {
   onboarded?: boolean;
   voiceDetection?: boolean;
   backgroundVoice?: boolean;
+  alertVibration?: boolean;
   pushEnabled?: boolean;
   policyAcceptedAt?: number | null;
 };
@@ -61,6 +62,7 @@ function subscribePersist() {
       next.app.onboarded !== prev.app.onboarded ||
       next.app.voiceDetection !== prev.app.voiceDetection ||
       next.app.backgroundVoice !== prev.app.backgroundVoice ||
+      next.app.alertVibration !== prev.app.alertVibration ||
       next.app.pushEnabled !== prev.app.pushEnabled ||
       next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
@@ -68,6 +70,7 @@ function subscribePersist() {
         onboarded: next.app.onboarded,
         voiceDetection: next.app.voiceDetection,
         backgroundVoice: next.app.backgroundVoice,
+        alertVibration: next.app.alertVibration,
         pushEnabled: next.app.pushEnabled,
         policyAcceptedAt: next.app.policyAcceptedAt,
       });

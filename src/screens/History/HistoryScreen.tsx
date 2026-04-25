@@ -8,9 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import {
   Card,
   EmptyState,
@@ -19,12 +17,9 @@ import {
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import type { SOSKind, SOSRecord } from '@/types';
-import type { AppStackParamList, TabParamList } from '@/navigation/types';
+import type { AppStackParamList } from '@/navigation/types';
 
-type Nav = CompositeNavigationProp<
-  BottomTabNavigationProp<TabParamList, 'History'>,
-  NativeStackNavigationProp<AppStackParamList>
->;
+type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 type Section = {
   title: string;

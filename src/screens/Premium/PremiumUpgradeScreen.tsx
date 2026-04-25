@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -22,73 +22,194 @@ import { useAppSelector } from '@/redux/store';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// 3-tier plan structure. We don't ship Razorpay yet — the "Upgrade" button
-// captures interest into a local waitlist instead, so we have a list of
-// people to email when payments go live.
+// Three subscription tiers, compared side-by-side. Every cell tells the
+// user exactly what they get and what they don't — no marketing wiggle.
+// Payments are not live yet; the upgrade buttons capture waitlist emails.
 type PlanId = 'free' | 'premium' | 'premium_plus';
 
 type Plan = {
   id: PlanId;
   name: string;
+  shortName: string;
   priceLabel: string;
-  perMonth: string;
-  badge?: string;
+  perPeriod: string;
   highlight?: boolean;
-  pitch: string;
-  features: Array<{ supported: boolean; label: string }>;
 };
 
 const PLANS: Plan[] = [
   {
     id: 'free',
     name: 'Free',
+    shortName: 'Free',
     priceLabel: '₹0',
-    perMonth: 'forever',
-    pitch: 'Everything you need to send help in 2 minutes.',
-    features: [
-      { supported: true, label: '2 SOS per month' },
-      { supported: true, label: 'Standard helper dispatch' },
-      { supported: true, label: 'Up to 3 emergency contacts' },
-      { supported: true, label: '30-day SOS history' },
-      { supported: false, label: 'Voice detection' },
-      { supported: false, label: 'Priority dispatch' },
-      { supported: false, label: 'Family dashboard' },
-      { supported: false, label: 'Safe zones' },
-    ],
+    perPeriod: 'forever',
   },
   {
     id: 'premium',
     name: 'Premium',
+    shortName: 'Premium',
     priceLabel: '₹99',
-    perMonth: 'per month',
-    badge: 'Most popular',
+    perPeriod: 'per month',
     highlight: true,
-    pitch: 'For people who want voice triggers and priority help.',
-    features: [
-      { supported: true, label: 'Unlimited SOS' },
-      { supported: true, label: 'Priority dispatch, helpers see you first' },
-      { supported: true, label: 'Up to 5 emergency contacts' },
-      { supported: true, label: 'Full SOS history (forever)' },
-      { supported: true, label: 'Voice detection: "help" or "bachao"' },
-      { supported: true, label: 'Safe zones with arrival/leave alerts' },
-      { supported: true, label: 'Monthly safety report' },
-      { supported: true, label: 'No ads' },
-    ],
   },
   {
     id: 'premium_plus',
     name: 'Premium Plus',
+    shortName: 'Plus',
     priceLabel: '₹299',
-    perMonth: 'per month',
-    pitch: 'Watch over your family, all in one dashboard.',
-    features: [
-      { supported: true, label: 'Everything in Premium' },
-      { supported: true, label: 'Family dashboard: track up to 5 members' },
-      { supported: true, label: 'Live location sharing 24/7' },
-      { supported: true, label: 'Geofencing alerts' },
-      { supported: true, label: 'Unlimited custom safe zones' },
-      { supported: true, label: 'Priority 24/7 helpline' },
-      { supported: true, label: 'Monthly family safety report' },
+    perPeriod: 'per month',
+  },
+];
+
+// Cell value: a string renders as plain text, true = ✓, false = empty dash.
+type Cell = string | boolean;
+
+type FeatureRow = {
+  label: string;
+  hint?: string;
+  values: Record<PlanId, Cell>;
+};
+
+type FeatureGroup = {
+  title: string;
+  rows: FeatureRow[];
+};
+
+const FEATURE_GROUPS: FeatureGroup[] = [
+  {
+    title: 'SOS dispatch',
+    rows: [
+      {
+        label: 'Monthly SOS limit',
+        hint: 'How many SOS broadcasts you can fire per calendar month.',
+        values: { free: '2', premium: 'Unlimited', premium_plus: 'Unlimited' },
+      },
+      {
+        label: 'Dispatch priority',
+        hint: 'Order helpers see your SOS in. Premium users surface above Free.',
+        values: { free: 'Standard', premium: 'Priority', premium_plus: 'Top priority' },
+      },
+      {
+        label: 'Target response time',
+        hint: 'Median time for the first helper to arrive in covered cities.',
+        values: { free: '5–7 min', premium: '2–3 min', premium_plus: '2 min' },
+      },
+      {
+        label: 'Police auto-notify',
+        hint: 'Local police control room is dialled the moment SOS fires.',
+        values: { free: true, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Lock-screen SOS shortcut',
+        values: { free: true, premium: true, premium_plus: true },
+      },
+    ],
+  },
+  {
+    title: 'Voice and hands-free',
+    rows: [
+      {
+        label: 'Voice detection',
+        hint: 'Listens for "help", "bachao", "madad" and auto-fires SOS.',
+        values: { free: false, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Background listening',
+        hint: 'Voice trigger keeps working while the app is closed.',
+        values: { free: false, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Crash-detected SOS',
+        hint: 'Phone sensors fire SOS automatically on a detected accident.',
+        values: { free: false, premium: 'Add-on', premium_plus: true },
+      },
+    ],
+  },
+  {
+    title: 'Emergency contacts',
+    rows: [
+      {
+        label: 'Max contacts',
+        values: { free: '3', premium: '5', premium_plus: '10' },
+      },
+      {
+        label: 'Auto-SMS on SOS',
+        hint: 'Contacts get an SMS with your name and live tracking link.',
+        values: { free: true, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Live location link expires',
+        values: { free: '15 min', premium: '60 min', premium_plus: '24 hours' },
+      },
+    ],
+  },
+  {
+    title: 'Safe Mode and zones',
+    rows: [
+      {
+        label: 'Live journey guard',
+        hint: 'Auto-fires SOS if you don\'t confirm safe arrival by ETA.',
+        values: { free: true, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Custom safe zones',
+        hint: 'Saved spots like home, office, college; arrivals trigger alerts.',
+        values: { free: false, premium: '3 zones', premium_plus: 'Unlimited' },
+      },
+      {
+        label: 'Family arrival alerts',
+        hint: 'Get a push when a circle member enters or leaves a safe zone.',
+        values: { free: false, premium: false, premium_plus: true },
+      },
+    ],
+  },
+  {
+    title: 'Friends and family circle',
+    rows: [
+      {
+        label: 'Friends you can add',
+        values: { free: '5', premium: '25', premium_plus: 'Unlimited' },
+      },
+      {
+        label: 'Family dashboard',
+        hint: 'Track up to 5 family members\' locations and SOS history.',
+        values: { free: false, premium: false, premium_plus: true },
+      },
+      {
+        label: 'Live location 24/7',
+        hint: 'Continuous location share with circle members, not just on SOS.',
+        values: { free: false, premium: false, premium_plus: true },
+      },
+    ],
+  },
+  {
+    title: 'History and reports',
+    rows: [
+      {
+        label: 'SOS history kept',
+        values: { free: '30 days', premium: 'Forever', premium_plus: 'Forever' },
+      },
+      {
+        label: 'Monthly safety report',
+        values: { free: false, premium: true, premium_plus: true },
+      },
+      {
+        label: 'Family safety report',
+        values: { free: false, premium: false, premium_plus: true },
+      },
+    ],
+  },
+  {
+    title: 'Support and ads',
+    rows: [
+      {
+        label: 'Customer support',
+        values: { free: 'Email', premium: 'Priority email', premium_plus: '24/7 helpline' },
+      },
+      {
+        label: 'Ads inside the app',
+        values: { free: 'Yes', premium: 'No', premium_plus: 'No' },
+      },
     ],
   },
 ];
@@ -101,7 +222,6 @@ type WaitlistEntry = {
 
 async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
   const existing = (await getItem<WaitlistEntry[]>(storageKeys.premiumWaitlist)) ?? [];
-  // De-dupe on (email, plan) so multiple taps don't bloat the list.
   const filtered = existing.filter(
     (e) => !(e.email === entry.email && e.plan === entry.plan),
   );
@@ -120,11 +240,6 @@ export function PremiumUpgradeScreen() {
   useEffect(() => {
     trackEvent('premium_viewed');
   }, []);
-
-  const currentPlanLabel = useMemo(
-    () => PLANS.find((p) => p.id === currentPlanId)?.name ?? 'Free',
-    [currentPlanId],
-  );
 
   const handleUpgradePress = (planId: PlanId) => {
     if (planId === currentPlanId) return;
@@ -159,31 +274,113 @@ export function PremiumUpgradeScreen() {
 
   return (
     <ScreenContainer padded={false}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.heroWrap}>
-          <View style={styles.currentPill}>
-            <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-            <Text style={styles.currentPillText}>
-              You're on {currentPlanLabel}
-            </Text>
-          </View>
           <Text style={styles.heroTitle}>Choose your plan</Text>
           <Text style={styles.heroBody}>
-            Payments aren't live yet. Join the waitlist on any paid plan and
-            we'll email you when they switch on.
+            Every row below tells you exactly what you get. Payments aren't live
+            yet — join the waitlist on any paid plan and we'll email you the
+            moment they switch on.
           </Text>
         </View>
 
-        <View style={styles.plansList}>
+        <View style={styles.planHeaderRow}>
+          <View style={styles.featureColHeader} />
           {PLANS.map((plan) => (
-            <PlanCard
+            <View
               key={plan.id}
-              plan={plan}
-              isCurrent={plan.id === currentPlanId}
-              onPress={() => handleUpgradePress(plan.id)}
-            />
+              style={[
+                styles.planCol,
+                plan.highlight && styles.planColHighlight,
+                currentPlanId === plan.id && styles.planColCurrent,
+              ]}
+            >
+              {plan.highlight ? (
+                <View style={styles.popularPill}>
+                  <Text style={styles.popularPillText}>POPULAR</Text>
+                </View>
+              ) : null}
+              <Text style={[styles.planColName, plan.highlight && { color: colors.primary }]}>
+                {plan.shortName}
+              </Text>
+              <Text style={styles.planColPrice}>{plan.priceLabel}</Text>
+              <Text style={styles.planColPeriod}>{plan.perPeriod}</Text>
+              {currentPlanId === plan.id ? (
+                <Text style={styles.currentTag}>Your plan</Text>
+              ) : null}
+            </View>
           ))}
         </View>
+
+        {FEATURE_GROUPS.map((group) => (
+          <View key={group.title} style={styles.group}>
+            <Text style={styles.groupTitle}>{group.title}</Text>
+            <View style={styles.groupCard}>
+              {group.rows.map((row, idx) => (
+                <View key={row.label}>
+                  <View style={styles.featureRow}>
+                    <View style={styles.featureLabelCell}>
+                      <Text style={styles.featureLabel}>{row.label}</Text>
+                      {row.hint ? (
+                        <Text style={styles.featureHint}>{row.hint}</Text>
+                      ) : null}
+                    </View>
+                    {PLANS.map((plan) => (
+                      <CellView key={plan.id} value={row.values[plan.id]} />
+                    ))}
+                  </View>
+                  {idx < group.rows.length - 1 ? (
+                    <View style={styles.divider} />
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          </View>
+        ))}
+
+        <View style={styles.upgradeRow}>
+          <View style={styles.upgradeRowSpacer} />
+          {PLANS.map((plan) => {
+            const isCurrent = plan.id === currentPlanId;
+            return (
+              <View key={plan.id} style={styles.upgradeBtnWrap}>
+                {isCurrent ? (
+                  <View style={styles.currentBtn}>
+                    <Text style={styles.currentBtnText}>Current</Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    onPress={() => handleUpgradePress(plan.id)}
+                    style={({ pressed }) => [
+                      styles.upgradeBtn,
+                      plan.highlight && styles.upgradeBtnHighlight,
+                      pressed && { opacity: 0.85 },
+                    ]}
+                    accessibilityRole="button"
+                  >
+                    <Text
+                      style={[
+                        styles.upgradeBtnText,
+                        plan.highlight && { color: colors.textInverse },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {plan.id === 'free' ? 'Stay free' : 'Waitlist'}
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            );
+          })}
+        </View>
+
+        <Text style={styles.footnote}>
+          Pricing shown does not include GST. Prices and limits may change before
+          launch as we gather feedback from the SRM pilot.
+        </Text>
       </ScrollView>
 
       <WaitlistModal
@@ -199,76 +396,26 @@ export function PremiumUpgradeScreen() {
   );
 }
 
-function PlanCard({
-  plan,
-  isCurrent,
-  onPress,
-}: {
-  plan: Plan;
-  isCurrent: boolean;
-  onPress: () => void;
-}) {
+function CellView({ value }: { value: Cell }) {
+  if (value === true) {
+    return (
+      <View style={styles.cell}>
+        <Ionicons name="checkmark" size={18} color={colors.success} />
+      </View>
+    );
+  }
+  if (value === false) {
+    return (
+      <View style={styles.cell}>
+        <Text style={styles.cellDash}>—</Text>
+      </View>
+    );
+  }
   return (
-    <View
-      style={[
-        styles.planCard,
-        plan.highlight && styles.planCardHighlight,
-      ]}
-    >
-      {plan.badge ? (
-        <View style={styles.planBadge}>
-          <Text style={styles.planBadgeText}>{plan.badge}</Text>
-        </View>
-      ) : null}
-
-      <View style={styles.planHeader}>
-        <Text style={styles.planName}>{plan.name}</Text>
-        <View style={styles.priceRow}>
-          <Text
-            style={[
-              styles.planPrice,
-              plan.highlight && { color: colors.primary },
-            ]}
-          >
-            {plan.priceLabel}
-          </Text>
-          <Text style={styles.planPriceMeta}>{plan.perMonth}</Text>
-        </View>
-      </View>
-
-      <Text style={styles.planPitch}>{plan.pitch}</Text>
-
-      <View style={styles.featureList}>
-        {plan.features.map((feat) => (
-          <View key={feat.label} style={styles.featureRow}>
-            <Ionicons
-              name={feat.supported ? 'checkmark-circle' : 'close-circle'}
-              size={16}
-              color={feat.supported ? colors.success : colors.textMuted}
-            />
-            <Text
-              style={[
-                styles.featureText,
-                !feat.supported && { color: colors.textMuted },
-              ]}
-            >
-              {feat.label}
-            </Text>
-          </View>
-        ))}
-      </View>
-
-      {isCurrent ? (
-        <View style={styles.currentBtn}>
-          <Text style={styles.currentBtnText}>Current plan</Text>
-        </View>
-      ) : (
-        <Button
-          label={plan.id === 'free' ? 'Stay on Free' : 'Join waitlist'}
-          onPress={onPress}
-          variant={plan.highlight ? 'primary' : 'outline'}
-        />
-      )}
+    <View style={styles.cell}>
+      <Text style={styles.cellText} numberOfLines={2}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -315,14 +462,14 @@ function WaitlistModal({
 
           {plan?.id === 'free' ? (
             <Text style={modalStyles.body}>
-              No action needed. You're already on Free. You can switch to a
-              paid plan anytime.
+              No action needed. You're already on Free. You can switch to a paid
+              plan anytime.
             </Text>
           ) : (
             <>
               <Text style={modalStyles.body}>
-                Payments aren't live yet. Drop your email and we'll be in
-                touch the moment {plan?.name} is available.
+                Payments aren't live yet. Drop your email and we'll be in touch
+                the moment {plan?.name} is available.
               </Text>
               <TextInput
                 value={email}
@@ -389,127 +536,212 @@ const modalStyles = StyleSheet.create({
   },
 });
 
+const FEATURE_LABEL_FLEX = 1.6;
+
 const styles = StyleSheet.create({
   scroll: {
-    paddingHorizontal: spacing.lg,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.lg,
     paddingBottom: spacing.xl,
-    gap: spacing.lg,
+    gap: spacing.md,
   },
   heroWrap: {
     gap: spacing.sm,
-    alignItems: 'center',
-  },
-  currentPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
-  },
-  currentPillText: {
-    ...typography.caption,
-    fontFamily: fontFamilies.poppinsMedium,
-    color: colors.textPrimary,
+    paddingHorizontal: spacing.xs,
   },
   heroTitle: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 24,
     color: colors.textPrimary,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+    letterSpacing: -0.3,
   },
   heroBody: {
     ...typography.body,
     color: colors.textSecondary,
+    fontSize: 13,
+  },
+  planHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 4,
+    marginTop: spacing.sm,
+  },
+  featureColHeader: {
+    flex: FEATURE_LABEL_FLEX,
+  },
+  planCol: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    gap: 2,
+    minHeight: 90,
+  },
+  planColHighlight: {
+    backgroundColor: '#FFF7F7',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  planColCurrent: {
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+  popularPill: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: radius.sm,
+    marginBottom: 2,
+  },
+  popularPillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 8,
+    letterSpacing: 1,
+    color: colors.textInverse,
+  },
+  planColName: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.textPrimary,
+    letterSpacing: 0.3,
+  },
+  planColPrice: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+    marginTop: 2,
+  },
+  planColPeriod: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 9,
     textAlign: 'center',
   },
-  plansList: {
-    gap: spacing.md,
+  currentTag: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 9,
+    color: colors.success,
+    letterSpacing: 0.5,
+    marginTop: 2,
   },
-  planCard: {
+  group: {
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  groupTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    paddingHorizontal: spacing.xs,
+  },
+  groupCard: {
     backgroundColor: colors.background,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  planCardHighlight: {
-    borderColor: colors.primary,
-    borderWidth: 2,
-  },
-  planBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-  },
-  planBadgeText: {
-    ...typography.caption,
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.textInverse,
-    fontSize: 10,
-    letterSpacing: 1,
-  },
-  planHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  planName: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 20,
-    color: colors.textPrimary,
-  },
-  priceRow: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  planPrice: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    color: colors.textPrimary,
-  },
-  planPriceMeta: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  planPitch: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  featureList: {
-    gap: 8,
+    overflow: 'hidden',
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    gap: 4,
   },
-  featureText: {
-    ...typography.body,
-    color: colors.textPrimary,
+  featureLabelCell: {
+    flex: FEATURE_LABEL_FLEX,
+    paddingRight: spacing.xs,
+  },
+  featureLabel: {
+    fontFamily: fontFamilies.poppinsMedium,
     fontSize: 13,
+    color: colors.textPrimary,
+  },
+  featureHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+    lineHeight: 14,
+  },
+  cell: {
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 4,
+  },
+  cellText: {
+    fontFamily: fontFamilies.poppinsMedium,
+    fontSize: 11,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+  cellDash: {
+    fontFamily: fontFamilies.poppinsMedium,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginHorizontal: spacing.sm,
+  },
+  upgradeRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: spacing.md,
+    alignItems: 'stretch',
+  },
+  upgradeRowSpacer: {
+    flex: FEATURE_LABEL_FLEX,
+  },
+  upgradeBtnWrap: {
+    flex: 1,
+  },
+  upgradeBtn: {
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  upgradeBtnHighlight: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  upgradeBtnText: {
+    fontFamily: fontFamilies.poppinsBold,
+    color: colors.primary,
+    fontSize: 12,
+    letterSpacing: 0.4,
   },
   currentBtn: {
     backgroundColor: colors.surface,
-    paddingVertical: spacing.sm,
+    paddingVertical: 10,
     borderRadius: radius.md,
     alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: colors.success,
   },
   currentBtnText: {
-    ...typography.body,
     fontFamily: fontFamilies.poppinsBold,
-    color: colors.textSecondary,
-    fontSize: 13,
-    letterSpacing: 1,
+    color: colors.success,
+    fontSize: 12,
+    letterSpacing: 0.5,
+  },
+  footnote: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
 });

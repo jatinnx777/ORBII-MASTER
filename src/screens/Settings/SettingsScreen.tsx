@@ -21,6 +21,7 @@ import {
 import { colors, fontFamilies, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
+  alertVibrationToggled,
   backgroundVoiceToggled,
   pushEnabledSet,
   voiceDetectionToggled,
@@ -45,6 +46,7 @@ export function SettingsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const voice = useAppSelector((s) => s.app.voiceDetection);
   const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
+  const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
 
   const handleVoice = (next: boolean) => {
@@ -203,6 +205,25 @@ export function SettingsScreen() {
               <Switch
                 value={push}
                 onValueChange={handlePush}
+                trackColor={{ true: colors.primary, false: colors.border }}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            icon="phone-portrait"
+            label="Vibrate on nearby SOS"
+            value={
+              alertVibration
+                ? 'Hard buzz when help is needed within 2 km'
+                : 'Off, no buzz on incoming alerts'
+            }
+            right={
+              <Switch
+                value={alertVibration}
+                onValueChange={(v) => {
+                  dispatch(alertVibrationToggled(v));
+                }}
                 trackColor={{ true: colors.primary, false: colors.border }}
               />
             }

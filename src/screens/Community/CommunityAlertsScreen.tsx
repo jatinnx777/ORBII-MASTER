@@ -86,9 +86,8 @@ export function CommunityAlertsScreen() {
   }, [load]);
 
   // Realtime fan-in so this screen reflects brand-new alerts the moment
-  // they're broadcast, without waiting for the 20s poll. We subscribe
-  // unconditionally — alertFromBroadcast tolerates a null viewer location
-  // (distance will read as -1 until GPS resolves).
+  // they're broadcast, without waiting for the 20s poll. The vibration is
+  // handled globally in App.tsx so we don't double-buzz.
   const knownIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     const sub = subscribeToAlerts((broadcast) => {
@@ -99,14 +98,8 @@ export function CommunityAlertsScreen() {
       );
       if (!alert) return;
       dispatch(alertReceived(alert));
-      // Only buzz on the FIRST sighting of each alert id so we don't
-      // re-vibrate every poll cycle.
       if (!knownIdsRef.current.has(alert.id)) {
         knownIdsRef.current.add(alert.id);
-        Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Warning,
-        ).catch(() => undefined);
-        Vibration.vibrate([0, 800, 200, 800, 200, 800, 200, 800]);
       }
     });
     return () => sub.unsubscribe();

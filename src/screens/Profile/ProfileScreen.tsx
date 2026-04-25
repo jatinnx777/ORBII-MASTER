@@ -108,7 +108,7 @@ export function ProfileScreen() {
             icon="time"
             label="SOS history"
             value={`${sosCount} incident${sosCount === 1 ? '' : 's'}`}
-            onPress={() => navigation.navigate('Tabs', { screen: 'History' })}
+            onPress={() => navigation.navigate('History')}
           />
         </Card>
 

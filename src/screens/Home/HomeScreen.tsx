@@ -9,7 +9,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  Vibration,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -40,15 +39,13 @@ import {
 } from '@/services/location';
 import { countHelpersNearby } from '@/services/helpers';
 import {
-  alertFromBroadcast,
   countPresenceNearby,
   joinPresence,
   listNearbyAlerts,
   subscribePresence,
-  subscribeToAlerts,
   type PresencePeer,
 } from '@/services/community';
-import { alertReceived, alertsLoaded } from '@/redux/slices/communitySlice';
+import { alertsLoaded } from '@/redux/slices/communitySlice';
 import {
   fireLocalNotification,
   requestNotificationPermission,
@@ -199,22 +196,8 @@ export function HomeScreen() {
     };
   }, [locationPermission, loadLocationAndHelpers]);
 
-  useEffect(() => {
-    const sub = subscribeToAlerts((broadcast) => {
-      const alert = alertFromBroadcast(
-        broadcast,
-        currentLocationRef.current,
-        profileRef.current?.uid ?? null,
-      );
-      if (!alert) return;
-      dispatch(alertReceived(alert));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-        () => undefined,
-      );
-      Vibration.vibrate([0, 800, 200, 800, 200, 800, 200, 800]);
-    });
-    return () => sub.unsubscribe();
-  }, [dispatch]);
+  // Alert subscription is now global (App.tsx) so the buzz fires on every
+  // tab. We don't subscribe here anymore, just read alerts from the slice.
 
   const presenceHandleRef = useRef<{
     update: (loc: GeoPoint, isVerified?: boolean) => void;
@@ -413,9 +396,6 @@ export function HomeScreen() {
             )}
           </View>
         </Pressable>
-        <View style={styles.brandWrap}>
-          <Text style={styles.brand}>ORBII</Text>
-        </View>
         <Pressable
           style={styles.iconChip}
           accessibilityRole="button"
@@ -428,6 +408,53 @@ export function HomeScreen() {
             size={20}
             color={colors.textPrimary}
           />
+        </Pressable>
+      </View>
+
+      <View style={styles.mapWrap}>
+        {currentLocation ? (
+          <OSMMapView
+            center={currentLocation}
+            zoom={15}
+            markers={mapMarkers}
+            interactive
+            style={styles.map}
+          />
+        ) : (
+          <View style={[styles.map, styles.mapPlaceholder]}>
+            <ActivityIndicator color={colors.primary} />
+            <Text style={styles.mapPlaceholderText}>Loading map…</Text>
+          </View>
+        )}
+
+        <View style={styles.mapLegend}>
+          <LegendDot color={colors.primary} label="You" />
+          <LegendDot color="#FFD600" label="Verified" />
+          <LegendDot color={colors.success} label="Helpers" />
+        </View>
+
+        <Pressable
+          onPress={handleSafeModePress}
+          style={[
+            styles.safeModeFab,
+            !!safeJourney && styles.safeModeFabActive,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
+        >
+          <Ionicons
+            name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
+            size={16}
+            color={safeJourney ? colors.textInverse : colors.textPrimary}
+          />
+          <Text
+            style={[
+              styles.safeModeFabText,
+              !!safeJourney && { color: colors.textInverse },
+            ]}
+          >
+            {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
+          </Text>
         </Pressable>
       </View>
 
@@ -445,53 +472,6 @@ export function HomeScreen() {
             <Ionicons name="chevron-forward" size={16} color={colors.primary} />
           </Pressable>
         ) : null}
-
-        <View style={styles.mapWrap}>
-          {currentLocation ? (
-            <OSMMapView
-              center={currentLocation}
-              zoom={15}
-              markers={mapMarkers}
-              interactive
-              style={styles.map}
-            />
-          ) : (
-            <View style={[styles.map, styles.mapPlaceholder]}>
-              <ActivityIndicator color={colors.primary} />
-              <Text style={styles.mapPlaceholderText}>Loading map…</Text>
-            </View>
-          )}
-
-          <View style={styles.mapLegend}>
-            <LegendDot color={colors.primary} label="You" />
-            <LegendDot color="#FFD600" label="Verified" />
-            <LegendDot color={colors.success} label="Helpers" />
-          </View>
-
-          <Pressable
-            onPress={handleSafeModePress}
-            style={[
-              styles.safeModeFab,
-              !!safeJourney && styles.safeModeFabActive,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
-          >
-            <Ionicons
-              name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
-              size={16}
-              color={safeJourney ? colors.textInverse : colors.textPrimary}
-            />
-            <Text
-              style={[
-                styles.safeModeFabText,
-                !!safeJourney && { color: colors.textInverse },
-              ]}
-            >
-              {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
-            </Text>
-          </Pressable>
-        </View>
 
         {helpersScanState === 'scanning' ? (
           <View style={styles.helperChip}>
@@ -570,12 +550,10 @@ export function HomeScreen() {
           </Pressable>
         </View>
 
-        {nearbyAlerts.length > 0 ? (
-          <AlertsBanner
-            count={nearbyAlerts.length}
-            onPress={() => navigation.navigate('CommunityAlerts')}
-          />
-        ) : null}
+        <AlertsStrip
+          count={nearbyAlerts.length}
+          onPress={() => navigation.navigate('CommunityAlerts')}
+        />
       </View>
     </ScreenContainer>
   );
@@ -629,20 +607,14 @@ function CountUp({
   return <Text style={style}>{display}</Text>;
 }
 
-function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }) {
-  const enter = useRef(new Animated.Value(0)).current;
+// Always-visible "someone needs help" strip. Calm grey when no alerts;
+// flips to red with a pulsing badge when one or more SOSs land within 2 km.
+function AlertsStrip({ count, onPress }: { count: number; onPress: () => void }) {
   const pulse = useRef(new Animated.Value(0)).current;
+  const active = count > 0;
 
   useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 320,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [enter]);
-
-  useEffect(() => {
+    if (!active) return;
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
@@ -660,20 +632,19 @@ function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [active, pulse]);
 
-  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
   const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
   const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
 
   return (
-    <Animated.View style={{ opacity: enter, transform: [{ translateY }] }}>
-      <Pressable
-        onPress={onPress}
-        style={styles.alertsBanner}
-        accessibilityRole="button"
-      >
-        <View style={styles.alertsBadge}>
+    <Pressable
+      onPress={onPress}
+      style={[styles.alertsBanner, !active && styles.alertsBannerIdle]}
+      accessibilityRole="button"
+    >
+      <View style={[styles.alertsBadge, !active && styles.alertsBadgeIdle]}>
+        {active ? (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -686,19 +657,33 @@ function AlertsBanner({ count, onPress }: { count: number; onPress: () => void }
               },
             ]}
           />
+        ) : null}
+        {active ? (
           <Text style={styles.alertsBadgeText}>{count}</Text>
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.alertsTitle}>
-            {count === 1
+        ) : (
+          <Ionicons name="heart-outline" size={16} color={colors.textPrimary} />
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.alertsTitle, !active && styles.alertsTitleIdle]}>
+          {active
+            ? count === 1
               ? 'Someone nearby needs help'
-              : `${count} people nearby need help`}
-          </Text>
-          <Text style={styles.alertsMeta}>Tap to respond, within 2 km</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={18} color={colors.textInverse} />
-      </Pressable>
-    </Animated.View>
+              : `${count} people nearby need help`
+            : 'No alerts nearby'}
+        </Text>
+        <Text style={[styles.alertsMeta, !active && styles.alertsMetaIdle]}>
+          {active
+            ? 'Tap to respond, within 2 km'
+            : "We'll buzz you the moment someone within 2 km fires SOS"}
+        </Text>
+      </View>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={active ? colors.textInverse : colors.textMuted}
+      />
+    </Pressable>
   );
 }
 
@@ -720,7 +705,8 @@ const legendStyles = StyleSheet.create({
   },
 });
 
-const MAP_HEIGHT = 440;
+// MAP_HEIGHT is no longer used; map now flexes to fill space between
+// header and content. Kept as a name in case we want a fallback minimum.
 
 const styles = StyleSheet.create({
   header: {
@@ -774,8 +760,8 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   content: {
-    flex: 1,
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
     gap: spacing.sm,
   },
@@ -795,11 +781,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapWrap: {
-    height: MAP_HEIGHT,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
+    flex: 1,
     backgroundColor: colors.surface,
-    ...shadows.card,
   },
   map: {
     flex: 1,
@@ -958,6 +941,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     ...shadows.hero,
   },
+  alertsBannerIdle: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
   alertsBadge: {
     width: 36,
     height: 36,
@@ -965,6 +955,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  alertsBadgeIdle: {
+    backgroundColor: colors.background,
   },
   alertsBadgeText: {
     fontFamily: fontFamilies.poppinsBold,
@@ -976,10 +969,16 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textInverse,
   },
+  alertsTitleIdle: {
+    color: colors.textPrimary,
+  },
   alertsMeta: {
     ...typography.caption,
     color: 'rgba(255,255,255,0.88)',
     marginTop: 2,
     fontSize: 12,
+  },
+  alertsMetaIdle: {
+    color: colors.textSecondary,
   },
 });

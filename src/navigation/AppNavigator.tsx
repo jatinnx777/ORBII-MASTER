@@ -20,6 +20,7 @@ import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScr
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
+import { HistoryScreen } from '@/screens/History/HistoryScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -156,6 +157,11 @@ export function AppNavigator() {
         name="Friends"
         component={FriendsScreen}
         options={withHeader('Friends')}
+      />
+      <Stack.Screen
+        name="History"
+        component={HistoryScreen}
+        options={withHeader('SOS history')}
       />
     </Stack.Navigator>
   );
