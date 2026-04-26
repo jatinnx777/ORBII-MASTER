@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
 import { OSMMapView, ScreenContainer, type OSMMarker } from '@/components/common';
@@ -331,6 +332,7 @@ export function HomeScreen() {
     }
   };
 
+  const insets = useSafeAreaInsets();
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
   const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
 
@@ -376,13 +378,14 @@ export function HomeScreen() {
   );
 
   return (
-    <ScreenContainer padded={false}>
+    <ScreenContainer padded={false} edges={['bottom', 'left', 'right']}>
       {currentLocation ? (
         <OSMMapView
           center={currentLocation}
           zoom={15}
           markers={mapMarkers}
           interactive
+          showZoomControls={false}
           style={StyleSheet.absoluteFill}
         />
       ) : (
@@ -392,7 +395,10 @@ export function HomeScreen() {
         </View>
       )}
 
-      <View style={styles.headerFloat} pointerEvents="box-none">
+      <View
+        style={[styles.headerFloat, { paddingTop: insets.top + spacing.xs }]}
+        pointerEvents="box-none"
+      >
         <HomeHeader
           profile={profile}
           initial={initial}
@@ -401,37 +407,42 @@ export function HomeScreen() {
         />
       </View>
 
-      <View style={styles.mapLegendFloat} pointerEvents="none">
-        <LegendDot color={colors.primary} label="You" />
-        <LegendDot color="#FFD600" label="Verified" />
-        <LegendDot color={colors.success} label="Helpers" />
-      </View>
-
-      <Pressable
-        onPress={handleSafeModePress}
-        style={[
-          styles.safeModeFab,
-          !!safeJourney && styles.safeModeFabActive,
-        ]}
-        accessibilityRole="button"
-        accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
+      <BottomPanel
+        topRow={
+          <View style={styles.panelTopRow}>
+            <View style={styles.legendInline}>
+              <LegendDot color={colors.primary} label="You" />
+              <LegendDot color="#FFD600" label="Verified" />
+              <LegendDot color={colors.success} label="Helpers" />
+            </View>
+            <Pressable
+              onPress={handleSafeModePress}
+              style={[
+                styles.safeModeChip,
+                !!safeJourney && styles.safeModeChipActive,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={
+                safeJourney ? 'Safe Mode active' : 'Start Safe Mode'
+              }
+            >
+              <Ionicons
+                name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
+                size={14}
+                color={safeJourney ? colors.textInverse : colors.textPrimary}
+              />
+              <Text
+                style={[
+                  styles.safeModeChipText,
+                  !!safeJourney && { color: colors.textInverse },
+                ]}
+              >
+                {safeJourney ? 'Safe Mode' : 'Safe Mode'}
+              </Text>
+            </Pressable>
+          </View>
+        }
       >
-        <Ionicons
-          name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
-          size={16}
-          color={safeJourney ? colors.textInverse : colors.textPrimary}
-        />
-        <Text
-          style={[
-            styles.safeModeFabText,
-            !!safeJourney && { color: colors.textInverse },
-          ]}
-        >
-          {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
-        </Text>
-      </Pressable>
-
-      <BottomPanel>
         {locationPermission !== 'granted' ? (
           <Pressable
             onPress={bootstrapPermission}
@@ -536,7 +547,13 @@ export function HomeScreen() {
 // visible) and collapsed (just the handle pokes up so the map fills the
 // screen). Drag the handle area down to open the map, drag up to bring
 // the controls back. Spring snap on release keeps it tactile.
-function BottomPanel({ children }: { children: React.ReactNode }) {
+function BottomPanel({
+  children,
+  topRow,
+}: {
+  children: React.ReactNode;
+  topRow?: React.ReactNode;
+}) {
   const screenHeight = Dimensions.get('window').height;
   // Panel takes ~58% of screen by default. The collapsed state shows just
   // the handle + a sliver, so we move the panel down by COLLAPSE_OFFSET.
@@ -583,6 +600,7 @@ function BottomPanel({ children }: { children: React.ReactNode }) {
       <View style={styles.handleZone} {...panResponder.panHandlers}>
         <View style={styles.handle} />
       </View>
+      {topRow ? <View style={styles.panelTopRowWrap}>{topRow}</View> : null}
       <View style={styles.panelContent}>{children}</View>
     </Animated.View>
   );
@@ -921,6 +939,45 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.lg,
     gap: spacing.md,
+  },
+  panelTopRowWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  panelTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  legendInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+  },
+  safeModeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.circle,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  safeModeChipActive: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  safeModeChipText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.textPrimary,
   },
   permissionBanner: {
     flexDirection: 'row',

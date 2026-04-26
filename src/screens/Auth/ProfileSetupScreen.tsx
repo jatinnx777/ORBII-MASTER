@@ -13,7 +13,12 @@ import { colors, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { profileUpdated } from '@/redux/slices/userSlice';
 import { updateProfile } from '@/services/auth';
-import { isValidName } from '@/utils/validation';
+import {
+  formatPhoneForDisplay,
+  isValidIndianPhone,
+  isValidName,
+  toE164India,
+} from '@/utils/validation';
 
 export function ProfileSetupScreen() {
   const dispatch = useAppDispatch();
@@ -21,6 +26,7 @@ export function ProfileSetupScreen() {
 
   const [name, setName] = useState('');
   const [username, setUsername] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -28,7 +34,10 @@ export function ProfileSetupScreen() {
   // 3-20 chars, lowercase letters/numbers/underscore. Friends look you up
   // by typing this exact string, so we keep the format strict.
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
-  const canSubmit = isValidName(name) && usernameValid && !isSaving;
+  const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
+  const phoneValid = isValidIndianPhone(phoneDigits);
+  const canSubmit =
+    isValidName(name) && usernameValid && phoneValid && !isSaving;
 
   const pickPhoto = async () => {
     try {
@@ -72,6 +81,10 @@ export function ProfileSetupScreen() {
       );
       return;
     }
+    if (!phoneValid) {
+      setError('Enter a valid 10-digit Indian mobile number.');
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -80,7 +93,12 @@ export function ProfileSetupScreen() {
         photoUri,
         username,
       });
-      dispatch(profileUpdated(updated));
+      dispatch(
+        profileUpdated({
+          ...updated,
+          phone: toE164India(phoneDigits),
+        }),
+      );
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not save profile.';
@@ -151,6 +169,24 @@ export function ProfileSetupScreen() {
           placeholder="e.g. jatin_k"
           maxLength={20}
           hint="Friends will add you to their safety circle by this username."
+          containerStyle={styles.input}
+        />
+
+        <Input
+          label="Mobile number"
+          keyboardType="number-pad"
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          maxLength={11}
+          value={phoneInput}
+          onChangeText={(v) => {
+            const digits = v.replace(/\D/g, '').slice(0, 10);
+            setPhoneInput(formatPhoneForDisplay(digits));
+            if (error) setError(null);
+          }}
+          placeholder="98765 43210"
+          leftAdornment={<Text style={styles.countryCode}>+91</Text>}
+          hint="Required. Helpers and your contacts use this number to reach you in an emergency."
           error={error ?? undefined}
           containerStyle={styles.input}
         />
@@ -234,5 +270,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     marginTop: spacing.lg,
+  },
+  countryCode: {
+    ...typography.bodyMedium,
+    color: colors.textPrimary,
   },
 });

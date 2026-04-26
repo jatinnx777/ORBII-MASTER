@@ -1,6 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Dimensions,
+  Easing,
   FlatList,
   Pressable,
   StyleSheet,
@@ -9,6 +11,7 @@ import {
   ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '@/components/common';
 import { colors, fontFamilies, spacing, typography } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
@@ -22,6 +25,7 @@ type Slide = {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
+  gradient: readonly [string, string];
 };
 
 const slides: Slide[] = [
@@ -30,18 +34,21 @@ const slides: Slide[] = [
     icon: 'alert-circle',
     title: 'Press once. Help arrives.',
     body: 'One tap summons the nearest ORBII helpers, your emergency contacts, and police control within 2 minutes.',
+    gradient: ['#FFE4E4', '#FFD4D4'] as const,
   },
   {
     id: 'network',
     icon: 'people-circle',
     title: 'A verified network of women',
     body: 'Helpers are verified with Aadhaar and come to you. Nearby students, working women, and safety volunteers.',
+    gradient: ['#FFE4F0', '#E8D7FF'] as const,
   },
   {
     id: 'always',
     icon: 'shield-checkmark',
     title: 'Always-on protection',
     body: 'Voice triggers, lock-screen SOS shortcut, background location. Even if your phone is locked, ORBII has your back.',
+    gradient: ['#D7F8E5', '#B6F2D6'] as const,
   },
 ];
 
@@ -49,6 +56,7 @@ export function OnboardingScreen() {
   const listRef = useRef<FlatList<Slide>>(null);
   const dispatch = useAppDispatch();
   const [index, setIndex] = useState(0);
+  const scrollX = useRef(new Animated.Value(0)).current;
 
   const onViewable = useRef(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -84,41 +92,178 @@ export function OnboardingScreen() {
         ) : null}
       </View>
 
-      <FlatList
-        ref={listRef}
+      <Animated.FlatList
+        ref={listRef as never}
         data={slides}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(s) => s.id}
+        keyExtractor={(s: Slide) => s.id}
         onViewableItemsChanged={onViewable}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
-        renderItem={({ item }) => (
-          <View style={styles.slide}>
-            <View style={styles.iconWrap}>
-              <Ionicons name={item.icon} size={100} color={colors.primary} />
-            </View>
-            <Text style={styles.title}>{item.title}</Text>
-            <Text style={styles.body}>{item.body}</Text>
-          </View>
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true },
+        )}
+        scrollEventThrottle={16}
+        renderItem={({ item, index: idx }: { item: Slide; index: number }) => (
+          <Slide slide={item} index={idx} scrollX={scrollX} />
         )}
       />
 
       <View style={styles.dots}>
-        {slides.map((_, i) => (
-          <View
-            key={i}
-            style={[styles.dot, i === index && styles.dotActive]}
-          />
-        ))}
+        {slides.map((_, i) => {
+          const inputRange = [(i - 1) * width, i * width, (i + 1) * width];
+          const dotWidth = scrollX.interpolate({
+            inputRange,
+            outputRange: [8, 28, 8],
+            extrapolate: 'clamp',
+          });
+          const dotOpacity = scrollX.interpolate({
+            inputRange,
+            outputRange: [0.4, 1, 0.4],
+            extrapolate: 'clamp',
+          });
+          return (
+            <Animated.View
+              key={i}
+              style={[
+                styles.dot,
+                {
+                  width: dotWidth,
+                  opacity: dotOpacity,
+                  backgroundColor: i === index ? colors.primary : colors.border,
+                },
+              ]}
+            />
+          );
+        })}
       </View>
 
       <View style={styles.footer}>
-        <Button
-          label={isLast ? 'Get started' : 'Next'}
-          onPress={handleNext}
-        />
+        <Button label={isLast ? 'Get started' : 'Next'} onPress={handleNext} />
       </View>
+    </View>
+  );
+}
+
+// Each slide animates as the user scrolls: icon halo scales + rotates a
+// touch, the title slides in from below, the body fades. Native driver so
+// the parallax stays at 60fps even with the gradient halo.
+function Slide({
+  slide,
+  index,
+  scrollX,
+}: {
+  slide: Slide;
+  index: number;
+  scrollX: Animated.Value;
+}) {
+  const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
+  const iconScale = scrollX.interpolate({
+    inputRange,
+    outputRange: [0.7, 1, 0.7],
+    extrapolate: 'clamp',
+  });
+  const iconRotate = scrollX.interpolate({
+    inputRange,
+    outputRange: ['-12deg', '0deg', '12deg'],
+    extrapolate: 'clamp',
+  });
+  const titleTranslateY = scrollX.interpolate({
+    inputRange,
+    outputRange: [40, 0, 40],
+    extrapolate: 'clamp',
+  });
+  const titleOpacity = scrollX.interpolate({
+    inputRange,
+    outputRange: [0, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const bodyOpacity = scrollX.interpolate({
+    inputRange,
+    outputRange: [0, 1, 0],
+    extrapolate: 'clamp',
+  });
+  const bodyTranslateY = scrollX.interpolate({
+    inputRange,
+    outputRange: [60, 0, 60],
+    extrapolate: 'clamp',
+  });
+
+  // Subtle continuous halo pulse on the active slide.
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 1600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const pulseScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.08],
+  });
+
+  return (
+    <View style={styles.slide}>
+      <Animated.View
+        style={[
+          styles.iconWrap,
+          {
+            transform: [
+              { scale: Animated.multiply(iconScale, pulseScale) },
+              { rotate: iconRotate },
+            ],
+          },
+        ]}
+      >
+        <LinearGradient
+          colors={slide.gradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.iconGradient}
+        >
+          <Ionicons name={slide.icon} size={80} color={colors.primary} />
+        </LinearGradient>
+      </Animated.View>
+
+      <Animated.Text
+        style={[
+          styles.title,
+          {
+            opacity: titleOpacity,
+            transform: [{ translateY: titleTranslateY }],
+          },
+        ]}
+      >
+        {slide.title}
+      </Animated.Text>
+
+      <Animated.Text
+        style={[
+          styles.body,
+          {
+            opacity: bodyOpacity,
+            transform: [{ translateY: bodyTranslateY }],
+          },
+        ]}
+      >
+        {slide.body}
+      </Animated.Text>
     </View>
   );
 }
@@ -150,10 +295,16 @@ const styles = StyleSheet.create({
     width: 180,
     height: 180,
     borderRadius: 90,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
+    overflow: 'hidden',
+  },
+  iconGradient: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
@@ -174,14 +325,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
   },
   dot: {
-    width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: colors.border,
-  },
-  dotActive: {
-    width: 24,
-    backgroundColor: colors.primary,
   },
   footer: {
     padding: spacing.lg,

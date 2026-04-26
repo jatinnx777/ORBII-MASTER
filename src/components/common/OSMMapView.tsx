@@ -37,6 +37,9 @@ type Props = {
   polylines?: OSMPolyline[];
   fitAll?: boolean;
   interactive?: boolean;
+  // Show Leaflet's default +/- zoom buttons. Defaults to `interactive`'s
+  // value; pass false to hide them while keeping pinch-zoom available.
+  showZoomControls?: boolean;
   onMarkerPress?: (id: string) => void;
 };
 
@@ -75,7 +78,12 @@ function serializePolylines(polylines: OSMPolyline[]) {
   }));
 }
 
-function buildHtml(center: GeoPoint, zoom: number, interactive: boolean): string {
+function buildHtml(
+  center: GeoPoint,
+  zoom: number,
+  interactive: boolean,
+  showZoomControls: boolean,
+): string {
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -112,7 +120,7 @@ function buildHtml(center: GeoPoint, zoom: number, interactive: boolean): string
   }
 
   var map = L.map('map', {
-    zoomControl: ${interactive ? 'true' : 'false'},
+    zoomControl: ${showZoomControls ? 'true' : 'false'},
     dragging: ${interactive ? 'true' : 'false'},
     touchZoom: ${interactive ? 'true' : 'false'},
     doubleClickZoom: ${interactive ? 'true' : 'false'},
@@ -256,8 +264,10 @@ export function OSMMapView({
   polylines = [],
   fitAll = false,
   interactive = true,
+  showZoomControls,
   onMarkerPress,
 }: Props) {
+  const zoomControls = showZoomControls ?? interactive;
   const webviewRef = useRef<WebView>(null);
   const isReadyRef = useRef(false);
   const pendingUpdateRef = useRef<string | null>(null);
@@ -266,7 +276,7 @@ export function OSMMapView({
   // all updates flow through injectJavaScript. This is what keeps the map
   // from flickering when markers move.
   const initialHtml = useMemo(
-    () => buildHtml(center, zoom, interactive),
+    () => buildHtml(center, zoom, interactive, zoomControls),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );

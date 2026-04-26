@@ -26,7 +26,10 @@ export function EditProfileScreen() {
   const profile = useAppSelector((s) => s.user.profile);
 
   const [name, setName] = useState(profile?.name ?? '');
+  const [username, setUsername] = useState(profile?.username ?? '');
   const [photoUri, setPhotoUri] = useState(profile?.photoUri ?? null);
+
+  const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
 
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -51,7 +54,21 @@ export function EditProfileScreen() {
       Alert.alert('Name required', 'Please enter a valid name.');
       return;
     }
-    dispatch(profileUpdated({ ...profile, name: name.trim(), photoUri }));
+    if (!usernameValid) {
+      Alert.alert(
+        'Username invalid',
+        'Username must be 3 to 20 lowercase letters, numbers, or underscores.',
+      );
+      return;
+    }
+    dispatch(
+      profileUpdated({
+        ...profile,
+        name: name.trim(),
+        username,
+        photoUri,
+      }),
+    );
     navigation.goBack();
   };
 
@@ -85,10 +102,27 @@ export function EditProfileScreen() {
           autoCapitalize="words"
         />
         <Input
+          label="Username"
+          value={username}
+          onChangeText={(v) =>
+            setUsername(v.toLowerCase().replace(/[^a-z0-9_]/g, ''))
+          }
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={20}
+          hint="3 to 20 lowercase letters, numbers, or underscores. Friends add you using this handle."
+        />
+        <Input
           label="Email"
           value={profile?.email ?? ''}
           editable={false}
           hint="Email comes from your Google account and can't be changed here."
+        />
+        <Input
+          label="Phone"
+          value={profile?.phone ?? ''}
+          editable={false}
+          hint="Phone is locked once set. Contact support to change it."
         />
       </View>
 
