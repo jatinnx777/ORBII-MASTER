@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { DrivingScreen } from '@/screens/Driving/DrivingScreen';
+import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { TabParamList } from './types';
@@ -18,6 +19,7 @@ const icons: Record<
 > = {
   Home: { active: 'home', inactive: 'home-outline' },
   Driving: { active: 'car-sport', inactive: 'car-sport-outline' },
+  Membership: { active: 'ribbon', inactive: 'ribbon-outline' },
   Settings: { active: 'settings', inactive: 'settings-outline' },
 };
 
@@ -40,6 +42,7 @@ export function TabNavigator() {
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Driving" component={DrivingScreen} />
+      <Tab.Screen name="Membership" component={PremiumUpgradeScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />
     </Tab.Navigator>
   );

@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -111,10 +113,10 @@ export function DrivingScreen() {
         </View>
 
         <View style={styles.eventGrid}>
-          <EventChip icon="speedometer" color="#FF6B6B" label="Speeding" value={0} />
-          <EventChip icon="warning" color="#4DA3FF" label="Hard brake" value={0} />
-          <EventChip icon="flash" color="#FFA500" label="Fast accel" value={0} />
-          <EventChip icon="phone-portrait" color="#A855F7" label="Phone use" value={0} />
+          <EventChip index={0} icon="speedometer" color="#FF6B6B" label="Speeding" value={0} />
+          <EventChip index={1} icon="warning" color="#4DA3FF" label="Hard brake" value={0} />
+          <EventChip index={2} icon="flash" color="#FFA500" label="Fast accel" value={0} />
+          <EventChip index={3} icon="phone-portrait" color="#A855F7" label="Phone use" value={0} />
         </View>
 
         <View style={styles.bigStatsRow}>
@@ -200,14 +202,35 @@ function EventChip({
   color,
   label,
   value,
+  index,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
   label: string;
   value: number;
+  index: number;
 }) {
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const id = setTimeout(() => {
+      Animated.spring(enter, {
+        toValue: 1,
+        speed: 14,
+        bounciness: 6,
+        useNativeDriver: true,
+      }).start();
+    }, 120 + index * 60);
+    return () => clearTimeout(id);
+  }, [enter, index]);
+
+  const scale = enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
   return (
-    <View style={styles.eventChip}>
+    <Animated.View
+      style={[
+        styles.eventChip,
+        { opacity: enter, transform: [{ scale }] },
+      ]}
+    >
       <View style={[styles.eventChipIconWrap, { backgroundColor: color + '22' }]}>
         <Ionicons name={icon} size={14} color={color} />
       </View>
@@ -215,7 +238,7 @@ function EventChip({
       <Text style={styles.eventChipLabel} numberOfLines={1}>
         {label}
       </Text>
-    </View>
+    </Animated.View>
   );
 }
 

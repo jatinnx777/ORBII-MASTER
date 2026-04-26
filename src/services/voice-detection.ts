@@ -57,20 +57,40 @@ export type VoiceKeyword =
   | 'bachao'
   | 'madad';
 
-// Whole-word / phrase patterns so "helpless" or "unhelpful" won't trigger.
-// Patterns are intentionally generous — we'd rather false-positive on a
-// shouted "help" than miss a real one. We also strip punctuation before
-// matching so "help!" still hits.
+// Keyword rules. Order matters only for which `keyword` value gets reported;
+// the FIRST matching pattern wins. We keep the strict-original patterns at
+// the top so we report the canonical keyword, then layer looser fallback
+// patterns below to catch shouted/elongated forms and Indian-English STT
+// mishears. Each row is independent — adding more patterns can only ADD
+// recall, it never removes a previously-matching transcript.
 const KEYWORD_RULES: Array<{ keyword: VoiceKeyword; pattern: RegExp }> = [
+  // ----- canonical English -----
   { keyword: 'help me', pattern: /\bhelp\s+me\b/i },
   { keyword: 'please help', pattern: /\bplease\s+help\b/i },
   { keyword: 'save me', pattern: /\bsave\s+me\b/i },
   { keyword: 'help', pattern: /\bhelp\b/i },
-  // bachao / bachaao / bacha / bachhao — Hindi STT often mis-spells; cover
-  // common transliterations including the "ch" / "chh" variants.
+  // ----- canonical Hindi (existing) -----
   { keyword: 'bachao', pattern: /\bb[ae]?ch+[ao]+\b/i },
-  // madad / madaad / mada / madat — STT sometimes adds a trailing 't'.
   { keyword: 'madad', pattern: /\bmad[ao]+d?t?\b/i },
+  // ----- looser fallbacks for shouted / elongated forms -----
+  // "heeelp", "hellp", "haaalp" — sustained vowels are common in screams.
+  { keyword: 'help', pattern: /\bhe+l+p+\b/i },
+  // Common Indian-English STT mishears for "help": "halp", "hep", "alp".
+  { keyword: 'help', pattern: /\b(?:halp|hep|elp|alp)\b/i },
+  // "help me" with stretched vowels.
+  { keyword: 'help me', pattern: /\bhe+l+p+\s+me+\b/i },
+  // "help help" — repeated cry, distinct enough to fire even if the single
+  // word didn't trigger on its own (sustained panic signal).
+  { keyword: 'help', pattern: /\bhelp\s+help\b/i },
+  // bachao with stretched vowels: "bachaaaao", "bachaao".
+  { keyword: 'bachao', pattern: /\bb[aeu]+c+h+[aeo]+w?\b/i },
+  // Pocket STT often turns "bachao" into "back chow" / "bash ow" / "bagaow".
+  { keyword: 'bachao', pattern: /\b(?:back\s*chow|bash\s*ow|bagaow|bachow)\b/i },
+  // madad mishears: "madat", "mudhad", "mudat", "madhad".
+  { keyword: 'madad', pattern: /\bm[au]+d+[ao]*[dt]?h?\b/i },
+  // "koi madad", "koi bachao" — common Hindi panic phrases.
+  { keyword: 'madad', pattern: /\bkoi\s+ma+d+/i },
+  { keyword: 'bachao', pattern: /\bkoi\s+b[ae]+c+h+[ao]+/i },
 ];
 
 function normalizeForMatch(text: string): string {
@@ -172,20 +192,31 @@ function startNativeSession() {
   const options: ExpoSpeechRecognitionOptions = {
     lang: 'en-IN',
     interimResults: true,
-    maxAlternatives: 3,
+    // 5 alternatives instead of 3. The engine ranks them by confidence;
+    // we scan ALL of them, so more candidates = higher chance the right
+    // transcription is somewhere in the list. Pure addition — never hurts.
+    maxAlternatives: 5,
     continuous: true,
     requiresOnDeviceRecognition: false,
     addsPunctuation: false,
-    // Hint the engine toward our trigger words so rare terms like "bachao"
-    // / "madad" are more likely to be transcribed accurately. Listing
-    // common mis-spellings explicitly raises recall on Indian-accent STT.
+    // Bias the engine toward our trigger words. Listing common mis-spellings
+    // and pocket mishears explicitly raises recall on Indian-accent STT.
+    // Adding more strings here can only help — the engine treats them as
+    // hints, never as a whitelist.
     contextualStrings: [
+      // English canonical + variants
       'help', 'help me', 'save me', 'please help', 'somebody help',
-      'bachao', 'bachaao', 'bachao bachao', 'mujhe bachao',
-      'madad', 'madat', 'madad karo', 'koi madad karo',
+      'help help', 'help me please', 'someone help me', 'help help help',
+      'heeelp', 'halp',
+      // Hindi canonical + common transliterations
+      'bachao', 'bachaao', 'bachao bachao', 'mujhe bachao', 'koi bachao',
+      'bacha lo', 'bachaaaao',
+      'madad', 'madat', 'madad karo', 'koi madad karo', 'madad chahiye',
+      'mujhe madad chahiye',
     ],
     // Android: keep the recognizer tolerant of long silences so it doesn't
-    // bail between words. iOS ignores these but they're harmless.
+    // bail between words. Same values that worked before — not touching
+    // these because tightening them previously broke recognition.
     androidIntentOptions: {
       EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS: 5000,
       EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS: 3000,

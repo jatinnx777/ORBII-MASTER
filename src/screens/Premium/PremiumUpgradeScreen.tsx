@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -315,30 +317,8 @@ export function PremiumUpgradeScreen() {
           ))}
         </View>
 
-        {FEATURE_GROUPS.map((group) => (
-          <View key={group.title} style={styles.group}>
-            <Text style={styles.groupTitle}>{group.title}</Text>
-            <View style={styles.groupCard}>
-              {group.rows.map((row, idx) => (
-                <View key={row.label}>
-                  <View style={styles.featureRow}>
-                    <View style={styles.featureLabelCell}>
-                      <Text style={styles.featureLabel}>{row.label}</Text>
-                      {row.hint ? (
-                        <Text style={styles.featureHint}>{row.hint}</Text>
-                      ) : null}
-                    </View>
-                    {PLANS.map((plan) => (
-                      <CellView key={plan.id} value={row.values[plan.id]} />
-                    ))}
-                  </View>
-                  {idx < group.rows.length - 1 ? (
-                    <View style={styles.divider} />
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          </View>
+        {FEATURE_GROUPS.map((group, groupIdx) => (
+          <FeatureGroupCard key={group.title} group={group} index={groupIdx} />
         ))}
 
         <View style={styles.upgradeRow}>
@@ -352,25 +332,11 @@ export function PremiumUpgradeScreen() {
                     <Text style={styles.currentBtnText}>Current</Text>
                   </View>
                 ) : (
-                  <Pressable
+                  <UpgradeButton
+                    label={plan.id === 'free' ? 'Stay free' : 'Waitlist'}
+                    highlight={!!plan.highlight}
                     onPress={() => handleUpgradePress(plan.id)}
-                    style={({ pressed }) => [
-                      styles.upgradeBtn,
-                      plan.highlight && styles.upgradeBtnHighlight,
-                      pressed && { opacity: 0.85 },
-                    ]}
-                    accessibilityRole="button"
-                  >
-                    <Text
-                      style={[
-                        styles.upgradeBtnText,
-                        plan.highlight && { color: colors.textInverse },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {plan.id === 'free' ? 'Stay free' : 'Waitlist'}
-                    </Text>
-                  </Pressable>
+                  />
                 )}
               </View>
             );
@@ -393,6 +359,114 @@ export function PremiumUpgradeScreen() {
         onSubmit={submitWaitlist}
       />
     </ScreenContainer>
+  );
+}
+
+// Each plan-table section fades + slides in with a per-index delay so the
+// page reads top-to-bottom instead of all at once. Native driver keeps it
+// at 60fps even on slow Androids.
+function FeatureGroupCard({
+  group,
+  index,
+}: {
+  group: FeatureGroup;
+  index: number;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      Animated.timing(enter, {
+        toValue: 1,
+        duration: 380,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }, index * 80);
+    return () => clearTimeout(id);
+  }, [enter, index]);
+
+  const translateY = enter.interpolate({
+    inputRange: [0, 1],
+    outputRange: [16, 0],
+  });
+
+  return (
+    <Animated.View
+      style={[styles.group, { opacity: enter, transform: [{ translateY }] }]}
+    >
+      <Text style={styles.groupTitle}>{group.title}</Text>
+      <View style={styles.groupCard}>
+        {group.rows.map((row, idx) => (
+          <View key={row.label}>
+            <View style={styles.featureRow}>
+              <View style={styles.featureLabelCell}>
+                <Text style={styles.featureLabel}>{row.label}</Text>
+                {row.hint ? (
+                  <Text style={styles.featureHint}>{row.hint}</Text>
+                ) : null}
+              </View>
+              {PLANS.map((plan) => (
+                <CellView key={plan.id} value={row.values[plan.id]} />
+              ))}
+            </View>
+            {idx < group.rows.length - 1 ? (
+              <View style={styles.divider} />
+            ) : null}
+          </View>
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+// Springy press feedback so the upgrade buttons feel tactile.
+function UpgradeButton({
+  label,
+  highlight,
+  onPress,
+}: {
+  label: string;
+  highlight: boolean;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+  const pressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.94,
+      speed: 40,
+      bounciness: 0,
+      useNativeDriver: true,
+    }).start();
+  };
+  const pressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      speed: 30,
+      bounciness: 8,
+      useNativeDriver: true,
+    }).start();
+  };
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+        style={[styles.upgradeBtn, highlight && styles.upgradeBtnHighlight]}
+        accessibilityRole="button"
+      >
+        <Text
+          style={[
+            styles.upgradeBtnText,
+            highlight && { color: colors.textInverse },
+          ]}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+      </Pressable>
+    </Animated.View>
   );
 }
 

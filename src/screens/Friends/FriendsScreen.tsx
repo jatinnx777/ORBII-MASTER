@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   FlatList,
   Pressable,
   Share,
@@ -163,35 +165,77 @@ export function FriendsScreen() {
             </Text>
           </View>
         }
-        renderItem={({ item }) => (
-          <View style={styles.friendRow}>
-            <View style={styles.friendAvatar}>
-              <Text style={styles.friendAvatarText}>
-                {item.username.charAt(0).toUpperCase()}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.friendHandle}>@{item.username}</Text>
-              <Text style={styles.friendMeta}>
-                Added {new Date(item.addedAt).toLocaleDateString('en-IN', {
-                  day: '2-digit',
-                  month: 'short',
-                })}
-              </Text>
-            </View>
-            <Pressable
-              onPress={() => handleRemove(item.username)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove ${item.username}`}
-            >
-              <Ionicons name="close-circle" size={22} color={colors.textMuted} />
-            </Pressable>
-          </View>
+        renderItem={({ item, index }) => (
+          <FriendRow
+            friend={item}
+            index={index}
+            onRemove={() => handleRemove(item.username)}
+          />
         )}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
       />
     </ScreenContainer>
+  );
+}
+
+// Slide-up + fade-in for each friend row, indexed so the list reads as a
+// cascade rather than appearing all at once.
+function FriendRow({
+  friend,
+  index,
+  onRemove,
+}: {
+  friend: Friend;
+  index: number;
+  onRemove: () => void;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      Animated.timing(enter, {
+        toValue: 1,
+        duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    }, index * 50);
+    return () => clearTimeout(id);
+  }, [enter, index]);
+
+  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+
+  return (
+    <Animated.View
+      style={[
+        styles.friendRow,
+        { opacity: enter, transform: [{ translateY }] },
+      ]}
+    >
+      <View style={styles.friendAvatar}>
+        <Text style={styles.friendAvatarText}>
+          {friend.username.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.friendHandle}>@{friend.username}</Text>
+        <Text style={styles.friendMeta}>
+          Added{' '}
+          {new Date(friend.addedAt).toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+          })}
+        </Text>
+      </View>
+      <Pressable
+        onPress={onRemove}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${friend.username}`}
+      >
+        <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+      </Pressable>
+    </Animated.View>
   );
 }
 
