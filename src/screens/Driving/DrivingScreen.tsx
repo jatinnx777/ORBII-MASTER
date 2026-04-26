@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components/common';
 import {
   colors,
@@ -154,7 +155,12 @@ export function DrivingScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </View>
 
-        <View style={styles.unlockCard}>
+        <LinearGradient
+          colors={['#FFF6E5', '#FFE9C2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.unlockCard}
+        >
           <View style={styles.unlockIconWrap}>
             <Ionicons name="car-sport" size={28} color={colors.primary} />
           </View>
@@ -170,7 +176,7 @@ export function DrivingScreen() {
             <BenefitRow icon="people" text="See driving for everyone in your circle" />
             <BenefitRow icon="time" text="Trip history with start and end times" />
           </View>
-        </View>
+        </LinearGradient>
       </ScrollView>
 
       <View style={styles.buyBar}>
@@ -534,7 +540,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   unlockCard: {
-    backgroundColor: '#FFF6E5',
     borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,

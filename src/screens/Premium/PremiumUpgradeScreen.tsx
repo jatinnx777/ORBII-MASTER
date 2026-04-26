@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components/common';
 import {
   colors,
@@ -280,14 +281,19 @@ export function PremiumUpgradeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroWrap}>
+        <LinearGradient
+          colors={['#FFE4F0', '#E8D7FF']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroWrap}
+        >
           <Text style={styles.heroTitle}>Choose your plan</Text>
           <Text style={styles.heroBody}>
             Every row below tells you exactly what you get. Payments aren't live
-            yet — join the waitlist on any paid plan and we'll email you the
+            yet, join the waitlist on any paid plan and we'll email you the
             moment they switch on.
           </Text>
-        </View>
+        </LinearGradient>
 
         <View style={styles.planHeaderRow}>
           <View style={styles.featureColHeader} />
@@ -621,7 +627,8 @@ const styles = StyleSheet.create({
   },
   heroWrap: {
     gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
   },
   heroTitle: {
     fontFamily: fontFamilies.poppinsBold,

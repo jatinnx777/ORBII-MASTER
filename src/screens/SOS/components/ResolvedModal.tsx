@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, StarRating } from '@/components/common';
 import {
   colors,
@@ -16,6 +17,9 @@ type ResolvedModalProps = {
   onSubmit: (rating: number) => void;
 };
 
+// Bottom-sheet style matches the waitlist sheets in Plans + Driving so every
+// in-app modal feels like the same surface. Subtle gradient on the icon
+// halo so the success moment feels celebratory but not over the top.
 export function ResolvedModal({
   visible,
   helperName,
@@ -24,12 +28,18 @@ export function ResolvedModal({
   const [rating, setRating] = useState(5);
 
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <View style={styles.backdrop}>
-        <View style={styles.card}>
-          <View style={styles.iconWrap}>
-            <Ionicons name="checkmark-circle" size={72} color={colors.success} />
-          </View>
+    <Modal visible={visible} animationType="slide" transparent>
+      <Pressable style={styles.backdrop} onPress={() => undefined}>
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
+          <LinearGradient
+            colors={['#D7F8E5', '#B6F2D6']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.iconWrap}
+          >
+            <Ionicons name="checkmark-circle" size={56} color={colors.success} />
+          </LinearGradient>
 
           <Text style={styles.title}>Help has arrived</Text>
           <Text style={styles.body}>
@@ -51,7 +61,7 @@ export function ResolvedModal({
             onPress={() => onSubmit(rating)}
           />
         </View>
-      </View>
+      </Pressable>
     </Modal>
   );
 }
@@ -60,25 +70,36 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing.lg,
+    justifyContent: 'flex-end',
   },
-  card: {
+  sheet: {
     backgroundColor: colors.background,
-    borderRadius: radius.md,
-    padding: spacing.xl,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
+    alignItems: 'center',
+  },
+  handle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+    marginTop: 4,
+    marginBottom: spacing.sm,
   },
   iconWrap: {
-    marginBottom: spacing.xs,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 24,
+    fontSize: 22,
     color: colors.textPrimary,
     textAlign: 'center',
   },
@@ -86,8 +107,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
+    fontSize: 14,
   },
   stars: {
-    marginVertical: spacing.md,
+    marginVertical: spacing.sm,
   },
 });

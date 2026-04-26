@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components/common';
 import {
   colors,
@@ -95,7 +96,12 @@ export function FriendsScreen() {
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <View style={styles.youCard}>
+            <LinearGradient
+              colors={['#FFE4F0', '#E8D7FF']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.youCard}
+            >
               <View style={styles.youAvatar}>
                 <Text style={styles.youAvatarText}>
                   {(profile?.name ?? '?').charAt(0).toUpperCase()}
@@ -117,7 +123,7 @@ export function FriendsScreen() {
                   <Ionicons name="share-social" size={16} color={colors.primary} />
                 </Pressable>
               ) : null}
-            </View>
+            </LinearGradient>
 
             <View style={styles.addCard}>
               <Text style={styles.addLabel}>Add a friend by username</Text>
@@ -269,11 +275,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.background,
     borderRadius: radius.lg,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   youAvatar: {
     width: 48,

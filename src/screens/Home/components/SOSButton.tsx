@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 
@@ -70,20 +71,27 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
         delayLongPress={700}
         disabled={disabled}
         style={({ pressed }) => [
-          styles.card,
+          styles.cardShell,
           pressed && styles.pressed,
           disabled && styles.disabled,
         ]}
         hitSlop={8}
       >
-        <View style={styles.asterisk}>
-          <View style={[styles.bar, { transform: [{ rotate: '0deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '45deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
-        </View>
-        <Text style={styles.label}>SOS</Text>
-        <Text style={styles.hint}>Tap or hold</Text>
+        <LinearGradient
+          colors={['#FF3333', '#CC0000']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.card}
+        >
+          <View style={styles.asterisk}>
+            <View style={[styles.bar, { transform: [{ rotate: '0deg' }] }]} />
+            <View style={[styles.bar, { transform: [{ rotate: '45deg' }] }]} />
+            <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
+            <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
+          </View>
+          <Text style={styles.label}>SOS</Text>
+          <Text style={styles.hint}>Tap or hold</Text>
+        </LinearGradient>
       </Pressable>
     </Animated.View>
   );
@@ -93,21 +101,24 @@ const styles = StyleSheet.create({
   wrap: {
     flex: 1,
   },
-  card: {
+  cardShell: {
     flex: 1,
-    minHeight: 110,
     borderRadius: radius.lg,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    gap: 4,
+    overflow: 'hidden',
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
     shadowRadius: 16,
     elevation: 10,
+  },
+  card: {
+    flex: 1,
+    minHeight: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    gap: 4,
   },
   pressed: {
     opacity: 0.88,
