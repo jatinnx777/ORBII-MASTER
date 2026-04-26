@@ -3,9 +3,11 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  Dimensions,
   Easing,
   Image,
   Linking,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -61,7 +63,7 @@ import {
   type VoiceKeyword,
 } from '@/services/voice-detection';
 import type { AppStackParamList } from '@/navigation/types';
-import type { GeoPoint } from '@/types';
+import type { GeoPoint, UserProfile } from '@/types';
 
 const HELPER_REFRESH_MS = 30_000;
 const MAP_RADIUS_KM = 5;
@@ -375,90 +377,61 @@ export function HomeScreen() {
 
   return (
     <ScreenContainer padded={false}>
-      <View style={styles.header}>
-        <Pressable
-          style={styles.avatarWrap}
-          accessibilityRole="button"
-          accessibilityLabel="Open profile"
-          hitSlop={8}
-          onPress={() => navigation.navigate('Profile')}
-        >
-          <View style={styles.avatar}>
-            {profile?.photoUri ? (
-              <Image
-                source={{ uri: profile.photoUri }}
-                style={styles.avatarImage}
-              />
-            ) : initial ? (
-              <Text style={styles.avatarInitial}>{initial}</Text>
-            ) : (
-              <Ionicons name="person" size={18} color={colors.textMuted} />
-            )}
-          </View>
-        </Pressable>
-        <Pressable
-          style={styles.iconChip}
-          accessibilityRole="button"
-          accessibilityLabel="Friends"
-          hitSlop={8}
-          onPress={() => navigation.navigate('Friends')}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={20}
-            color={colors.textPrimary}
-          />
-        </Pressable>
-      </View>
-
-      <View style={styles.mapWrap}>
-        {currentLocation ? (
-          <OSMMapView
-            center={currentLocation}
-            zoom={15}
-            markers={mapMarkers}
-            interactive
-            style={styles.map}
-          />
-        ) : (
-          <View style={[styles.map, styles.mapPlaceholder]}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.mapPlaceholderText}>Loading map…</Text>
-          </View>
-        )}
-
-        <View style={styles.mapLegend}>
-          <LegendDot color={colors.primary} label="You" />
-          <LegendDot color="#FFD600" label="Verified" />
-          <LegendDot color={colors.success} label="Helpers" />
+      {currentLocation ? (
+        <OSMMapView
+          center={currentLocation}
+          zoom={15}
+          markers={mapMarkers}
+          interactive
+          style={StyleSheet.absoluteFill}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFill, styles.mapPlaceholder]}>
+          <ActivityIndicator color={colors.primary} />
+          <Text style={styles.mapPlaceholderText}>Loading map…</Text>
         </View>
+      )}
 
-        <Pressable
-          onPress={handleSafeModePress}
-          style={[
-            styles.safeModeFab,
-            !!safeJourney && styles.safeModeFabActive,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
-        >
-          <Ionicons
-            name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
-            size={16}
-            color={safeJourney ? colors.textInverse : colors.textPrimary}
-          />
-          <Text
-            style={[
-              styles.safeModeFabText,
-              !!safeJourney && { color: colors.textInverse },
-            ]}
-          >
-            {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
-          </Text>
-        </Pressable>
+      <View style={styles.headerFloat} pointerEvents="box-none">
+        <HomeHeader
+          profile={profile}
+          initial={initial}
+          onProfilePress={() => navigation.navigate('Profile')}
+          onFriendsPress={() => navigation.navigate('Friends')}
+        />
       </View>
 
-      <View style={styles.content}>
+      <View style={styles.mapLegendFloat} pointerEvents="none">
+        <LegendDot color={colors.primary} label="You" />
+        <LegendDot color="#FFD600" label="Verified" />
+        <LegendDot color={colors.success} label="Helpers" />
+      </View>
+
+      <Pressable
+        onPress={handleSafeModePress}
+        style={[
+          styles.safeModeFab,
+          !!safeJourney && styles.safeModeFabActive,
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={safeJourney ? 'Safe Mode active' : 'Start Safe Mode'}
+      >
+        <Ionicons
+          name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
+          size={16}
+          color={safeJourney ? colors.textInverse : colors.textPrimary}
+        />
+        <Text
+          style={[
+            styles.safeModeFabText,
+            !!safeJourney && { color: colors.textInverse },
+          ]}
+        >
+          {safeJourney ? 'Safe Mode on' : 'Safe Mode'}
+        </Text>
+      </Pressable>
+
+      <BottomPanel>
         {locationPermission !== 'granted' ? (
           <Pressable
             onPress={bootstrapPermission}
@@ -554,8 +527,165 @@ export function HomeScreen() {
           count={nearbyAlerts.length}
           onPress={() => navigation.navigate('CommunityAlerts')}
         />
-      </View>
+      </BottomPanel>
     </ScreenContainer>
+  );
+}
+
+// Draggable bottom panel with two snap points: expanded (full content
+// visible) and collapsed (just the handle pokes up so the map fills the
+// screen). Drag the handle area down to open the map, drag up to bring
+// the controls back. Spring snap on release keeps it tactile.
+function BottomPanel({ children }: { children: React.ReactNode }) {
+  const screenHeight = Dimensions.get('window').height;
+  // Panel takes ~58% of screen by default. The collapsed state shows just
+  // the handle + a sliver, so we move the panel down by COLLAPSE_OFFSET.
+  const COLLAPSE_OFFSET = Math.max(280, screenHeight * 0.42);
+  const translateY = useRef(new Animated.Value(0)).current;
+  const lastSnapRef = useRef(0);
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
+        onPanResponderGrant: () => {
+          translateY.setOffset(lastSnapRef.current);
+          translateY.setValue(0);
+        },
+        onPanResponderMove: (_, g) => {
+          const next = Math.max(-20, Math.min(COLLAPSE_OFFSET + 20, g.dy));
+          translateY.setValue(next);
+        },
+        onPanResponderRelease: (_, g) => {
+          translateY.flattenOffset();
+          // Decide snap based on velocity + final position. Quick flicks
+          // win over absolute position so the gesture feels responsive.
+          const finalRaw = lastSnapRef.current + g.dy;
+          let snap = finalRaw > COLLAPSE_OFFSET / 2 ? COLLAPSE_OFFSET : 0;
+          if (g.vy > 0.6) snap = COLLAPSE_OFFSET;
+          if (g.vy < -0.6) snap = 0;
+          lastSnapRef.current = snap;
+          Animated.spring(translateY, {
+            toValue: snap,
+            speed: 18,
+            bounciness: 6,
+            useNativeDriver: true,
+          }).start();
+        },
+      }),
+    [translateY, COLLAPSE_OFFSET],
+  );
+
+  return (
+    <Animated.View
+      style={[styles.bottomPanel, { transform: [{ translateY }] }]}
+    >
+      <View style={styles.handleZone} {...panResponder.panHandlers}>
+        <View style={styles.handle} />
+      </View>
+      <View style={styles.panelContent}>{children}</View>
+    </Animated.View>
+  );
+}
+
+// Avatar springs in on screen mount; chat icon fades in just after. Subtle
+// motion on the header so the home doesn't pop into existence all at once.
+function HomeHeader({
+  profile,
+  initial,
+  onProfilePress,
+  onFriendsPress,
+}: {
+  profile: UserProfile | null;
+  initial: string;
+  onProfilePress: () => void;
+  onFriendsPress: () => void;
+}) {
+  const avatarScale = useRef(new Animated.Value(0.6)).current;
+  const avatarOpacity = useRef(new Animated.Value(0)).current;
+  const chatOpacity = useRef(new Animated.Value(0)).current;
+  const chatTranslate = useRef(new Animated.Value(8)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(avatarScale, {
+        toValue: 1,
+        speed: 14,
+        bounciness: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(avatarOpacity, {
+        toValue: 1,
+        duration: 280,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.sequence([
+        Animated.delay(120),
+        Animated.parallel([
+          Animated.timing(chatOpacity, {
+            toValue: 1,
+            duration: 260,
+            useNativeDriver: true,
+          }),
+          Animated.timing(chatTranslate, {
+            toValue: 0,
+            duration: 280,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const photo = profile?.photoUri ?? null;
+
+  return (
+    <View style={styles.header}>
+      <Animated.View
+        style={{ opacity: avatarOpacity, transform: [{ scale: avatarScale }] }}
+      >
+        <Pressable
+          style={styles.avatarWrap}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile"
+          hitSlop={8}
+          onPress={onProfilePress}
+        >
+          <View style={styles.avatar}>
+            {photo ? (
+              <Image source={{ uri: photo }} style={styles.avatarImage} />
+            ) : initial ? (
+              <Text style={styles.avatarInitial}>{initial}</Text>
+            ) : (
+              <Ionicons name="person" size={18} color={colors.textMuted} />
+            )}
+          </View>
+        </Pressable>
+      </Animated.View>
+      <Animated.View
+        style={{
+          opacity: chatOpacity,
+          transform: [{ translateY: chatTranslate }],
+        }}
+      >
+        <Pressable
+          style={styles.iconChip}
+          accessibilityRole="button"
+          accessibilityLabel="Friends"
+          hitSlop={8}
+          onPress={onFriendsPress}
+        >
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={20}
+            color={colors.textPrimary}
+          />
+        </Pressable>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -709,6 +839,13 @@ const legendStyles = StyleSheet.create({
 // header and content. Kept as a name in case we want a fallback minimum.
 
 const styles = StyleSheet.create({
+  headerFloat: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 5,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -759,11 +896,31 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.primary,
   },
-  content: {
+  bottomPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    ...shadows.sheet,
+    elevation: 12,
+  },
+  handleZone: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  handle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.border,
+  },
+  panelContent: {
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
     paddingBottom: spacing.lg,
-    gap: spacing.sm,
+    gap: spacing.md,
   },
   permissionBanner: {
     flexDirection: 'row',
@@ -780,37 +937,32 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     flex: 1,
   },
-  mapWrap: {
-    flex: 1,
-    backgroundColor: colors.surface,
-  },
-  map: {
-    flex: 1,
-  },
   mapPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
+    backgroundColor: colors.surface,
   },
   mapPlaceholderText: {
     ...typography.caption,
     color: colors.textSecondary,
   },
-  mapLegend: {
+  mapLegendFloat: {
     position: 'absolute',
-    top: 10,
-    left: 10,
+    top: 80,
+    left: spacing.md,
     flexDirection: 'row',
     gap: 10,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: radius.circle,
     backgroundColor: 'rgba(255,255,255,0.94)',
+    zIndex: 4,
   },
   safeModeFab: {
     position: 'absolute',
-    bottom: 12,
-    right: 12,
+    top: 80,
+    right: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -819,6 +971,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.circle,
     backgroundColor: 'rgba(255,255,255,0.96)',
     ...shadows.card,
+    zIndex: 4,
   },
   safeModeFabActive: {
     backgroundColor: colors.success,

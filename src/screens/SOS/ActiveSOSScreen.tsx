@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   ScrollView,
@@ -15,7 +14,12 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
-import { OSMMapView, type OSMMarker, type OSMPolyline } from '@/components/common';
+import {
+  OSMMapView,
+  useBrandSheet,
+  type OSMMarker,
+  type OSMPolyline,
+} from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -65,6 +69,8 @@ export function ActiveSOSScreen() {
   const [resolvedBy, setResolvedBy] = useState<LiveResponder | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [noHelperWarned, setNoHelperWarned] = useState(false);
+
+  const sheet = useBrandSheet();
 
   const userLocation: GeoPoint | null = activeSOS
     ? {
@@ -143,13 +149,15 @@ export function ActiveSOSScreen() {
     if (noHelperWarned || responderList.length > 0 || resolved) return;
     const id = setTimeout(() => {
       setNoHelperWarned(true);
-      Alert.alert(
-        'Still searching',
-        'No one has responded yet. Your SOS is still broadcasting to every ORBII user within 2 km.',
-      );
+      sheet.notify({
+        title: 'Still searching',
+        body: 'No one has responded yet. Your SOS is still broadcasting to every ORBII user within 2 km.',
+        tone: 'warning',
+        icon: 'pulse',
+      });
     }, NO_HELPER_WARN_MS);
     return () => clearTimeout(id);
-  }, [responderList.length, resolved, noHelperWarned]);
+  }, [responderList.length, resolved, noHelperWarned, sheet]);
 
   const helperSummaries = useMemo<HelperSummary[]>(
     () =>
@@ -179,37 +187,34 @@ export function ActiveSOSScreen() {
   const primaryEta = primaryDistance != null ? etaSeconds(primaryDistance) : null;
 
   const handleCancel = useCallback(() => {
-    Alert.alert(
-      'Cancel SOS?',
-      'Helpers may be on the way. Only cancel if you are truly safe.',
-      [
-        { text: 'Keep active', style: 'cancel' },
-        {
-          text: 'Cancel SOS',
-          style: 'destructive',
-          onPress: () => {
-            if (activeSOS) {
-              trackEvent('sos_cancelled', { sosId: activeSOS.id });
-              dispatch(sosCancelled());
-              dispatch(
-                historyRecordAdded({
-                  ...activeSOS,
-                  helpers: helperSummaries,
-                  status: 'cancelled',
-                  resolvedAt: Date.now(),
-                  responseTime: Math.round(
-                    (Date.now() - activeSOS.timestamp) / 1000,
-                  ),
-                }),
-              );
-            }
-            dispatch(sosCleared());
-            navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
-          },
-        },
-      ],
-    );
-  }, [activeSOS, dispatch, helperSummaries, navigation]);
+    sheet.confirm({
+      title: 'Cancel SOS?',
+      body: 'Helpers may be on the way. Only cancel if you are truly safe.',
+      cancelLabel: 'Keep active',
+      confirmLabel: 'Cancel SOS',
+      destructive: true,
+      icon: 'close-circle',
+      onConfirm: () => {
+        if (activeSOS) {
+          trackEvent('sos_cancelled', { sosId: activeSOS.id });
+          dispatch(sosCancelled());
+          dispatch(
+            historyRecordAdded({
+              ...activeSOS,
+              helpers: helperSummaries,
+              status: 'cancelled',
+              resolvedAt: Date.now(),
+              responseTime: Math.round(
+                (Date.now() - activeSOS.timestamp) / 1000,
+              ),
+            }),
+          );
+        }
+        dispatch(sosCleared());
+        navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+      },
+    });
+  }, [activeSOS, dispatch, helperSummaries, navigation, sheet]);
 
   const handleResolved = useCallback(
     (rating: number) => {
@@ -248,19 +253,26 @@ export function ActiveSOSScreen() {
 
   const handleCallHelper = () => {
     if (!primary?.phone) {
-      Alert.alert('No number shared', 'This helper has not shared a phone number.');
+      sheet.notify({
+        title: 'No number shared',
+        body: 'This helper has not shared a phone number.',
+        tone: 'warning',
+      });
       return;
     }
     Linking.openURL(`tel:${primary.phone}`).catch(() => undefined);
   };
 
   const handleTip = (amount: number | 'other') => {
-    Alert.alert(
-      'Tip recorded',
-      amount === 'other'
-        ? 'A custom tip will be available once payments are live.'
-        : `₹${amount} tip queued. We will charge it once payments are live.`,
-    );
+    sheet.notify({
+      title: 'Tip recorded',
+      body:
+        amount === 'other'
+          ? 'A custom tip will be available once payments are live.'
+          : `₹${amount} tip queued. We will charge it once payments are live.`,
+      tone: 'success',
+      icon: 'heart',
+    });
   };
 
   const mapMarkers: OSMMarker[] = useMemo(() => {

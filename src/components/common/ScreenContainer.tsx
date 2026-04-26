@@ -8,6 +8,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing } from '@/theme';
 
 type ScreenContainerProps = {
@@ -17,6 +18,13 @@ type ScreenContainerProps = {
   edges?: Edge[];
   style?: ViewStyle;
 };
+
+// Soft 3-stop gradient pulled from the launcher icon palette: warm pink at
+// the top, lavender in the middle, fading to white. Sits behind every
+// screen so the app reads as branded instead of stark white. Cards / sheets
+// stay opaque on top so contrast is preserved where it matters.
+const BACKDROP_COLORS = ['#FFF1F6', '#F7EDFA', '#FFFFFF'] as const;
+const BACKDROP_LOCATIONS = [0, 0.45, 1] as const;
 
 export function ScreenContainer({
   children,
@@ -38,31 +46,38 @@ export function ScreenContainer({
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={edges}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        {scroll ? (
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {inner}
-          </ScrollView>
-        ) : (
-          inner
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <View style={styles.flex}>
+      <LinearGradient
+        colors={BACKDROP_COLORS}
+        locations={BACKDROP_LOCATIONS}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safe} edges={edges}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {scroll ? (
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {inner}
+            </ScrollView>
+          ) : (
+            inner
+          )}
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: 'transparent',
   },
   flex: {
     flex: 1,

@@ -28,7 +28,7 @@ import { hydrateStore } from '@/redux/persist';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
-import { OfflineBanner } from '@/components/common';
+import { BrandSheetProvider, OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
   fireVoiceWakeNotification,
@@ -224,13 +224,15 @@ export default function App() {
   return (
     <Provider store={store}>
       <SafeAreaProvider>
-        <View style={styles.root} onLayout={onReady}>
-          <StatusBar style="dark" />
-          <OfflineBanner />
-          <NavigationContainer ref={navigationRef}>
-            <RootNavigator />
-          </NavigationContainer>
-        </View>
+        <BrandSheetProvider>
+          <View style={styles.root} onLayout={onReady}>
+            <StatusBar style="dark" />
+            <OfflineBanner />
+            <NavigationContainer ref={navigationRef}>
+              <RootNavigator />
+            </NavigationContainer>
+          </View>
+        </BrandSheetProvider>
       </SafeAreaProvider>
     </Provider>
   );

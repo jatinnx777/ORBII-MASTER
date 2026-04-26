@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
@@ -17,6 +16,7 @@ import {
   Row,
   ScreenContainer,
   SectionHeader,
+  useBrandSheet,
 } from '@/components/common';
 import { colors, fontFamilies, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -48,20 +48,18 @@ export function SettingsScreen() {
   const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
+  const sheet = useBrandSheet();
 
   const handleVoice = (next: boolean) => {
     if (next && !profile?.isPremium) {
-      Alert.alert(
-        'Premium feature',
-        'Voice-activated SOS is a Premium feature. Upgrade to unlock.',
-        [
-          { text: 'Later', style: 'cancel' },
-          {
-            text: 'Upgrade',
-            onPress: () => navigation.navigate('PremiumUpgrade'),
-          },
-        ],
-      );
+      sheet.confirm({
+        title: 'Premium feature',
+        body: 'Voice-activated SOS is a Premium feature. Upgrade to unlock.',
+        cancelLabel: 'Later',
+        confirmLabel: 'See plans',
+        icon: 'ribbon',
+        onConfirm: () => navigation.navigate('PremiumUpgrade'),
+      });
       return;
     }
     dispatch(voiceDetectionToggled(next));
@@ -69,17 +67,13 @@ export function SettingsScreen() {
 
   const handleBackgroundVoice = (next: boolean) => {
     if (next) {
-      Alert.alert(
-        'Run ORBII in the background?',
-        'ORBII will keep listening for "help", "bachao", or "madad" while the app is closed. A persistent notification stays in the tray so Android doesn\'t kill the listener. This uses extra battery.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Turn on',
-            onPress: () => dispatch(backgroundVoiceToggled(true)),
-          },
-        ],
-      );
+      sheet.confirm({
+        title: 'Run ORBII in the background?',
+        body: 'ORBII will keep listening for "help", "bachao", or "madad" while the app is closed. A persistent notification stays in the tray so Android does not kill the listener. Uses extra battery.',
+        confirmLabel: 'Turn on',
+        icon: 'mic',
+        onConfirm: () => dispatch(backgroundVoiceToggled(true)),
+      });
       return;
     }
     dispatch(backgroundVoiceToggled(false));
@@ -89,10 +83,11 @@ export function SettingsScreen() {
     if (next) {
       const ok = await requestNotificationPermission();
       if (!ok) {
-        Alert.alert(
-          'Permission denied',
-          'Enable notifications in system settings to receive SOS alerts.',
-        );
+        sheet.notify({
+          title: 'Permission denied',
+          body: 'Enable notifications in system settings to receive SOS alerts.',
+          tone: 'warning',
+        });
         return;
       }
     }
@@ -100,23 +95,23 @@ export function SettingsScreen() {
   };
 
   const handleTestSOS = () => {
-    Alert.alert(
-      'Practice SOS?',
-      'Runs the full SOS flow without sending real alerts. The incident shows up in your history tagged "PRACTICE".',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Start practice',
-          onPress: () => navigation.navigate('SOSCountdown', { test: true }),
-        },
-      ],
-    );
+    sheet.confirm({
+      title: 'Practice SOS?',
+      body: 'Runs the full SOS flow without sending real alerts. The incident shows up in your history tagged "PRACTICE".',
+      confirmLabel: 'Start practice',
+      icon: 'flask',
+      onConfirm: () => navigation.navigate('SOSCountdown', { test: true }),
+    });
   };
 
   const handleTestNotif = async () => {
     const ok = await requestNotificationPermission();
     if (!ok) {
-      Alert.alert('Enable notifications first');
+      sheet.notify({
+        title: 'Enable notifications first',
+        body: 'Notifications are turned off in system settings.',
+        tone: 'warning',
+      });
       return;
     }
     fireLocalNotification(
@@ -126,17 +121,17 @@ export function SettingsScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Sign out?', 'You can sign back in with your Google account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOutFromGoogle();
-          dispatch(signedOut());
-        },
+    sheet.confirm({
+      title: 'Sign out?',
+      body: 'You can sign back in anytime. Your local profile and history will be cleared from this device.',
+      destructive: true,
+      confirmLabel: 'Sign out',
+      icon: 'log-out',
+      onConfirm: async () => {
+        await signOutFromGoogle();
+        dispatch(signedOut());
       },
-    ]);
+    });
   };
 
   return (

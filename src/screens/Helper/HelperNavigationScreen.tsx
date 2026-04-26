@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Linking,
@@ -16,7 +15,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { OSMMapView, type OSMMarker, type OSMPolyline } from '@/components/common';
+import {
+  OSMMapView,
+  useBrandSheet,
+  type OSMMarker,
+  type OSMPolyline,
+} from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -61,6 +65,7 @@ export function HelperNavigationScreen() {
   const status = useAppSelector((s) => s.helper.jobStatus);
   const currentLocation = useAppSelector((s) => s.sos.currentLocation);
   const profile = useAppSelector((s) => s.user.profile);
+  const sheet = useBrandSheet();
 
   const origin = useRef<GeoPoint | null>(
     currentLocation ??
@@ -188,44 +193,42 @@ export function HelperNavigationScreen() {
 
   const handleCallVictim = () => {
     if (!job.user.phone) {
-      Alert.alert('No number shared', 'This user has not shared a phone number.');
+      sheet.notify({
+        title: 'No number shared',
+        body: 'This user has not shared a phone number.',
+        tone: 'warning',
+      });
       return;
     }
     Linking.openURL(`tel:${job.user.phone}`).catch(() => undefined);
   };
 
   const handleEmergencyCall = (line: EmergencyLine) => {
-    Alert.alert(
-      `Call ${line.label} (${line.number})?`,
-      'Use this only if the situation is escalating beyond what you can handle alone.',
-      [
-        { text: 'Not yet', style: 'cancel' },
-        {
-          text: `Call ${line.number}`,
-          style: 'destructive',
-          onPress: () =>
-            Linking.openURL(`tel:${line.number}`).catch(() => undefined),
-        },
-      ],
-    );
+    sheet.confirm({
+      title: `Call ${line.label} (${line.number})?`,
+      body: 'Use this only if the situation is escalating beyond what you can handle alone.',
+      cancelLabel: 'Not yet',
+      confirmLabel: `Call ${line.number}`,
+      destructive: true,
+      icon: line.icon,
+      onConfirm: () =>
+        Linking.openURL(`tel:${line.number}`).catch(() => undefined),
+    });
   };
 
   const handleCancel = () => {
-    Alert.alert(
-      'Cancel this job?',
-      'Your rating may drop if you cancel after accepting.',
-      [
-        { text: 'Keep going', style: 'cancel' },
-        {
-          text: 'Cancel',
-          style: 'destructive',
-          onPress: () => {
-            dispatch(jobStatusChanged('declined'));
-            navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
-          },
-        },
-      ],
-    );
+    sheet.confirm({
+      title: 'Cancel this job?',
+      body: 'Your rating may drop if you cancel after accepting.',
+      cancelLabel: 'Keep going',
+      confirmLabel: 'Cancel',
+      destructive: true,
+      icon: 'close-circle',
+      onConfirm: () => {
+        dispatch(jobStatusChanged('declined'));
+        navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+      },
+    });
   };
 
   const arrived = status === 'arrived';

@@ -1,6 +1,5 @@
 import React from 'react';
 import {
-  Alert,
   Image,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import {
   Row,
   ScreenContainer,
   SectionHeader,
+  useBrandSheet,
 } from '@/components/common';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -36,18 +36,19 @@ export function ProfileScreen() {
   const initial = (profile.name || profile.email || 'O').charAt(0).toUpperCase();
   const sosCount = history.length;
 
+  const sheet = useBrandSheet();
   const handleSignOut = () => {
-    Alert.alert('Sign out?', 'You can sign back in with your Google account.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          await signOutFromGoogle();
-          dispatch(signedOut());
-        },
+    sheet.confirm({
+      title: 'Sign out?',
+      body: 'You can sign back in anytime. Your local profile and history will be cleared from this device.',
+      destructive: true,
+      confirmLabel: 'Sign out',
+      icon: 'log-out',
+      onConfirm: async () => {
+        await signOutFromGoogle();
+        dispatch(signedOut());
       },
-    ]);
+    });
   };
 
   return (
