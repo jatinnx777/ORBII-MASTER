@@ -38,6 +38,7 @@ export type AppStackParamList = {
   CommunityAlerts: undefined;
   Profile: undefined;
   Friends: undefined;
+  ChatThread: { username: string };
   History: undefined;
 };
 

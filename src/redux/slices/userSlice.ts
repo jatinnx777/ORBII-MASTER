@@ -76,6 +76,8 @@ const userSlice = createSlice({
       const exists = list.some((f) => f.username === action.payload.username);
       if (exists) return;
       state.profile.friends = [action.payload, ...list];
+      // Server-side mirror is fire-and-forget — no need to import here, the
+      // persist subscriber pushes the whole profile up on every change.
     },
     friendRemoved(state, action: PayloadAction<string>) {
       if (!state.profile) return;

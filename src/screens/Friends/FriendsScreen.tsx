@@ -13,6 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, ScreenContainer } from '@/components/common';
 import {
   colors,
@@ -24,6 +26,9 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { friendAdded, friendRemoved } from '@/redux/slices/userSlice';
 import type { Friend } from '@/types';
+import type { AppStackParamList } from '@/navigation/types';
+
+type Nav = NativeStackNavigationProp<AppStackParamList, 'Friends'>;
 
 // Friends/Chat tab. Friends are added by username and live in the user's
 // safety circle. We do not have a profiles table yet, so adding by
@@ -31,6 +36,7 @@ import type { Friend } from '@/types';
 // real backend is wired we can resolve usernames to user records and
 // surface friend status / chat.
 export function FriendsScreen() {
+  const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const friends: Friend[] = profile?.friends ?? [];
@@ -176,6 +182,7 @@ export function FriendsScreen() {
             friend={item}
             index={index}
             onRemove={() => handleRemove(item.username)}
+            onChat={() => navigation.navigate('ChatThread', { username: item.username })}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
@@ -190,10 +197,12 @@ function FriendRow({
   friend,
   index,
   onRemove,
+  onChat,
 }: {
   friend: Friend;
   index: number;
   onRemove: () => void;
+  onChat: () => void;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -213,33 +222,51 @@ function FriendRow({
 
   return (
     <Animated.View
-      style={[
-        styles.friendRow,
-        { opacity: enter, transform: [{ translateY }] },
-      ]}
+      style={{ opacity: enter, transform: [{ translateY }] }}
     >
-      <View style={styles.friendAvatar}>
-        <Text style={styles.friendAvatarText}>
-          {friend.username.charAt(0).toUpperCase()}
-        </Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.friendHandle}>@{friend.username}</Text>
-        <Text style={styles.friendMeta}>
-          Added{' '}
-          {new Date(friend.addedAt).toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-          })}
-        </Text>
-      </View>
       <Pressable
-        onPress={onRemove}
-        hitSlop={10}
+        onPress={onChat}
+        style={({ pressed }) => [
+          styles.friendRow,
+          pressed && { opacity: 0.85 },
+        ]}
         accessibilityRole="button"
-        accessibilityLabel={`Remove ${friend.username}`}
+        accessibilityLabel={`Chat with ${friend.username}`}
       >
-        <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+        <View style={styles.friendAvatar}>
+          <Text style={styles.friendAvatarText}>
+            {friend.username.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.friendHandle}>@{friend.username}</Text>
+          <Text style={styles.friendMeta}>
+            Added{' '}
+            {new Date(friend.addedAt).toLocaleDateString('en-IN', {
+              day: '2-digit',
+              month: 'short',
+            })}
+          </Text>
+        </View>
+        <View style={styles.friendActions}>
+          <Pressable
+            onPress={onChat}
+            hitSlop={10}
+            style={styles.chatBtn}
+            accessibilityRole="button"
+            accessibilityLabel={`Open chat with ${friend.username}`}
+          >
+            <Ionicons name="chatbubble-ellipses" size={16} color={colors.primary} />
+          </Pressable>
+          <Pressable
+            onPress={onRemove}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={`Remove ${friend.username}`}
+          >
+            <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+          </Pressable>
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -412,5 +439,20 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     fontSize: 11,
+  },
+  friendActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  chatBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

@@ -20,6 +20,7 @@ import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScr
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
+import { ChatThreadScreen } from '@/screens/Friends/ChatThreadScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
@@ -157,6 +158,11 @@ export function AppNavigator() {
         name="Friends"
         component={FriendsScreen}
         options={withHeader('Friends')}
+      />
+      <Stack.Screen
+        name="ChatThread"
+        component={ChatThreadScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="History"

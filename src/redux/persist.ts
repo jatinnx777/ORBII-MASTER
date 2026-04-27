@@ -4,6 +4,7 @@ import { historyHydrated } from './slices/historySlice';
 import { helperHydrated } from './slices/helperSlice';
 import { appHydrated } from './slices/appSlice';
 import { profileHydrated } from './slices/userSlice';
+import { syncProfile } from '@/services/profile-sync';
 import {
   clearSession,
   isSessionExpired,
@@ -79,6 +80,9 @@ function subscribePersist() {
       if (next.user.profile) {
         setItem(storageKeys.profile, next.user.profile);
         touchSession();
+        // Best-effort server-side sync. Fails silently if the profiles
+        // table isn't in Supabase yet.
+        void syncProfile(next.user.profile);
       } else {
         removeItem(storageKeys.profile);
         clearSession();
