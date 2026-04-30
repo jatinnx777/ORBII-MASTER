@@ -93,10 +93,13 @@ export function ProfileSetupScreen() {
         photoUri,
         username,
       });
+      const now = Date.now();
       dispatch(
         profileUpdated({
           ...updated,
           phone: toE164India(phoneDigits),
+          usernameChangedAt: now,
+          photoChangedAt: photoUri ? now : null,
         }),
       );
     } catch (err) {

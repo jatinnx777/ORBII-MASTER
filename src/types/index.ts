@@ -34,6 +34,11 @@ export type UserProfile = {
   isHelper: boolean;
   isPremium: boolean;
   createdAt: number;
+  // Cooldown timestamps. After picking a username or profile photo the
+  // user can't change it again for 30 days. Stored on the device AND
+  // mirrored to the profiles table so the limit holds across reinstalls.
+  usernameChangedAt: number | null;
+  photoChangedAt: number | null;
   idKind: IdDocumentKind | null;
   idNumber: string | null;
   idPhotoUri: string | null;

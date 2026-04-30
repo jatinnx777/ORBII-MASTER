@@ -555,11 +555,15 @@ function BottomPanel({
   topRow?: React.ReactNode;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  // Panel takes ~58% of screen by default. The collapsed state shows just
-  // the handle + a sliver, so we move the panel down by COLLAPSE_OFFSET.
+  // Panel takes ~58% of screen at full height. Collapsed = slid down by
+  // COLLAPSE_OFFSET, leaving just the handle + alerts sliver visible.
   const COLLAPSE_OFFSET = Math.max(280, screenHeight * 0.42);
-  const translateY = useRef(new Animated.Value(0)).current;
-  const lastSnapRef = useRef(0);
+  // Default initial position is partly slid down (~30% of the way to
+  // collapsed) so users see more map at first glance and can drag the
+  // panel up for the action cards.
+  const INITIAL_OFFSET = COLLAPSE_OFFSET * 0.3;
+  const translateY = useRef(new Animated.Value(INITIAL_OFFSET)).current;
+  const lastSnapRef = useRef(INITIAL_OFFSET);
 
   const panResponder = useMemo(
     () =>
@@ -707,15 +711,6 @@ function HomeHeader({
   );
 }
 
-function getGreeting(): string {
-  const h = new Date().getHours();
-  if (h < 5) return 'Good night';
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  if (h < 21) return 'Good evening';
-  return 'Good night';
-}
-
 function LegendDot({ color, label }: { color: string; label: string }) {
   return (
     <View style={legendStyles.row}>
@@ -852,9 +847,6 @@ const legendStyles = StyleSheet.create({
     fontSize: 11,
   },
 });
-
-// MAP_HEIGHT is no longer used; map now flexes to fill space between
-// header and content. Kept as a name in case we want a fallback minimum.
 
 const styles = StyleSheet.create({
   headerFloat: {
@@ -1003,41 +995,6 @@ const styles = StyleSheet.create({
   mapPlaceholderText: {
     ...typography.caption,
     color: colors.textSecondary,
-  },
-  mapLegendFloat: {
-    position: 'absolute',
-    top: 80,
-    left: spacing.md,
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radius.circle,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    zIndex: 4,
-  },
-  safeModeFab: {
-    position: 'absolute',
-    top: 80,
-    right: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: radius.circle,
-    backgroundColor: 'rgba(255,255,255,0.96)',
-    ...shadows.card,
-    zIndex: 4,
-  },
-  safeModeFabActive: {
-    backgroundColor: colors.success,
-  },
-  safeModeFabText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
   },
   helperChip: {
     flexDirection: 'row',

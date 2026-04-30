@@ -61,16 +61,52 @@ export function EditProfileScreen() {
       );
       return;
     }
+
+    const now = Date.now();
+    const COOLDOWN_MS = 30 * 24 * 60 * 60 * 1000;
+    const usernameChanged = username !== (profile.username ?? '');
+    const photoChanged = photoUri !== (profile.photoUri ?? null);
+
+    if (usernameChanged && profile.usernameChangedAt) {
+      const remaining = profile.usernameChangedAt + COOLDOWN_MS - now;
+      if (remaining > 0) {
+        Alert.alert(
+          'Username locked',
+          `You can change your username again in ${formatDays(remaining)}.`,
+        );
+        return;
+      }
+    }
+    if (photoChanged && profile.photoChangedAt) {
+      const remaining = profile.photoChangedAt + COOLDOWN_MS - now;
+      if (remaining > 0) {
+        Alert.alert(
+          'Photo locked',
+          `You can change your profile photo again in ${formatDays(remaining)}.`,
+        );
+        return;
+      }
+    }
+
     dispatch(
       profileUpdated({
         ...profile,
         name: name.trim(),
         username,
         photoUri,
+        usernameChangedAt: usernameChanged ? now : profile.usernameChangedAt,
+        photoChangedAt: photoChanged ? now : profile.photoChangedAt,
       }),
     );
     navigation.goBack();
   };
+
+  // Friendly remaining-days string for the cooldown alerts.
+  function formatDays(ms: number): string {
+    const days = Math.ceil(ms / (24 * 60 * 60 * 1000));
+    if (days <= 1) return 'less than a day';
+    return `${days} days`;
+  }
 
   const initial = (name || '').trim().charAt(0).toUpperCase() || 'O';
 

@@ -14,5 +14,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: false,
+    // PKCE flow returns the auth code as `?code=...` on the redirect URL
+    // (which matches our exchangeCodeForSession call). Implicit flow puts
+    // tokens in the URL fragment (#access_token=...) and would break the
+    // mobile deep-link handoff.
+    flowType: 'pkce',
   },
 });

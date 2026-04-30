@@ -2,6 +2,7 @@
   "expo": {
     "name": "ORBII",
     "slug": "orbii",
+    "scheme": "orbii",
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -56,13 +57,14 @@
           ]
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
         "projectId": "9a0c1b10-4897-4093-8dae-aec5e8461a6b"
       },
-      "googleWebClientId": "REPLACE_WITH_GOOGLE_WEB_CLIENT_ID.apps.googleusercontent.com"
+      "googleWebClientId": "526555902664-kq54edss00ru109gncq9bkuvrg3cie16.apps.googleusercontent.com"
     }
   }
 }

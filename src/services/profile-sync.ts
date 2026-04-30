@@ -39,6 +39,12 @@ export async function syncProfile(profile: UserProfile): Promise<void> {
         photo_uri: profile.photoUri,
         is_helper: profile.isHelper,
         is_verified: profile.idVerification === 'verified',
+        username_changed_at: profile.usernameChangedAt
+          ? new Date(profile.usernameChangedAt).toISOString()
+          : null,
+        photo_changed_at: profile.photoChangedAt
+          ? new Date(profile.photoChangedAt).toISOString()
+          : null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' },

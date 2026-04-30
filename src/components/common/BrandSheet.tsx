@@ -232,7 +232,11 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
             style={[
               styles.sheet,
               {
-                paddingBottom: spacing.xl + insets.bottom,
+                // Stack a generous baseline (>= xxl) on top of the safe-area
+                // inset so on phones with no inset (older Androids) the
+                // sheet still sits a thumb's-width above the edge.
+                paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xl),
+                marginBottom: insets.bottom > 0 ? 0 : spacing.md,
                 transform: [{ translateY }],
               },
             ]}
