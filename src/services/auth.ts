@@ -2,6 +2,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import type { UserProfile } from '@/types';
 import { supabase } from './supabase';
+import { listFriendsForUser } from './friend-requests';
 
 // Custom URL scheme registered in app.json. Redirect URI must be hard-coded
 // so it stays stable across Expo Go vs production builds (where
@@ -165,8 +166,13 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     .eq('id', user.id)
     .maybeSingle<ProfileRow>();
 
+  // Pull the friend list from the server so logging out + back in restores
+  // the user's circle. New users come back with an empty list.
+  const friends = await listFriendsForUser(user.id);
+
   if (row) {
     const profile = rowToProfile(row, user.email ?? '');
+    profile.friends = friends;
     return { profile, needsProfile: !profile.username || !profile.phone };
   }
 
@@ -176,6 +182,7 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     name: (user.user_metadata?.full_name as string | undefined) ?? null,
     photo: (user.user_metadata?.avatar_url as string | undefined) ?? null,
   });
+  profile.friends = friends;
   return { profile, needsProfile: true };
 }
 

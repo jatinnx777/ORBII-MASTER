@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -25,6 +25,14 @@ import {
 } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { friendAdded, friendRemoved } from '@/redux/slices/userSlice';
+import {
+  acceptFriendRequest,
+  declineFriendRequest,
+  listIncomingRequests,
+  listOutgoingRequests,
+  sendFriendRequest,
+  type FriendRequest,
+} from '@/services/friend-requests';
 import type { Friend } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -43,11 +51,28 @@ export function FriendsScreen() {
 
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [incoming, setIncoming] = useState<FriendRequest[]>([]);
+  const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
 
   const sanitizedDraft = draft.toLowerCase().replace(/[^a-z0-9_]/g, '');
   const draftValid = /^[a-z0-9_]{3,20}$/.test(sanitizedDraft);
 
-  const handleAdd = () => {
+  const refreshRequests = useCallback(async () => {
+    if (!profile?.uid || !profile.username) return;
+    const [inc, out] = await Promise.all([
+      listIncomingRequests(profile.username),
+      listOutgoingRequests(profile.uid),
+    ]);
+    setIncoming(inc);
+    setOutgoing(out.filter((r) => r.status === 'pending'));
+  }, [profile?.uid, profile?.username]);
+
+  useEffect(() => {
+    refreshRequests();
+  }, [refreshRequests]);
+
+  const handleAdd = async () => {
     if (!draftValid) {
       setError('Username must be 3 to 20 lowercase letters, numbers, or underscores.');
       return;
@@ -60,9 +85,49 @@ export function FriendsScreen() {
       setError('Already in your circle.');
       return;
     }
-    dispatch(friendAdded({ username: sanitizedDraft, addedAt: Date.now() }));
-    setDraft('');
-    setError(null);
+    if (outgoing.some((r) => r.toUsername === sanitizedDraft)) {
+      setError('Request already pending.');
+      return;
+    }
+    if (!profile?.uid || !profile.username) {
+      setError('Set up your profile before adding friends.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await sendFriendRequest({
+        fromUserId: profile.uid,
+        fromUsername: profile.username,
+        toUsername: sanitizedDraft,
+      });
+      setDraft('');
+      setError(null);
+      await refreshRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not send request.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleAccept = async (request: FriendRequest) => {
+    if (!profile?.uid || !profile.username) return;
+    await acceptFriendRequest({
+      requestId: request.id,
+      myUid: profile.uid,
+      myUsername: profile.username,
+      fromUserId: request.fromUserId,
+      fromUsername: request.fromUsername,
+    });
+    dispatch(
+      friendAdded({ username: request.fromUsername, addedAt: Date.now() }),
+    );
+    await refreshRequests();
+  };
+
+  const handleDecline = async (request: FriendRequest) => {
+    await declineFriendRequest(request.id);
+    await refreshRequests();
   };
 
   const handleRemove = (username: string) => {
@@ -132,7 +197,7 @@ export function FriendsScreen() {
             </LinearGradient>
 
             <View style={styles.addCard}>
-              <Text style={styles.addLabel}>Add a friend by username</Text>
+              <Text style={styles.addLabel}>Send a friend request by username</Text>
               <View style={styles.addRow}>
                 <Text style={styles.addPrefix}>@</Text>
                 <TextInput
@@ -151,11 +216,47 @@ export function FriendsScreen() {
               </View>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
               <Button
-                label="Add to circle"
+                label={submitting ? 'Sending…' : 'Send request'}
                 onPress={handleAdd}
-                disabled={!draftValid}
+                disabled={!draftValid || submitting}
+                loading={submitting}
               />
+              <Text style={styles.hintText}>
+                They have to accept before you're connected. Until then no
+                location sharing or chat.
+              </Text>
             </View>
+
+            {incoming.length > 0 ? (
+              <View style={styles.requestsBlock}>
+                <Text style={styles.sectionHeader}>
+                  {incoming.length} request{incoming.length === 1 ? '' : 's'} for you
+                </Text>
+                {incoming.map((req) => (
+                  <RequestRow
+                    key={req.id}
+                    request={req}
+                    onAccept={() => handleAccept(req)}
+                    onDecline={() => handleDecline(req)}
+                  />
+                ))}
+              </View>
+            ) : null}
+
+            {outgoing.length > 0 ? (
+              <View style={styles.requestsBlock}>
+                <Text style={styles.sectionHeader}>
+                  Pending — sent by you
+                </Text>
+                {outgoing.map((req) => (
+                  <View key={req.id} style={styles.outgoingRow}>
+                    <Ionicons name="paper-plane-outline" size={16} color={colors.textSecondary} />
+                    <Text style={styles.outgoingHandle}>@{req.toUsername}</Text>
+                    <Text style={styles.outgoingMeta}>Waiting for them</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             {friends.length > 0 ? (
               <Text style={styles.sectionHeader}>
@@ -269,6 +370,50 @@ function FriendRow({
         </View>
       </Pressable>
     </Animated.View>
+  );
+}
+
+// Pending incoming friend request. Renders the sender's handle plus an
+// Accept (primary, red) and Decline (outline) action.
+function RequestRow({
+  request,
+  onAccept,
+  onDecline,
+}: {
+  request: FriendRequest;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <View style={styles.requestRow}>
+      <View style={styles.requestAvatar}>
+        <Text style={styles.requestAvatarText}>
+          {request.fromUsername.charAt(0).toUpperCase()}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.friendHandle}>@{request.fromUsername}</Text>
+        <Text style={styles.friendMeta}>
+          Wants to add you to their circle
+        </Text>
+      </View>
+      <Pressable
+        onPress={onDecline}
+        style={styles.declineBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Decline"
+      >
+        <Ionicons name="close" size={18} color={colors.textSecondary} />
+      </Pressable>
+      <Pressable
+        onPress={onAccept}
+        style={styles.acceptBtn}
+        accessibilityRole="button"
+        accessibilityLabel="Accept"
+      >
+        <Ionicons name="checkmark" size={18} color={colors.textInverse} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -454,5 +599,75 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  hintText: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
+    marginTop: 2,
+  },
+  requestsBlock: {
+    gap: 6,
+  },
+  requestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  requestAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  requestAvatarText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textInverse,
+  },
+  acceptBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.success,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  declineBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outgoingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+  },
+  outgoingHandle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+    flex: 1,
+  },
+  outgoingMeta: {
+    ...typography.caption,
+    color: colors.textMuted,
+    fontSize: 11,
   },
 });
