@@ -23,6 +23,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
   backgroundVoiceToggled,
+  crashDetectionToggled,
   pushEnabledSet,
   voiceDetectionToggled,
 } from '@/redux/slices/appSlice';
@@ -47,6 +48,7 @@ export function SettingsScreen() {
   const voice = useAppSelector((s) => s.app.voiceDetection);
   const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
+  const crashDetection = useAppSelector((s) => s.app.crashDetection);
   const push = useAppSelector((s) => s.app.pushEnabled);
   const sheet = useBrandSheet();
 
@@ -170,6 +172,25 @@ export function SettingsScreen() {
               <Switch
                 value={backgroundVoice}
                 onValueChange={handleBackgroundVoice}
+                trackColor={{ true: colors.primary, false: colors.border }}
+              />
+            }
+          />
+          <Divider />
+          <Row
+            icon="car-sport"
+            label="Crash detection"
+            value={
+              crashDetection
+                ? 'Auto-fires SOS on detected impact'
+                : 'Off. Sensor watch for sudden 3.5g jolts'
+            }
+            right={
+              <Switch
+                value={crashDetection}
+                onValueChange={(v) => {
+                  dispatch(crashDetectionToggled(v));
+                }}
                 trackColor={{ true: colors.primary, false: colors.border }}
               />
             }

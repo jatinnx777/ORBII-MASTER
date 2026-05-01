@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Linking,
@@ -20,6 +20,7 @@ import {
   type OSMMarker,
   type OSMPolyline,
 } from '@/components/common';
+import { broadcastExpandRadius } from '@/services/community';
 import {
   colors,
   fontFamilies,
@@ -48,6 +49,9 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 const ARRIVAL_RADIUS_M = 40;
 const STALE_PING_MS = 45_000;
 const NO_HELPER_WARN_MS = 120_000;
+// Sender expands the alert radius from 2 km → 5 km if no responder pings
+// the live-location channel within this window.
+const EXPAND_RADIUS_AFTER_MS = 60_000;
 
 type LiveResponder = {
   id: string;
@@ -158,6 +162,21 @@ export function ActiveSOSScreen() {
     }, NO_HELPER_WARN_MS);
     return () => clearTimeout(id);
   }, [responderList.length, resolved, noHelperWarned, sheet]);
+
+  // Radius expansion: if no one responds in 60s, broadcast an expand
+  // pulse so users 2-5 km away get this alert too. Fires only once per
+  // active SOS — once any responder pings, we cancel the timer.
+  const expandedRef = useRef(false);
+  useEffect(() => {
+    if (expandedRef.current || resolved || !activeSOS?.id) return;
+    if (responderList.length > 0) return;
+    const id = setTimeout(() => {
+      if (expandedRef.current || responderList.length > 0) return;
+      expandedRef.current = true;
+      broadcastExpandRadius(activeSOS.id).catch(() => undefined);
+    }, EXPAND_RADIUS_AFTER_MS);
+    return () => clearTimeout(id);
+  }, [responderList.length, resolved, activeSOS?.id]);
 
   const helperSummaries = useMemo<HelperSummary[]>(
     () =>

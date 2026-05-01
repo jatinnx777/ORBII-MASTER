@@ -90,17 +90,23 @@ export function CommunityAlertsScreen() {
   // handled globally in App.tsx so we don't double-buzz.
   const knownIdsRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    const sub = subscribeToAlerts((broadcast) => {
-      const alert = alertFromBroadcast(
-        broadcast,
-        viewerRef.current,
-        profileRef.current?.uid ?? null,
-      );
-      if (!alert) return;
-      dispatch(alertReceived(alert));
-      if (!knownIdsRef.current.has(alert.id)) {
-        knownIdsRef.current.add(alert.id);
-      }
+    const sub = subscribeToAlerts({
+      onAlert: (broadcast) => {
+        const alert = alertFromBroadcast(
+          broadcast,
+          viewerRef.current,
+          profileRef.current?.uid ?? null,
+        );
+        if (!alert) return;
+        // CommunityAlerts is the dedicated "all nearby alerts" screen, so
+        // we show alerts up to 5 km even before the expand pulse fires.
+        // Anything past 5 km is filtered out.
+        if (alert.distanceMeters > 5000) return;
+        dispatch(alertReceived(alert));
+        if (!knownIdsRef.current.has(alert.id)) {
+          knownIdsRef.current.add(alert.id);
+        }
+      },
     });
     return () => sub.unsubscribe();
   }, [dispatch]);

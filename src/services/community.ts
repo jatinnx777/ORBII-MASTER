@@ -218,9 +218,27 @@ export async function broadcastAlert(alert: AlertBroadcast): Promise<void> {
   }
 }
 
-export function subscribeToAlerts(
-  onAlert: (alert: AlertBroadcast) => void,
-): { unsubscribe: () => void } {
+// Tells every receiver listening on the alerts channel that the SOS with
+// the given id should now be considered "expanded" — receivers between
+// 2 km and 5 km of the victim will start showing it. Sender fires this
+// after 60 s with no responder.
+export async function broadcastExpandRadius(sosId: string): Promise<void> {
+  const channel = ensureBroadcastChannel();
+  try {
+    await channel.send({
+      type: 'broadcast',
+      event: 'expand-radius',
+      payload: { id: sosId },
+    });
+  } catch (err) {
+    console.warn('[community] expand-radius broadcast failed', err);
+  }
+}
+
+export function subscribeToAlerts(handlers: {
+  onAlert: (alert: AlertBroadcast) => void;
+  onExpand?: (sosId: string) => void;
+}): { unsubscribe: () => void } {
   const channel = supabase
     .channel(ALERTS_CHANNEL, {
       config: { broadcast: { ack: false, self: false } },
@@ -229,7 +247,12 @@ export function subscribeToAlerts(
       const payload = msg.payload as AlertBroadcast | undefined;
       console.log('[community] alert received', payload?.id);
       if (!payload || !payload.id || !payload.location) return;
-      onAlert(payload);
+      handlers.onAlert(payload);
+    })
+    .on('broadcast', { event: 'expand-radius' }, (msg) => {
+      const payload = msg.payload as { id?: string } | undefined;
+      if (!payload?.id) return;
+      handlers.onExpand?.(payload.id);
     })
     .subscribe((status) => {
       console.log('[community] subscription status', status);

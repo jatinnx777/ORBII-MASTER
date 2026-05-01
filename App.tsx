@@ -48,6 +48,11 @@ import {
   stopListening,
   subscribeKeyword,
 } from '@/services/voice-detection';
+import {
+  startCrashDetection,
+  stopCrashDetection,
+  subscribeCrashEvents,
+} from '@/services/crash-detection';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
@@ -61,6 +66,7 @@ function RootNavigator() {
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
   const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
+  const crashDetection = useAppSelector((s) => s.app.crashDetection);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
   // signs in / out.
@@ -96,6 +102,31 @@ function RootNavigator() {
       stopListening();
     };
   }, [status, backgroundVoice]);
+
+  // Crash detection — runs whenever the user is signed in and the toggle
+  // is on. A detected crash routes through the navigationRef into the
+  // SOS countdown, so the user gets a 5-second cancel window before the
+  // alert actually fires.
+  useEffect(() => {
+    if (status !== 'authenticated' || !crashDetection) return;
+    let cancelled = false;
+    (async () => {
+      const result = await startCrashDetection();
+      if (cancelled || !result.ok) return;
+    })();
+    const unsub = subscribeCrashEvents(() => {
+      Vibration.vibrate([0, 400, 200, 400]);
+      if (navigationRef.isReady()) {
+        // @ts-expect-error - SOSCountdown is in the AppStack only.
+        navigationRef.navigate('SOSCountdown');
+      }
+    });
+    return () => {
+      cancelled = true;
+      unsub();
+      stopCrashDetection();
+    };
+  }, [status, crashDetection]);
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
@@ -186,34 +217,62 @@ export default function App() {
     return unsub;
   }, []);
 
-  // Global SOS broadcast receiver. When ANY user nearby fires an SOS we
-  // shove the alert into the community slice and buzz the phone hard so
-  // the responder notices even from a pocket. Settings → "Alert vibration"
-  // toggles it. Subscribing here (not on a screen) means the buzz fires
-  // regardless of which tab the responder is on.
+  // Global SOS broadcast receiver. Two-stage radius: alerts within 2 km of
+  // the receiver fire immediately. Alerts 2-5 km away are cached pending
+  // the sender's "expand-radius" pulse (sent if no responder accepts in
+  // 60 s). Anything beyond 5 km is dropped silently — keeps a Bangalore
+  // alert from buzzing phones in Mumbai.
   useEffect(() => {
     const seen = new Set<string>();
-    const sub = subscribeToAlerts((broadcast) => {
+    const pending = new Map<string, { broadcast: ReturnType<typeof Object>; alert: ReturnType<typeof Object> }>();
+
+    const handleAlert = (broadcastPayload: Parameters<typeof alertFromBroadcast>[0]) => {
       const state = store.getState();
       const me = state.user.profile?.uid ?? null;
       const here = state.sos.currentLocation;
-      const alert = alertFromBroadcast(broadcast, here, me);
+      const alert = alertFromBroadcast(broadcastPayload, here, me);
       if (!alert) return;
-      // Dedup if the same broadcast lands twice (Supabase resends after
-      // socket recovery).
       if (seen.has(alert.id)) return;
-      seen.add(alert.id);
-      store.dispatch(alertReceived(alert));
+      const distance = alert.distanceMeters;
+      // No GPS yet → distance reads as -1. Be permissive so we don't miss
+      // the first alert before location resolves.
+      const within2km = distance < 0 || distance <= 2000;
+      const within5km = distance < 0 || distance <= 5000;
+      if (within2km) {
+        seen.add(alert.id);
+        store.dispatch(alertReceived(alert));
+        if (state.app.alertVibration) {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+            () => undefined,
+          );
+          Vibration.vibrate([0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]);
+        }
+        return;
+      }
+      if (within5km) {
+        pending.set(alert.id, { broadcast: broadcastPayload, alert });
+      }
+      // else: silently drop, this user is too far to help
+    };
+
+    const handleExpand = (sosId: string) => {
+      const cached = pending.get(sosId);
+      if (!cached) return;
+      pending.delete(sosId);
+      seen.add(sosId);
+      const state = store.getState();
+      // We dispatch the cached alert as if it just arrived. Vibration
+      // pattern is identical so the responder treats it the same way.
+      store.dispatch(alertReceived(cached.alert as never));
       if (state.app.alertVibration) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
           () => undefined,
         );
-        // 6 buzzes, ~600ms each with 200ms gaps. Total ~5s, distinctive
-        // enough that even a pocketed phone feels different from a normal
-        // notification.
         Vibration.vibrate([0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]);
       }
-    });
+    };
+
+    const sub = subscribeToAlerts({ onAlert: handleAlert, onExpand: handleExpand });
     return () => sub.unsubscribe();
   }, []);
 

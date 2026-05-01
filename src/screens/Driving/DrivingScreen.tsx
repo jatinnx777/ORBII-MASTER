@@ -26,10 +26,10 @@ import { useAppSelector } from '@/redux/store';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// "Driving" tab. Doubles as a teaser for the paid Driving add-on (₹199 /
-// 56 days). The stats grid is intentionally zeroed out — we do not have a
-// telematics SDK plumbed in yet, so showing fabricated numbers would lie to
-// the user. Once the add-on is purchased and the SDK is wired, the same
+// "Driving" tab. Doubles as a teaser for the paid Driving add-on. The
+// stats grid is intentionally zeroed out — we do not have a telematics
+// SDK plumbed in yet, so showing fabricated numbers would lie to the
+// user. Once the add-on is purchased and the SDK is wired, the same
 // layout fills with real data.
 const PERIODS = ['This week', 'Last week', 'Custom'] as const;
 type Period = typeof PERIODS[number];
@@ -182,12 +182,10 @@ export function DrivingScreen() {
       <View style={styles.buyBar}>
         <View style={{ flex: 1 }}>
           <Text style={styles.buyBarLabel}>Driving + Crash Detection</Text>
-          <Text style={styles.buyBarPrice}>
-            ₹199 <Text style={styles.buyBarPriceMeta}>for 56 days</Text>
-          </Text>
+          <Text style={styles.buyBarPrice}>Coming soon</Text>
         </View>
         <Pressable onPress={handleBuy} style={styles.buyBarBtn} accessibilityRole="button">
-          <Text style={styles.buyBarBtnText}>Buy add-on</Text>
+          <Text style={styles.buyBarBtnText}>Join waitlist</Text>
         </Pressable>
       </View>
 
@@ -300,7 +298,7 @@ function WaitlistModal({
           </View>
           <Text style={modalStyles.body}>
             Payments aren't live yet. Drop your email and we'll be in touch the
-            moment Driving + Crash Detection (₹199 / 56 days) is available.
+            moment Driving + Crash Detection is available.
           </Text>
           <TextInput
             value={email}

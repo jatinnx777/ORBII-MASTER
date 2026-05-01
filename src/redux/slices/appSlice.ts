@@ -29,6 +29,9 @@ type AppState = {
   backgroundVoice: boolean;
   // Buzz the phone when an SOS broadcast lands within 2 km. On by default.
   alertVibration: boolean;
+  // Crash detection: accelerometer watches for sudden 3.5g+ jolts and
+  // fires the SOS countdown on detection. Off by default — opt-in.
+  crashDetection: boolean;
   pushEnabled: boolean;
   hydrated: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.
@@ -44,6 +47,7 @@ const initialState: AppState = {
   voiceDetection: false,
   backgroundVoice: false,
   alertVibration: true,
+  crashDetection: false,
   pushEnabled: false,
   hydrated: false,
   safeJourney: null,
@@ -74,6 +78,9 @@ const appSlice = createSlice({
     },
     alertVibrationToggled(state, action: PayloadAction<boolean>) {
       state.alertVibration = action.payload;
+    },
+    crashDetectionToggled(state, action: PayloadAction<boolean>) {
+      state.crashDetection = action.payload;
     },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
@@ -111,6 +118,7 @@ export const {
   voiceDetectionToggled,
   backgroundVoiceToggled,
   alertVibrationToggled,
+  crashDetectionToggled,
   pushEnabledSet,
   safeJourneyStarted,
   safeJourneyEnded,
