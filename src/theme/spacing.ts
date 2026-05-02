@@ -20,28 +20,29 @@ export const touchTarget = {
 } as const;
 
 export const shadows = {
-  // Subtle lift for resting cards. Reads as premium on both iOS & Android.
+  // Subtle resting card lift.
   card: {
     shadowColor: '#0A0A0A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 14,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  // Pronounced lift for sheets & modals.
+  // Top-only shadow used by the bottom sheet to separate from the map.
+  // No glow, just a thin grounding line.
   sheet: {
-    shadowColor: '#0A0A0A',
-    shadowOffset: { width: 0, height: -8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20,
-    elevation: 12,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 6,
   },
-  // Strong lift for the primary SOS button.
+  // Restrained lift for primary actions. No coloured glow.
   hero: {
-    shadowColor: '#FF0000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.28,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowColor: '#0A0A0A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
 } as const;

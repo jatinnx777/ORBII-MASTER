@@ -1,19 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
-  Easing,
-  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Button, ScreenContainer } from '@/components/common';
+import { ScreenContainer } from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -22,78 +19,85 @@ import {
   spacing,
   typography,
 } from '@/theme';
-import { useAppSelector } from '@/redux/store';
-import { trackEvent } from '@/services/analytics';
-import { getItem, setItem, storageKeys } from '@/services/storage';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { crashDetectionToggled } from '@/redux/slices/appSlice';
 
-// "Driving" tab. Doubles as a teaser for the paid Driving add-on. The
-// stats grid is intentionally zeroed out — we do not have a telematics
-// SDK plumbed in yet, so showing fabricated numbers would lie to the
-// user. Once the add-on is purchased and the SDK is wired, the same
-// layout fills with real data.
+// "Driving" tab. Real, working features only. The stats grid stays empty
+// because we don't have a telematics SDK yet — we won't fake numbers.
+// Crash detection is the live feature: a sensor toggle that actually fires
+// SOS when the accelerometer detects an impact.
 const PERIODS = ['This week', 'Last week', 'Custom'] as const;
 type Period = typeof PERIODS[number];
 
-type WaitlistEntry = {
-  email: string;
-  plan: string;
-  createdAt: number;
-};
-
-async function joinDrivingWaitlist(email: string): Promise<void> {
-  const existing = (await getItem<WaitlistEntry[]>(storageKeys.premiumWaitlist)) ?? [];
-  const filtered = existing.filter(
-    (e) => !(e.email === email && e.plan === 'driving'),
-  );
-  filtered.unshift({ email, plan: 'driving', createdAt: Date.now() });
-  await setItem(storageKeys.premiumWaitlist, filtered);
-}
-
 export function DrivingScreen() {
+  const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
+  const crashDetection = useAppSelector((s) => s.app.crashDetection);
   const [period, setPeriod] = useState<Period>('This week');
-  const [waitlistOpen, setWaitlistOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const firstName = (profile?.name ?? '').trim().split(' ')[0] || 'You';
   const initial = (profile?.name ?? 'U').charAt(0).toUpperCase();
-
-  const handleBuy = () => {
-    trackEvent('premium_viewed');
-    setWaitlistOpen(true);
-  };
-
-  const submitWaitlist = async () => {
-    const trimmed = email.trim().toLowerCase();
-    if (!/^\S+@\S+\.\S+$/.test(trimmed)) {
-      Alert.alert('Invalid email', 'Enter a valid email so we can reach you.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await joinDrivingWaitlist(trimmed);
-      trackEvent('premium_purchased', { plan: 'driving', waitlist: true });
-      setWaitlistOpen(false);
-      Alert.alert(
-        "You're on the list",
-        "We'll email the moment Driving + Crash Detection is live. Thanks for backing ORBII early.",
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   return (
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Driving</Text>
         <Text style={styles.subtitle}>
-          Trip stats and crash detection for {firstName}
+          Crash detection and trip stats for {firstName}
         </Text>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <LinearGradient
+          colors={crashDetection ? ['#D7F8E5', '#B6F2D6'] : ['#FFF6E5', '#FFE9C2']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.crashCard}
+        >
+          <View style={styles.crashHeader}>
+            <View style={styles.crashIconWrap}>
+              <Ionicons
+                name={crashDetection ? 'shield-checkmark' : 'car-sport'}
+                size={28}
+                color={colors.primary}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.crashTitle}>Crash detection</Text>
+              <Text style={styles.crashStatus}>
+                {crashDetection
+                  ? 'Active. Phone is watching for impacts.'
+                  : 'Off. Toggle on before driving.'}
+              </Text>
+            </View>
+            <Switch
+              value={crashDetection}
+              onValueChange={(v) => {
+                dispatch(crashDetectionToggled(v));
+              }}
+              trackColor={{ true: colors.primary, false: colors.border }}
+            />
+          </View>
+          <Text style={styles.crashBody}>
+            ORBII reads your phone's accelerometer at 50 Hz. A sustained 3.5 g
+            jolt triggers the SOS countdown. You get 5 seconds to cancel before
+            nearby helpers, your contacts, and the police are alerted.
+          </Text>
+          <View style={styles.benefitsList}>
+            <BenefitRow icon="pulse" text="50 Hz accelerometer with 80 ms sustain check" />
+            <BenefitRow icon="hand-left" text="5-second cancel window before SOS fires" />
+            <BenefitRow icon="people" text="Same nearby helpers are dispatched" />
+            <BenefitRow icon="battery-half" text="Sensor stays on whenever the toggle is on" />
+          </View>
+        </LinearGradient>
+
+        <View style={styles.sectionLabel}>
+          <Text style={styles.sectionLabelText}>Trip stats</Text>
+        </View>
+
         <View style={styles.periodRow}>
           {PERIODS.map((p) => (
             <Pressable
@@ -152,51 +156,13 @@ export function DrivingScreen() {
               <Text style={styles.riskyChipText}>0 risky events</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </View>
 
-        <LinearGradient
-          colors={['#FFF6E5', '#FFE9C2']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.unlockCard}
-        >
-          <View style={styles.unlockIconWrap}>
-            <Ionicons name="car-sport" size={28} color={colors.primary} />
-          </View>
-          <Text style={styles.unlockTitle}>Unlock Driver Reports</Text>
-          <Text style={styles.unlockBody}>
-            See how you and your family drive. Get crash detection that auto-fires
-            an SOS if your phone senses an accident, even when you can't reach it.
-          </Text>
-
-          <View style={styles.benefitsList}>
-            <BenefitRow icon="shield-checkmark" text="Auto-SOS on detected crash" />
-            <BenefitRow icon="analytics" text="Weekly speeding and braking reports" />
-            <BenefitRow icon="people" text="See driving for everyone in your circle" />
-            <BenefitRow icon="time" text="Trip history with start and end times" />
-          </View>
-        </LinearGradient>
+        <Text style={styles.footnote}>
+          Trip data fills in once the telematics module is wired. Crash
+          detection above is live and works without it.
+        </Text>
       </ScrollView>
-
-      <View style={styles.buyBar}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.buyBarLabel}>Driving + Crash Detection</Text>
-          <Text style={styles.buyBarPrice}>Coming soon</Text>
-        </View>
-        <Pressable onPress={handleBuy} style={styles.buyBarBtn} accessibilityRole="button">
-          <Text style={styles.buyBarBtnText}>Join waitlist</Text>
-        </Pressable>
-      </View>
-
-      <WaitlistModal
-        visible={waitlistOpen}
-        email={email}
-        onChangeEmail={setEmail}
-        submitting={submitting}
-        onClose={() => setWaitlistOpen(false)}
-        onSubmit={submitWaitlist}
-      />
     </ScreenContainer>
   );
 }
@@ -230,10 +196,7 @@ function EventChip({
   const scale = enter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
   return (
     <Animated.View
-      style={[
-        styles.eventChip,
-        { opacity: enter, transform: [{ scale }] },
-      ]}
+      style={[styles.eventChip, { opacity: enter, transform: [{ scale }] }]}
     >
       <View style={[styles.eventChipIconWrap, { backgroundColor: color + '22' }]}>
         <Ionicons name={icon} size={14} color={color} />
@@ -261,108 +224,6 @@ function BenefitRow({
   );
 }
 
-function WaitlistModal({
-  visible,
-  email,
-  onChangeEmail,
-  submitting,
-  onClose,
-  onSubmit,
-}: {
-  visible: boolean;
-  email: string;
-  onChangeEmail: (s: string) => void;
-  submitting: boolean;
-  onClose: () => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={modalStyles.backdrop}>
-        <View style={modalStyles.sheet}>
-          <View style={modalStyles.headerRow}>
-            <Text style={modalStyles.title}>Driving add-on waitlist</Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-          <Text style={modalStyles.body}>
-            Payments aren't live yet. Drop your email and we'll be in touch the
-            moment Driving + Crash Detection is available.
-          </Text>
-          <TextInput
-            value={email}
-            onChangeText={onChangeEmail}
-            placeholder="you@example.com"
-            placeholderTextColor={colors.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={modalStyles.input}
-          />
-          <Button
-            label={submitting ? 'Saving…' : 'Join waitlist'}
-            onPress={onSubmit}
-            loading={submitting}
-            disabled={submitting}
-          />
-        </View>
-      </View>
-    </Modal>
-  );
-}
-
-const modalStyles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    justifyContent: 'flex-end',
-  },
-  sheet: {
-    backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: spacing.md,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  title: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
-    color: colors.textPrimary,
-  },
-  body: {
-    ...typography.body,
-    color: colors.textSecondary,
-  },
-  input: {
-    ...typography.body,
-    color: colors.textPrimary,
-    backgroundColor: colors.inputBackground,
-    borderColor: colors.inputBorder,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-});
-
 const styles = StyleSheet.create({
   header: {
     paddingHorizontal: spacing.lg,
@@ -382,13 +243,71 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: 110,
+    paddingBottom: spacing.xl,
     gap: spacing.md,
+  },
+  crashCard: {
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    gap: spacing.sm,
+  },
+  crashHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  crashIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,0,0,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  crashTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 18,
+    color: colors.textPrimary,
+  },
+  crashStatus: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  crashBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 13,
+  },
+  benefitsList: {
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  benefitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  benefitText: {
+    ...typography.body,
+    color: colors.textPrimary,
+    fontSize: 13,
+  },
+  sectionLabel: {
+    paddingHorizontal: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  sectionLabelText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
   },
   periodRow: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.xs,
   },
   periodPill: {
     paddingHorizontal: spacing.md,
@@ -537,87 +456,12 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 11,
   },
-  unlockCard: {
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  unlockIconWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,0,0,0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  unlockTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  unlockBody: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 14,
-  },
-  benefitsList: {
-    gap: 6,
-    marginTop: spacing.sm,
-  },
-  benefitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  benefitText: {
-    ...typography.body,
-    color: colors.textPrimary,
-    fontSize: 13,
-  },
-  buyBar: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    backgroundColor: colors.dark,
-    borderRadius: radius.lg,
-    paddingVertical: 12,
-    paddingHorizontal: spacing.md,
-    ...shadows.hero,
-  },
-  buyBarLabel: {
+  footnote: {
     ...typography.caption,
-    color: 'rgba(255,255,255,0.7)',
+    color: colors.textMuted,
     fontSize: 11,
-    letterSpacing: 0.5,
-  },
-  buyBarPrice: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
-    color: colors.textInverse,
-    marginTop: 2,
-  },
-  buyBarPriceMeta: {
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  buyBarBtn: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-  },
-  buyBarBtnText: {
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.textInverse,
-    fontSize: 14,
-    letterSpacing: 0.4,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.sm,
   },
 });

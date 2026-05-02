@@ -408,6 +408,7 @@ export function HomeScreen() {
       </View>
 
       <BottomPanel
+        bottomInset={insets.bottom}
         topRow={
           <View style={styles.panelTopRow}>
             <View style={styles.legendInline}>
@@ -417,9 +418,10 @@ export function HomeScreen() {
             </View>
             <Pressable
               onPress={handleSafeModePress}
-              style={[
+              style={({ pressed }) => [
                 styles.safeModeChip,
                 !!safeJourney && styles.safeModeChipActive,
+                pressed && styles.pressedScale,
               ]}
               accessibilityRole="button"
               accessibilityLabel={
@@ -437,7 +439,7 @@ export function HomeScreen() {
                   !!safeJourney && { color: colors.textInverse },
                 ]}
               >
-                {safeJourney ? 'Safe Mode' : 'Safe Mode'}
+                Safe Mode
               </Text>
             </Pressable>
           </View>
@@ -543,27 +545,30 @@ export function HomeScreen() {
   );
 }
 
-// Draggable bottom panel with two snap points: expanded (full content
-// visible) and collapsed (just the handle pokes up so the map fills the
-// screen). Drag the handle area down to open the map, drag up to bring
-// the controls back. Spring snap on release keeps it tactile.
+// Draggable bottom sheet, two snap points (expanded / collapsed). Designed
+// to feel grounded — top-only shadow, low radius, no glow. Map dims when
+// expanded so the sheet reads as the active surface.
 function BottomPanel({
   children,
   topRow,
+  bottomInset,
 }: {
   children: React.ReactNode;
   topRow?: React.ReactNode;
+  bottomInset: number;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  // Panel takes ~58% of screen at full height. Collapsed = slid down by
-  // COLLAPSE_OFFSET, leaving just the handle + alerts sliver visible.
   const COLLAPSE_OFFSET = Math.max(280, screenHeight * 0.42);
-  // Default initial position is partly slid down (~30% of the way to
-  // collapsed) so users see more map at first glance and can drag the
-  // panel up for the action cards.
-  const INITIAL_OFFSET = COLLAPSE_OFFSET * 0.3;
-  const translateY = useRef(new Animated.Value(INITIAL_OFFSET)).current;
-  const lastSnapRef = useRef(INITIAL_OFFSET);
+  const translateY = useRef(new Animated.Value(0)).current;
+  const lastSnapRef = useRef(0);
+
+  // Map dim overlay: 1 (fully visible dim) when expanded → 0 when collapsed.
+  // Subtle: 0.06 max so it reads as depth, not as an overlay.
+  const dimOpacity = translateY.interpolate({
+    inputRange: [0, COLLAPSE_OFFSET],
+    outputRange: [0.06, 0],
+    extrapolate: 'clamp',
+  });
 
   const panResponder = useMemo(
     () =>
@@ -574,22 +579,36 @@ function BottomPanel({
           translateY.setValue(0);
         },
         onPanResponderMove: (_, g) => {
-          const next = Math.max(-20, Math.min(COLLAPSE_OFFSET + 20, g.dy));
+          // Resistance past snap points: rubber-band beyond the boundaries
+          // so a hard pull feels like it's pushing against a stop.
+          let next = g.dy;
+          if (next < 0) next = next * 0.35;
+          else if (next > COLLAPSE_OFFSET) {
+            next = COLLAPSE_OFFSET + (next - COLLAPSE_OFFSET) * 0.35;
+          }
           translateY.setValue(next);
         },
         onPanResponderRelease: (_, g) => {
           translateY.flattenOffset();
-          // Decide snap based on velocity + final position. Quick flicks
-          // win over absolute position so the gesture feels responsive.
           const finalRaw = lastSnapRef.current + g.dy;
+          // Clamp velocity so a flick doesn't yeet the sheet past its
+          // snap point with overshoot.
+          const vy = Math.max(-1.6, Math.min(1.6, g.vy));
           let snap = finalRaw > COLLAPSE_OFFSET / 2 ? COLLAPSE_OFFSET : 0;
-          if (g.vy > 0.6) snap = COLLAPSE_OFFSET;
-          if (g.vy < -0.6) snap = 0;
+          if (vy > 0.5) snap = COLLAPSE_OFFSET;
+          if (vy < -0.5) snap = 0;
           lastSnapRef.current = snap;
           Animated.spring(translateY, {
             toValue: snap,
-            speed: 18,
-            bounciness: 6,
+            // Higher damping, lower overshoot — settles cleanly without
+            // the bouncy "card" feel.
+            damping: 28,
+            stiffness: 240,
+            mass: 1,
+            velocity: vy,
+            overshootClamping: false,
+            restSpeedThreshold: 0.5,
+            restDisplacementThreshold: 0.5,
             useNativeDriver: true,
           }).start();
         },
@@ -598,15 +617,27 @@ function BottomPanel({
   );
 
   return (
-    <Animated.View
-      style={[styles.bottomPanel, { transform: [{ translateY }] }]}
-    >
-      <View style={styles.handleZone} {...panResponder.panHandlers}>
-        <View style={styles.handle} />
-      </View>
-      {topRow ? <View style={styles.panelTopRowWrap}>{topRow}</View> : null}
-      <View style={styles.panelContent}>{children}</View>
-    </Animated.View>
+    <>
+      <Animated.View
+        pointerEvents="none"
+        style={[styles.mapDim, { opacity: dimOpacity }]}
+      />
+      <Animated.View
+        style={[
+          styles.bottomPanel,
+          {
+            paddingBottom: Math.max(bottomInset, spacing.sm),
+            transform: [{ translateY }],
+          },
+        ]}
+      >
+        <View style={styles.handleZone} {...panResponder.panHandlers}>
+          <View style={styles.handle} />
+        </View>
+        {topRow ? <View style={styles.panelTopRowWrap}>{topRow}</View> : null}
+        <View style={styles.panelContent}>{children}</View>
+      </Animated.View>
+    </>
   );
 }
 
@@ -906,35 +937,47 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.primary,
   },
+  mapDim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000000',
+    zIndex: 1,
+  },
   bottomPanel: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderTopWidth: 1,
+    borderColor: 'rgba(0,0,0,0.04)',
     ...shadows.sheet,
-    elevation: 12,
+    zIndex: 2,
   },
   handleZone: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingTop: 8,
+    paddingBottom: 6,
   },
   handle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.border,
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C9C9CE',
+  },
+  pressedScale: {
+    transform: [{ scale: 0.97 }],
+    opacity: 0.92,
   },
   panelContent: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.lg,
-    gap: spacing.md,
+    paddingBottom: spacing.md,
+    gap: spacing.sm,
   },
   panelTopRowWrap: {
     paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
+    paddingBottom: 6,
   },
   panelTopRow: {
     flexDirection: 'row',
@@ -1046,16 +1089,16 @@ const styles = StyleSheet.create({
   },
   voiceCard: {
     flex: 1,
-    minHeight: 110,
+    minHeight: 96,
     borderRadius: radius.lg,
     backgroundColor: colors.background,
     borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
-    gap: 6,
+    gap: 4,
   },
   voiceCardActive: {
     borderColor: colors.primary,

@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { colors, fontFamilies, radius, spacing } from '@/theme';
+import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 
 type SOSButtonProps = {
   onPress: () => void;
@@ -78,9 +78,9 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
         hitSlop={8}
       >
         <LinearGradient
-          colors={['#FF3333', '#CC0000']}
+          colors={['#E60000', '#B30000']}
           start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+          end={{ x: 0, y: 1 }}
           style={styles.card}
         >
           <View style={styles.asterisk}>
@@ -113,10 +113,10 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    minHeight: 110,
+    minHeight: 96,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,
     gap: 4,
   },
