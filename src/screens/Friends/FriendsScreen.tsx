@@ -222,10 +222,10 @@ export function FriendsScreen() {
                 <TextInput
                   value={draft}
                   onChangeText={(v) => {
-                    // Accept letters, numbers, underscore, space (for name
-                    // search) and dot. Strip @ silently — handles can be
-                    // typed as "@jay" and we resolve to "jay".
-                    const cleaned = v.toLowerCase().replace(/[^a-z0-9_ .]/g, '');
+                    // Accept letters, numbers, underscore, @ (for handles),
+                    // space + dot (for name search). Lowercased on input —
+                    // usernames are case-insensitive and so is name match.
+                    const cleaned = v.toLowerCase().replace(/[^a-z0-9_@ .]/g, '');
                     setDraft(cleaned);
                     if (error) setError(null);
                   }}
@@ -269,6 +269,12 @@ export function FriendsScreen() {
                     onSend={() => handleSend(u)}
                   />
                 ))}
+                {!searching && searchResults.length === 0 ? (
+                  <Text style={styles.noMatchHint}>
+                    They need to sign in to ORBII at least once before they
+                    show up in search.
+                  </Text>
+                ) : null}
               </View>
             ) : (
               <>
@@ -614,6 +620,14 @@ const styles = StyleSheet.create({
   },
   searchResults: {
     gap: 6,
+  },
+  noMatchHint: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12,
+    color: colors.textMuted,
+    paddingHorizontal: spacing.sm,
+    paddingTop: 4,
+    lineHeight: 17,
   },
   resultRow: {
     flexDirection: 'row',

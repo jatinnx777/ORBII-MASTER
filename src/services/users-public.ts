@@ -59,6 +59,8 @@ export async function searchUsers(args: {
 }): Promise<PublicUser[]> {
   const q = args.query.trim().toLowerCase();
   if (q.length < 2) return [];
+  // Postgres `ilike` treats % and _ as wildcards. Escape any in the user
+  // input so a literal underscore in a username doesn't match every char.
   const escaped = q.replace(/[%_]/g, '\\$&');
   const { data, error } = await supabase
     .from('users_public')
@@ -67,7 +69,14 @@ export async function searchUsers(args: {
     .neq('id', args.excludeUid)
     .order('username', { ascending: true })
     .limit(10);
-  if (error || !data) return [];
+  if (error) {
+    console.warn('[users-public] search error:', error.message);
+    return [];
+  }
+  console.log(
+    `[users-public] search "${q}" → ${data?.length ?? 0} result(s)`,
+  );
+  if (!data) return [];
   return (data as PublicUserRow[]).map(rowToUser);
 }
 
