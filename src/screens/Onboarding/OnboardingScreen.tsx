@@ -1,8 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
-  Easing,
   FlatList,
   Pressable,
   StyleSheet,
@@ -11,7 +10,6 @@ import {
   ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Button } from '@/components/common';
 import { colors, fontFamilies, spacing, typography } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
@@ -25,7 +23,6 @@ type Slide = {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
-  gradient: readonly [string, string];
 };
 
 const slides: Slide[] = [
@@ -34,21 +31,18 @@ const slides: Slide[] = [
     icon: 'alert-circle',
     title: 'Press once. Help arrives.',
     body: 'One tap summons the nearest ORBII helpers, your emergency contacts, and police control within 2 minutes.',
-    gradient: ['#FFE4E4', '#FFD4D4'] as const,
   },
   {
     id: 'network',
     icon: 'people-circle',
     title: 'A verified network of women',
     body: 'Helpers are verified with Aadhaar and come to you. Nearby students, working women, and safety volunteers.',
-    gradient: ['#FFE4F0', '#E8D7FF'] as const,
   },
   {
     id: 'always',
     icon: 'shield-checkmark',
     title: 'Always-on protection',
     body: 'Voice triggers, lock-screen SOS shortcut, background location. Even if your phone is locked, ORBII has your back.',
-    gradient: ['#D7F8E5', '#B6F2D6'] as const,
   },
 ];
 
@@ -191,54 +185,17 @@ function Slide({
     extrapolate: 'clamp',
   });
 
-  // Subtle continuous halo pulse on the active slide.
-  const pulse = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1600,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 1600,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-  const pulseScale = pulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.08],
-  });
-
   return (
     <View style={styles.slide}>
       <Animated.View
         style={[
           styles.iconWrap,
           {
-            transform: [
-              { scale: Animated.multiply(iconScale, pulseScale) },
-              { rotate: iconRotate },
-            ],
+            transform: [{ scale: iconScale }, { rotate: iconRotate }],
           },
         ]}
       >
-        <LinearGradient
-          colors={slide.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.iconGradient}
-        >
-          <Ionicons name={slide.icon} size={80} color={colors.primary} />
-        </LinearGradient>
+        <Ionicons name={slide.icon} size={72} color={colors.primary} />
       </Animated.View>
 
       <Animated.Text
@@ -292,19 +249,13 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   iconWrap: {
-    width: 180,
-    height: 180,
-    borderRadius: 90,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.lg,
-    overflow: 'hidden',
-  },
-  iconGradient: {
-    width: '100%',
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.surface,
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,

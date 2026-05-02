@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Button, StarRating } from '@/components/common';
 import {
   colors,
@@ -32,14 +31,9 @@ export function ResolvedModal({
       <Pressable style={styles.backdrop} onPress={() => undefined}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <LinearGradient
-            colors={['#D7F8E5', '#B6F2D6']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.iconWrap}
-          >
+          <View style={styles.iconWrap}>
             <Ionicons name="checkmark-circle" size={56} color={colors.success} />
-          </LinearGradient>
+          </View>
 
           <Text style={styles.title}>Help has arrived</Text>
           <Text style={styles.body}>
@@ -91,9 +85,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   iconWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },

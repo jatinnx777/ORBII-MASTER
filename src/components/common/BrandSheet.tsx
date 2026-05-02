@@ -18,7 +18,6 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import {
   colors,
   fontFamilies,
@@ -92,12 +91,13 @@ export function useBrandSheet(): SheetContext {
   return ctx;
 }
 
-// Tone-driven colour palette for the icon halo. Keeps the gradient on-brand.
-const TONE_GRADIENT: Record<Tone, [string, string]> = {
-  neutral: ['#FFE4F0', '#E8D7FF'],
-  destructive: ['#FFD9D9', '#FFB3B3'],
-  success: ['#D7F8E5', '#B6F2D6'],
-  warning: ['#FFEDD5', '#FFE0A6'],
+// Flat tone-driven icon backdrop. Solid surface tinted by tone — no
+// gradient, no halo.
+const TONE_BG: Record<Tone, string> = {
+  neutral: colors.surface,
+  destructive: '#FFEFEF',
+  success: '#E8F7EE',
+  warning: '#FFF7E6',
 };
 
 const TONE_ICON_COLOR: Record<Tone, string> = {
@@ -243,18 +243,18 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
           >
             <View style={styles.handle} />
             {config?.icon ? (
-              <LinearGradient
-                colors={TONE_GRADIENT[tone]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={styles.iconWrap}
+              <View
+                style={[
+                  styles.iconWrap,
+                  { backgroundColor: TONE_BG[tone] },
+                ]}
               >
                 <Ionicons
                   name={config.icon}
                   size={36}
                   color={TONE_ICON_COLOR[tone]}
                 />
-              </LinearGradient>
+              </View>
             ) : null}
             <Text style={styles.title}>{config?.title}</Text>
             {config?.body ? <Text style={styles.body}>{config.body}</Text> : null}

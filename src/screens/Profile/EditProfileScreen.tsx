@@ -16,6 +16,7 @@ import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { profileUpdated } from '@/redux/slices/userSlice';
 import { isValidName } from '@/utils/validation';
+import { isUsernameAvailable } from '@/services/users-public';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'EditProfile'>;
@@ -48,7 +49,7 @@ export function EditProfileScreen() {
     }
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!profile) return;
     if (!isValidName(name)) {
       Alert.alert('Name required', 'Please enter a valid name.');
@@ -73,6 +74,16 @@ export function EditProfileScreen() {
         Alert.alert(
           'Username locked',
           `You can change your username again in ${formatDays(remaining)}.`,
+        );
+        return;
+      }
+    }
+    if (usernameChanged) {
+      const available = await isUsernameAvailable(username, profile.uid);
+      if (!available) {
+        Alert.alert(
+          'Username taken',
+          `@${username} is already taken. Pick another.`,
         );
         return;
       }

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   StyleSheet,
   Text,
@@ -33,6 +34,7 @@ export function Button({
   testID,
 }: ButtonProps) {
   const isDisabled = disabled || loading;
+  const press = useRef(new Animated.Value(1)).current;
   const containerStyle = [
     styles.base,
     styles[variant],
@@ -42,26 +44,37 @@ export function Button({
   ];
   const textStyle: TextStyle[] = [styles.baseText, textStyles[variant]];
 
+  const animateTo = (toValue: number) => {
+    Animated.timing(press, {
+      toValue,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
+  };
+
   return (
-    <Pressable
-      testID={testID}
-      onPress={onPress}
-      disabled={isDisabled}
-      accessibilityRole="button"
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
-      style={({ pressed }) => [
-        ...containerStyle,
-        pressed && !isDisabled && styles.pressed,
-      ]}
+    <Animated.View
+      style={[fullWidth && styles.fullWidth, { transform: [{ scale: press }] }]}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === 'primary' ? colors.textInverse : colors.primary}
-        />
-      ) : (
-        <Text style={textStyle}>{label}</Text>
-      )}
-    </Pressable>
+      <Pressable
+        testID={testID}
+        onPress={onPress}
+        onPressIn={() => !isDisabled && animateTo(0.97)}
+        onPressOut={() => animateTo(1)}
+        disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled, busy: loading }}
+        style={containerStyle}
+      >
+        {loading ? (
+          <ActivityIndicator
+            color={variant === 'primary' ? colors.textInverse : colors.primary}
+          />
+        ) : (
+          <Text style={textStyle}>{label}</Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -70,7 +83,7 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.comfortable,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -93,9 +106,6 @@ const styles = StyleSheet.create({
   },
   disabled: {
     opacity: 0.5,
-  },
-  pressed: {
-    opacity: 0.85,
   },
   baseText: {
     ...typography.button,

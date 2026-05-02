@@ -19,30 +19,29 @@ export const touchTarget = {
   comfortable: 56,
 } as const;
 
+// Two shadows total. Either use `card` for resting elevation or `sheet`
+// for the bottom panel — never both. `hero` is a tight alias for `card`
+// so legacy callers don't have to change.
 export const shadows = {
-  // Subtle resting card lift.
   card: {
-    shadowColor: '#0A0A0A',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
     elevation: 2,
   },
-  // Top-only shadow used by the bottom sheet to separate from the map.
-  // No glow, just a thin grounding line.
   sheet: {
     shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 6,
+    shadowOffset: { width: 0, height: -1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 4,
   },
-  // Restrained lift for primary actions. No coloured glow.
   hero: {
-    shadowColor: '#0A0A0A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
 } as const;

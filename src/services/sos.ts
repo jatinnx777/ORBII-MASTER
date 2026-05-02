@@ -62,29 +62,33 @@ export async function createSOS(
     console.warn('[sos] broadcast failed', err),
   );
 
-  // Fire-and-forget DB write. We never await it on the critical path. If it
-  // returns a real id we'll log it; the local id continues to drive every
-  // realtime channel keyed off this SOS, so a DB failure is non-fatal.
-  void persistSOS(user, location);
+  // Fire-and-forget DB write. We never await it on the critical path —
+  // DB failure must not delay the broadcast.
+  void persistSOS(record, user);
 
   return record;
 }
 
-async function persistSOS(user: UserProfile, location: SOSLocation): Promise<void> {
+async function persistSOS(
+  record: SOSRecord,
+  user: UserProfile,
+): Promise<void> {
   try {
-    const { data, error } = await supabase
-      .from('sos_events')
-      .insert({
+    const { error } = await supabase.from('sos_events').upsert(
+      {
+        id: record.id,
         user_id: user.uid,
-        lat: location.latitude,
-        lng: location.longitude,
-        address: location.address,
+        lat: record.location.latitude,
+        lng: record.location.longitude,
+        address: record.location.address,
         status: 'active',
-      })
-      .select('id')
-      .single();
+        kind: record.kind ?? 'real',
+        user_name: user.name,
+        user_photo: user.photoUri,
+      },
+      { onConflict: 'id' },
+    );
     if (error) console.warn('[sos] supabase insert failed', error);
-    else if (data?.id) console.log('[sos] persisted with id', data.id);
   } catch (err) {
     console.warn('[sos] supabase insert threw', err);
   }

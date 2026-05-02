@@ -8,7 +8,6 @@ import {
   ViewStyle,
 } from 'react-native';
 import { SafeAreaView, Edge } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
 import { colors, spacing } from '@/theme';
 
 type ScreenContainerProps = {
@@ -19,12 +18,8 @@ type ScreenContainerProps = {
   style?: ViewStyle;
 };
 
-// Clean off-white surface. We dropped the pink/lavender gradient — it
-// read as cutesy/AI-templated. Now a subtle warm-grey wash that gives
-// depth without competing with content.
-const BACKDROP_COLORS = ['#FAFAFB', '#FFFFFF'] as const;
-const BACKDROP_LOCATIONS = [0, 1] as const;
-
+// Flat surface, no gradient. Solid white is the calmest background and
+// reads as serious; gradients here read templated/AI-generated.
 export function ScreenContainer({
   children,
   scroll = false,
@@ -46,11 +41,6 @@ export function ScreenContainer({
 
   return (
     <View style={styles.flex}>
-      <LinearGradient
-        colors={BACKDROP_COLORS}
-        locations={BACKDROP_LOCATIONS}
-        style={StyleSheet.absoluteFill}
-      />
       <SafeAreaView style={styles.safe} edges={edges}>
         <KeyboardAvoidingView
           style={styles.flex}
@@ -76,10 +66,11 @@ export function ScreenContainer({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: colors.background,
   },
   flex: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   scrollContent: {
     flexGrow: 1,

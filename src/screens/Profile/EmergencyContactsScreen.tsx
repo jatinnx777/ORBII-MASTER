@@ -20,6 +20,7 @@ import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactRemoved } from '@/redux/slices/userSlice';
 import { trackEvent } from '@/services/analytics';
+import { deleteEmergencyContact } from '@/services/emergency-contacts';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'EmergencyContacts'>;
@@ -27,8 +28,9 @@ type Nav = NativeStackNavigationProp<AppStackParamList, 'EmergencyContacts'>;
 export function EmergencyContactsScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
-  const contacts = useAppSelector((s) => s.user.profile?.emergencyContacts ?? []);
-  const isPremium = useAppSelector((s) => s.user.profile?.isPremium ?? false);
+  const profile = useAppSelector((s) => s.user.profile);
+  const contacts = profile?.emergencyContacts ?? [];
+  const isPremium = profile?.isPremium ?? false;
 
   const max = isPremium ? 20 : 5;
   const atLimit = contacts.length >= max;
@@ -42,6 +44,9 @@ export function EmergencyContactsScreen() {
         onPress: () => {
           trackEvent('contact_removed');
           dispatch(contactRemoved(id));
+          if (profile?.uid) {
+            deleteEmergencyContact(profile.uid, id).catch(() => undefined);
+          }
         },
       },
     ]);

@@ -7,7 +7,6 @@ import {
   Text,
   View,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 
@@ -20,24 +19,24 @@ type SOSButtonProps = {
 const BAR_LEN = 18;
 const BAR_THICK = 4;
 
-// Compact SOS card. Sits in a row with the Voice SOS card on the home
-// screen. The asterisk + pulsing background keep its emergency feel even at
-// half-width. Tap = countdown, long-press = instant SOS.
+// SOS card. Solid red, no gradient, no glow. Subtle idle pulse + scale
+// press feedback (0.96, 120ms). Tap = countdown, long-press = instant.
 export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   const pulse = useRef(new Animated.Value(1)).current;
+  const press = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(pulse, {
-          toValue: 1.04,
-          duration: 900,
+          toValue: 1.025,
+          duration: 1100,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(pulse, {
           toValue: 1,
-          duration: 900,
+          duration: 1100,
           easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
@@ -46,6 +45,22 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
     loop.start();
     return () => loop.stop();
   }, [pulse]);
+
+  const handlePressIn = () => {
+    Animated.timing(press, {
+      toValue: 0.96,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.timing(press, {
+      toValue: 1,
+      duration: 120,
+      useNativeDriver: true,
+    }).start();
+  };
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
@@ -61,39 +76,35 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   };
 
   return (
-    <Animated.View style={[styles.wrap, { transform: [{ scale: pulse }] }]}>
+    <Animated.View
+      style={[
+        styles.wrap,
+        { transform: [{ scale: Animated.multiply(pulse, press) }] },
+      ]}
+    >
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Send SOS alert"
         accessibilityHint="Tap for a 5-second countdown. Press and hold to fire instantly."
         onPress={handlePress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
         onLongPress={onLongPress ? handleLongPress : undefined}
         delayLongPress={700}
         disabled={disabled}
-        style={({ pressed }) => [
-          styles.cardShell,
-          pressed && styles.pressed,
-          disabled && styles.disabled,
-        ]}
+        style={[styles.card, disabled && styles.disabled]}
         hitSlop={8}
       >
-        <LinearGradient
-          colors={['#E11D2A', '#9A0E18']}
-          start={{ x: 0.1, y: 0 }}
-          end={{ x: 0.9, y: 1 }}
-          style={styles.card}
-        >
-          <View style={styles.asterisk}>
-            <View style={[styles.bar, { transform: [{ rotate: '0deg' }] }]} />
-            <View style={[styles.bar, { transform: [{ rotate: '45deg' }] }]} />
-            <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
-            <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
-          </View>
-          <View style={styles.textCol}>
-            <Text style={styles.label}>SOS</Text>
-            <Text style={styles.hint}>Tap or hold</Text>
-          </View>
-        </LinearGradient>
+        <View style={styles.asterisk}>
+          <View style={[styles.bar, { transform: [{ rotate: '0deg' }] }]} />
+          <View style={[styles.bar, { transform: [{ rotate: '45deg' }] }]} />
+          <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
+          <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
+        </View>
+        <View style={styles.textCol}>
+          <Text style={styles.label}>SOS</Text>
+          <Text style={styles.hint}>Tap or hold</Text>
+        </View>
       </Pressable>
     </Animated.View>
   );
@@ -102,12 +113,6 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
 const styles = StyleSheet.create({
   wrap: {
     flex: 1,
-  },
-  cardShell: {
-    flex: 1,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    ...shadows.hero,
   },
   card: {
     flex: 1,
@@ -118,10 +123,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     gap: 10,
-  },
-  pressed: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.94,
+    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    ...shadows.card,
   },
   disabled: {
     opacity: 0.5,

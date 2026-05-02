@@ -4,6 +4,8 @@ import type { UserProfile } from '@/types';
 import { supabase } from './supabase';
 import { listFriendsForUser } from './friend-requests';
 import { syncUsersPublic } from './users-public';
+import { listEmergencyContacts } from './emergency-contacts';
+import { fetchSOSHistory } from './sos-history';
 
 // Custom URL scheme registered in app.json. Redirect URI must be hard-coded
 // so it stays stable across Expo Go vs production builds (where
@@ -37,6 +39,10 @@ WebBrowser.maybeCompleteAuthSession();
 export type SignInResult = {
   profile: UserProfile;
   needsProfile: boolean;
+  // SOS history pulled from the server alongside the profile. The
+  // LoginScreen dispatches this into the history slice so the records
+  // tab is populated immediately on sign-in.
+  history: import('@/types').SOSRecord[];
 };
 
 function emptyProfile(args: {
@@ -115,7 +121,7 @@ export async function signInWithGoogle(): Promise<SignInResult> {
       name: null,
       photo: null,
     });
-    return { profile, needsProfile: true };
+    return { profile, needsProfile: true, history: [] };
   }
 
   // 1. Tell Supabase we want the Google OAuth URL. We pass our own
@@ -167,20 +173,30 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     .eq('id', user.id)
     .maybeSingle<ProfileRow>();
 
-  // Pull the friend list from the server so logging out + back in restores
-  // the user's circle. New users come back with an empty list.
-  const friends = await listFriendsForUser(user.id);
+  // Pull friends, emergency contacts, and SOS history from the server so
+  // reinstall / new device restores everything. New users come back with
+  // empty lists.
+  const [friends, emergencyContacts, history] = await Promise.all([
+    listFriendsForUser(user.id),
+    listEmergencyContacts(user.id),
+    fetchSOSHistory(user.id),
+  ]);
 
   if (row) {
     const profile = rowToProfile(row, user.email ?? '');
     profile.friends = friends;
+    profile.emergencyContacts = emergencyContacts;
     // Backfill users_public on every sign-in. Cheap upsert, ensures
     // existing accounts created before the table was added get mirrored
     // so other users can find them in search.
     if (profile.username) {
       syncUsersPublic(profile).catch(() => undefined);
     }
-    return { profile, needsProfile: !profile.username || !profile.phone };
+    return {
+      profile,
+      needsProfile: !profile.username || !profile.phone,
+      history,
+    };
   }
 
   const profile = emptyProfile({
@@ -190,7 +206,8 @@ export async function signInWithGoogle(): Promise<SignInResult> {
     photo: (user.user_metadata?.avatar_url as string | undefined) ?? null,
   });
   profile.friends = friends;
-  return { profile, needsProfile: true };
+  profile.emergencyContacts = emergencyContacts;
+  return { profile, needsProfile: true, history };
 }
 
 export async function signOutFromGoogle(): Promise<void> {

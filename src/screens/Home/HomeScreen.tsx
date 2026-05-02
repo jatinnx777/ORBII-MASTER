@@ -755,35 +755,10 @@ function CountUp({
   return <Text style={style}>{display}</Text>;
 }
 
-// Always-visible "someone needs help" strip. Calm grey when no alerts;
-// flips to red with a pulsing badge when one or more SOSs land within 2 km.
+// Always-visible "someone needs help" strip. Solid colour switch — no
+// glow / halo. The badge count makes it clear which state we're in.
 function AlertsStrip({ count, onPress }: { count: number; onPress: () => void }) {
-  const pulse = useRef(new Animated.Value(0)).current;
   const active = count > 0;
-
-  useEffect(() => {
-    if (!active) return;
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 900,
-          easing: Easing.out(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 0,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [active, pulse]);
-
-  const ringScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
-  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
 
   return (
     <Pressable
@@ -792,20 +767,6 @@ function AlertsStrip({ count, onPress }: { count: number; onPress: () => void })
       accessibilityRole="button"
     >
       <View style={[styles.alertsBadge, !active && styles.alertsBadgeIdle]}>
-        {active ? (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              StyleSheet.absoluteFillObject,
-              {
-                borderRadius: 14,
-                backgroundColor: 'rgba(255,255,255,0.35)',
-                opacity: ringOpacity,
-                transform: [{ scale: ringScale }],
-              },
-            ]}
-          />
-        ) : null}
         {active ? (
           <Text style={styles.alertsBadgeText}>{count}</Text>
         ) : (

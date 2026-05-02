@@ -19,6 +19,7 @@ import {
   signInStarted,
   signInSucceeded,
 } from '@/redux/slices/userSlice';
+import { historyHydrated } from '@/redux/slices/historySlice';
 import { policyAccepted } from '@/redux/slices/appSlice';
 import { signInWithGoogle, DEV_AUTH } from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
@@ -39,8 +40,9 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
     }
     dispatch(signInStarted());
     try {
-      const { profile, needsProfile } = await signInWithGoogle();
+      const { profile, needsProfile, history } = await signInWithGoogle();
       dispatch(signInSucceeded({ profile, needsProfile }));
+      dispatch(historyHydrated(history));
       if (needsProfile) {
         navigation.reset({ index: 0, routes: [{ name: 'ProfileSetup' }] });
       }

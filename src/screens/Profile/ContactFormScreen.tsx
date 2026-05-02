@@ -7,6 +7,7 @@ import { colors, fontFamilies, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, contactUpdated } from '@/redux/slices/userSlice';
 import { trackEvent } from '@/services/analytics';
+import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import {
   formatPhoneForDisplay,
   isValidIndianPhone,
@@ -43,31 +44,38 @@ export function ContactFormScreen() {
     navigation.setOptions({ title: editing ? 'Edit contact' : 'Add contact' });
   }, [editing, navigation]);
 
+  const profile = useAppSelector((s) => s.user.profile);
+
   const handleSave = () => {
     if (!canSave) {
       Alert.alert('Check the form', 'Name, relation and 10-digit phone required.');
       return;
     }
     const e164 = toE164India(phone);
-    if (editing) {
-      dispatch(
-        contactUpdated({
+    const contact = editing
+      ? {
           id: editing.id,
           name: name.trim(),
           relation: relation.trim(),
           phone: e164,
-        }),
-      );
-    } else {
-      trackEvent('contact_added');
-      dispatch(
-        contactAdded({
-          id: `c_${Date.now()}`,
+        }
+      : {
+          id: `c_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
           name: name.trim(),
           relation: relation.trim(),
           phone: e164,
-        }),
-      );
+        };
+
+    if (editing) {
+      dispatch(contactUpdated(contact));
+    } else {
+      trackEvent('contact_added');
+      dispatch(contactAdded(contact));
+    }
+    // Fire-and-forget server mirror. Local cache is the truth on-device;
+    // server is the truth across reinstalls.
+    if (profile?.uid) {
+      upsertEmergencyContact(profile.uid, contact).catch(() => undefined);
     }
     navigation.goBack();
   };

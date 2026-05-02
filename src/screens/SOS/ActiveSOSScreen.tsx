@@ -23,6 +23,7 @@ import {
 } from '@/components/common';
 import { broadcastExpandRadius } from '@/services/community';
 import { fetchRoute, formatEta } from '@/services/osrm';
+import { upsertSOSRecord } from '@/services/sos-history';
 import {
   colors,
   fontFamilies,
@@ -219,17 +220,17 @@ export function ActiveSOSScreen() {
         if (activeSOS) {
           trackEvent('sos_cancelled', { sosId: activeSOS.id });
           dispatch(sosCancelled());
-          dispatch(
-            historyRecordAdded({
-              ...activeSOS,
-              helpers: helperSummaries,
-              status: 'cancelled',
-              resolvedAt: Date.now(),
-              responseTime: Math.round(
-                (Date.now() - activeSOS.timestamp) / 1000,
-              ),
-            }),
-          );
+          const record = {
+            ...activeSOS,
+            helpers: helperSummaries,
+            status: 'cancelled' as const,
+            resolvedAt: Date.now(),
+            responseTime: Math.round(
+              (Date.now() - activeSOS.timestamp) / 1000,
+            ),
+          };
+          dispatch(historyRecordAdded(record));
+          upsertSOSRecord(record).catch(() => undefined);
         }
         dispatch(sosCleared());
         navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
@@ -254,17 +255,17 @@ export function ActiveSOSScreen() {
           responderId: responder?.id ?? null,
         });
         dispatch(sosResolved({ responderId: responder?.id ?? null, rating }));
-        dispatch(
-          historyRecordAdded({
-            ...activeSOS,
-            helpers: helperSummaries,
-            responder,
-            rating,
-            status: 'resolved',
-            resolvedAt: Date.now(),
-            responseTime: Math.round((Date.now() - activeSOS.timestamp) / 1000),
-          }),
-        );
+        const record = {
+          ...activeSOS,
+          helpers: helperSummaries,
+          responder,
+          rating,
+          status: 'resolved' as const,
+          resolvedAt: Date.now(),
+          responseTime: Math.round((Date.now() - activeSOS.timestamp) / 1000),
+        };
+        dispatch(historyRecordAdded(record));
+        upsertSOSRecord(record).catch(() => undefined);
       }
       dispatch(sosCleared());
       navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
