@@ -19,12 +19,11 @@ type ScreenContainerProps = {
   style?: ViewStyle;
 };
 
-// Soft 3-stop gradient pulled from the launcher icon palette: warm pink at
-// the top, lavender in the middle, fading to white. Sits behind every
-// screen so the app reads as branded instead of stark white. Cards / sheets
-// stay opaque on top so contrast is preserved where it matters.
-const BACKDROP_COLORS = ['#FFF1F6', '#F7EDFA', '#FFFFFF'] as const;
-const BACKDROP_LOCATIONS = [0, 0.45, 1] as const;
+// Clean off-white surface. We dropped the pink/lavender gradient — it
+// read as cutesy/AI-templated. Now a subtle warm-grey wash that gives
+// depth without competing with content.
+const BACKDROP_COLORS = ['#FAFAFB', '#FFFFFF'] as const;
+const BACKDROP_LOCATIONS = [0, 1] as const;
 
 export function ScreenContainer({
   children,

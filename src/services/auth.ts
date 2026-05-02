@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import type { UserProfile } from '@/types';
 import { supabase } from './supabase';
 import { listFriendsForUser } from './friend-requests';
+import { syncUsersPublic } from './users-public';
 
 // Custom URL scheme registered in app.json. Redirect URI must be hard-coded
 // so it stays stable across Expo Go vs production builds (where
@@ -173,6 +174,12 @@ export async function signInWithGoogle(): Promise<SignInResult> {
   if (row) {
     const profile = rowToProfile(row, user.email ?? '');
     profile.friends = friends;
+    // Backfill users_public on every sign-in. Cheap upsert, ensures
+    // existing accounts created before the table was added get mirrored
+    // so other users can find them in search.
+    if (profile.username) {
+      syncUsersPublic(profile).catch(() => undefined);
+    }
     return { profile, needsProfile: !profile.username || !profile.phone };
   }
 

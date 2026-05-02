@@ -13,7 +13,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScreenContainer } from '@/components/common';
@@ -57,7 +56,10 @@ export function FriendsScreen() {
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // For sending a friend request we still need a strict username (no
+  // spaces / @). Search itself is more forgiving — see the search effect.
   const sanitizedDraft = draft.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  const queryDraft = draft.replace(/^@+/, '').trim();
 
   const refreshRequests = useCallback(async () => {
     if (!profile?.uid || !profile.username) return;
@@ -76,7 +78,7 @@ export function FriendsScreen() {
   // Debounced live search. Hits Supabase only after the user stops typing.
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (sanitizedDraft.length < 2 || !profile?.uid) {
+    if (queryDraft.length < 2 || !profile?.uid) {
       setSearchResults([]);
       setSearching(false);
       return;
@@ -84,7 +86,7 @@ export function FriendsScreen() {
     setSearching(true);
     searchTimer.current = setTimeout(async () => {
       const results = await searchUsers({
-        query: sanitizedDraft,
+        query: queryDraft,
         excludeUid: profile.uid,
       });
       setSearchResults(results);
@@ -93,7 +95,7 @@ export function FriendsScreen() {
     return () => {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
-  }, [sanitizedDraft, profile?.uid]);
+  }, [queryDraft, profile?.uid]);
 
   const sentTo = useMemo(
     () => new Set(outgoing.map((r) => r.toUsername)),
@@ -171,7 +173,7 @@ export function FriendsScreen() {
     }
   };
 
-  const isSearching = sanitizedDraft.length >= 2;
+  const isSearching = queryDraft.length >= 2;
 
   return (
     <ScreenContainer padded={false} scroll={false}>
@@ -189,19 +191,14 @@ export function FriendsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <LinearGradient
-              colors={['#FFE4F0', '#E8D7FF']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.youCard}
-            >
+            <View style={styles.youCard}>
               <View style={styles.youAvatar}>
                 <Text style={styles.youAvatarText}>
                   {(profile?.name ?? '?').charAt(0).toUpperCase()}
                 </Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.youLabel}>Your username</Text>
+                <Text style={styles.youLabel}>Your handle</Text>
                 <Text style={styles.youHandle}>
                   {profile?.username ? `@${profile.username}` : 'Set in profile'}
                 </Text>
@@ -216,10 +213,10 @@ export function FriendsScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Share username"
                 >
-                  <Ionicons name="share-social" size={16} color={colors.primary} />
+                  <Ionicons name="share-social" size={15} color={colors.textInverse} />
                 </Pressable>
               ) : null}
-            </LinearGradient>
+            </View>
 
             <View style={styles.searchCard}>
               <View style={styles.searchRow}>
@@ -227,14 +224,18 @@ export function FriendsScreen() {
                 <TextInput
                   value={draft}
                   onChangeText={(v) => {
-                    setDraft(v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
+                    // Accept letters, numbers, underscore, space (for name
+                    // search) and dot. Strip @ silently — handles can be
+                    // typed as "@jay" and we resolve to "jay".
+                    const cleaned = v.toLowerCase().replace(/[^a-z0-9_ .]/g, '');
+                    setDraft(cleaned);
                     if (error) setError(null);
                   }}
-                  placeholder="Search by username"
+                  placeholder="Search username or name"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
-                  maxLength={20}
+                  maxLength={32}
                   style={styles.searchInput}
                 />
                 {draft.length > 0 ? (
@@ -547,40 +548,39 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: radius.md,
     padding: spacing.md,
+    backgroundColor: colors.dark,
   },
   youAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   youAvatarText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
+    fontSize: 17,
     color: colors.textInverse,
   },
   youLabel: {
-    ...typography.caption,
-    color: colors.textSecondary,
+    fontFamily: fontFamilies.interMedium,
+    color: 'rgba(255,255,255,0.55)',
     fontSize: 11,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   youHandle: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 16,
-    color: colors.textPrimary,
-    marginTop: 2,
+    color: colors.textInverse,
+    marginTop: 1,
   },
   shareBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.primary,
+    backgroundColor: 'rgba(255,255,255,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -681,12 +681,13 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   sectionHeader: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
-    color: colors.textSecondary,
-    letterSpacing: 0.5,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginTop: spacing.sm,
+    marginBottom: 2,
   },
   empty: {
     alignItems: 'center',
@@ -712,7 +713,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     backgroundColor: colors.background,
     borderRadius: radius.md,
-    padding: spacing.md,
+    padding: 12,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -724,8 +725,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: colors.primary,
   },
   friendAvatarImg: { width: '100%', height: '100%' },
   friendAvatarText: {
@@ -753,8 +752,6 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 16,
     backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -769,7 +766,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     padding: spacing.md,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary,
   },
   requestAvatar: {
     width: 40,

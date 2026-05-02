@@ -78,9 +78,9 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
         hitSlop={8}
       >
         <LinearGradient
-          colors={['#E60000', '#B30000']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 0, y: 1 }}
+          colors={['#E11D2A', '#9A0E18']}
+          start={{ x: 0.1, y: 0 }}
+          end={{ x: 0.9, y: 1 }}
           style={styles.card}
         >
           <View style={styles.asterisk}>
@@ -114,10 +114,10 @@ const styles = StyleSheet.create({
     minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingVertical: 8,
-    paddingHorizontal: 10,
-    gap: 8,
+    paddingHorizontal: 12,
+    gap: 10,
   },
   pressed: {
     transform: [{ scale: 0.97 }],

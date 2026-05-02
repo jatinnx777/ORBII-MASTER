@@ -384,15 +384,15 @@ const styles = StyleSheet.create({
     maxWidth: '78%',
     paddingHorizontal: 12,
     paddingVertical: 8,
-    borderRadius: radius.md,
+    borderRadius: 16,
   },
   bubbleMine: {
-    backgroundColor: colors.primary,
-    borderTopRightRadius: 4,
+    backgroundColor: colors.dark,
+    borderBottomRightRadius: 4,
   },
   bubbleTheirs: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: 4,
+    borderBottomLeftRadius: 4,
   },
   bubbleText: {
     fontFamily: fontFamilies.poppinsMedium,

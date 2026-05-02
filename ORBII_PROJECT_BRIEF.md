@@ -1,14 +1,5 @@
 # ORBII — Project Brief
 
-## ABOUT ME (JATIN)
-
-- Name: Jatin Kumar
-- Age: 19 (turning 20), First-year engineering student at SRM Sonepat
-- Role: Founder & CEO of ORBII
-- Co-founder: Vishnu (CTO, 19, currently recovering from hepatitis)
-- Equity split: Jatin 51%, Vishnu 49%
-- Background: Non-technical founder, used no-code tools before, learning to code now
-- Goal: Build ORBII to ₹5,000cr valuation in 4 years, exit at age 30, retire
 
 ## THE PROBLEM ORBII SOLVES
 
