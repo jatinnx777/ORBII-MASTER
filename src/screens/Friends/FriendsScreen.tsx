@@ -56,9 +56,7 @@ export function FriendsScreen() {
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // For sending a friend request we still need a strict username (no
-  // spaces / @). Search itself is more forgiving — see the search effect.
-  const sanitizedDraft = draft.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  // Strip a leading "@" and trim — what the user actually means to query.
   const queryDraft = draft.replace(/^@+/, '').trim();
 
   const refreshRequests = useCallback(async () => {
