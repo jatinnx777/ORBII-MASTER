@@ -33,7 +33,11 @@ import {
   sendFriendRequest,
   type FriendRequest,
 } from '@/services/friend-requests';
-import { searchUsers, type PublicUser } from '@/services/users-public';
+import {
+  searchUsers,
+  syncUsersPublic,
+  type PublicUser,
+} from '@/services/users-public';
 import type { Friend } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -72,6 +76,15 @@ export function FriendsScreen() {
   useEffect(() => {
     refreshRequests();
   }, [refreshRequests]);
+
+  // Mirror the current user into users_public on every Friends open.
+  // Defensive — if the auto-sync at sign-in failed (RLS, network), this
+  // catches it so the user is searchable.
+  useEffect(() => {
+    if (profile && profile.username) {
+      syncUsersPublic(profile).catch(() => undefined);
+    }
+  }, [profile?.uid, profile?.username]);
 
   // Debounced live search. Hits Supabase only after the user stops typing.
   useEffect(() => {

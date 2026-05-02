@@ -109,3 +109,28 @@ export async function getPublicUserByUsername(
   if (error || !data) return null;
   return rowToUser(data);
 }
+
+// True if `username` is free, or already owned by `excludeUid`. Used during
+// profile setup to enforce one-username-per-user before the upsert hits the
+// unique constraint at the DB level (which would otherwise surface as a
+// generic "duplicate key" error).
+export async function isUsernameAvailable(
+  username: string,
+  excludeUid: string | null,
+): Promise<boolean> {
+  const u = username.trim().toLowerCase();
+  if (!u) return false;
+  const { data, error } = await supabase
+    .from('users_public')
+    .select('id, username')
+    .eq('username', u)
+    .maybeSingle<{ id: string; username: string }>();
+  if (error) {
+    // Network / RLS failure — be permissive so profile setup doesn't
+    // soft-block the user. The DB unique constraint is the final guard.
+    console.warn('[users-public] availability check failed:', error.message);
+    return true;
+  }
+  if (!data) return true;
+  return excludeUid != null && data.id === excludeUid;
+}

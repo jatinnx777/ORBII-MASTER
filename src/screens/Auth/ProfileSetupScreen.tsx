@@ -13,6 +13,7 @@ import { colors, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { profileUpdated } from '@/redux/slices/userSlice';
 import { updateProfile } from '@/services/auth';
+import { isUsernameAvailable } from '@/services/users-public';
 import {
   formatPhoneForDisplay,
   isValidIndianPhone,
@@ -88,6 +89,12 @@ export function ProfileSetupScreen() {
     setIsSaving(true);
     setError(null);
     try {
+      const available = await isUsernameAvailable(username, profile.uid);
+      if (!available) {
+        setError(`@${username} is already taken. Pick another.`);
+        setIsSaving(false);
+        return;
+      }
       const updated = await updateProfile(profile, {
         name,
         photoUri,
