@@ -27,6 +27,9 @@ export type AlertBroadcast = {
   };
   location: SOSLocation;
   createdAt: number;
+  // Priority responders: uids of the victim's friends. Receivers whose uid
+  // appears here always see the alert (skipping the 2 km radius gate).
+  friendUids?: string[];
 };
 
 let broadcastChannel: ReturnType<typeof supabase.channel> | null = null;

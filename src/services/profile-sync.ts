@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { UserProfile } from '@/types';
+import { syncUsersPublic } from './users-public';
 
 // Best-effort profile persistence to Supabase. The expected `profiles`
 // table schema (paste into Supabase SQL editor):
@@ -56,6 +57,8 @@ export async function syncProfile(profile: UserProfile): Promise<void> {
         console.warn('[profile-sync] not active:', error.message);
       }
     }
+    // Mirror the public-facing fields into users_public so search works.
+    await syncUsersPublic(profile);
   } catch (err) {
     if (!warnedMissingTable) {
       warnedMissingTable = true;

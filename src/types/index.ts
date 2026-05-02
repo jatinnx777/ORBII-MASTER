@@ -16,6 +16,11 @@ export type IdVerificationStatus =
 export type Friend = {
   username: string;
   addedAt: number;
+  // Hydrated from users_public on sign-in / friend accept. Falls back
+  // gracefully when the public row hasn't synced yet.
+  uid?: string | null;
+  name?: string | null;
+  photoUri?: string | null;
 };
 
 export type UserProfile = {

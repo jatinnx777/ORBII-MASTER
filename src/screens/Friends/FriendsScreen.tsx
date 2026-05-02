@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
   Easing,
   FlatList,
+  Image,
   Pressable,
   Share,
   StyleSheet,
@@ -15,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, ScreenContainer } from '@/components/common';
+import { ScreenContainer } from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -33,16 +34,14 @@ import {
   sendFriendRequest,
   type FriendRequest,
 } from '@/services/friend-requests';
+import { searchUsers, type PublicUser } from '@/services/users-public';
 import type { Friend } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'Friends'>;
 
-// Friends/Chat tab. Friends are added by username and live in the user's
-// safety circle. We do not have a profiles table yet, so adding by
-// username persists locally without verifying the friend exists. Once a
-// real backend is wired we can resolve usernames to user records and
-// surface friend status / chat.
+// Friends/Chat tab. Search pulls live `users_public` rows from Supabase
+// and the Friend rows are enriched with name + photo from the same table.
 export function FriendsScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
@@ -50,13 +49,15 @@ export function FriendsScreen() {
   const friends: Friend[] = profile?.friends ?? [];
 
   const [draft, setDraft] = useState('');
+  const [searchResults, setSearchResults] = useState<PublicUser[]>([]);
+  const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submittingFor, setSubmittingFor] = useState<string | null>(null);
   const [incoming, setIncoming] = useState<FriendRequest[]>([]);
   const [outgoing, setOutgoing] = useState<FriendRequest[]>([]);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sanitizedDraft = draft.toLowerCase().replace(/[^a-z0-9_]/g, '');
-  const draftValid = /^[a-z0-9_]{3,20}$/.test(sanitizedDraft);
 
   const refreshRequests = useCallback(async () => {
     if (!profile?.uid || !profile.username) return;
@@ -72,41 +73,55 @@ export function FriendsScreen() {
     refreshRequests();
   }, [refreshRequests]);
 
-  const handleAdd = async () => {
-    if (!draftValid) {
-      setError('Username must be 3 to 20 lowercase letters, numbers, or underscores.');
+  // Debounced live search. Hits Supabase only after the user stops typing.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (sanitizedDraft.length < 2 || !profile?.uid) {
+      setSearchResults([]);
+      setSearching(false);
       return;
     }
-    if (sanitizedDraft === profile?.username) {
-      setError("That's your own username.");
-      return;
-    }
-    if (friends.some((f) => f.username === sanitizedDraft)) {
-      setError('Already in your circle.');
-      return;
-    }
-    if (outgoing.some((r) => r.toUsername === sanitizedDraft)) {
-      setError('Request already pending.');
-      return;
-    }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      const results = await searchUsers({
+        query: sanitizedDraft,
+        excludeUid: profile.uid,
+      });
+      setSearchResults(results);
+      setSearching(false);
+    }, 300);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [sanitizedDraft, profile?.uid]);
+
+  const sentTo = useMemo(
+    () => new Set(outgoing.map((r) => r.toUsername)),
+    [outgoing],
+  );
+  const friendUsernames = useMemo(
+    () => new Set(friends.map((f) => f.username)),
+    [friends],
+  );
+
+  const handleSend = async (target: PublicUser) => {
     if (!profile?.uid || !profile.username) {
       setError('Set up your profile before adding friends.');
       return;
     }
-    setSubmitting(true);
+    setSubmittingFor(target.username);
+    setError(null);
     try {
       await sendFriendRequest({
         fromUserId: profile.uid,
         fromUsername: profile.username,
-        toUsername: sanitizedDraft,
+        toUsername: target.username,
       });
-      setDraft('');
-      setError(null);
       await refreshRequests();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not send request.');
     } finally {
-      setSubmitting(false);
+      setSubmittingFor(null);
     }
   };
 
@@ -120,7 +135,11 @@ export function FriendsScreen() {
       fromUsername: request.fromUsername,
     });
     dispatch(
-      friendAdded({ username: request.fromUsername, addedAt: Date.now() }),
+      friendAdded({
+        username: request.fromUsername,
+        addedAt: Date.now(),
+        uid: request.fromUserId,
+      }),
     );
     await refreshRequests();
   };
@@ -152,19 +171,22 @@ export function FriendsScreen() {
     }
   };
 
+  const isSearching = sanitizedDraft.length >= 2;
+
   return (
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Your safety circle</Text>
         <Text style={styles.subtitle}>
-          Friends in your circle see your SOS first. Add them by username.
+          Friends in your circle see your SOS first.
         </Text>
       </View>
 
       <FlatList
-        data={friends}
+        data={isSearching ? [] : friends}
         keyExtractor={(f) => f.username}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.listHeader}>
             <LinearGradient
@@ -187,7 +209,10 @@ export function FriendsScreen() {
               {profile?.username ? (
                 <Pressable
                   onPress={handleShareUsername}
-                  style={styles.shareBtn}
+                  style={({ pressed }) => [
+                    styles.shareBtn,
+                    pressed && styles.pressed,
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel="Share username"
                 >
@@ -196,87 +221,110 @@ export function FriendsScreen() {
               ) : null}
             </LinearGradient>
 
-            <View style={styles.addCard}>
-              <Text style={styles.addLabel}>Send a friend request by username</Text>
-              <View style={styles.addRow}>
-                <Text style={styles.addPrefix}>@</Text>
+            <View style={styles.searchCard}>
+              <View style={styles.searchRow}>
+                <Ionicons name="search" size={16} color={colors.textSecondary} />
                 <TextInput
                   value={draft}
                   onChangeText={(v) => {
                     setDraft(v.toLowerCase().replace(/[^a-z0-9_]/g, ''));
                     if (error) setError(null);
                   }}
-                  placeholder="their_username"
+                  placeholder="Search by username"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
                   maxLength={20}
-                  style={styles.addInput}
+                  style={styles.searchInput}
                 />
+                {draft.length > 0 ? (
+                  <Pressable
+                    onPress={() => setDraft('')}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Clear search"
+                  >
+                    <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+                  </Pressable>
+                ) : null}
               </View>
               {error ? <Text style={styles.errorText}>{error}</Text> : null}
-              <Button
-                label={submitting ? 'Sending…' : 'Send request'}
-                onPress={handleAdd}
-                disabled={!draftValid || submitting}
-                loading={submitting}
-              />
-              <Text style={styles.hintText}>
-                They have to accept before you're connected. Until then no
-                location sharing or chat.
-              </Text>
             </View>
 
-            {incoming.length > 0 ? (
-              <View style={styles.requestsBlock}>
+            {isSearching ? (
+              <View style={styles.searchResults}>
                 <Text style={styles.sectionHeader}>
-                  {incoming.length} request{incoming.length === 1 ? '' : 's'} for you
+                  {searching
+                    ? 'Searching…'
+                    : searchResults.length > 0
+                      ? `${searchResults.length} result${searchResults.length === 1 ? '' : 's'}`
+                      : 'No matches'}
                 </Text>
-                {incoming.map((req) => (
-                  <RequestRow
-                    key={req.id}
-                    request={req}
-                    onAccept={() => handleAccept(req)}
-                    onDecline={() => handleDecline(req)}
+                {searchResults.map((u) => (
+                  <SearchResultRow
+                    key={u.id}
+                    user={u}
+                    isFriend={friendUsernames.has(u.username)}
+                    isSent={sentTo.has(u.username)}
+                    submitting={submittingFor === u.username}
+                    onSend={() => handleSend(u)}
                   />
                 ))}
               </View>
-            ) : null}
-
-            {outgoing.length > 0 ? (
-              <View style={styles.requestsBlock}>
-                <Text style={styles.sectionHeader}>
-                  Pending — sent by you
-                </Text>
-                {outgoing.map((req) => (
-                  <View key={req.id} style={styles.outgoingRow}>
-                    <Ionicons name="paper-plane-outline" size={16} color={colors.textSecondary} />
-                    <Text style={styles.outgoingHandle}>@{req.toUsername}</Text>
-                    <Text style={styles.outgoingMeta}>Waiting for them</Text>
+            ) : (
+              <>
+                {incoming.length > 0 ? (
+                  <View style={styles.requestsBlock}>
+                    <Text style={styles.sectionHeader}>
+                      {incoming.length} request{incoming.length === 1 ? '' : 's'} for you
+                    </Text>
+                    {incoming.map((req) => (
+                      <RequestRow
+                        key={req.id}
+                        request={req}
+                        onAccept={() => handleAccept(req)}
+                        onDecline={() => handleDecline(req)}
+                      />
+                    ))}
                   </View>
-                ))}
-              </View>
-            ) : null}
+                ) : null}
 
-            {friends.length > 0 ? (
-              <Text style={styles.sectionHeader}>
-                {friends.length} friend{friends.length === 1 ? '' : 's'} in your circle
-              </Text>
-            ) : null}
+                {outgoing.length > 0 ? (
+                  <View style={styles.requestsBlock}>
+                    <Text style={styles.sectionHeader}>Pending — sent by you</Text>
+                    {outgoing.map((req) => (
+                      <View key={req.id} style={styles.outgoingRow}>
+                        <Ionicons name="paper-plane-outline" size={16} color={colors.textSecondary} />
+                        <Text style={styles.outgoingHandle}>@{req.toUsername}</Text>
+                        <Text style={styles.outgoingMeta}>Waiting for them</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+
+                {friends.length > 0 ? (
+                  <Text style={styles.sectionHeader}>
+                    {friends.length} friend{friends.length === 1 ? '' : 's'} in your circle
+                  </Text>
+                ) : null}
+              </>
+            )}
           </View>
         }
         ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons
-              name="people-outline"
-              size={36}
-              color={colors.textMuted}
-            />
-            <Text style={styles.emptyTitle}>Your circle is empty</Text>
-            <Text style={styles.emptyBody}>
-              The first person you add could be the one who reaches you fastest.
-            </Text>
-          </View>
+          isSearching ? null : (
+            <View style={styles.empty}>
+              <Ionicons
+                name="people-outline"
+                size={36}
+                color={colors.textMuted}
+              />
+              <Text style={styles.emptyTitle}>Your circle is empty</Text>
+              <Text style={styles.emptyBody}>
+                The first person you add could be the one who reaches you fastest.
+              </Text>
+            </View>
+          )
         }
         renderItem={({ item, index }) => (
           <FriendRow
@@ -292,8 +340,62 @@ export function FriendsScreen() {
   );
 }
 
-// Slide-up + fade-in for each friend row, indexed so the list reads as a
-// cascade rather than appearing all at once.
+function SearchResultRow({
+  user,
+  isFriend,
+  isSent,
+  submitting,
+  onSend,
+}: {
+  user: PublicUser;
+  isFriend: boolean;
+  isSent: boolean;
+  submitting: boolean;
+  onSend: () => void;
+}) {
+  const initial = (user.name ?? user.username).charAt(0).toUpperCase();
+  return (
+    <View style={styles.resultRow}>
+      <View style={styles.resultAvatar}>
+        {user.photoUri ? (
+          <Image source={{ uri: user.photoUri }} style={styles.resultAvatarImg} />
+        ) : (
+          <Text style={styles.resultAvatarText}>{initial}</Text>
+        )}
+      </View>
+      <View style={{ flex: 1 }}>
+        {user.name ? <Text style={styles.resultName}>{user.name}</Text> : null}
+        <Text style={styles.resultHandle}>@{user.username}</Text>
+      </View>
+      {isFriend ? (
+        <View style={styles.statusPill}>
+          <Ionicons name="checkmark" size={14} color={colors.success} />
+          <Text style={styles.statusPillText}>In circle</Text>
+        </View>
+      ) : isSent ? (
+        <View style={styles.statusPill}>
+          <Ionicons name="time-outline" size={14} color={colors.textSecondary} />
+          <Text style={styles.statusPillText}>Pending</Text>
+        </View>
+      ) : (
+        <Pressable
+          onPress={onSend}
+          disabled={submitting}
+          style={({ pressed }) => [
+            styles.addBtn,
+            (pressed || submitting) && styles.pressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={`Send friend request to ${user.username}`}
+        >
+          <Ionicons name="person-add" size={14} color={colors.textInverse} />
+          <Text style={styles.addBtnText}>{submitting ? 'Sending…' : 'Add'}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 function FriendRow({
   friend,
   index,
@@ -320,40 +422,36 @@ function FriendRow({
   }, [enter, index]);
 
   const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  const initial = (friend.name ?? friend.username).charAt(0).toUpperCase();
 
   return (
-    <Animated.View
-      style={{ opacity: enter, transform: [{ translateY }] }}
-    >
+    <Animated.View style={{ opacity: enter, transform: [{ translateY }] }}>
       <Pressable
         onPress={onChat}
-        style={({ pressed }) => [
-          styles.friendRow,
-          pressed && { opacity: 0.85 },
-        ]}
+        style={({ pressed }) => [styles.friendRow, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={`Chat with ${friend.username}`}
       >
         <View style={styles.friendAvatar}>
-          <Text style={styles.friendAvatarText}>
-            {friend.username.charAt(0).toUpperCase()}
-          </Text>
+          {friend.photoUri ? (
+            <Image source={{ uri: friend.photoUri }} style={styles.friendAvatarImg} />
+          ) : (
+            <Text style={styles.friendAvatarText}>{initial}</Text>
+          )}
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.friendHandle}>@{friend.username}</Text>
+          <Text style={styles.friendHandle}>
+            {friend.name ? friend.name : `@${friend.username}`}
+          </Text>
           <Text style={styles.friendMeta}>
-            Added{' '}
-            {new Date(friend.addedAt).toLocaleDateString('en-IN', {
-              day: '2-digit',
-              month: 'short',
-            })}
+            {friend.name ? `@${friend.username}` : `Added ${new Date(friend.addedAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}`}
           </Text>
         </View>
         <View style={styles.friendActions}>
           <Pressable
             onPress={onChat}
             hitSlop={10}
-            style={styles.chatBtn}
+            style={({ pressed }) => [styles.chatBtn, pressed && styles.pressed]}
             accessibilityRole="button"
             accessibilityLabel={`Open chat with ${friend.username}`}
           >
@@ -373,8 +471,6 @@ function FriendRow({
   );
 }
 
-// Pending incoming friend request. Renders the sender's handle plus an
-// Accept (primary, red) and Decline (outline) action.
 function RequestRow({
   request,
   onAccept,
@@ -393,13 +489,11 @@ function RequestRow({
       </View>
       <View style={{ flex: 1 }}>
         <Text style={styles.friendHandle}>@{request.fromUsername}</Text>
-        <Text style={styles.friendMeta}>
-          Wants to add you to their circle
-        </Text>
+        <Text style={styles.friendMeta}>Wants to add you to their circle</Text>
       </View>
       <Pressable
         onPress={onDecline}
-        style={styles.declineBtn}
+        style={({ pressed }) => [styles.declineBtn, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel="Decline"
       >
@@ -407,7 +501,7 @@ function RequestRow({
       </Pressable>
       <Pressable
         onPress={onAccept}
-        style={styles.acceptBtn}
+        style={({ pressed }) => [styles.acceptBtn, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel="Accept"
       >
@@ -418,6 +512,10 @@ function RequestRow({
 }
 
 const styles = StyleSheet.create({
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
   header: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
@@ -447,7 +545,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     padding: spacing.md,
   },
   youAvatar: {
@@ -480,39 +578,30 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
+    backgroundColor: colors.background,
+    borderWidth: 1,
     borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  addCard: {
+  searchCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    borderRadius: radius.md,
+    padding: 4,
     gap: spacing.sm,
   },
-  addLabel: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
-    color: colors.textPrimary,
-  },
-  addRow: {
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.sm,
     backgroundColor: colors.background,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
+    paddingVertical: 4,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  addPrefix: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 16,
-  },
-  addInput: {
+  searchInput: {
     flex: 1,
     paddingVertical: spacing.sm,
     fontFamily: fontFamilies.poppinsMedium,
@@ -523,6 +612,73 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.error,
     fontSize: 12,
+    paddingHorizontal: spacing.sm,
+  },
+  searchResults: {
+    gap: 6,
+  },
+  resultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.background,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  resultAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  resultAvatarImg: { width: '100%', height: '100%' },
+  resultAvatarText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  resultName: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  resultHandle: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+  },
+  addBtnText: {
+    color: colors.textInverse,
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+  },
+  statusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.circle,
+  },
+  statusPillText: {
+    fontFamily: fontFamilies.poppinsMedium,
+    fontSize: 11,
+    color: colors.textSecondary,
   },
   sectionHeader: {
     fontFamily: fontFamilies.poppinsBold,
@@ -567,9 +723,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
+  friendAvatarImg: { width: '100%', height: '100%' },
   friendAvatarText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 14,
@@ -599,12 +757,6 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  hintText: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
   },
   requestsBlock: {
     gap: 6,

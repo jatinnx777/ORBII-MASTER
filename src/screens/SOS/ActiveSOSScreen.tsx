@@ -15,12 +15,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
 import {
-  OSMMapView,
+  MLMapView,
   useBrandSheet,
-  type OSMMarker,
-  type OSMPolyline,
+  type MLMarker,
+  type MLMapViewHandle,
+  type MLRoute,
 } from '@/components/common';
 import { broadcastExpandRadius } from '@/services/community';
+import { fetchRoute, formatEta } from '@/services/osrm';
 import {
   colors,
   fontFamilies,
@@ -294,49 +296,62 @@ export function ActiveSOSScreen() {
     });
   };
 
-  const mapMarkers: OSMMarker[] = useMemo(() => {
+  const mapMarkers: MLMarker[] = useMemo(() => {
     if (!userLocation) return [];
-    const list: OSMMarker[] = [
-      {
-        id: 'me',
-        coordinate: userLocation,
-        html: `
-          <div style="position:relative;width:40px;height:48px;display:flex;align-items:flex-end;justify-content:center;">
-            <div style="position:absolute;top:0;width:32px;height:32px;border-radius:16px;background:#fff;border:2px solid #1a1a1a;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">
-              <span style="font-size:16px;">🏠</span>
-            </div>
-            <div style="position:absolute;bottom:2px;width:10px;height:10px;border-radius:5px;background:#FF0000;border:2px solid #fff;"></div>
-          </div>
-        `,
-        kind: 'destination',
-        pulse: !resolved,
-      },
+    const list: MLMarker[] = [
+      { id: 'me', coordinate: userLocation, kind: 'destination' },
     ];
     responderList.forEach((r) => {
-      list.push({
-        id: r.id,
-        coordinate: r.point,
-        html: `
-          <div style="width:36px;height:36px;border-radius:18px;background:#1a1a1a;border:3px solid #fff;display:flex;align-items:center;justify-content:center;color:#fff;font-family:-apple-system,Roboto,sans-serif;font-weight:700;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,0.4);">
-            <span>🛵</span>
-          </div>
-        `,
-        pulse: true,
-      });
+      list.push({ id: r.id, coordinate: r.point, kind: 'helper' });
     });
     return list;
-  }, [userLocation, responderList, resolved]);
+  }, [userLocation, responderList]);
 
-  const mapPolylines: OSMPolyline[] = useMemo(() => {
-    if (!userLocation || resolved) return [];
-    return responderList.map((r) => ({
-      id: `line-${r.id}`,
-      coordinates: [r.point, userLocation],
-      color: '#1a1a1a',
-      width: 3,
-      dashed: true,
-    }));
-  }, [userLocation, responderList, resolved]);
+  // Live route between the closest responder and the victim. Refetches:
+  //   a) immediately when the helper moves >50m since the last fetch
+  //   b) every 8s as a safety net (traffic shifts even when the helper
+  //      stops at a light)
+  // Both paths debounce off the same lastRouteFetchRef.
+  const [route, setRoute] = useState<MLRoute | null>(null);
+  const [liveEtaSeconds, setLiveEtaSeconds] = useState<number | null>(null);
+  const lastRouteFetchRef = useRef<{ at: number; from: GeoPoint } | null>(null);
+  const [routeTick, setRouteTick] = useState(0);
+
+  useEffect(() => {
+    if (resolved) return;
+    const id = setInterval(() => setRouteTick((t) => t + 1), 8000);
+    return () => clearInterval(id);
+  }, [resolved]);
+
+  useEffect(() => {
+    if (resolved || !userLocation || !primary) {
+      setRoute(null);
+      setLiveEtaSeconds(null);
+      return;
+    }
+    const last = lastRouteFetchRef.current;
+    const moved = last ? haversineMeters(last.from, primary.point) : Infinity;
+    const stale = !last || Date.now() - last.at > 8000;
+    if (!stale && moved < 50) return;
+    const ctrl = new AbortController();
+    (async () => {
+      const result = await fetchRoute(primary.point, userLocation, ctrl.signal);
+      if (ctrl.signal.aborted) return;
+      if (result) {
+        setRoute({ geometry: result.geometry });
+        setLiveEtaSeconds(result.durationSeconds);
+      }
+      lastRouteFetchRef.current = { at: Date.now(), from: primary.point };
+    })();
+    return () => ctrl.abort();
+  }, [
+    primary?.point.latitude,
+    primary?.point.longitude,
+    userLocation?.latitude,
+    userLocation?.longitude,
+    resolved,
+    routeTick,
+  ]);
 
   if (!userLocation || !activeSOS) {
     return <MissingRecord navigation={navigation} />;
@@ -354,7 +369,9 @@ export function ActiveSOSScreen() {
       ? 'Your helper is at your location'
       : primaryDistance != null && primaryDistance <= 300
         ? 'Your helper is very close'
-        : `ETA about ${Math.max(1, Math.round((primaryEta ?? 0) / 60))} min`;
+        : liveEtaSeconds != null
+          ? formatEta(liveEtaSeconds)
+          : `ETA about ${Math.max(1, Math.round((primaryEta ?? 0) / 60))} min`;
 
   return (
     <View style={styles.container}>
@@ -389,13 +406,14 @@ export function ActiveSOSScreen() {
         </View>
 
         <View style={styles.mapCard}>
-          <OSMMapView
+          <MLMapView
             style={styles.map}
             center={primary ? primary.point : userLocation}
             zoom={16}
             fitAll={responderList.length > 0}
+            fitPadding={64}
             markers={mapMarkers}
-            polylines={mapPolylines}
+            route={route}
           />
         </View>
 

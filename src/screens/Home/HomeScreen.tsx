@@ -19,7 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
-import { OSMMapView, ScreenContainer, type OSMMarker } from '@/components/common';
+import { MLMapView, ScreenContainer, type MLMarker } from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -70,27 +70,6 @@ const HELPER_REFRESH_MS = 30_000;
 const MAP_RADIUS_KM = 5;
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
-
-// Marker HTML used by the home map. We hand-roll the icons so we can colour
-// them by status (red user, yellow verified, green standard) and show a
-// soft halo on the user's pin so it always pops against the OSM tiles.
-function userPinHtml(): string {
-  return `
-    <div style="position:relative;width:42px;height:42px;display:flex;align-items:center;justify-content:center;">
-      <div style="position:absolute;width:42px;height:42px;border-radius:21px;background:rgba(255,0,0,0.18);animation:halo 1.6s ease-out infinite;"></div>
-      <div style="position:relative;width:18px;height:18px;border-radius:9px;background:#FF0000;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,0.3);"></div>
-    </div>
-    <style>@keyframes halo{0%{transform:scale(0.8);opacity:0.7}100%{transform:scale(1.6);opacity:0}}</style>
-  `;
-}
-
-function helperPinHtml(verified: boolean): string {
-  const color = verified ? '#FFD600' : '#00C853';
-  const ring = verified ? '#B58F00' : '#00873E';
-  return `
-    <div style="width:18px;height:18px;border-radius:9px;background:${color};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,0.25);outline:1px solid ${ring};"></div>
-  `;
-}
 
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
@@ -338,15 +317,10 @@ export function HomeScreen() {
 
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
-  const mapMarkers: OSMMarker[] = useMemo(() => {
-    const out: OSMMarker[] = [];
+  const mapMarkers: MLMarker[] = useMemo(() => {
+    const out: MLMarker[] = [];
     if (currentLocation) {
-      out.push({
-        id: 'me',
-        coordinate: currentLocation,
-        html: userPinHtml(),
-        kind: 'user',
-      });
+      out.push({ id: 'me', coordinate: currentLocation, kind: 'user' });
     }
     const here = currentLocation;
     presencePeers.forEach((peer) => {
@@ -358,8 +332,7 @@ export function HomeScreen() {
       out.push({
         id: `peer:${peer.userId}`,
         coordinate: peer.location,
-        html: helperPinHtml(!!peer.isVerified),
-        kind: 'helper',
+        kind: peer.isVerified ? 'helper-verified' : 'helper',
       });
     });
     return out;
@@ -378,14 +351,14 @@ export function HomeScreen() {
   );
 
   return (
-    <ScreenContainer padded={false} edges={['bottom', 'left', 'right']}>
+    <ScreenContainer padded={false} edges={['left', 'right']}>
       {currentLocation ? (
-        <OSMMapView
+        <MLMapView
           center={currentLocation}
           zoom={15}
           markers={mapMarkers}
           interactive
-          showZoomControls={false}
+          followUser={false}
           style={StyleSheet.absoluteFill}
         />
       ) : (
@@ -492,7 +465,7 @@ export function HomeScreen() {
             style={({ pressed }) => [
               styles.voiceCard,
               voiceListening && styles.voiceCardActive,
-              pressed && { opacity: 0.9 },
+              pressed && styles.pressedScale,
             ]}
             accessibilityRole="button"
             accessibilityLabel={voiceListening ? 'Stop listening' : 'Start hands-free SOS'}
@@ -558,7 +531,8 @@ function BottomPanel({
   bottomInset: number;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  const COLLAPSE_OFFSET = Math.max(280, screenHeight * 0.42);
+  // Panel content is ~190px tall now; collapse to just the handle visible.
+  const COLLAPSE_OFFSET = Math.max(180, screenHeight * 0.26);
   const translateY = useRef(new Animated.Value(0)).current;
   const lastSnapRef = useRef(0);
 
@@ -824,7 +798,7 @@ function AlertsStrip({ count, onPress }: { count: number; onPress: () => void })
             style={[
               StyleSheet.absoluteFillObject,
               {
-                borderRadius: 18,
+                borderRadius: 14,
                 backgroundColor: 'rgba(255,255,255,0.35)',
                 opacity: ringOpacity,
                 transform: [{ scale: ringScale }],
@@ -835,26 +809,22 @@ function AlertsStrip({ count, onPress }: { count: number; onPress: () => void })
         {active ? (
           <Text style={styles.alertsBadgeText}>{count}</Text>
         ) : (
-          <Ionicons name="heart-outline" size={16} color={colors.textPrimary} />
+          <Ionicons name="heart-outline" size={14} color={colors.textPrimary} />
         )}
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.alertsTitle, !active && styles.alertsTitleIdle]}>
-          {active
-            ? count === 1
-              ? 'Someone nearby needs help'
-              : `${count} people nearby need help`
-            : 'No alerts nearby'}
-        </Text>
-        <Text style={[styles.alertsMeta, !active && styles.alertsMetaIdle]}>
-          {active
-            ? 'Tap to respond, within 2 km'
-            : "We'll buzz you the moment someone within 2 km fires SOS"}
-        </Text>
-      </View>
+      <Text
+        style={[styles.alertsTitle, !active && styles.alertsTitleIdle]}
+        numberOfLines={1}
+      >
+        {active
+          ? count === 1
+            ? '1 person needs help nearby'
+            : `${count} people need help nearby`
+          : 'No alerts nearby'}
+      </Text>
       <Ionicons
         name="chevron-forward"
-        size={18}
+        size={16}
         color={active ? colors.textInverse : colors.textMuted}
       />
     </Pressable>
@@ -957,11 +927,11 @@ const styles = StyleSheet.create({
   },
   handleZone: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 6,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
   handle: {
-    width: 36,
+    width: 32,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#C9C9CE',
@@ -971,13 +941,13 @@ const styles = StyleSheet.create({
     opacity: 0.92,
   },
   panelContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 4,
+    gap: 6,
   },
   panelTopRowWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: 6,
+    paddingHorizontal: spacing.md,
+    paddingBottom: 4,
   },
   panelTopRow: {
     flexDirection: 'row',
@@ -988,18 +958,18 @@ const styles = StyleSheet.create({
   legendInline: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderRadius: radius.circle,
     backgroundColor: colors.surface,
   },
   safeModeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.circle,
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -1018,7 +988,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.md,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: radius.md,
     backgroundColor: '#FFF4F4',
     borderWidth: 1,
@@ -1043,9 +1014,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.circle,
     backgroundColor: colors.surface,
   },
@@ -1053,9 +1024,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.circle,
     backgroundColor: colors.surface,
   },
@@ -1089,26 +1060,27 @@ const styles = StyleSheet.create({
   },
   voiceCard: {
     flex: 1,
-    minHeight: 96,
-    borderRadius: radius.lg,
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
+    minHeight: 68,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
     borderColor: colors.border,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 8,
   },
   voiceCardActive: {
     borderColor: colors.primary,
-    backgroundColor: '#FFF6F6',
+    backgroundColor: '#FFF1F1',
   },
   voiceIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1117,26 +1089,27 @@ const styles = StyleSheet.create({
   },
   voiceCardLabel: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textPrimary,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
+    flex: 1,
   },
   voiceCardLabelActive: {
     color: colors.primary,
   },
   tinyPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
     borderRadius: radius.circle,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   tinyPillActive: {
     backgroundColor: colors.primary,
   },
   tinyPillText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 10,
-    letterSpacing: 1,
+    fontSize: 9,
+    letterSpacing: 0.6,
     color: colors.textMuted,
   },
   tinyPillTextActive: {
@@ -1145,23 +1118,21 @@ const styles = StyleSheet.create({
   alertsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    padding: spacing.md,
+    gap: spacing.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     borderRadius: radius.md,
     backgroundColor: colors.primary,
-    ...shadows.hero,
   },
   alertsBannerIdle: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
-    shadowOpacity: 0,
-    elevation: 0,
   },
   alertsBadge: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1171,24 +1142,16 @@ const styles = StyleSheet.create({
   },
   alertsBadgeText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 16,
+    fontSize: 13,
     color: colors.textInverse,
   },
   alertsTitle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 15,
+    fontSize: 13,
     color: colors.textInverse,
+    flex: 1,
   },
   alertsTitleIdle: {
     color: colors.textPrimary,
-  },
-  alertsMeta: {
-    ...typography.caption,
-    color: 'rgba(255,255,255,0.88)',
-    marginTop: 2,
-    fontSize: 12,
-  },
-  alertsMetaIdle: {
-    color: colors.textSecondary,
   },
 });

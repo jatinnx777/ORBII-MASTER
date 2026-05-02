@@ -234,18 +234,26 @@ export default function App() {
       if (!alert) return;
       if (seen.has(alert.id)) return;
       const distance = alert.distanceMeters;
-      // No GPS yet → distance reads as -1. Be permissive so we don't miss
-      // the first alert before location resolves.
       const within2km = distance < 0 || distance <= 2000;
       const within5km = distance < 0 || distance <= 5000;
-      if (within2km) {
+      // Friends in the victim's circle get the alert regardless of distance,
+      // with a stronger vibration. The receiver still sees an accurate
+      // distance/ETA in the alert card.
+      const isFriend =
+        !!me &&
+        Array.isArray(broadcastPayload.friendUids) &&
+        broadcastPayload.friendUids.includes(me);
+      if (within2km || isFriend) {
         seen.add(alert.id);
         store.dispatch(alertReceived(alert));
         if (state.app.alertVibration) {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
             () => undefined,
           );
-          Vibration.vibrate([0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]);
+          const pattern = isFriend
+            ? [0, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800]
+            : [0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600];
+          Vibration.vibrate(pattern);
         }
         return;
       }

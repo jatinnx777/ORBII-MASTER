@@ -1,4 +1,6 @@
 import { supabase } from './supabase';
+import { getPublicUsersByUsernames } from './users-public';
+import type { Friend } from '@/types';
 
 // Friend-request system. User A sends a request to @B. Until @B accepts,
 // they're not in either user's circle (no chat, no priority dispatch).
@@ -167,18 +169,26 @@ export async function declineFriendRequest(requestId: string): Promise<void> {
 
 // Server-side mirror of the user's friends list. On sign-in we hydrate
 // `profile.friends` from this so logging out and back in restores the
-// circle.
-export async function listFriendsForUser(
-  myUid: string,
-): Promise<Array<{ username: string; addedAt: number }>> {
+// circle. Each row is enriched with name/photo from users_public so the
+// friends list renders correctly without a follow-up fetch.
+export async function listFriendsForUser(myUid: string): Promise<Friend[]> {
   const { data, error } = await supabase
     .from('friends')
     .select('friend_username, added_at')
     .eq('user_id', myUid)
     .order('added_at', { ascending: false });
   if (error || !data) return [];
-  return data.map((row) => ({
-    username: row.friend_username as string,
-    addedAt: Date.parse(row.added_at as string),
-  }));
+  const usernames = data.map((row) => row.friend_username as string);
+  const publicMap = await getPublicUsersByUsernames(usernames);
+  return data.map((row) => {
+    const username = row.friend_username as string;
+    const pub = publicMap.get(username) ?? null;
+    return {
+      username,
+      addedAt: Date.parse(row.added_at as string),
+      uid: pub?.id ?? null,
+      name: pub?.name ?? null,
+      photoUri: pub?.photoUri ?? null,
+    };
+  });
 }

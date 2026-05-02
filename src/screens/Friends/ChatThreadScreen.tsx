@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
   Linking,
@@ -23,40 +24,65 @@ import {
 } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getFastLocation } from '@/services/location';
-import { openChat, type ChatHandle, type ChatMessage } from '@/services/chat';
+import {
+  encodeLocationMessage,
+  fetchRecentMessages,
+  parseLocation,
+  sendMessage,
+  subscribeMessages,
+  type ChatMessage,
+} from '@/services/messages';
+import { getPublicUserByUsername } from '@/services/users-public';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'ChatThread'>;
 
-// Direct chat between the signed-in user and one friend. Messages travel
-// over a Supabase Realtime broadcast channel keyed off both usernames, so
-// no backend tables are required for the live experience.
+// Persistent chat backed by Supabase `messages` table. We resolve the
+// friend's username → uid on mount, fetch the last 50 messages, then
+// subscribe to INSERTs for the pair.
 export function ChatThreadScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<RouteProp<AppStackParamList, 'ChatThread'>>();
   const profile = useAppSelector((s) => s.user.profile);
   const friendUsername = route.params.username;
-  const me = profile?.username ?? null;
+  const myUid = profile?.uid ?? null;
 
+  const [friendUid, setFriendUid] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
-  const handleRef = useRef<ChatHandle | null>(null);
+  const [loading, setLoading] = useState(true);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
   useEffect(() => {
-    if (!me) return;
-    const handle = openChat(me, friendUsername, (msg) => {
+    let alive = true;
+    (async () => {
+      const pub = await getPublicUserByUsername(friendUsername);
+      if (!alive) return;
+      setFriendUid(pub?.id ?? null);
+      if (!pub || !myUid) {
+        setLoading(false);
+        return;
+      }
+      const recent = await fetchRecentMessages(myUid, pub.id);
+      if (!alive) return;
+      setMessages(recent);
+      setLoading(false);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [friendUsername, myUid]);
+
+  useEffect(() => {
+    if (!myUid || !friendUid) return;
+    const handle = subscribeMessages(myUid, friendUid, (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
         return [...prev, msg];
       });
     });
-    handleRef.current = handle;
-    return () => {
-      handle.unsubscribe();
-      handleRef.current = null;
-    };
-  }, [me, friendUsername]);
+    return () => handle.unsubscribe();
+  }, [myUid, friendUid]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -66,52 +92,31 @@ export function ChatThreadScreen() {
 
   const handleSend = async () => {
     const trimmed = draft.trim();
-    if (!trimmed || !me) return;
-    const handle = handleRef.current;
-    if (!handle) return;
-    const optimistic: ChatMessage = {
-      id: `m_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
-      fromUsername: me,
-      toUsername: friendUsername,
-      body: trimmed,
-      kind: 'text',
-      createdAt: Date.now(),
-    };
-    setMessages((prev) => [...prev, optimistic]);
+    if (!trimmed || !myUid || !friendUid) return;
     setDraft('');
-    await handle.send({
-      fromUsername: me,
-      toUsername: friendUsername,
-      body: trimmed,
-      kind: 'text',
-    });
+    const sent = await sendMessage(myUid, friendUid, trimmed);
+    if (sent) {
+      setMessages((prev) =>
+        prev.some((m) => m.id === sent.id) ? prev : [...prev, sent],
+      );
+    }
   };
 
   const handleShareLocation = async () => {
-    if (!me) return;
-    const handle = handleRef.current;
-    if (!handle) return;
+    if (!myUid || !friendUid) return;
     try {
       const point = await getFastLocation();
-      const optimistic: ChatMessage = {
-        id: `m_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
-        fromUsername: me,
-        toUsername: friendUsername,
-        body: 'Shared a live location',
-        kind: 'location',
-        latitude: point.latitude,
-        longitude: point.longitude,
-        createdAt: Date.now(),
-      };
-      setMessages((prev) => [...prev, optimistic]);
-      await handle.send({
-        fromUsername: me,
-        toUsername: friendUsername,
-        body: 'Shared a live location',
-        kind: 'location',
-        latitude: point.latitude,
-        longitude: point.longitude,
-      });
+      const text = encodeLocationMessage(
+        point.latitude,
+        point.longitude,
+        'Sharing my location',
+      );
+      const sent = await sendMessage(myUid, friendUid, text);
+      if (sent) {
+        setMessages((prev) =>
+          prev.some((m) => m.id === sent.id) ? prev : [...prev, sent],
+        );
+      }
     } catch {
       Alert.alert('Location off', 'Enable location to share where you are.');
     }
@@ -119,10 +124,24 @@ export function ChatThreadScreen() {
 
   const friendInitial = friendUsername.charAt(0).toUpperCase();
 
-  if (!me) {
+  if (!myUid) {
     return (
       <ScreenContainer>
         <Text style={styles.empty}>Set a username from your profile first.</Text>
+      </ScreenContainer>
+    );
+  }
+
+  if (!loading && !friendUid) {
+    return (
+      <ScreenContainer>
+        <View style={styles.emptyState}>
+          <Ionicons name="alert-circle-outline" size={36} color={colors.textMuted} />
+          <Text style={styles.emptyTitle}>User not found</Text>
+          <Text style={styles.emptyBody}>
+            @{friendUsername} hasn't set up an ORBII profile yet.
+          </Text>
+        </View>
       </ScreenContainer>
     );
   }
@@ -133,7 +152,7 @@ export function ChatThreadScreen() {
         <Pressable
           onPress={() => navigation.goBack()}
           hitSlop={12}
-          style={styles.backBtn}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
@@ -145,27 +164,33 @@ export function ChatThreadScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.friendHandle}>@{friendUsername}</Text>
           <Text style={styles.friendMeta}>
-            Live chat. Messages flow when both of you are online.
+            {loading ? 'Loading…' : 'Messages stored, end-to-friend'}
           </Text>
         </View>
       </View>
 
-      <FlatList
-        ref={listRef}
-        data={messages}
-        keyExtractor={(m) => m.id}
-        contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
-        ListEmptyComponent={<EmptyState friend={friendUsername} />}
-        renderItem={({ item }) => (
-          <MessageBubble message={item} mine={item.fromUsername === me} />
-        )}
-      />
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          ref={listRef}
+          data={messages}
+          keyExtractor={(m) => m.id}
+          contentContainerStyle={styles.listContent}
+          ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
+          ListEmptyComponent={<EmptyState friend={friendUsername} />}
+          renderItem={({ item }) => (
+            <MessageBubble message={item} mine={item.senderId === myUid} />
+          )}
+        />
+      )}
 
       <View style={styles.composer}>
         <Pressable
           onPress={handleShareLocation}
-          style={styles.locationBtn}
+          style={({ pressed }) => [styles.locationBtn, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel="Share live location"
         >
@@ -183,9 +208,10 @@ export function ChatThreadScreen() {
         <Pressable
           onPress={handleSend}
           disabled={!draft.trim()}
-          style={[
+          style={({ pressed }) => [
             styles.sendBtn,
             !draft.trim() && styles.sendBtnDisabled,
+            pressed && styles.pressed,
           ]}
           accessibilityRole="button"
           accessibilityLabel="Send"
@@ -213,9 +239,11 @@ function MessageBubble({
     [message.createdAt],
   );
 
+  const location = useMemo(() => parseLocation(message.message), [message.message]);
+
   const handleOpenLocation = () => {
-    if (message.kind !== 'location' || message.latitude == null) return;
-    const url = `https://maps.google.com/?q=${message.latitude},${message.longitude}`;
+    if (!location) return;
+    const url = `https://maps.google.com/?q=${location.latitude},${location.longitude}`;
     Linking.openURL(url).catch(() => undefined);
   };
 
@@ -226,23 +254,21 @@ function MessageBubble({
       <View
         style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}
       >
-        {message.kind === 'location' ? (
+        {location ? (
           <Pressable onPress={handleOpenLocation} style={styles.locationBubble}>
             <View style={styles.locationIconWrap}>
               <Ionicons name="location" size={16} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
-                {message.body}
+                {location.caption || 'Shared a live location'}
               </Text>
-              <Text style={styles.locationCoord}>
-                Tap to open in Maps
-              </Text>
+              <Text style={styles.locationCoord}>Tap to open in Maps</Text>
             </View>
           </Pressable>
         ) : (
           <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
-            {message.body}
+            {message.message}
           </Text>
         )}
         <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
@@ -267,11 +293,20 @@ function EmptyState({ friend }: { friend: string }) {
 }
 
 const styles = StyleSheet.create({
+  pressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.97 }],
+  },
   empty: {
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.xxl,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

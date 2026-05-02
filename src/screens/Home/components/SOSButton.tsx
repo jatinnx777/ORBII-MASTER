@@ -17,8 +17,8 @@ type SOSButtonProps = {
   disabled?: boolean;
 };
 
-const BAR_LEN = 26;
-const BAR_THICK = 6;
+const BAR_LEN = 18;
+const BAR_THICK = 4;
 
 // Compact SOS card. Sits in a row with the Voice SOS card on the home
 // screen. The asterisk + pulsing background keep its emergency feel even at
@@ -89,8 +89,10 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
             <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
             <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
           </View>
-          <Text style={styles.label}>SOS</Text>
-          <Text style={styles.hint}>Tap or hold</Text>
+          <View style={styles.textCol}>
+            <Text style={styles.label}>SOS</Text>
+            <Text style={styles.hint}>Tap or hold</Text>
+          </View>
         </LinearGradient>
       </Pressable>
     </Animated.View>
@@ -103,25 +105,23 @@ const styles = StyleSheet.create({
   },
   cardShell: {
     flex: 1,
-    borderRadius: radius.lg,
+    borderRadius: radius.md,
     overflow: 'hidden',
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 10,
+    ...shadows.hero,
   },
   card: {
     flex: 1,
-    minHeight: 96,
+    minHeight: 68,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.md,
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    gap: 8,
   },
   pressed: {
-    opacity: 0.88,
+    transform: [{ scale: 0.97 }],
+    opacity: 0.94,
   },
   disabled: {
     opacity: 0.5,
@@ -131,7 +131,9 @@ const styles = StyleSheet.create({
     height: BAR_LEN,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+  },
+  textCol: {
+    alignItems: 'flex-start',
   },
   bar: {
     position: 'absolute',
@@ -143,13 +145,13 @@ const styles = StyleSheet.create({
   label: {
     color: colors.textInverse,
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    fontSize: 18,
     letterSpacing: 3,
   },
   hint: {
     color: 'rgba(255,255,255,0.85)',
     fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 11,
-    letterSpacing: 0.5,
+    fontSize: 10,
+    letterSpacing: 0.4,
   },
 });

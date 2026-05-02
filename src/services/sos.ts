@@ -42,6 +42,10 @@ export async function createSOS(
   // what notifies every nearby phone, and it's what actually saves time.
   // The Supabase write happens in parallel so we don't pay its latency
   // before alerting helpers.
+  const friendUids = (user.friends ?? [])
+    .map((f) => f.uid)
+    .filter((uid): uid is string => !!uid);
+
   const broadcast: AlertBroadcast = {
     id: record.id,
     victim: {
@@ -52,6 +56,7 @@ export async function createSOS(
     },
     location,
     createdAt: record.timestamp,
+    friendUids,
   };
   broadcastAlert(broadcast).catch((err) =>
     console.warn('[sos] broadcast failed', err),
