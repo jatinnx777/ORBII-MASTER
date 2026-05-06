@@ -22,17 +22,12 @@ import { colors, fontFamilies, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
-  backgroundVoiceToggled,
   pushEnabledSet,
-  voiceDetectionToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
-import { trackEvent } from '@/services/analytics';
-import {
-  fireLocalNotification,
-  requestNotificationPermission,
-} from '@/services/notifications';
+import { requestNotificationPermission } from '@/services/notifications';
+import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
 import type { AppStackParamList, TabParamList } from '@/navigation/types';
 
 type Nav = CompositeNavigationProp<
@@ -44,40 +39,11 @@ export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
-  const voice = useAppSelector((s) => s.app.voiceDetection);
-  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
   const sheet = useBrandSheet();
-
-  const handleVoice = (next: boolean) => {
-    if (next && !profile?.isPremium) {
-      sheet.confirm({
-        title: 'Premium feature',
-        body: 'Voice-activated SOS is a Premium feature. Upgrade to unlock.',
-        cancelLabel: 'Later',
-        confirmLabel: 'See plans',
-        icon: 'ribbon',
-        onConfirm: () => navigation.navigate('PremiumUpgrade'),
-      });
-      return;
-    }
-    dispatch(voiceDetectionToggled(next));
-  };
-
-  const handleBackgroundVoice = (next: boolean) => {
-    if (next) {
-      sheet.confirm({
-        title: 'Run ORBII in the background?',
-        body: 'ORBII will keep listening for "help", "bachao", or "madad" while the app is closed. A persistent notification stays in the tray so Android does not kill the listener. Uses extra battery.',
-        confirmLabel: 'Turn on',
-        icon: 'mic',
-        onConfirm: () => dispatch(backgroundVoiceToggled(true)),
-      });
-      return;
-    }
-    dispatch(backgroundVoiceToggled(false));
-  };
+  const friendsCount = profile?.friends?.length ?? 0;
+  const contactsCount = profile?.emergencyContacts?.length ?? 0;
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -85,39 +51,13 @@ export function SettingsScreen() {
       if (!ok) {
         sheet.notify({
           title: 'Permission denied',
-          body: 'Enable notifications in system settings to receive SOS alerts.',
+          body: 'Enable notifications in system settings to receive alerts.',
           tone: 'warning',
         });
         return;
       }
     }
     dispatch(pushEnabledSet(next));
-  };
-
-  const handleTestSOS = () => {
-    sheet.confirm({
-      title: 'Practice SOS?',
-      body: 'Runs the full SOS flow without sending real alerts. The incident shows up in your history tagged "PRACTICE".',
-      confirmLabel: 'Start practice',
-      icon: 'flask',
-      onConfirm: () => navigation.navigate('SOSCountdown', { test: true }),
-    });
-  };
-
-  const handleTestNotif = async () => {
-    const ok = await requestNotificationPermission();
-    if (!ok) {
-      sheet.notify({
-        title: 'Enable notifications first',
-        body: 'Notifications are turned off in system settings.',
-        tone: 'warning',
-      });
-      return;
-    }
-    fireLocalNotification(
-      'Test alert',
-      'If you see this, push notifications work on your device.',
-    );
   };
 
   const handleSignOut = () => {
@@ -139,106 +79,105 @@ export function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>Settings</Text>
 
-        <SectionHeader title="SOS" />
+        <SectionHeader title="Profile" />
         <Card style={styles.rowsCard}>
           <Row
-            icon="mic"
-            label="Voice detection"
-            value={
-              profile?.isPremium
-                ? 'Listens for "help" keyword'
-                : 'Premium feature'
-            }
-            right={
-              <Switch
-                value={voice}
-                onValueChange={handleVoice}
-                trackColor={{ true: colors.primary, false: colors.border }}
-              />
-            }
-          />
-          <Divider />
-          <Row
-            icon="radio"
-            label="Background Voice SOS"
-            value={
-              backgroundVoice
-                ? 'Listening even when app is closed'
-                : 'Off, only listens with app open'
-            }
-            right={
-              <Switch
-                value={backgroundVoice}
-                onValueChange={handleBackgroundVoice}
-                trackColor={{ true: colors.primary, false: colors.border }}
-              />
-            }
-          />
-          <Divider />
-          <Row
-            icon="play-circle"
-            label="Trigger test SOS"
-            value="Same countdown flow, no alerts sent"
-            onPress={handleTestSOS}
+            icon="person-circle"
+            label="Edit profile"
+            value={profile?.username ? `@${profile.username}` : 'Set up your handle'}
+            onPress={() => navigation.navigate('EditProfile')}
           />
           <Divider />
           <Row
             icon="people"
             label="Emergency contacts"
-            value={`${profile?.emergencyContacts.length ?? 0} added`}
+            value={`${contactsCount} ${contactsCount === 1 ? 'contact' : 'contacts'}`}
             onPress={() => navigation.navigate('EmergencyContacts')}
           />
         </Card>
 
-        <SectionHeader title="Notifications" />
+        <SectionHeader title="Privacy" />
         <Card style={styles.rowsCard}>
           <Row
             icon="notifications"
-            label="Push notifications"
-            value="SOS, helper jobs, arrivals"
+            label="Smart notifications"
+            value={
+              push
+                ? 'Push for SOS, helpers, and circle activity'
+                : 'Off — you won\'t be notified'
+            }
             right={
               <Switch
                 value={push}
                 onValueChange={handlePush}
-                trackColor={{ true: colors.primary, false: colors.border }}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={push ? colors.brandDeep : colors.background}
               />
             }
           />
           <Divider />
           <Row
             icon="phone-portrait"
-            label="Vibrate on nearby SOS"
+            label="Vibrate on nearby alerts"
             value={
               alertVibration
-                ? 'Hard buzz when help is needed within 2 km'
-                : 'Off, no buzz on incoming alerts'
+                ? 'Buzz when help is needed within 2 km'
+                : 'Off — no buzz on incoming alerts'
             }
             right={
               <Switch
                 value={alertVibration}
-                onValueChange={(v) => {
-                  dispatch(alertVibrationToggled(v));
-                }}
-                trackColor={{ true: colors.primary, false: colors.border }}
+                onValueChange={(v) => dispatch(alertVibrationToggled(v))}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={alertVibration ? colors.brandDeep : colors.background}
               />
             }
           />
           <Divider />
           <Row
-            icon="pulse"
-            label="Send test notification"
-            onPress={handleTestNotif}
+            icon="location"
+            label="Location sharing"
+            value="Always while app is open · only your circle sees you"
+            onPress={() => Linking.openSettings().catch(() => undefined)}
+          />
+        </Card>
+
+        <SectionHeader title="Circle" />
+        <Card style={styles.rowsCard}>
+          <Row
+            icon="people-circle"
+            label="Manage your circle"
+            value={`${friendsCount} ${friendsCount === 1 ? 'friend' : 'friends'} in your circle`}
+            onPress={() => navigation.navigate('Friends')}
+          />
+          <Divider />
+          <Row
+            icon="person-add"
+            label="Add people to circle"
+            value="Search by username or name"
+            onPress={() => navigation.navigate('Friends')}
+          />
+        </Card>
+
+        <SectionHeader title="Help" />
+        <Card style={styles.rowsCard}>
+          <Row
+            icon="chatbubbles"
+            label="Chat with support"
+            value="ORBII Assistant — instant replies"
+            onPress={() => navigation.navigate('SupportChat')}
+          />
+          <Divider />
+          <Row
+            icon="information-circle"
+            label="About ORBII"
+            value="What we do, who we are"
+            onPress={() => navigation.navigate('About')}
           />
         </Card>
 
         <SectionHeader title="Account" />
         <Card style={styles.rowsCard}>
-          <Row
-            icon="person-circle"
-            label="Edit profile"
-            onPress={() => navigation.navigate('EditProfile')}
-          />
-          <Divider />
           <Row
             icon="ribbon"
             label="ORBII plans"
@@ -253,23 +192,10 @@ export function SettingsScreen() {
           />
         </Card>
 
-        <SectionHeader title="About" />
-        <Card style={styles.rowsCard}>
-          <Row
-            icon="mail"
-            label="Contact support"
-            value="hello@orbii.app"
-            onPress={() => Linking.openURL('mailto:hello@orbii.app')}
-          />
-          <Divider />
-          <Row
-            icon="document-text"
-            label="Privacy policy"
-            onPress={() => Linking.openURL('https://orbii.app/privacy')}
-          />
-          <Divider />
-          <Row icon="information-circle" label="Version" value="0.1.0 · demo" />
-        </Card>
+        <View style={styles.footer}>
+          <Text style={styles.versionText}>Version {APP_VERSION}</Text>
+          <Text style={styles.copyrightText}>{COPYRIGHT_LINE}</Text>
+        </View>
       </ScrollView>
     </ScreenContainer>
   );
@@ -281,23 +207,46 @@ function Divider() {
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: spacing.xl,
+    paddingBottom: 120,
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 24,
+    fontSize: 28,
     color: colors.textPrimary,
-    marginTop: spacing.md,
-    marginHorizontal: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
+    letterSpacing: -0.4,
   },
   rowsCard: {
-    marginHorizontal: spacing.lg,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
     padding: 0,
     overflow: 'hidden',
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
+    marginLeft: 56,
+  },
+  footer: {
+    alignItems: 'center',
+    paddingVertical: spacing.lg,
+    gap: 4,
+  },
+  versionText: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  copyrightText: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 0.2,
   },
 });

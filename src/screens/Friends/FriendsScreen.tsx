@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ScreenContainer } from '@/components/common';
@@ -202,66 +203,22 @@ export function FriendsScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <View style={styles.listHeader}>
-            <View style={styles.youCard}>
-              <View style={styles.youAvatar}>
-                <Text style={styles.youAvatarText}>
-                  {(profile?.name ?? '?').charAt(0).toUpperCase()}
-                </Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.youLabel}>Your handle</Text>
-                <Text style={styles.youHandle}>
-                  {profile?.username ? `@${profile.username}` : 'Set in profile'}
-                </Text>
-              </View>
-              {profile?.username ? (
-                <Pressable
-                  onPress={handleShareUsername}
-                  style={({ pressed }) => [
-                    styles.shareBtn,
-                    pressed && styles.pressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Share username"
-                >
-                  <Ionicons name="share-social" size={15} color={colors.textInverse} />
-                </Pressable>
-              ) : null}
-            </View>
+            <YouCard
+              name={profile?.name ?? '?'}
+              username={profile?.username ?? null}
+              onShare={handleShareUsername}
+            />
 
-            <View style={styles.searchCard}>
-              <View style={styles.searchRow}>
-                <Ionicons name="search" size={16} color={colors.textSecondary} />
-                <TextInput
-                  value={draft}
-                  onChangeText={(v) => {
-                    // Accept letters, numbers, underscore, @ (for handles),
-                    // space + dot (for name search). Lowercased on input —
-                    // usernames are case-insensitive and so is name match.
-                    const cleaned = v.toLowerCase().replace(/[^a-z0-9_@ .]/g, '');
-                    setDraft(cleaned);
-                    if (error) setError(null);
-                  }}
-                  placeholder="Search username or name"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={32}
-                  style={styles.searchInput}
-                />
-                {draft.length > 0 ? (
-                  <Pressable
-                    onPress={() => setDraft('')}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Clear search"
-                  >
-                    <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-                  </Pressable>
-                ) : null}
-              </View>
-              {error ? <Text style={styles.errorText}>{error}</Text> : null}
-            </View>
+            <SearchField
+              value={draft}
+              onChange={(v) => {
+                const cleaned = v.toLowerCase().replace(/[^a-z0-9_@ .]/g, '');
+                setDraft(cleaned);
+                if (error) setError(null);
+              }}
+              onClear={() => setDraft('')}
+              error={error}
+            />
 
             {isSearching ? (
               <View style={styles.searchResults}>
@@ -331,17 +288,7 @@ export function FriendsScreen() {
         }
         ListEmptyComponent={
           isSearching ? null : (
-            <View style={styles.empty}>
-              <Ionicons
-                name="people-outline"
-                size={36}
-                color={colors.textMuted}
-              />
-              <Text style={styles.emptyTitle}>Your circle is empty</Text>
-              <Text style={styles.emptyBody}>
-                The first person you add could be the one who reaches you fastest.
-              </Text>
-            </View>
+            <CircleEmptyState onInvite={handleShareUsername} />
           )
         }
         renderItem={({ item, index }) => (
@@ -529,6 +476,217 @@ function RequestRow({
   );
 }
 
+// "You" card — translucent layered mint card. Replaces the harsh dark
+// block with something that reads as your own corner of the app.
+function YouCard({
+  name,
+  username,
+  onShare,
+}: {
+  name: string;
+  username: string | null;
+  onShare: () => void;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1.04,
+          duration: 1600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 1600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const initial = (name || '?').charAt(0).toUpperCase();
+
+  return (
+    <View style={styles.youCardWrap}>
+      <LinearGradient
+        colors={[colors.brandSoft, colors.background]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.youCardGradient}
+      >
+        <Animated.View
+          style={[styles.youAvatar, { transform: [{ scale: pulse }] }]}
+        >
+          <Text style={styles.youAvatarText}>{initial}</Text>
+        </Animated.View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.youLabel}>Your handle</Text>
+          <Text style={styles.youHandle}>
+            {username ? `@${username}` : 'Set in profile'}
+          </Text>
+        </View>
+        {username ? (
+          <Pressable
+            onPress={onShare}
+            style={({ pressed }) => [
+              styles.shareBtn,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Share username"
+          >
+            <Ionicons name="share-social" size={16} color={colors.brandDeep} />
+          </Pressable>
+        ) : null}
+      </LinearGradient>
+    </View>
+  );
+}
+
+// Soft, focusable search field. Border + shadow shift on focus so the
+// input feels alive without flashing colour.
+function SearchField({
+  value,
+  onChange,
+  onClear,
+  error,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  onClear: () => void;
+  error: string | null;
+}) {
+  const [focused, setFocused] = useState(false);
+  const focusAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(focusAnim, {
+      toValue: focused ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [focused, focusAnim]);
+
+  const borderColor = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.border, colors.brand],
+  });
+  const shadowOpacity = focusAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 0.18],
+  });
+
+  return (
+    <View>
+      <Animated.View
+        style={[
+          styles.searchRow,
+          { borderColor, shadowOpacity, shadowColor: colors.brandDeep },
+        ]}
+      >
+        <Ionicons name="search" size={16} color={colors.textSecondary} />
+        <TextInput
+          value={value}
+          onChangeText={onChange}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Search username or name"
+          placeholderTextColor={colors.textMuted}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={32}
+          style={styles.searchInput}
+        />
+        {value.length > 0 ? (
+          <Pressable
+            onPress={onClear}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
+      </Animated.View>
+      {error ? <Text style={styles.errorText}>{error}</Text> : null}
+    </View>
+  );
+}
+
+// Friendly empty state for new users with no circle yet. Soft floating
+// illustration block + warm copy. Replaces the stark "people-outline +
+// 'Your circle is empty'" placeholder.
+function CircleEmptyState({ onInvite }: { onInvite: () => void }) {
+  const float = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, {
+          toValue: 1,
+          duration: 2200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(float, {
+          toValue: 0,
+          duration: 2200,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [float]);
+  const translateY = float.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-3, 3],
+  });
+
+  return (
+    <View style={styles.emptyWrap}>
+      <Animated.View
+        style={[styles.emptyArt, { transform: [{ translateY }] }]}
+      >
+        <LinearGradient
+          colors={[colors.brandSoft, colors.background]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.emptyArtGradient}
+        >
+          <View style={styles.emptyArtRing}>
+            <Ionicons
+              name="people"
+              size={40}
+              color={colors.brandDeep}
+            />
+          </View>
+        </LinearGradient>
+      </Animated.View>
+      <Text style={styles.emptyTitle}>
+        Your circle starts with one trusted person.
+      </Text>
+      <Text style={styles.emptyBody}>
+        The people you add here can help faster during emergencies.
+      </Text>
+      <Pressable
+        onPress={onInvite}
+        style={({ pressed }) => [
+          styles.inviteBtn,
+          pressed && styles.pressed,
+        ]}
+        accessibilityRole="button"
+      >
+        <Ionicons name="paper-plane" size={14} color={colors.textInverse} />
+        <Text style={styles.inviteBtnText}>Invite Friends</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
@@ -559,64 +717,75 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     paddingTop: spacing.sm,
   },
-  youCard: {
+  youCardWrap: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 14,
+    elevation: 4,
+  },
+  youCardGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    backgroundColor: colors.dark,
+    padding: 18,
   },
   youAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.brandDeep,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
   },
   youAvatarText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 17,
+    fontSize: 18,
     color: colors.textInverse,
   },
   youLabel: {
     fontFamily: fontFamilies.interMedium,
-    color: 'rgba(255,255,255,0.55)',
+    color: colors.textSecondary,
     fontSize: 11,
     letterSpacing: 0.6,
     textTransform: 'uppercase',
   },
   youHandle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 16,
-    color: colors.textInverse,
+    fontSize: 17,
+    color: colors.textPrimary,
     marginTop: 1,
   },
   shareBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.10)',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  searchCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    padding: 4,
-    gap: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
   },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.background,
-    borderRadius: radius.md,
+    borderRadius: 18,
     paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: colors.border,
+    shadowOffset: { width: 0, height: 4 },
+    shadowRadius: 12,
+    elevation: 0,
   },
   searchInput: {
     flex: 1,
@@ -714,16 +883,45 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: 2,
   },
-  empty: {
+  emptyWrap: {
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
     paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+  },
+  emptyArt: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    overflow: 'hidden',
+    marginBottom: spacing.md,
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    elevation: 6,
+  },
+  emptyArtGradient: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyArtRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   emptyTitle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 16,
+    fontSize: 18,
     color: colors.textPrimary,
     marginTop: spacing.sm,
+    textAlign: 'center',
+    letterSpacing: -0.2,
+    paddingHorizontal: spacing.md,
   },
   emptyBody: {
     ...typography.body,
@@ -731,6 +929,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 13,
     paddingHorizontal: spacing.lg,
+    lineHeight: 19,
+  },
+  inviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: colors.brandDeep,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 12,
+    borderRadius: radius.circle,
+    marginTop: spacing.md,
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  inviteBtnText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textInverse,
+    letterSpacing: 0.2,
   },
   friendRow: {
     flexDirection: 'row',

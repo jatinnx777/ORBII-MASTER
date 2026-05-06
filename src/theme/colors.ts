@@ -1,9 +1,26 @@
-// 3-color core palette: Primary red (emergencies only), neutral dark/light
-// surfaces, success green for connected/helper states. No pastels, no
-// accent yellow, no decorative tones. Keeping a few legacy aliases pointed
-// at the canonical colours so existing references compile without churn.
+// Two-track palette:
+//
+// • BRAND (calm) → light green. This is the everyday voice of the app —
+//   tabs, headers, confirmations, "all good" states. Defaults the user
+//   sees on the Home, Safety, Settings, Membership tabs.
+//
+// • PRIMARY (alarm) → red. Reserved for SOS / emergencies / errors.
+//   We keep the historical name `primary` pointing at red so existing
+//   call sites that mean "emergency action" don't have to change.
+//
+// Background is a soft white that pairs cleanly with the green brand.
 export const colors = {
+  // Calm brand — Life360-grade soft mint. brandSoft is the wash colour
+  // used for surfaces; brand is the signature mid-mint; brandDeep is the
+  // CTA / pressed accent.
+  brand: '#95D5B2',
+  brandSoft: '#DDF8E8',
+  brandMid: '#B7EFC5',
+  brandDeep: '#56C596',
+
+  // Alarm — SOS only
   primary: '#FF3B30',
+
   secondary: '#FFFFFF',
   dark: '#0F1115',
   success: '#16A34A',
@@ -14,20 +31,20 @@ export const colors = {
   textMuted: '#9AA0A6',
   textInverse: '#FFFFFF',
 
-  background: '#FFFFFF',
-  surface: '#F4F5F7',
-  border: '#E5E7EB',
-  inputBorder: '#D5D7DC',
-  inputBackground: '#FAFAFB',
+  background: '#F8FCFA',
+  surface: '#F0F7F3',
+  border: '#E5EDE8',
+  inputBorder: '#D8E0DB',
+  inputBackground: '#FAFCFB',
 
   error: '#FF3B30',
   overlay: 'rgba(0, 0, 0, 0.55)',
 
   // Legacy aliases — kept so old imports compile. Prefer canonical names.
   primaryDeep: '#CC2A22',
-  accent: '#FF3B30',
+  accent: '#56C596',
   darkSoft: '#0F1115',
-  surfaceMuted: '#EDEEF1',
+  surfaceMuted: '#E8F2EC',
 } as const;
 
 export type ColorKey = keyof typeof colors;

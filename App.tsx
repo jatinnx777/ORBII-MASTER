@@ -48,11 +48,6 @@ import {
   stopListening,
   subscribeKeyword,
 } from '@/services/voice-detection';
-import {
-  startCrashDetection,
-  stopCrashDetection,
-  subscribeCrashEvents,
-} from '@/services/crash-detection';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
@@ -66,7 +61,6 @@ function RootNavigator() {
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
   const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
-  const crashDetection = useAppSelector((s) => s.app.crashDetection);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
   // signs in / out.
@@ -103,30 +97,8 @@ function RootNavigator() {
     };
   }, [status, backgroundVoice]);
 
-  // Crash detection — runs whenever the user is signed in and the toggle
-  // is on. A detected crash routes through the navigationRef into the
-  // SOS countdown, so the user gets a 5-second cancel window before the
-  // alert actually fires.
-  useEffect(() => {
-    if (status !== 'authenticated' || !crashDetection) return;
-    let cancelled = false;
-    (async () => {
-      const result = await startCrashDetection();
-      if (cancelled || !result.ok) return;
-    })();
-    const unsub = subscribeCrashEvents(() => {
-      Vibration.vibrate([0, 400, 200, 400]);
-      if (navigationRef.isReady()) {
-        // @ts-expect-error - SOSCountdown is in the AppStack only.
-        navigationRef.navigate('SOSCountdown');
-      }
-    });
-    return () => {
-      cancelled = true;
-      unsub();
-      stopCrashDetection();
-    };
-  }, [status, crashDetection]);
+  // Crash detection was removed when the driving feature group was
+  // dropped. SOS still has voice trigger + tap + lock-screen shortcut.
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;

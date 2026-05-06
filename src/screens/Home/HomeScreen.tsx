@@ -404,7 +404,7 @@ export function HomeScreen() {
               <Ionicons
                 name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
                 size={14}
-                color={safeJourney ? colors.textInverse : colors.textPrimary}
+                color={safeJourney ? colors.textInverse : colors.brandDeep}
               />
               <Text
                 style={[
@@ -531,16 +531,18 @@ function BottomPanel({
   bottomInset: number;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  // Panel content is ~190px tall now; collapse to just the handle visible.
-  const COLLAPSE_OFFSET = Math.max(180, screenHeight * 0.26);
+  // Panel content + nav clearance is ~270px now; collapse to just the
+  // handle peeking above the floating nav.
+  const COLLAPSE_OFFSET = Math.max(240, screenHeight * 0.34);
   const translateY = useRef(new Animated.Value(0)).current;
   const lastSnapRef = useRef(0);
 
   // Map dim overlay: 1 (fully visible dim) when expanded → 0 when collapsed.
-  // Subtle: 0.06 max so it reads as depth, not as an overlay.
+  // 0.10 max — enough that the bottom sheet reads as the active surface
+  // without making the map feel "off".
   const dimOpacity = translateY.interpolate({
     inputRange: [0, COLLAPSE_OFFSET],
-    outputRange: [0.06, 0],
+    outputRange: [0.10, 0],
     extrapolate: 'clamp',
   });
 
@@ -600,7 +602,10 @@ function BottomPanel({
         style={[
           styles.bottomPanel,
           {
-            paddingBottom: Math.max(bottomInset, spacing.sm),
+            // Floating tab bar lives at bottom: max(insets.bottom, 12)
+            // and is ~64px tall. Reserve that height + insets so the
+            // alerts strip doesn't slip under the bar.
+            paddingBottom: Math.max(bottomInset, 12) + 76,
             transform: [{ translateY }],
           },
         ]}
@@ -881,10 +886,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: colors.background,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderTopWidth: 1,
-    borderColor: 'rgba(0,0,0,0.04)',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     ...shadows.sheet,
     zIndex: 2,
   },
@@ -905,12 +908,12 @@ const styles = StyleSheet.create({
   },
   panelContent: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 4,
-    gap: 6,
+    paddingBottom: spacing.sm,
+    gap: spacing.sm,
   },
   panelTopRowWrap: {
     paddingHorizontal: spacing.md,
-    paddingBottom: 4,
+    paddingBottom: spacing.sm,
   },
   panelTopRow: {
     flexDirection: 'row',
@@ -930,22 +933,30 @@ const styles = StyleSheet.create({
   safeModeChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: radius.circle,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.brandSoft,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.brandMid,
   },
   safeModeChipActive: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
+    backgroundColor: colors.brandDeep,
+    borderColor: colors.brandDeep,
+    // Subtle glow — the only halo effect on Home, reserved for the
+    // signature protective state.
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.32,
+    shadowRadius: 12,
+    elevation: 6,
   },
   safeModeChipText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 12,
-    color: colors.textPrimary,
+    color: colors.brandDeep,
+    letterSpacing: 0.2,
   },
   permissionBanner: {
     flexDirection: 'row',

@@ -12,7 +12,7 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 
 export type TabParamList = {
   Home: undefined;
-  Driving: undefined;
+  Safety: undefined;
   Membership: undefined;
   Settings: undefined;
 };
@@ -40,6 +40,8 @@ export type AppStackParamList = {
   Friends: undefined;
   ChatThread: { username: string };
   History: undefined;
+  SupportChat: undefined;
+  About: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

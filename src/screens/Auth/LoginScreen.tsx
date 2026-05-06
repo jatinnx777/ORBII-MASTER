@@ -154,8 +154,8 @@ const styles = StyleSheet.create({
   },
   brand: {
     ...typography.h1,
-    color: colors.primary,
-    letterSpacing: 2,
+    color: colors.brandDeep,
+    letterSpacing: 4,
   },
   tagline: {
     ...typography.body,
@@ -181,7 +181,12 @@ const styles = StyleSheet.create({
     minHeight: touchTarget.comfortable,
     paddingHorizontal: spacing.lg,
     borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.brandDeep,
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
   continueBtnPressed: {
     opacity: 0.88,
@@ -212,8 +217,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   checkboxChecked: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
+    backgroundColor: colors.brandDeep,
+    borderColor: colors.brandDeep,
   },
   policyText: {
     ...typography.body,
@@ -221,9 +226,10 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     flex: 1,
   },
+  // green link colour for the privacy policy / terms anchors
   policyLink: {
     fontFamily: typography.bodyMedium.fontFamily,
-    color: colors.primary,
+    color: colors.brandDeep,
   },
   devHint: {
     ...typography.caption,

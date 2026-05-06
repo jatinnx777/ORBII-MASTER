@@ -22,6 +22,8 @@ import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
 import { ChatThreadScreen } from '@/screens/Friends/ChatThreadScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
+import { SupportChatScreen } from '@/screens/Support/SupportChatScreen';
+import { AboutScreen } from '@/screens/About/AboutScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -168,6 +170,16 @@ export function AppNavigator() {
         name="History"
         component={HistoryScreen}
         options={withHeader('SOS history')}
+      />
+      <Stack.Screen
+        name="SupportChat"
+        component={SupportChatScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="About"
+        component={AboutScreen}
+        options={withHeader('About ORBII')}
       />
     </Stack.Navigator>
   );

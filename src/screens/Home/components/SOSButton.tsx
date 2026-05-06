@@ -16,8 +16,8 @@ type SOSButtonProps = {
   disabled?: boolean;
 };
 
-const BAR_LEN = 18;
-const BAR_THICK = 4;
+const BAR_LEN = 22;
+const BAR_THICK = 5;
 
 // SOS card. Solid red, no gradient, no glow. Subtle idle pulse + scale
 // press feedback (0.96, 120ms). Tap = countdown, long-press = instant.
@@ -116,16 +116,22 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
-    minHeight: 68,
+    minHeight: 84,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    gap: 10,
-    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 12,
+    borderRadius: 20,
     backgroundColor: colors.primary,
-    ...shadows.card,
+    // Soft red lift — premium glow without neon. The shadow colour is
+    // the SOS red itself, very low opacity, so it reads as warmth.
+    shadowColor: '#FF3B30',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 8,
   },
   disabled: {
     opacity: 0.5,
@@ -149,13 +155,14 @@ const styles = StyleSheet.create({
   label: {
     color: colors.textInverse,
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
-    letterSpacing: 3,
+    fontSize: 22,
+    letterSpacing: 4,
   },
   hint: {
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.88)',
     fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 10,
+    fontSize: 11,
     letterSpacing: 0.4,
+    marginTop: 2,
   },
 });

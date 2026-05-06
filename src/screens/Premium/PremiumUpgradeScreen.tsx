@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
-  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -12,12 +11,12 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { Button, ScreenContainer } from '@/components/common';
 import {
   colors,
   fontFamilies,
   radius,
+  shadows,
   spacing,
   typography,
 } from '@/theme';
@@ -25,206 +24,102 @@ import { useAppSelector } from '@/redux/store';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// Three subscription tiers, compared side-by-side. Every cell tells the
-// user exactly what they get and what they don't — no marketing wiggle.
-// Payments are not live yet; the upgrade buttons capture waitlist emails.
-type PlanId = 'free' | 'premium' | 'premium_plus';
+// Three subscription tiers — Silver / Gold / Platinum — with a billing
+// cycle toggle (Weekly / Monthly / Yearly). Yearly offers the biggest
+// discount. Payments are not live yet; the upgrade buttons capture
+// waitlist emails.
+
+type PlanId = 'silver' | 'gold' | 'platinum';
+type BillingCycle = 'weekly' | 'monthly' | 'yearly';
 
 type Plan = {
   id: PlanId;
   name: string;
-  shortName: string;
-  priceLabel: string;
-  perPeriod: string;
+  tagline: string;
+  badge: string;
+  badgeColor: string;
   highlight?: boolean;
+  prices: Record<BillingCycle, number>;
+  features: string[];
 };
 
 const PLANS: Plan[] = [
   {
-    id: 'free',
-    name: 'Free',
-    shortName: 'Free',
-    priceLabel: '₹0',
-    perPeriod: 'forever',
+    id: 'silver',
+    name: 'Silver',
+    tagline: 'Crime visibility for your area.',
+    badge: 'SILVER',
+    badgeColor: '#E6E8EC',
+    prices: { weekly: 29, monthly: 99, yearly: 899 },
+    features: [
+      'Crime Reports near you',
+      'Basic priority on SOS dispatch',
+      'Limited SOS history (90 days)',
+      'Email support',
+    ],
   },
   {
-    id: 'premium',
-    name: 'Premium',
-    shortName: 'Premium',
-    priceLabel: '₹99',
-    perPeriod: 'per month',
+    id: 'gold',
+    name: 'Gold',
+    tagline: 'Priority response when it matters.',
+    badge: 'GOLD',
+    badgeColor: '#FFF1CB',
     highlight: true,
-  },
-  {
-    id: 'premium_plus',
-    name: 'Premium Plus',
-    shortName: 'Plus',
-    priceLabel: '₹299',
-    perPeriod: 'per month',
-  },
-];
-
-// Cell value: a string renders as plain text, true = ✓, false = empty dash.
-type Cell = string | boolean;
-
-type FeatureRow = {
-  label: string;
-  hint?: string;
-  values: Record<PlanId, Cell>;
-};
-
-type FeatureGroup = {
-  title: string;
-  rows: FeatureRow[];
-};
-
-const FEATURE_GROUPS: FeatureGroup[] = [
-  {
-    title: 'SOS dispatch',
-    rows: [
-      {
-        label: 'Monthly SOS limit',
-        hint: 'How many SOS broadcasts you can fire per calendar month.',
-        values: { free: '2', premium: 'Unlimited', premium_plus: 'Unlimited' },
-      },
-      {
-        label: 'Dispatch priority',
-        hint: 'Order helpers see your SOS in. Premium users surface above Free.',
-        values: { free: 'Standard', premium: 'Priority', premium_plus: 'Top priority' },
-      },
-      {
-        label: 'Target response time',
-        hint: 'Median time for the first helper to arrive in covered cities.',
-        values: { free: '5–7 min', premium: '2–3 min', premium_plus: '2 min' },
-      },
-      {
-        label: 'Police auto-notify',
-        hint: 'Local police control room is dialled the moment SOS fires.',
-        values: { free: true, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Lock-screen SOS shortcut',
-        values: { free: true, premium: true, premium_plus: true },
-      },
+    prices: { weekly: 59, monthly: 199, yearly: 1799 },
+    features: [
+      'Everything in Silver',
+      'Priority alert delivery',
+      'Faster response routing',
+      'Extended location tracking',
+      'Priority support',
     ],
   },
   {
-    title: 'Voice and hands-free',
-    rows: [
-      {
-        label: 'Voice detection',
-        hint: 'Listens for "help", "bachao", "madad" and auto-fires SOS.',
-        values: { free: false, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Background listening',
-        hint: 'Voice trigger keeps working while the app is closed.',
-        values: { free: false, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Crash-detected SOS',
-        hint: 'Phone sensors fire SOS automatically on a detected accident.',
-        values: { free: false, premium: 'Add-on', premium_plus: true },
-      },
-    ],
-  },
-  {
-    title: 'Emergency contacts',
-    rows: [
-      {
-        label: 'Max contacts',
-        values: { free: '3', premium: '5', premium_plus: '10' },
-      },
-      {
-        label: 'Auto-SMS on SOS',
-        hint: 'Contacts get an SMS with your name and live tracking link.',
-        values: { free: true, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Live location link expires',
-        values: { free: '15 min', premium: '60 min', premium_plus: '24 hours' },
-      },
-    ],
-  },
-  {
-    title: 'Safe Mode and zones',
-    rows: [
-      {
-        label: 'Live journey guard',
-        hint: 'Auto-fires SOS if you don\'t confirm safe arrival by ETA.',
-        values: { free: true, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Custom safe zones',
-        hint: 'Saved spots like home, office, college; arrivals trigger alerts.',
-        values: { free: false, premium: '3 zones', premium_plus: 'Unlimited' },
-      },
-      {
-        label: 'Family arrival alerts',
-        hint: 'Get a push when a circle member enters or leaves a safe zone.',
-        values: { free: false, premium: false, premium_plus: true },
-      },
-    ],
-  },
-  {
-    title: 'Friends and family circle',
-    rows: [
-      {
-        label: 'Friends you can add',
-        values: { free: '5', premium: '25', premium_plus: 'Unlimited' },
-      },
-      {
-        label: 'Family dashboard',
-        hint: 'Track up to 5 family members\' locations and SOS history.',
-        values: { free: false, premium: false, premium_plus: true },
-      },
-      {
-        label: 'Live location 24/7',
-        hint: 'Continuous location share with circle members, not just on SOS.',
-        values: { free: false, premium: false, premium_plus: true },
-      },
-    ],
-  },
-  {
-    title: 'History and reports',
-    rows: [
-      {
-        label: 'SOS history kept',
-        values: { free: '30 days', premium: 'Forever', premium_plus: 'Forever' },
-      },
-      {
-        label: 'Monthly safety report',
-        values: { free: false, premium: true, premium_plus: true },
-      },
-      {
-        label: 'Family safety report',
-        values: { free: false, premium: false, premium_plus: true },
-      },
-    ],
-  },
-  {
-    title: 'Support and ads',
-    rows: [
-      {
-        label: 'Customer support',
-        values: { free: 'Email', premium: 'Priority email', premium_plus: '24/7 helpline' },
-      },
-      {
-        label: 'Ads inside the app',
-        values: { free: 'Yes', premium: 'No', premium_plus: 'No' },
-      },
+    id: 'platinum',
+    name: 'Platinum',
+    tagline: 'Full intelligence layer.',
+    badge: 'PLATINUM',
+    badgeColor: '#E6EAFF',
+    prices: { weekly: 99, monthly: 299, yearly: 2699 },
+    features: [
+      'Everything in Gold',
+      'Travel Safety Heatmap',
+      'Advanced safety insights',
+      'Family dashboard (up to 5)',
+      '24/7 helpline',
     ],
   },
 ];
+
+const CYCLES: { id: BillingCycle; label: string; suffix: string }[] = [
+  { id: 'weekly', label: 'Weekly', suffix: '/wk' },
+  { id: 'monthly', label: 'Monthly', suffix: '/mo' },
+  { id: 'yearly', label: 'Yearly', suffix: '/yr' },
+];
+
+function formatPrice(amount: number): string {
+  return `₹${amount.toLocaleString('en-IN')}`;
+}
+
+function savingsText(plan: Plan, cycle: BillingCycle): string | null {
+  if (cycle !== 'yearly') return null;
+  const monthlyAnnualised = plan.prices.monthly * 12;
+  const saved = monthlyAnnualised - plan.prices.yearly;
+  if (saved <= 0) return null;
+  const pct = Math.round((saved / monthlyAnnualised) * 100);
+  return `Save ${pct}% vs monthly`;
+}
 
 type WaitlistEntry = {
   email: string;
   plan: PlanId;
+  cycle: BillingCycle;
   createdAt: number;
 };
 
 async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
-  const existing = (await getItem<WaitlistEntry[]>(storageKeys.premiumWaitlist)) ?? [];
+  const existing =
+    (await getItem<WaitlistEntry[]>(storageKeys.premiumWaitlist)) ?? [];
   const filtered = existing.filter(
     (e) => !(e.email === entry.email && e.plan === entry.plan),
   );
@@ -235,17 +130,16 @@ async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
 export function PremiumUpgradeScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const isPremium = profile?.isPremium ?? false;
-  const currentPlanId: PlanId = isPremium ? 'premium' : 'free';
+  const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [waitlistOpen, setWaitlistOpen] = useState<PlanId | null>(null);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(profile?.email ?? '');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     trackEvent('premium_viewed');
   }, []);
 
-  const handleUpgradePress = (planId: PlanId) => {
-    if (planId === currentPlanId) return;
+  const handleUpgrade = (planId: PlanId) => {
     setWaitlistOpen(planId);
   };
 
@@ -262,13 +156,18 @@ export function PremiumUpgradeScreen() {
       await joinWaitlist({
         email: trimmed,
         plan: planId,
+        cycle,
         createdAt: Date.now(),
       });
-      trackEvent('premium_purchased', { plan: planId, waitlist: true });
+      trackEvent('premium_purchased', {
+        plan: planId,
+        cycle,
+        waitlist: true,
+      });
       setWaitlistOpen(null);
       Alert.alert(
         "You're on the list",
-        "We'll email you the moment paid plans go live. Thanks for backing ORBII early.",
+        "We'll email you the moment paid plans go live.",
       );
     } finally {
       setSubmitting(false);
@@ -281,83 +180,37 @@ export function PremiumUpgradeScreen() {
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
-        <LinearGradient
-          colors={['#FFE4F0', '#E8D7FF']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroWrap}
-        >
-          <Text style={styles.heroTitle}>Choose your plan</Text>
+        <View style={styles.hero}>
+          <Text style={styles.heroTitle}>Upgrade your safety net</Text>
           <Text style={styles.heroBody}>
-            Every row below tells you exactly what you get. Payments aren't live
-            yet, join the waitlist on any paid plan and we'll email you the
-            moment they switch on.
+            Unlock crime visibility, faster response, and family-grade
+            insights. Cancel anytime.
           </Text>
-        </LinearGradient>
-
-        <View style={styles.planHeaderRow}>
-          <View style={styles.featureColHeader} />
-          {PLANS.map((plan) => (
-            <View
-              key={plan.id}
-              style={[
-                styles.planCol,
-                plan.highlight && styles.planColHighlight,
-                currentPlanId === plan.id && styles.planColCurrent,
-              ]}
-            >
-              {plan.highlight ? (
-                <View style={styles.popularPill}>
-                  <Text style={styles.popularPillText}>POPULAR</Text>
-                </View>
-              ) : null}
-              <Text style={[styles.planColName, plan.highlight && { color: colors.primary }]}>
-                {plan.shortName}
-              </Text>
-              <Text style={styles.planColPrice}>{plan.priceLabel}</Text>
-              <Text style={styles.planColPeriod}>{plan.perPeriod}</Text>
-              {currentPlanId === plan.id ? (
-                <Text style={styles.currentTag}>Your plan</Text>
-              ) : null}
-            </View>
-          ))}
         </View>
 
-        {FEATURE_GROUPS.map((group, groupIdx) => (
-          <FeatureGroupCard key={group.title} group={group} index={groupIdx} />
+        <CycleToggle value={cycle} onChange={setCycle} />
+
+        {PLANS.map((plan, index) => (
+          <PlanCard
+            key={plan.id}
+            plan={plan}
+            cycle={cycle}
+            index={index}
+            current={isPremium && plan.id === 'platinum'}
+            onPress={() => handleUpgrade(plan.id)}
+          />
         ))}
 
-        <View style={styles.upgradeRow}>
-          <View style={styles.upgradeRowSpacer} />
-          {PLANS.map((plan) => {
-            const isCurrent = plan.id === currentPlanId;
-            return (
-              <View key={plan.id} style={styles.upgradeBtnWrap}>
-                {isCurrent ? (
-                  <View style={styles.currentBtn}>
-                    <Text style={styles.currentBtnText}>Current</Text>
-                  </View>
-                ) : (
-                  <UpgradeButton
-                    label={plan.id === 'free' ? 'Stay free' : 'Waitlist'}
-                    highlight={!!plan.highlight}
-                    onPress={() => handleUpgradePress(plan.id)}
-                  />
-                )}
-              </View>
-            );
-          })}
-        </View>
-
         <Text style={styles.footnote}>
-          Pricing shown does not include GST. Prices and limits may change before
-          launch as we gather feedback from the SRM pilot.
+          Pricing excludes GST. Plans and limits may evolve as we gather
+          feedback from the SRM pilot.
         </Text>
       </ScrollView>
 
       <WaitlistModal
         visible={waitlistOpen !== null}
         plan={waitlistOpen ? PLANS.find((p) => p.id === waitlistOpen) ?? null : null}
+        cycle={cycle}
         email={email}
         onChangeEmail={setEmail}
         submitting={submitting}
@@ -368,141 +221,154 @@ export function PremiumUpgradeScreen() {
   );
 }
 
-// Each plan-table section fades + slides in with a per-index delay so the
-// page reads top-to-bottom instead of all at once. Native driver keeps it
-// at 60fps even on slow Androids.
-function FeatureGroupCard({
-  group,
-  index,
+// ---------------------------------------------------------------------------
+// Billing cycle toggle
+// ---------------------------------------------------------------------------
+
+function CycleToggle({
+  value,
+  onChange,
 }: {
-  group: FeatureGroup;
-  index: number;
+  value: BillingCycle;
+  onChange: (v: BillingCycle) => void;
 }) {
-  const enter = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const id = setTimeout(() => {
-      Animated.timing(enter, {
-        toValue: 1,
-        duration: 380,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    }, index * 80);
-    return () => clearTimeout(id);
-  }, [enter, index]);
-
-  const translateY = enter.interpolate({
-    inputRange: [0, 1],
-    outputRange: [16, 0],
-  });
-
   return (
-    <Animated.View
-      style={[styles.group, { opacity: enter, transform: [{ translateY }] }]}
-    >
-      <Text style={styles.groupTitle}>{group.title}</Text>
-      <View style={styles.groupCard}>
-        {group.rows.map((row, idx) => (
-          <View key={row.label}>
-            <View style={styles.featureRow}>
-              <View style={styles.featureLabelCell}>
-                <Text style={styles.featureLabel}>{row.label}</Text>
-                {row.hint ? (
-                  <Text style={styles.featureHint}>{row.hint}</Text>
-                ) : null}
+    <View style={styles.cycleWrap}>
+      {CYCLES.map((c) => {
+        const active = c.id === value;
+        return (
+          <Pressable
+            key={c.id}
+            onPress={() => onChange(c.id)}
+            style={[styles.cycleBtn, active && styles.cycleBtnActive]}
+            accessibilityRole="button"
+            accessibilityState={{ selected: active }}
+          >
+            <Text
+              style={[
+                styles.cycleLabel,
+                active && styles.cycleLabelActive,
+              ]}
+            >
+              {c.label}
+            </Text>
+            {c.id === 'yearly' ? (
+              <View style={styles.bestPill}>
+                <Text style={styles.bestPillText}>BEST VALUE</Text>
               </View>
-              {PLANS.map((plan) => (
-                <CellView key={plan.id} value={row.values[plan.id]} />
-              ))}
-            </View>
-            {idx < group.rows.length - 1 ? (
-              <View style={styles.divider} />
             ) : null}
-          </View>
-        ))}
-      </View>
-    </Animated.View>
-  );
-}
-
-// Springy press feedback so the upgrade buttons feel tactile.
-function UpgradeButton({
-  label,
-  highlight,
-  onPress,
-}: {
-  label: string;
-  highlight: boolean;
-  onPress: () => void;
-}) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const pressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.94,
-      speed: 40,
-      bounciness: 0,
-      useNativeDriver: true,
-    }).start();
-  };
-  const pressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      speed: 30,
-      bounciness: 8,
-      useNativeDriver: true,
-    }).start();
-  };
-  return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <Pressable
-        onPress={onPress}
-        onPressIn={pressIn}
-        onPressOut={pressOut}
-        style={[styles.upgradeBtn, highlight && styles.upgradeBtnHighlight]}
-        accessibilityRole="button"
-      >
-        <Text
-          style={[
-            styles.upgradeBtnText,
-            highlight && { color: colors.textInverse },
-          ]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
-      </Pressable>
-    </Animated.View>
-  );
-}
-
-function CellView({ value }: { value: Cell }) {
-  if (value === true) {
-    return (
-      <View style={styles.cell}>
-        <Ionicons name="checkmark" size={18} color={colors.success} />
-      </View>
-    );
-  }
-  if (value === false) {
-    return (
-      <View style={styles.cell}>
-        <Text style={styles.cellDash}>—</Text>
-      </View>
-    );
-  }
-  return (
-    <View style={styles.cell}>
-      <Text style={styles.cellText} numberOfLines={2}>
-        {value}
-      </Text>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Plan card
+// ---------------------------------------------------------------------------
+
+function PlanCard({
+  plan,
+  cycle,
+  index,
+  current,
+  onPress,
+}: {
+  plan: Plan;
+  cycle: BillingCycle;
+  index: number;
+  current: boolean;
+  onPress: () => void;
+}) {
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 320,
+      delay: index * 70,
+      useNativeDriver: true,
+    }).start();
+  }, [enter, index]);
+
+  const translateY = enter.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, 0],
+  });
+
+  const cycleSuffix = CYCLES.find((c) => c.id === cycle)?.suffix ?? '';
+  const savings = savingsText(plan, cycle);
+
+  return (
+    <Animated.View
+      style={[
+        styles.planCard,
+        plan.highlight && styles.planCardHighlight,
+        { opacity: enter, transform: [{ translateY }] },
+      ]}
+    >
+      <View style={styles.planHead}>
+        <View
+          style={[styles.planBadge, { backgroundColor: plan.badgeColor }]}
+        >
+          <Text style={styles.planBadgeText}>{plan.badge}</Text>
+        </View>
+        {plan.highlight ? (
+          <View style={styles.popularPill}>
+            <Text style={styles.popularPillText}>MOST POPULAR</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <Text style={styles.planName}>{plan.name}</Text>
+      <Text style={styles.planTagline}>{plan.tagline}</Text>
+
+      <View style={styles.priceRow}>
+        <Text style={styles.price}>{formatPrice(plan.prices[cycle])}</Text>
+        <Text style={styles.priceSuffix}>{cycleSuffix}</Text>
+      </View>
+      {savings ? <Text style={styles.savings}>{savings}</Text> : null}
+
+      <View style={styles.divider} />
+
+      {plan.features.map((feature) => (
+        <View key={feature} style={styles.featureRow}>
+          <Ionicons
+            name="checkmark"
+            size={16}
+            color={colors.brandDeep}
+            style={styles.featureIcon}
+          />
+          <Text style={styles.featureText}>{feature}</Text>
+        </View>
+      ))}
+
+      <View style={{ height: spacing.sm }} />
+
+      {current ? (
+        <View style={styles.currentBtn}>
+          <Ionicons name="checkmark-circle" size={16} color={colors.brandDeep} />
+          <Text style={styles.currentBtnText}>Your current plan</Text>
+        </View>
+      ) : (
+        <Button
+          label={plan.highlight ? 'Join waitlist' : 'Choose plan'}
+          variant={plan.highlight ? 'primary' : 'outline'}
+          onPress={onPress}
+        />
+      )}
+    </Animated.View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Waitlist modal
+// ---------------------------------------------------------------------------
+
 function WaitlistModal({
   visible,
   plan,
+  cycle,
   email,
   onChangeEmail,
   submitting,
@@ -511,71 +377,244 @@ function WaitlistModal({
 }: {
   visible: boolean;
   plan: Plan | null;
+  cycle: BillingCycle;
   email: string;
-  onChangeEmail: (s: string) => void;
+  onChangeEmail: (v: string) => void;
   submitting: boolean;
   onClose: () => void;
   onSubmit: () => void;
 }) {
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onClose}
-    >
-      <View style={modalStyles.backdrop}>
-        <View style={modalStyles.sheet}>
-          <View style={modalStyles.headerRow}>
-            <Text style={modalStyles.title}>
-              {plan?.id === 'free' ? 'Stay on Free' : `${plan?.name ?? ''} waitlist`}
-            </Text>
-            <Pressable
-              onPress={onClose}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </Pressable>
-          </View>
+  const cycleSuffix = CYCLES.find((c) => c.id === cycle)?.suffix ?? '';
+  const priceLabel = plan
+    ? `${formatPrice(plan.prices[cycle])}${cycleSuffix}`
+    : '';
 
-          {plan?.id === 'free' ? (
-            <Text style={modalStyles.body}>
-              No action needed. You're already on Free. You can switch to a paid
-              plan anytime.
-            </Text>
-          ) : (
-            <>
-              <Text style={modalStyles.body}>
-                Payments aren't live yet. Drop your email and we'll be in touch
-                the moment {plan?.name} is available.
-              </Text>
-              <TextInput
-                value={email}
-                onChangeText={onChangeEmail}
-                placeholder="you@example.com"
-                placeholderTextColor={colors.textMuted}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={modalStyles.input}
-              />
-              <Button
-                label={submitting ? 'Saving…' : 'Join waitlist'}
-                onPress={onSubmit}
-                loading={submitting}
-                disabled={submitting}
-              />
-            </>
-          )}
-        </View>
-      </View>
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <Pressable style={styles.backdrop} onPress={onClose}>
+        <Pressable style={styles.sheet} onPress={() => undefined}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>
+            {plan ? `${plan.name} — ${priceLabel}` : ''}
+          </Text>
+          <Text style={styles.sheetBody}>
+            Payments aren't live yet. Drop your email and we'll let you know
+            the moment they switch on for India.
+          </Text>
+          <TextInput
+            value={email}
+            onChangeText={onChangeEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={colors.textMuted}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            style={styles.input}
+          />
+          <View style={{ height: spacing.sm }} />
+          <Button
+            label={submitting ? 'Saving…' : 'Notify me'}
+            onPress={onSubmit}
+            loading={submitting}
+          />
+          <Pressable
+            onPress={onClose}
+            style={styles.dismissBtn}
+            accessibilityRole="button"
+          >
+            <Text style={styles.dismissText}>Not now</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
     </Modal>
   );
 }
 
-const modalStyles = StyleSheet.create({
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
+
+const styles = StyleSheet.create({
+  scroll: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: 100,
+    gap: spacing.md,
+  },
+  hero: {
+    paddingTop: spacing.lg,
+    paddingHorizontal: spacing.xs,
+    gap: 4,
+  },
+  heroTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 26,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  heroBody: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  cycleWrap: {
+    flexDirection: 'row',
+    backgroundColor: colors.surface,
+    borderRadius: radius.circle,
+    padding: 4,
+    gap: 4,
+  },
+  cycleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.circle,
+    flexDirection: 'row',
+    gap: 6,
+  },
+  cycleBtnActive: {
+    backgroundColor: colors.background,
+    ...shadows.card,
+  },
+  cycleLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  cycleLabelActive: {
+    color: colors.textPrimary,
+  },
+  bestPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.circle,
+    backgroundColor: colors.brand,
+  },
+  bestPillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 8,
+    color: colors.textInverse,
+    letterSpacing: 0.5,
+  },
+  planCard: {
+    backgroundColor: colors.background,
+    borderRadius: 18,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  planCardHighlight: {
+    borderColor: colors.brand,
+    borderWidth: 1.5,
+  },
+  planHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  planBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.circle,
+  },
+  planBadgeText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 10,
+    color: colors.textPrimary,
+    letterSpacing: 0.8,
+  },
+  popularPill: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.circle,
+  },
+  popularPillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 9,
+    color: colors.textInverse,
+    letterSpacing: 0.8,
+  },
+  planName: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+    marginTop: 10,
+  },
+  planTagline: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginTop: spacing.sm,
+    gap: 4,
+  },
+  price: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 32,
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+  },
+  priceSuffix: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  savings: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11,
+    color: colors.brandDeep,
+    marginTop: 2,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.md,
+  },
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    paddingVertical: 4,
+  },
+  featureIcon: {
+    marginTop: 1,
+  },
+  featureText: {
+    flex: 1,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13,
+    color: colors.textPrimary,
+    lineHeight: 18,
+  },
+  currentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 14,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  currentBtnText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.brandDeep,
+  },
+  footnote: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
+    lineHeight: 16,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: colors.overlay,
@@ -583,246 +622,50 @@ const modalStyles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: colors.background,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: spacing.lg,
     paddingBottom: spacing.xl,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    gap: spacing.md,
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+    alignSelf: 'center',
+    marginBottom: spacing.md,
   },
-  title: {
+  sheetTitle: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 18,
     color: colors.textPrimary,
   },
-  body: {
+  sheetBody: {
     ...typography.body,
     color: colors.textSecondary,
+    fontSize: 13,
+    marginTop: 4,
+    marginBottom: spacing.md,
+    lineHeight: 18,
   },
   input: {
-    ...typography.body,
-    color: colors.textPrimary,
-    backgroundColor: colors.inputBackground,
+    borderWidth: 1,
     borderColor: colors.inputBorder,
-    borderWidth: 1,
+    backgroundColor: colors.inputBackground,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-});
-
-const FEATURE_LABEL_FLEX = 1.6;
-
-const styles = StyleSheet.create({
-  scroll: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xl,
-    gap: spacing.md,
-  },
-  heroWrap: {
-    gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.lg,
-  },
-  heroTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 24,
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  heroBody: {
-    ...typography.body,
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  planHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 4,
-    marginTop: spacing.sm,
-  },
-  featureColHeader: {
-    flex: FEATURE_LABEL_FLEX,
-  },
-  planCol: {
-    flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    paddingHorizontal: 6,
-    alignItems: 'center',
-    gap: 2,
-    minHeight: 90,
-  },
-  planColHighlight: {
-    backgroundColor: '#FFF7F7',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  planColCurrent: {
-    borderWidth: 1,
-    borderColor: colors.success,
-  },
-  popularPill: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: radius.sm,
-    marginBottom: 2,
-  },
-  popularPillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 8,
-    letterSpacing: 1,
-    color: colors.textInverse,
-  },
-  planColName: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
-    color: colors.textPrimary,
-    letterSpacing: 0.3,
-  },
-  planColPrice: {
-    fontFamily: fontFamilies.poppinsBold,
+    paddingVertical: 12,
+    fontFamily: fontFamilies.poppinsMedium,
     fontSize: 14,
     color: colors.textPrimary,
-    marginTop: 2,
   },
-  planColPeriod: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    fontSize: 9,
-    textAlign: 'center',
-  },
-  currentTag: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 9,
-    color: colors.success,
-    letterSpacing: 0.5,
-    marginTop: 2,
-  },
-  group: {
-    gap: spacing.xs,
-    marginTop: spacing.sm,
-  },
-  groupTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
-    color: colors.textSecondary,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-    paddingHorizontal: spacing.xs,
-  },
-  groupCard: {
-    backgroundColor: colors.background,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    overflow: 'hidden',
-  },
-  featureRow: {
-    flexDirection: 'row',
+  dismissBtn: {
     alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    gap: 4,
+    paddingVertical: spacing.md,
   },
-  featureLabelCell: {
-    flex: FEATURE_LABEL_FLEX,
-    paddingRight: spacing.xs,
-  },
-  featureLabel: {
+  dismissText: {
     fontFamily: fontFamilies.poppinsMedium,
     fontSize: 13,
-    color: colors.textPrimary,
-  },
-  featureHint: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 11,
-    marginTop: 2,
-    lineHeight: 14,
-  },
-  cell: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 4,
-  },
-  cellText: {
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 11,
-    color: colors.textPrimary,
-    textAlign: 'center',
-  },
-  cellDash: {
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.sm,
-  },
-  upgradeRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: spacing.md,
-    alignItems: 'stretch',
-  },
-  upgradeRowSpacer: {
-    flex: FEATURE_LABEL_FLEX,
-  },
-  upgradeBtnWrap: {
-    flex: 1,
-  },
-  upgradeBtn: {
-    backgroundColor: colors.background,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  upgradeBtnHighlight: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  upgradeBtnText: {
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.primary,
-    fontSize: 12,
-    letterSpacing: 0.4,
-  },
-  currentBtn: {
-    backgroundColor: colors.surface,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: colors.success,
-  },
-  currentBtnText: {
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.success,
-    fontSize: 12,
-    letterSpacing: 0.5,
-  },
-  footnote: {
-    ...typography.caption,
-    color: colors.textMuted,
-    fontSize: 11,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.sm,
+    color: colors.textSecondary,
   },
 });
