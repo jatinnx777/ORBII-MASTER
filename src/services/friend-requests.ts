@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getPublicUsersByUsernames } from './users-public';
+import { checkRateLimit, rateLimitMessage } from './rate-limit';
 import type { Friend } from '@/types';
 
 // Friend-request system. User A sends a request to @B. Until @B accepts,
@@ -62,12 +63,18 @@ function rowToRequest(row: RequestRow): FriendRequest {
 }
 
 // Send a request. Looks up the recipient by username so we know they
-// exist before issuing the row.
+// exist before issuing the row. Rate-limited at 1.5s between requests
+// + 20 per rolling hour to stop social spam.
 export async function sendFriendRequest(args: {
   fromUserId: string;
   fromUsername: string;
   toUsername: string;
 }): Promise<FriendRequest> {
+  const gate = checkRateLimit('friend.request');
+  if (!gate.ok) {
+    throw new Error(rateLimitMessage(gate));
+  }
+
   // Quick existence check — without it we'd create requests for ghost
   // usernames, which is bad UX.
   const { data: target } = await supabase

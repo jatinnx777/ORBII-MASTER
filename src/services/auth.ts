@@ -86,6 +86,83 @@ type ProfileRow = {
   photo_changed_at?: string | null;
 };
 
+// Last-line-of-defence profile creator. The DB trigger in
+// sql/04_profile_triggers.sql is the primary path — this is here for
+// projects that haven't installed the trigger yet, or for the rare case
+// where the trigger fires but RLS blocks SELECT immediately after.
+//
+// Generates a placeholder username derived from the email so the user is
+// findable in search before they finish ProfileSetup.
+async function ensureFallbackProfile(user: {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+}): Promise<string | null> {
+  const local = (user.email ?? '').split('@')[0] ?? '';
+  const sanitized = local.toLowerCase().replace(/[^a-z0-9_]/g, '');
+  let candidate =
+    sanitized.length >= 3
+      ? sanitized.slice(0, 16)
+      : `orbii_${user.id.replace(/-/g, '').slice(0, 8)}`;
+
+  // Walk a small suffix counter to dodge a duplicate-username collision.
+  for (let i = 0; i < 6; i++) {
+    const tryName = i === 0 ? candidate : `${candidate.slice(0, 14)}_${i}`;
+    const { data: existing } = await supabase
+      .from('users_public')
+      .select('id')
+      .eq('username', tryName)
+      .maybeSingle();
+    if (!existing) {
+      candidate = tryName;
+      break;
+    }
+  }
+
+  const fullName =
+    typeof user.user_metadata?.full_name === 'string'
+      ? (user.user_metadata.full_name as string)
+      : null;
+  const avatarUrl =
+    typeof user.user_metadata?.avatar_url === 'string'
+      ? (user.user_metadata.avatar_url as string)
+      : null;
+
+  const { error: profileError } = await supabase.from('profiles').upsert(
+    {
+      id: user.id,
+      email: user.email ?? null,
+      username: candidate,
+      name: fullName,
+      photo_uri: avatarUrl,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+  if (profileError) {
+    console.warn('[auth] fallback profile insert failed:', profileError.message);
+    return null;
+  }
+
+  // Mirror to users_public so search picks them up.
+  const { error: publicError } = await supabase.from('users_public').upsert(
+    {
+      id: user.id,
+      username: candidate,
+      name: fullName,
+      photo_url: avatarUrl,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'id' },
+  );
+  if (publicError) {
+    console.warn('[auth] fallback users_public insert failed:', publicError.message);
+  }
+
+  return candidate;
+}
+
 function rowToProfile(row: ProfileRow, fallbackEmail: string): UserProfile {
   return {
     uid: row.id,
@@ -165,13 +242,32 @@ export async function signInWithGoogle(): Promise<SignInResult> {
 
   // 4. Look up an existing profiles row for this user. If the row exists,
   //    they're a returning user; if not, ProfileSetup will fire.
-  const { data: row } = await supabase
+  //
+  //    Defensive fallback: the SQL trigger in sql/04_profile_triggers.sql
+  //    auto-creates a profile on auth.users insert. If the trigger isn't
+  //    installed yet (or RLS hiccupped), we insert a minimal row from the
+  //    client so the user is immediately searchable.
+  let { data: row } = await supabase
     .from('profiles')
     .select(
       'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
     )
     .eq('id', user.id)
     .maybeSingle<ProfileRow>();
+
+  if (!row) {
+    const fallbackUsername = await ensureFallbackProfile(user);
+    if (fallbackUsername) {
+      const { data: refreshed } = await supabase
+        .from('profiles')
+        .select(
+          'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
+        )
+        .eq('id', user.id)
+        .maybeSingle<ProfileRow>();
+      row = refreshed ?? null;
+    }
+  }
 
   // Pull friends, emergency contacts, and SOS history from the server so
   // reinstall / new device restores everything. New users come back with
