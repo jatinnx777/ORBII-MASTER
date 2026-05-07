@@ -43,7 +43,7 @@ export function AboutScreen() {
 
           <Text style={styles.sectionTitle}>How it works</Text>
           <Bullet text="Press SOS — your live location is shared with helpers within 2 km." />
-          <Bullet text="Voice triggers (\"help\", \"bachao\", \"madad\") fire SOS hands-free." />
+          <Bullet text={'Voice triggers ("help", "bachao", "madad") fire SOS hands-free.'} />
           <Bullet text="Friends in your circle are notified first, no matter the distance." />
           <Bullet text="Helpers are Aadhaar-verified and rated after each response." />
 

@@ -3,7 +3,7 @@
     "name": "ORBII",
     "slug": "orbii",
     "scheme": "orbii",
-    "version": "0.1.0",
+    "version": "26.5.7",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#FF0000"
+      "backgroundColor": "#95D5B2"
     },
     "ios": {
       "supportsTablet": false,
@@ -28,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF0000"
+        "backgroundColor": "#95D5B2"
       },
       "package": "com.orbii.app",
       "permissions": [

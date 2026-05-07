@@ -126,7 +126,7 @@ export function OnboardingScreen() {
                 {
                   width: dotWidth,
                   opacity: dotOpacity,
-                  backgroundColor: i === index ? colors.primary : colors.border,
+                  backgroundColor: i === index ? colors.brandDeep : colors.border,
                 },
               ]}
             />
@@ -195,7 +195,7 @@ function Slide({
           },
         ]}
       >
-        <Ionicons name={slide.icon} size={72} color={colors.primary} />
+        <Ionicons name={slide.icon} size={72} color={colors.brandDeep} />
       </Animated.View>
 
       <Animated.Text

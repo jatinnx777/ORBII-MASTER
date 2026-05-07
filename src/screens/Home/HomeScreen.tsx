@@ -424,11 +424,11 @@ export function HomeScreen() {
             style={styles.permissionBanner}
             accessibilityRole="button"
           >
-            <Ionicons name="location" size={18} color={colors.primary} />
+            <Ionicons name="location" size={18} color={colors.brandDeep} />
             <Text style={styles.permissionText}>
               Enable location for emergencies
             </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            <Ionicons name="chevron-forward" size={16} color={colors.brandDeep} />
           </Pressable>
         ) : null}
 
@@ -454,7 +454,7 @@ export function HomeScreen() {
             <View style={[styles.helperDot, styles.helperDotIdle]} />
             <Text style={styles.helperChipText}>0 helpers nearby ·</Text>
             <Text style={styles.helperChipCta}>Be the first</Text>
-            <Ionicons name="arrow-forward" size={12} color={colors.primary} />
+            <Ionicons name="arrow-forward" size={12} color={colors.brandDeep} />
           </Pressable>
         )}
 
@@ -965,9 +965,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: radius.md,
-    backgroundColor: '#FFF4F4',
+    backgroundColor: colors.brandSoft,
     borderWidth: 1,
-    borderColor: '#FFD3D3',
+    borderColor: colors.brandMid,
   },
   permissionText: {
     ...typography.bodyMedium,
@@ -1026,7 +1026,7 @@ const styles = StyleSheet.create({
   helperChipCta: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 12,
-    color: colors.primary,
+    color: colors.brandDeep,
   },
   actionRow: {
     flexDirection: 'row',
@@ -1047,8 +1047,8 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   voiceCardActive: {
-    borderColor: colors.primary,
-    backgroundColor: '#FFF7F7',
+    borderColor: colors.brandDeep,
+    backgroundColor: colors.brandSoft,
   },
   voiceIcon: {
     width: 28,

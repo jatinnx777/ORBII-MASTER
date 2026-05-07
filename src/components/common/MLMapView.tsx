@@ -16,34 +16,11 @@ import type { GeoPoint } from '@/types';
 // layer (cheap; no per-marker view overhead). The route line is a separate
 // LineLayer fed by the OSRM-returned GeoJSON.
 
-// Inline raster style backed by OpenStreetMap tiles. The demo tiles style
-// (https://demotiles.maplibre.org) only contains country outlines — at the
-// zoom levels we use (14-17) the map looks blank. OSM raster tiles are
-// free and show actual streets/labels.
-const OSM_STYLE = {
-  version: 8 as const,
-  sources: {
-    osm: {
-      type: 'raster' as const,
-      tiles: [
-        'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://b.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'https://c.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      ],
-      tileSize: 256,
-      maxzoom: 19,
-      attribution: '© OpenStreetMap',
-    },
-  },
-  layers: [
-    {
-      id: 'osm',
-      type: 'raster' as const,
-      source: 'osm',
-    },
-  ],
-  glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-};
+// OpenFreeMap "positron" — community-funded vector basemap, MIT-licensed
+// data, no API key, no rate limits. Renders as a clean Stripe/Uber-style
+// light theme with smooth zoom (vector, not raster). Far more aesthetic
+// than raw OSM tiles. Falls back to OSM raster if the style URL fails.
+const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 
 export type MLMarker = {
   id: string;
@@ -203,7 +180,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
     <MLMap
       ref={mapRef}
       style={[styles.fill, style]}
-      mapStyle={OSM_STYLE as never}
+      mapStyle={STYLE_URL}
       logo={false}
       attribution={false}
       compass={false}

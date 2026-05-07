@@ -127,7 +127,9 @@ export function SettingsScreen() {
             right={
               <Switch
                 value={alertVibration}
-                onValueChange={(v) => dispatch(alertVibrationToggled(v))}
+                onValueChange={(v) => {
+                  dispatch(alertVibrationToggled(v));
+                }}
                 trackColor={{ true: colors.brand, false: colors.border }}
                 thumbColor={alertVibration ? colors.brandDeep : colors.background}
               />
