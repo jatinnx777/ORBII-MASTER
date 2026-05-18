@@ -241,8 +241,16 @@ export async function createCircle(input: {
   emoji?: string | null;
   isDefault?: boolean;
 }): Promise<Circle> {
-  const user = (await supabase.auth.getUser()).data.user;
-  if (!user) throw new Error('Sign in to create a circle.');
+  // Phone-bypass users have no real session, so the create request would
+  // hit Postgres as `anon` and fail RLS with a confusing message. Pull
+  // the session explicitly so we can short-circuit with a clearer error.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const user = sessionData.session?.user ?? null;
+  if (!user) {
+    throw new Error(
+      'You need a real ORBII account to create circles. Sign in with Google from the Welcome screen — phone OTP demo profiles can\'t create circles yet.',
+    );
+  }
   const trimmed = input.name.trim();
   if (!trimmed) throw new Error('Circle needs a name.');
   if (input.isDefault) {

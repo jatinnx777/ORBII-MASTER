@@ -7,7 +7,6 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -15,10 +14,9 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Button } from '@/components/common';
 import { useAppSelector } from '@/redux/store';
 import { inviteByPhone, inviteByUsername } from '@/services/circles';
-import { searchUsers, type PublicUser } from '@/services/users-public';
+import { findUserByPhone, type PublicUser } from '@/services/users-public';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
 import {
   colors,
@@ -30,15 +28,22 @@ import {
 } from '@/theme';
 import type { AppScreenProps } from '@/navigation/types';
 
-// Invite-to-circle screen. Two complementary paths:
-//   • Username search — live debounced query against users_public. Only
-//     surfaces real Supabase-backed users (Google sign-ins today; phone
-//     sign-ins land here too once the OTP gateway is wired). Tap a result
-//     to send the invite instantly.
-//   • Phone — pre-creates a pending invite by E.164 and pops the native
-//     Share sheet with an orbii://join/<token> deep link the inviter can
-//     drop into WhatsApp / SMS. The receiver opens that link inside ORBII
-//     and gets auto-added (handler in App.tsx).
+// Phone-number-first circle invite.
+//
+//   • You type a +91 mobile number.
+//   • We look it up in users_public (debounced). If the number belongs to
+//     a registered ORBII user, their profile card surfaces with a single
+//     "Send invite" CTA — the invite is tied to their account so they get
+//     pulled into the circle the moment they accept.
+//   • If the number ISN'T registered, we fall back to a shareable join
+//     link (orbii://join/<token>) the inviter can drop into WhatsApp/SMS.
+//     The invitee installs ORBII, taps the link, and lands in the circle
+//     once they sign in.
+//
+// Why phone-first (vs. username): users know each other's phone numbers
+// instinctively; usernames take cognitive effort. Phone match guarantees
+// the invitee has a real ORBII account so location sharing kicks in the
+// moment they accept.
 
 const DEBOUNCE_MS = 250;
 
@@ -52,72 +57,44 @@ export function CircleInviteScreen({
   );
   const myUid = useAppSelector((s) => s.user.profile?.uid ?? null);
 
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<PublicUser[]>([]);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [match, setMatch] = useState<PublicUser | null>(null);
   const [searching, setSearching] = useState(false);
-  const [phone, setPhone] = useState('');
-  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<'match' | 'share' | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
+  const phoneValid = isValidIndianPhone(phoneDigits);
 
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    const q = query.replace(/^@/, '').trim();
-    if (!myUid || q.length < 2) {
-      setResults([]);
+    if (!myUid || !phoneValid) {
+      setMatch(null);
       setSearching(false);
       return;
     }
     setSearching(true);
     debounceRef.current = setTimeout(async () => {
-      const matches = await searchUsers({ query: q, excludeUid: myUid });
-      setResults(matches);
+      const e164 = toE164India(phoneDigits);
+      const found = await findUserByPhone(e164, myUid);
+      setMatch(found);
       setSearching(false);
     }, DEBOUNCE_MS);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query, myUid]);
+  }, [phoneDigits, phoneValid, myUid]);
 
-  const sendUsername = useCallback(
-    async (username: string) => {
-      if (!username || submitting) return;
-      setSubmitting(username);
-      try {
-        await inviteByUsername(circleId, username);
-        Alert.alert(
-          'Invite sent',
-          `@${username} will see your invite the next time they open ORBII.`,
-          [{ text: 'OK', onPress: () => navigation.goBack() }],
-        );
-      } catch (err) {
-        Alert.alert(
-          'Could not send invite',
-          err instanceof Error ? err.message : 'Try again.',
-        );
-      } finally {
-        setSubmitting(null);
-      }
-    },
-    [circleId, navigation, submitting],
-  );
-
-  const sendPhone = useCallback(async () => {
-    if (!isValidIndianPhone(phone) || submitting) return;
-    setSubmitting('phone');
+  const inviteRegistered = useCallback(async () => {
+    if (!match || !match.username || submitting) return;
+    setSubmitting('match');
     try {
-      const e164 = toE164India(phone);
-      const invite = await inviteByPhone(circleId, e164);
-      const link = `https://orbii.app/join/${invite.token}`;
-      try {
-        await Share.share({
-          message: `Join my ORBII safety circle "${circle?.name ?? ''}": ${link}`,
-        });
-      } catch {
-        // Share sheet dismissed — invite is still pending server-side.
-      }
-      setPhone('');
-      navigation.goBack();
+      await inviteByUsername(circleId, match.username);
+      Alert.alert(
+        'Invite sent',
+        `${match.name?.trim() || `@${match.username}`} will see your invite the next time they open ORBII. They'll start sharing their location with the circle as soon as they accept.`,
+        [{ text: 'Done', onPress: () => navigation.goBack() }],
+      );
     } catch (err) {
       Alert.alert(
         'Could not send invite',
@@ -126,9 +103,33 @@ export function CircleInviteScreen({
     } finally {
       setSubmitting(null);
     }
-  }, [phone, submitting, circleId, circle?.name, navigation]);
+  }, [match, submitting, circleId, navigation]);
 
-  const showSearchResults = query.replace(/^@/, '').trim().length >= 2;
+  const sharePhoneLink = useCallback(async () => {
+    if (!phoneValid || submitting) return;
+    setSubmitting('share');
+    try {
+      const e164 = toE164India(phoneDigits);
+      const invite = await inviteByPhone(circleId, e164);
+      const link = `https://orbii.app/join/${invite.token}`;
+      try {
+        const { Share } = await import('react-native');
+        await Share.share({
+          message: `Join my ORBII safety circle "${circle?.name ?? ''}". Tap to accept and share your live location: ${link}`,
+        });
+      } catch {
+        // Share sheet dismissed — invite is still saved server-side.
+      }
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert(
+        'Could not create invite link',
+        err instanceof Error ? err.message : 'Try again.',
+      );
+    } finally {
+      setSubmitting(null);
+    }
+  }, [phoneValid, phoneDigits, submitting, circleId, circle?.name, navigation]);
 
   return (
     <View style={styles.root}>
@@ -142,7 +143,7 @@ export function CircleInviteScreen({
           >
             <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Invite to circle</Text>
+          <Text style={styles.headerTitle}>Add to circle</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -155,121 +156,140 @@ export function CircleInviteScreen({
             keyboardShouldPersistTaps="handled"
           >
             {circle ? (
-              <Text style={styles.subhead} numberOfLines={1}>
-                Adding to <Text style={styles.subheadAccent}>{circle.name}</Text>
+              <Text style={styles.subhead}>
+                Adding to{' '}
+                <Text style={styles.subheadAccent}>{circle.name}</Text>
               </Text>
             ) : null}
 
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Search someone on ORBII</Text>
+              <Text style={styles.sectionLabel}>Their phone number</Text>
               <Text style={styles.hint}>
-                Type a username or name. Real ORBII users only.
+                The person you invite must have an ORBII account. Once they
+                accept, their live location starts sharing with the circle.
               </Text>
               <View style={styles.inputRow}>
-                <Ionicons
-                  name="search"
-                  size={16}
-                  color={colors.textMuted}
-                  style={{ marginLeft: 4 }}
-                />
+                <Text style={styles.atPrefix}>+91</Text>
                 <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="Search by name or @username"
+                  value={phoneInput}
+                  onChangeText={(v) =>
+                    setPhoneInput(v.replace(/\D/g, '').slice(0, 10))
+                  }
+                  placeholder="10-digit mobile number"
                   placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  keyboardType="number-pad"
                   style={styles.input}
-                  maxLength={48}
+                  maxLength={10}
+                  autoFocus
                 />
                 {searching ? (
                   <ActivityIndicator size="small" color={colors.brandDeep} />
                 ) : null}
               </View>
 
-              {!showSearchResults ? null : !myUid ? (
+              {!phoneValid ? (
+                <Text style={styles.emptyHint}>
+                  Enter a valid 10-digit Indian mobile number.
+                </Text>
+              ) : !myUid ? (
                 <Text style={styles.emptyHint}>
                   Sign in with Google to search ORBII users.
                 </Text>
-              ) : results.length === 0 && !searching ? (
-                <Text style={styles.emptyHint}>
-                  No one found. Try a different spelling, or invite by phone below.
-                </Text>
-              ) : (
-                <View style={{ gap: 6 }}>
-                  {results.map((user) => (
-                    <Pressable
-                      key={user.id}
-                      onPress={() => sendUsername(user.username)}
-                      style={({ pressed }) => [
-                        styles.userRow,
-                        pressed && styles.pressedScale,
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Invite @${user.username}`}
-                      disabled={submitting !== null}
-                    >
-                      <View style={styles.avatar}>
-                        {user.photoUri ? (
-                          <Image
-                            source={{ uri: user.photoUri }}
-                            style={styles.avatarImg}
-                          />
-                        ) : (
-                          <Text style={styles.avatarInitial}>
-                            {(user.name?.charAt(0) ?? user.username.charAt(0)).toUpperCase()}
-                          </Text>
-                        )}
+              ) : match ? (
+                <View style={styles.matchCard}>
+                  <View style={styles.matchAvatar}>
+                    {match.photoUri ? (
+                      <Image
+                        source={{ uri: match.photoUri }}
+                        style={styles.matchAvatarImg}
+                      />
+                    ) : (
+                      <Text style={styles.matchAvatarInitial}>
+                        {(match.name?.charAt(0) ?? match.username.charAt(0)).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={styles.matchTitleRow}>
+                      <Text style={styles.matchName} numberOfLines={1}>
+                        {match.name?.trim() || `@${match.username}`}
+                      </Text>
+                      <View style={styles.verifiedDot}>
+                        <Ionicons
+                          name="checkmark-circle"
+                          size={14}
+                          color={colors.brandDeep}
+                        />
                       </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.userName} numberOfLines={1}>
-                          {user.name?.trim() || `@${user.username}`}
-                        </Text>
-                        <Text style={styles.userHandle} numberOfLines={1}>
-                          @{user.username}
-                        </Text>
-                      </View>
-                      <View style={styles.inviteBadge}>
-                        {submitting === user.username ? (
-                          <ActivityIndicator
-                            size="small"
-                            color={colors.textInverse}
-                          />
-                        ) : (
-                          <Text style={styles.inviteBadgeText}>Invite</Text>
-                        )}
-                      </View>
-                    </Pressable>
-                  ))}
+                    </View>
+                    <Text style={styles.matchHandle} numberOfLines={1}>
+                      Registered on ORBII · @{match.username}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={inviteRegistered}
+                    style={({ pressed }) => [
+                      styles.matchInviteBtn,
+                      submitting === 'match' && { opacity: 0.7 },
+                      pressed && styles.pressedScale,
+                    ]}
+                    disabled={submitting !== null}
+                    accessibilityRole="button"
+                    accessibilityLabel="Send invite"
+                  >
+                    {submitting === 'match' ? (
+                      <ActivityIndicator size="small" color={colors.textInverse} />
+                    ) : (
+                      <>
+                        <Ionicons name="person-add" size={14} color={colors.textInverse} />
+                        <Text style={styles.matchInviteText}>Invite</Text>
+                      </>
+                    )}
+                  </Pressable>
                 </View>
-              )}
+              ) : !searching ? (
+                <View style={styles.noMatchCard}>
+                  <View style={styles.noMatchIcon}>
+                    <Ionicons
+                      name="information-circle"
+                      size={18}
+                      color={colors.brandDeep}
+                    />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.noMatchTitle}>
+                      Not on ORBII yet
+                    </Text>
+                    <Text style={styles.noMatchBody}>
+                      Share an invite link via WhatsApp / SMS — they'll join
+                      the circle as soon as they install ORBII and tap the link.
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </View>
 
-            <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Invite by phone</Text>
-              <Text style={styles.hint}>
-                Generates a share link for WhatsApp / SMS. They'll join the circle when they open it in ORBII.
-              </Text>
-              <View style={styles.inputRow}>
-                <Text style={styles.atPrefix}>+91</Text>
-                <TextInput
-                  value={phone}
-                  onChangeText={(v) => setPhone(v.replace(/\D/g, '').slice(0, 10))}
-                  placeholder="10-digit number"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  style={styles.input}
-                  maxLength={10}
+            {phoneValid && !match && !searching ? (
+              <Pressable
+                onPress={sharePhoneLink}
+                disabled={submitting !== null}
+                style={({ pressed }) => [
+                  styles.shareCta,
+                  submitting === 'share' && { opacity: 0.7 },
+                  pressed && styles.pressedScale,
+                ]}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name="share-social-outline"
+                  size={18}
+                  color={colors.brandDeep}
                 />
-              </View>
-              <Button
-                label={submitting === 'phone' ? 'Sending…' : 'Create & share'}
-                onPress={sendPhone}
-                disabled={!isValidIndianPhone(phone) || submitting !== null}
-                loading={submitting === 'phone'}
-                variant="outline"
-              />
-            </View>
+                <Text style={styles.shareCtaText}>
+                  {submitting === 'share' ? 'Creating link…' : 'Share invite link'}
+                </Text>
+              </Pressable>
+            ) : null}
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -289,9 +309,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -319,10 +339,10 @@ const styles = StyleSheet.create({
   },
   card: {
     padding: spacing.md,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.05)',
+    borderColor: colors.border,
     gap: spacing.sm,
     ...shadows.card,
   },
@@ -336,6 +356,7 @@ const styles = StyleSheet.create({
   hint: {
     ...typography.caption,
     color: colors.textSecondary,
+    lineHeight: 17,
   },
   inputRow: {
     flexDirection: 'row',
@@ -346,12 +367,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderWidth: 1,
-    borderColor: 'rgba(0,0,0,0.06)',
+    borderColor: colors.brandMid,
   },
   atPrefix: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 14,
-    color: colors.textSecondary,
+    color: colors.brandDeep,
   },
   input: {
     flex: 1,
@@ -367,53 +388,111 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     paddingTop: 4,
   },
-  userRow: {
+  matchCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     padding: 10,
     borderRadius: radius.md,
-    backgroundColor: '#F7FAF8',
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
     backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
+  },
+  matchAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  avatarImg: { width: '100%', height: '100%' },
-  avatarInitial: {
+  matchAvatarImg: { width: '100%', height: '100%' },
+  matchAvatarInitial: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13,
+    fontSize: 14,
     color: colors.brandDeep,
   },
-  userName: {
-    fontFamily: fontFamilies.poppinsSemiBold,
+  matchTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  matchName: {
+    fontFamily: fontFamilies.poppinsBold,
     fontSize: 14,
     color: colors.textPrimary,
+    flexShrink: 1,
   },
-  userHandle: {
+  verifiedDot: {},
+  matchHandle: {
     fontFamily: fontFamilies.interMedium,
     fontSize: 11.5,
     color: colors.textSecondary,
     marginTop: 1,
   },
-  inviteBadge: {
+  matchInviteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingVertical: 8,
     borderRadius: radius.circle,
     backgroundColor: colors.brandDeep,
-    minWidth: 64,
-    alignItems: 'center',
+    minWidth: 78,
+    justifyContent: 'center',
   },
-  inviteBadgeText: {
+  matchInviteText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 11.5,
+    fontSize: 12,
     color: colors.textInverse,
     letterSpacing: 0.3,
+  },
+  noMatchCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
+  },
+  noMatchIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noMatchTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  noMatchBody: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 11.5,
+    color: colors.textSecondary,
+    lineHeight: 16,
+  },
+  shareCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
+  },
+  shareCtaText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13.5,
+    color: colors.brandDeep,
+    letterSpacing: 0.2,
   },
   pressedScale: {
     opacity: 0.92,

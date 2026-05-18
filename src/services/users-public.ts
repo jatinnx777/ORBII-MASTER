@@ -12,6 +12,10 @@ export type PublicUser = {
   username: string;
   name: string | null;
   photoUri: string | null;
+  // E.164 phone (e.g. "+919876543210"). Optional — populated when the
+  // user has set their phone during sign-up. Used by the phone-number
+  // circle invite flow to find registered friends.
+  phone: string | null;
 };
 
 type PublicUserRow = {
@@ -19,6 +23,7 @@ type PublicUserRow = {
   username: string;
   name: string | null;
   photo_url: string | null;
+  phone: string | null;
 };
 
 function rowToUser(row: PublicUserRow): PublicUser {
@@ -27,11 +32,14 @@ function rowToUser(row: PublicUserRow): PublicUser {
     username: row.username,
     name: row.name,
     photoUri: row.photo_url,
+    phone: row.phone,
   };
 }
 
 // Push the signed-in user's public record. Called from profile-sync after
-// every profile change so search results stay fresh.
+// every profile change so search results stay fresh. Now also stores
+// `phone` so the circle-invite flow can match registered friends by
+// phone number.
 export async function syncUsersPublic(profile: UserProfile): Promise<void> {
   if (!profile.username) return;
   try {
@@ -41,6 +49,7 @@ export async function syncUsersPublic(profile: UserProfile): Promise<void> {
         username: profile.username,
         name: profile.name,
         photo_url: profile.photoUri,
+        phone: profile.phone ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
@@ -49,6 +58,27 @@ export async function syncUsersPublic(profile: UserProfile): Promise<void> {
   } catch (err) {
     console.warn('[users-public] threw', err);
   }
+}
+
+// Look up a registered ORBII user by their E.164 phone. Used by the
+// circle-invite flow to make sure the invitee already has an account
+// before sending a friend request.
+export async function findUserByPhone(
+  phoneE164: string,
+  excludeUid: string,
+): Promise<PublicUser | null> {
+  if (!phoneE164.startsWith('+')) return null;
+  const { data, error } = await supabase
+    .from('users_public')
+    .select('id, username, name, photo_url, phone')
+    .eq('phone', phoneE164)
+    .neq('id', excludeUid)
+    .maybeSingle<PublicUserRow>();
+  if (error) {
+    console.warn('[users-public] phone search error', error.message);
+    return null;
+  }
+  return data ? rowToUser(data) : null;
 }
 
 // User search by username OR name. Substring match (matches middle, not
@@ -64,7 +94,7 @@ export async function searchUsers(args: {
   const escaped = q.replace(/[%_]/g, '\\$&');
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url')
+    .select('id, username, name, photo_url, phone')
     .or(`username.ilike.%${escaped}%,name.ilike.%${escaped}%`)
     .neq('id', args.excludeUid)
     .order('username', { ascending: true })
@@ -89,7 +119,7 @@ export async function getPublicUsersByUsernames(
   if (usernames.length === 0) return out;
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url')
+    .select('id, username, name, photo_url, phone')
     .in('username', usernames);
   if (error || !data) return out;
   (data as PublicUserRow[]).forEach((row) => {
@@ -103,7 +133,7 @@ export async function getPublicUserByUsername(
 ): Promise<PublicUser | null> {
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url')
+    .select('id, username, name, photo_url, phone')
     .eq('username', username)
     .maybeSingle<PublicUserRow>();
   if (error || !data) return null;

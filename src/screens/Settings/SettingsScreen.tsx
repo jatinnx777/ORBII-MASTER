@@ -185,13 +185,6 @@ export function SettingsScreen() {
           ) : null}
           <Divider />
           <Row
-            icon="mic-outline"
-            label="Background Voice SOS"
-            value="Always-on wake word — Picovoice setup needed"
-            onPress={() => navigation.navigate('VoiceSetup')}
-          />
-          <Divider />
-          <Row
             icon="hand-left-outline"
             label="Background reliability"
             value="OEM permissions, autostart, battery — walk-through"
