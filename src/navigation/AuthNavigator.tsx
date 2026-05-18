@@ -2,6 +2,9 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
+import { PhoneSignInScreen } from '@/screens/Auth/PhoneSignInScreen';
+import { PhoneVerifyScreen } from '@/screens/Auth/PhoneVerifyScreen';
+import { LanguageSelectorScreen } from '@/screens/Auth/LanguageSelectorScreen';
 import { ProfileSetupScreen } from '@/screens/Auth/ProfileSetupScreen';
 import { useAppSelector } from '@/redux/store';
 import type { AuthStackParamList } from './types';
@@ -33,6 +36,12 @@ export function AuthNavigator() {
     >
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
+      <Stack.Screen name="PhoneSignIn" component={PhoneSignInScreen} />
+      <Stack.Screen name="PhoneVerify" component={PhoneVerifyScreen} />
+      <Stack.Screen
+        name="LanguageSelector"
+        component={LanguageSelectorScreen}
+      />
       <Stack.Screen name="ProfileSetup" component={ProfileSetupScreen} />
     </Stack.Navigator>
   );

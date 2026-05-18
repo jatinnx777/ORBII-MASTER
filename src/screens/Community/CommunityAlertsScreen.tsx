@@ -380,10 +380,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.md,
-    backgroundColor: '#FFF4F4',
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 77, 77, 0.08)',
     borderWidth: 1,
-    borderColor: '#FFD3D3',
+    borderColor: 'rgba(255, 77, 77, 0.22)',
   },
   bannerText: {
     ...typography.caption,

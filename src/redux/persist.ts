@@ -4,7 +4,9 @@ import { historyHydrated } from './slices/historySlice';
 import { helperHydrated } from './slices/helperSlice';
 import { appHydrated } from './slices/appSlice';
 import { profileHydrated } from './slices/userSlice';
+import { safetyModesHydrated } from './slices/safetyModesSlice';
 import { syncProfile } from '@/services/profile-sync';
+import type { GhostModeState, DeadmanTimerState } from './slices/safetyModesSlice';
 import {
   clearSession,
   isSessionExpired,
@@ -17,6 +19,7 @@ type PersistedApp = {
   voiceDetection?: boolean;
   backgroundVoice?: boolean;
   alertVibration?: boolean;
+  hardwareSOS?: boolean;
   pushEnabled?: boolean;
   policyAcceptedAt?: number | null;
 };
@@ -31,11 +34,14 @@ export async function hydrateStore() {
     ]);
   }
 
-  const [history, helper, appSettings, profile] = await Promise.all([
+  const [history, helper, appSettings, profile, safetyModes] = await Promise.all([
     getItem<SOSRecord[]>(storageKeys.history),
     getItem<HelperState>(storageKeys.helperEarnings),
     getItem<PersistedApp>(storageKeys.settings),
     expired ? Promise.resolve(null) : getItem<UserProfile>(storageKeys.profile),
+    getItem<{ ghost?: GhostModeState; deadman?: DeadmanTimerState }>(
+      storageKeys.safetyModes,
+    ),
   ]);
 
   store.dispatch(historyHydrated(history ?? []));
@@ -44,6 +50,19 @@ export async function hydrateStore() {
   if (profile) {
     store.dispatch(profileHydrated(profile));
     await touchSession();
+  }
+  if (safetyModes) {
+    // If a deadman timer was armed and has since expired while the app
+    // was killed, drop the local copy — the local notification already
+    // fired (or is about to). The user-facing "your timer expired"
+    // surface is the notification, not the slice.
+    const now = Date.now();
+    const dead = safetyModes.deadman;
+    if (dead && dead.active && dead.expiresAt && dead.expiresAt < now) {
+      // expired during downtime: don't rehydrate as active.
+    } else {
+      store.dispatch(safetyModesHydrated(safetyModes));
+    }
   }
 
   subscribePersist();
@@ -64,6 +83,7 @@ function subscribePersist() {
       next.app.voiceDetection !== prev.app.voiceDetection ||
       next.app.backgroundVoice !== prev.app.backgroundVoice ||
       next.app.alertVibration !== prev.app.alertVibration ||
+      next.app.hardwareSOS !== prev.app.hardwareSOS ||
       next.app.pushEnabled !== prev.app.pushEnabled ||
       next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
@@ -72,6 +92,7 @@ function subscribePersist() {
         voiceDetection: next.app.voiceDetection,
         backgroundVoice: next.app.backgroundVoice,
         alertVibration: next.app.alertVibration,
+        hardwareSOS: next.app.hardwareSOS,
         pushEnabled: next.app.pushEnabled,
         policyAcceptedAt: next.app.policyAcceptedAt,
       });
@@ -87,6 +108,9 @@ function subscribePersist() {
         removeItem(storageKeys.profile);
         clearSession();
       }
+    }
+    if (next.safetyModes !== prev.safetyModes) {
+      setItem(storageKeys.safetyModes, next.safetyModes);
     }
     prev = next;
   });

@@ -9,8 +9,13 @@ export const spacing = {
 
 export const radius = {
   sm: 8,
-  md: 12,
-  lg: 20,
+  md: 14,
+  // `lg` (24) is the premium card radius — pairs with `shadows.card` to
+  // give surfaces an Apple-grade softness. Use it for the major resting
+  // surfaces (action cards, list rows, info panels). Use `xl` (28) for
+  // bottom sheets where a stronger curve reads better.
+  lg: 24,
+  xl: 28,
   circle: 9999,
 } as const;
 
@@ -19,29 +24,30 @@ export const touchTarget = {
   comfortable: 56,
 } as const;
 
-// Two shadows total. Either use `card` for resting elevation or `sheet`
-// for the bottom panel — never both. `hero` is a tight alias for `card`
-// so legacy callers don't have to change.
+// Soft diffuse shadows only — per the premium design spec. Three
+// presets: `card` is the everyday resting elevation, `sheet` is the
+// upward-facing shadow for the bottom panel, and `hero` is a slightly
+// stronger lift for primary CTAs / pressed states.
 export const shadows = {
   card: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: '#0F1115',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 3,
   },
   sheet: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: -1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: '#0F1115',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 18,
+    elevation: 6,
   },
   hero: {
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowColor: '#0F1115',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.10,
+    shadowRadius: 22,
+    elevation: 6,
   },
 } as const;

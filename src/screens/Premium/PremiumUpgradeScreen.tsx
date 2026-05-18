@@ -498,8 +498,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   planCard: {
-    backgroundColor: colors.background,
-    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,

@@ -7,6 +7,7 @@ import helperReducer from './slices/helperSlice';
 import appReducer from './slices/appSlice';
 import communityReducer from './slices/communitySlice';
 import safetyModesReducer from './slices/safetyModesSlice';
+import circlesReducer from './slices/circlesSlice';
 
 export const store = configureStore({
   reducer: {
@@ -17,6 +18,7 @@ export const store = configureStore({
     app: appReducer,
     community: communityReducer,
     safetyModes: safetyModesReducer,
+    circles: circlesReducer,
   },
 });
 

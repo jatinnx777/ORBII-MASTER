@@ -11,6 +11,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
+import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { SafetyScreen } from '@/screens/Safety/SafetyScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
@@ -26,6 +27,11 @@ const ICONS: Record<
   { active: IoniconsName; inactive: IoniconsName; label: string }
 > = {
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
+  Circles: {
+    active: 'people-circle',
+    inactive: 'people-circle-outline',
+    label: 'Circles',
+  },
   Safety: {
     active: 'shield-checkmark',
     inactive: 'shield-checkmark-outline',
@@ -46,6 +52,7 @@ export function TabNavigator() {
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Circles" component={CirclesScreen} />
       <Tab.Screen name="Safety" component={SafetyScreen} />
       <Tab.Screen name="Membership" component={PremiumUpgradeScreen} />
       <Tab.Screen name="Settings" component={SettingsScreen} />

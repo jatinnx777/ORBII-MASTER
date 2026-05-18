@@ -29,6 +29,9 @@ type AppState = {
   backgroundVoice: boolean;
   // Buzz the phone when an SOS broadcast lands within 2 km. On by default.
   alertVibration: boolean;
+  // Volume-button triple-press fires SOS countdown. Off by default —
+  // requires the user to opt in from Settings.
+  hardwareSOS: boolean;
   pushEnabled: boolean;
   hydrated: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.
@@ -44,6 +47,7 @@ const initialState: AppState = {
   voiceDetection: false,
   backgroundVoice: false,
   alertVibration: true,
+  hardwareSOS: false,
   pushEnabled: false,
   hydrated: false,
   safeJourney: null,
@@ -74,6 +78,9 @@ const appSlice = createSlice({
     },
     alertVibrationToggled(state, action: PayloadAction<boolean>) {
       state.alertVibration = action.payload;
+    },
+    hardwareSOSToggled(state, action: PayloadAction<boolean>) {
+      state.hardwareSOS = action.payload;
     },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
@@ -111,6 +118,7 @@ export const {
   voiceDetectionToggled,
   backgroundVoiceToggled,
   alertVibrationToggled,
+  hardwareSOSToggled,
   pushEnabledSet,
   safeJourneyStarted,
   safeJourneyEnded,

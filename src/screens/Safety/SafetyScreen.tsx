@@ -42,19 +42,16 @@ import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
-type Tier = 'free' | 'silver' | 'gold' | 'platinum';
-
-// Feature gate. The user's `profile.isPremium` flag will be replaced by a
-// proper tier field once payments land — for now, true = highest tier.
-function useTier(): Tier {
-  const isPremium = useAppSelector((s) => s.user.profile?.isPremium ?? false);
-  return isPremium ? 'platinum' : 'free';
-}
-
-function isUnlocked(have: Tier, need: Tier): boolean {
-  const order: Tier[] = ['free', 'silver', 'gold', 'platinum'];
-  return order.indexOf(have) >= order.indexOf(need);
-}
+// Tier is shown as a badge on each card (SILVER / GOLD / PLATINUM)
+// even when the feature is unlocked — it tells the user what plan
+// the feature WILL be on once paid plans are restored.
+import {
+  type Feature,
+  type Tier,
+  canUse,
+  tierFor,
+  useEntitlement,
+} from '@/services/entitlements';
 
 export function SafetyScreen() {
   return (
@@ -64,6 +61,7 @@ export function SafetyScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Header />
+        <ActiveProtectionSection />
         <DigitalSafetySection />
         <PersonalSafetySection />
         <IntelligenceSection />
@@ -90,6 +88,95 @@ function Header() {
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
+}
+
+// ---------------------------------------------------------------------------
+// Active Protection — Ghost Mode + Deadman Timer (both Silver-tier)
+// ---------------------------------------------------------------------------
+
+function ActiveProtectionSection() {
+  const navigation = useNavigation<Nav>();
+  const ghost = useAppSelector((s) => s.safetyModes.ghost);
+  const deadman = useAppSelector((s) => s.safetyModes.deadman);
+  const ghostUnlocked = useEntitlement('ghost_mode');
+  const deadmanUnlocked = useEntitlement('deadman_timer');
+
+  const openGhost = () => {
+    if (!ghostUnlocked) {
+      navigation.navigate('PremiumUpgrade');
+      return;
+    }
+    if (ghost.active) navigation.navigate('GhostActive');
+    else navigation.navigate('GhostStart');
+  };
+
+  const openDeadman = () => {
+    if (!deadmanUnlocked) {
+      navigation.navigate('PremiumUpgrade');
+      return;
+    }
+    if (deadman.active) navigation.navigate('DeadmanActive');
+    else navigation.navigate('DeadmanStart');
+  };
+
+  const remainingMs =
+    deadman.active && deadman.expiresAt
+      ? Math.max(0, deadman.expiresAt - Date.now())
+      : 0;
+
+  return (
+    <>
+      <SectionHeader title="Active Protection" />
+
+      <FeatureCard
+        icon="eye"
+        title="Ghost Mode"
+        description="Quietly tracks your trip and flags if anything looks off."
+        tier={tierFor('ghost_mode')}
+        locked={!ghostUnlocked}
+        onUnlock={() => navigation.navigate('PremiumUpgrade')}
+        onPress={openGhost}
+      >
+        {ghost.active ? (
+          <View style={styles.statusRow}>
+            <View style={[styles.liveDot, styles.liveDotActive]} />
+            <Text style={styles.statusText}>
+              Watching · headed to {ghost.destinationLabel ?? 'destination'}
+            </Text>
+          </View>
+        ) : ghostUnlocked ? (
+          <Text style={styles.cardSub}>
+            Tap to start a silent trip — destination, ride, optional note.
+          </Text>
+        ) : null}
+      </FeatureCard>
+
+      <FeatureCard
+        icon="hourglass-outline"
+        title="Deadman Timer"
+        description="A countdown that alerts your circle if you don't cancel it."
+        tier={tierFor('deadman_timer')}
+        locked={!deadmanUnlocked}
+        onUnlock={() => navigation.navigate('PremiumUpgrade')}
+        onPress={openDeadman}
+      >
+        {deadman.active ? (
+          <View style={styles.statusRow}>
+            <View style={[styles.liveDot, styles.liveDotActive]} />
+            <Text style={styles.statusText}>
+              Running ·{' '}
+              {Math.floor(remainingMs / 60_000)}m{' '}
+              {Math.floor((remainingMs % 60_000) / 1000)}s left
+            </Text>
+          </View>
+        ) : deadmanUnlocked ? (
+          <Text style={styles.cardSub}>
+            Tap to set a check-in timer before risky moments.
+          </Text>
+        ) : null}
+      </FeatureCard>
+    </>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -200,6 +287,7 @@ function PersonalSafetySection() {
 function VoiceSOSCard() {
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>('idle');
   const listening = voiceStatus === 'listening' || voiceStatus === 'starting';
+  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
 
   useEffect(() => subscribeStatus(setVoiceStatus), []);
 
@@ -211,11 +299,20 @@ function VoiceSOSCard() {
     await startListening();
   };
 
+  // Honest framing: foreground listening works; background listening is a
+  // best-effort beta because Android OEMs throttle the mic API. The UI
+  // tells the user exactly what to expect.
+  const statusLine = listening
+    ? backgroundVoice
+      ? 'Listening · background reliability is best-effort'
+      : 'Listening while ORBII is open'
+    : 'Tap to start listening for "help", "bachao", or "madad"';
+
   return (
     <FeatureCard
       icon="mic"
       title="Voice SOS"
-      description='Says "help" or "bachao" and we fire an SOS hands-free.'
+      description='Says "help" or "bachao" and ORBII fires an SOS hands-free.'
       tier="free"
       right={
         <Switch
@@ -228,14 +325,22 @@ function VoiceSOSCard() {
     >
       <View style={styles.voiceStatusRow}>
         <Waveform active={listening} />
-        <Text
-          style={[
-            styles.voiceStatusText,
-            listening && { color: colors.brandDeep },
-          ]}
-        >
-          {listening ? 'Listening…' : 'Ready'}
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text
+            style={[
+              styles.voiceStatusText,
+              listening && { color: colors.brandDeep },
+            ]}
+            numberOfLines={2}
+          >
+            {statusLine}
+          </Text>
+        </View>
+        {backgroundVoice && listening ? (
+          <View style={styles.betaPill}>
+            <Text style={styles.betaPillText}>BETA</Text>
+          </View>
+        ) : null}
       </View>
     </FeatureCard>
   );
@@ -386,9 +491,10 @@ function EmergencySOSCard() {
 // ---------------------------------------------------------------------------
 
 function IntelligenceSection() {
-  const tier = useTier();
   const navigation = useNavigation<Nav>();
   const point = useAppSelector((s) => s.sos.currentLocation);
+  const heatmapUnlocked = useEntitlement('travel_heatmap');
+  const crimeUnlocked = useEntitlement('crime_reports');
   const [crimeEnabled, setCrimeEnabled] = useState(false);
   const [crimeCount, setCrimeCount] = useState<number | null>(null);
   const [crimeLoading, setCrimeLoading] = useState(false);
@@ -412,8 +518,8 @@ function IntelligenceSection() {
         icon="map"
         title="Travel Safety Heatmap"
         description="Risk zones along your route — high, medium, low."
-        tier="platinum"
-        locked={!isUnlocked(tier, 'platinum')}
+        tier={tierFor('travel_heatmap')}
+        locked={!heatmapUnlocked}
         onUnlock={() => navigation.navigate('PremiumUpgrade')}
       >
         <Text style={styles.cardSub}>
@@ -425,11 +531,11 @@ function IntelligenceSection() {
         icon="newspaper"
         title="Crime Reports"
         description="Recent incidents reported within 2 km of you."
-        tier="silver"
-        locked={!isUnlocked(tier, 'silver')}
+        tier={tierFor('crime_reports')}
+        locked={!crimeUnlocked}
         onUnlock={() => navigation.navigate('PremiumUpgrade')}
         right={
-          isUnlocked(tier, 'silver') ? (
+          crimeUnlocked ? (
             <Switch
               value={crimeEnabled}
               onValueChange={setCrimeEnabled}
@@ -439,7 +545,7 @@ function IntelligenceSection() {
           ) : undefined
         }
       >
-        {isUnlocked(tier, 'silver') && crimeEnabled ? (
+        {crimeUnlocked && crimeEnabled ? (
           <View style={styles.statusRow}>
             {crimeLoading ? (
               <ActivityIndicator size="small" color={colors.brandDeep} />
@@ -569,6 +675,7 @@ function FeatureCard({
   locked,
   right,
   onUnlock,
+  onPress,
   children,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -578,6 +685,7 @@ function FeatureCard({
   locked?: boolean;
   right?: React.ReactNode;
   onUnlock?: () => void;
+  onPress?: () => void;
   children?: React.ReactNode;
 }) {
   const press = useRef(new Animated.Value(1)).current;
@@ -588,10 +696,15 @@ function FeatureCard({
       useNativeDriver: true,
     }).start();
 
-  const Wrapper: React.ElementType = locked && onUnlock ? Pressable : View;
-  const wrapperProps: Record<string, unknown> = locked && onUnlock
+  // Locked → tapping anywhere on the card sends the user to the
+  // upgrade flow. Unlocked + onPress → tappable card. Otherwise
+  // (toggle-only / read-only) the wrapper stays a plain View so
+  // nested Switches / interactive children stay clickable.
+  const handler = locked ? onUnlock : onPress;
+  const Wrapper: React.ElementType = handler ? Pressable : View;
+  const wrapperProps: Record<string, unknown> = handler
     ? {
-        onPress: onUnlock,
+        onPress: handler,
         onPressIn: () => animateTo(0.98),
         onPressOut: () => animateTo(1),
       }
@@ -692,11 +805,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xs,
   },
   card: {
-    backgroundColor: colors.background,
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    padding: spacing.md,
     gap: 10,
     ...shadows.card,
   },
@@ -778,8 +891,19 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 10,
   },
+  liveDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
+  },
+  liveDotActive: {
+    backgroundColor: colors.brandDeep,
+  },
   statusRowAlert: {
-    backgroundColor: '#FFF7E6',
+    // Soft mint wash for "needs attention" — replaces the legacy warm
+    // yellow that clashed with the spec palette.
+    backgroundColor: colors.brandSoft,
   },
   statusText: {
     flex: 1,
@@ -798,9 +922,22 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   voiceStatusText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 13,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12.5,
     color: colors.textSecondary,
+    lineHeight: 17,
+  },
+  betaPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: radius.circle,
+    backgroundColor: '#FFF1CB',
+  },
+  betaPillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 9,
+    color: '#7A4D00',
+    letterSpacing: 0.6,
   },
   waveform: {
     flexDirection: 'row',

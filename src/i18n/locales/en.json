@@ -1,0 +1,66 @@
+{
+  "welcome": {
+    "brand": "ORBII",
+    "tagline": "Your Personal Safety Circle",
+    "headlineLine1": "Stay connected.",
+    "headlineLine2": "Stay protected.",
+    "subtitle": "Trusted by thousands of women and families across India.",
+    "continueWithPhone": "Continue with Phone Number",
+    "continueWithEmail": "Continue with Email",
+    "continueWithGoogle": "Continue with Google",
+    "or": "or",
+    "encrypted": "Your data is encrypted and never shared without your permission.",
+    "chooseLanguage": "Choose your language",
+    "learnPrivacy": "Learn how ORBII protects your privacy",
+    "agreementPrefix": "By continuing, you agree to ORBII's",
+    "terms": "Terms of Service",
+    "and": "and",
+    "privacy": "Privacy Policy"
+  },
+  "phone": {
+    "title": "Enter your phone number",
+    "subtitle": "We will send you a 6-digit OTP to verify your number.",
+    "placeholder": "Enter phone number",
+    "sendOtp": "Send OTP",
+    "sending": "Sending…",
+    "neverShare": "We never share your number with anyone.",
+    "verifyTitle": "Enter the OTP",
+    "verifySubtitle": "We sent a 6-digit code to {{phone}}.",
+    "testHint": "Test mode — use 123456",
+    "verify": "Verify",
+    "verifying": "Verifying…",
+    "resend": "Resend OTP",
+    "resendIn": "Resend in {{seconds}}s",
+    "invalidNumber": "Enter a valid 10-digit Indian mobile number.",
+    "invalidOtp": "Enter the 6-digit OTP you received.",
+    "otpFailed": "We couldn't verify that code. Try again."
+  },
+  "language": {
+    "title": "Choose your language",
+    "subtitle": "You can change this anytime in Settings.",
+    "continue": "Continue",
+    "names": {
+      "en": "English",
+      "hi": "हिन्दी",
+      "pa": "ਪੰਜਾਬੀ",
+      "ta": "தமிழ்",
+      "bn": "বাংলা"
+    },
+    "english": {
+      "en": "English",
+      "hi": "Hindi",
+      "pa": "Punjabi",
+      "ta": "Tamil",
+      "bn": "Bengali"
+    }
+  },
+  "common": {
+    "back": "Back",
+    "cancel": "Cancel",
+    "save": "Save",
+    "continue": "Continue",
+    "done": "Done",
+    "skip": "Skip",
+    "retry": "Try again"
+  }
+}

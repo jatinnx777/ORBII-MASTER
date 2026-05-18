@@ -1,0 +1,66 @@
+{
+  "welcome": {
+    "brand": "ORBII",
+    "tagline": "आपका निजी सुरक्षा घेरा",
+    "headlineLine1": "जुड़े रहें।",
+    "headlineLine2": "सुरक्षित रहें।",
+    "subtitle": "भारत भर की हज़ारों महिलाओं और परिवारों का भरोसा।",
+    "continueWithPhone": "फ़ोन नंबर से जारी रखें",
+    "continueWithEmail": "ईमेल से जारी रखें",
+    "continueWithGoogle": "Google से जारी रखें",
+    "or": "या",
+    "encrypted": "आपका डेटा एन्क्रिप्टेड है और बिना अनुमति कभी साझा नहीं किया जाता।",
+    "chooseLanguage": "अपनी भाषा चुनें",
+    "learnPrivacy": "जानें कि ORBII आपकी गोपनीयता कैसे सुरक्षित रखता है",
+    "agreementPrefix": "जारी रखने पर आप ORBII की",
+    "terms": "सेवा शर्तों",
+    "and": "और",
+    "privacy": "गोपनीयता नीति"
+  },
+  "phone": {
+    "title": "अपना फ़ोन नंबर डालें",
+    "subtitle": "हम आपके नंबर की पुष्टि के लिए 6-अंकों का OTP भेजेंगे।",
+    "placeholder": "फ़ोन नंबर डालें",
+    "sendOtp": "OTP भेजें",
+    "sending": "भेज रहे हैं…",
+    "neverShare": "हम आपका नंबर किसी के साथ साझा नहीं करते।",
+    "verifyTitle": "OTP डालें",
+    "verifySubtitle": "हमने {{phone}} पर 6-अंकों का कोड भेजा है।",
+    "testHint": "टेस्ट मोड — 123456 का उपयोग करें",
+    "verify": "सत्यापित करें",
+    "verifying": "सत्यापित कर रहे हैं…",
+    "resend": "OTP फिर भेजें",
+    "resendIn": "{{seconds}}s में फिर भेजें",
+    "invalidNumber": "वैध 10-अंकों का भारतीय मोबाइल नंबर डालें।",
+    "invalidOtp": "मिला हुआ 6-अंकों का OTP डालें।",
+    "otpFailed": "कोड सत्यापित नहीं हो सका। फिर से कोशिश करें।"
+  },
+  "language": {
+    "title": "अपनी भाषा चुनें",
+    "subtitle": "आप इसे कभी भी सेटिंग्स में बदल सकते हैं।",
+    "continue": "जारी रखें",
+    "names": {
+      "en": "English",
+      "hi": "हिन्दी",
+      "pa": "ਪੰਜਾਬੀ",
+      "ta": "தமிழ்",
+      "bn": "বাংলা"
+    },
+    "english": {
+      "en": "English",
+      "hi": "Hindi",
+      "pa": "Punjabi",
+      "ta": "Tamil",
+      "bn": "Bengali"
+    }
+  },
+  "common": {
+    "back": "वापस",
+    "cancel": "रद्द करें",
+    "save": "सहेजें",
+    "continue": "जारी रखें",
+    "done": "हो गया",
+    "skip": "छोड़ें",
+    "retry": "फिर कोशिश करें"
+  }
+}

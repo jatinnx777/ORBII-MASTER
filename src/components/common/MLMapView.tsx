@@ -53,11 +53,14 @@ export type MLMapViewHandle = {
   flyTo: (point: GeoPoint, zoom?: number) => void;
 };
 
+// Pin palette — aligned to the design tokens. Verified helpers use the
+// brand-deep mint so they read as "ORBII-trusted" instead of the legacy
+// yellow that broke the spec's no-orange-no-yellow rule.
 const COLOURS = {
-  user: '#FF0000',
-  helper: '#00C853',
-  'helper-verified': '#FFD600',
-  destination: '#FF0000',
+  user: '#FF4D4D',
+  helper: '#57C691',
+  'helper-verified': '#1E8E5A',
+  destination: '#FF4D4D',
 } as const;
 
 function toCoords(p: GeoPoint): [number, number] {

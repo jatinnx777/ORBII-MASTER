@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import {
+  isAccessibilityEnabled,
+  isNativeHardwareAvailable,
+  openAccessibilitySettings,
+} from '@/services/hardware-sos';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -18,10 +25,11 @@ import {
   SectionHeader,
   useBrandSheet,
 } from '@/components/common';
-import { colors, fontFamilies, spacing } from '@/theme';
+import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
+  hardwareSOSToggled,
   pushEnabledSet,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
@@ -40,7 +48,41 @@ export function SettingsScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
+  const hardwareSOS = useAppSelector((s) => s.app.hardwareSOS);
   const push = useAppSelector((s) => s.app.pushEnabled);
+
+  const [accessibilityOn, setAccessibilityOn] = useState(false);
+  const nativeAvailable = isNativeHardwareAvailable();
+  // Refresh the accessibility flag when the screen mounts and whenever
+  // hardwareSOS toggles — covers the case where the user just toggled
+  // on, opened Settings, came back, and we want to know if they enabled.
+  useEffect(() => {
+    if (!nativeAvailable) return;
+    let cancelled = false;
+    isAccessibilityEnabled().then((on) => {
+      if (!cancelled) setAccessibilityOn(on);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nativeAvailable, hardwareSOS]);
+
+  const handleToggleHardware = (next: boolean) => {
+    dispatch(hardwareSOSToggled(next));
+    if (next && nativeAvailable && !accessibilityOn) {
+      sheet.confirm({
+        title: 'Enable global hardware SOS',
+        body:
+          'For triple-press to fire SOS even when the screen is off or ORBII is closed, enable the ORBII Accessibility Service. We only listen for volume key events — never your screen content.',
+        confirmLabel: 'Open Accessibility',
+        cancelLabel: 'Skip for now',
+        icon: 'shield-checkmark',
+        onConfirm: () => {
+          openAccessibilitySettings();
+        },
+      });
+    }
+  };
   const sheet = useBrandSheet();
   const friendsCount = profile?.friends?.length ?? 0;
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
@@ -93,6 +135,67 @@ export function SettingsScreen() {
             label="Emergency contacts"
             value={`${contactsCount} ${contactsCount === 1 ? 'contact' : 'contacts'}`}
             onPress={() => navigation.navigate('EmergencyContacts')}
+          />
+        </Card>
+
+        <SectionHeader title="Emergency triggers" />
+        <Card style={styles.rowsCard}>
+          <Row
+            icon="hardware-chip-outline"
+            label="Hardware button SOS"
+            value={
+              hardwareSOS
+                ? nativeAvailable && accessibilityOn
+                  ? 'Triple-press volume — works screen-off'
+                  : 'Triple-press volume — works while ORBII is open'
+                : 'Off — only the SOS button fires alerts'
+            }
+            right={
+              <Switch
+                value={hardwareSOS}
+                onValueChange={handleToggleHardware}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={hardwareSOS ? colors.brandDeep : colors.background}
+              />
+            }
+          />
+          {hardwareSOS && nativeAvailable && !accessibilityOn ? (
+            <Pressable
+              onPress={() => openAccessibilitySettings()}
+              style={({ pressed }) => [
+                styles.upgradeBanner,
+                pressed && styles.bannerPressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name="sparkles"
+                size={14}
+                color={colors.brandDeep}
+              />
+              <Text style={styles.upgradeBannerText}>
+                Enable ORBII in Accessibility for screen-off coverage
+              </Text>
+              <Ionicons
+                name="chevron-forward"
+                size={14}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          ) : null}
+          <Divider />
+          <Row
+            icon="mic-outline"
+            label="Background Voice SOS"
+            value="Always-on wake word — Picovoice setup needed"
+            onPress={() => navigation.navigate('VoiceSetup')}
+          />
+          <Divider />
+          <Row
+            icon="hand-left-outline"
+            label="Background reliability"
+            value="OEM permissions, autostart, battery — walk-through"
+            onPress={() => navigation.navigate('OEMHelp')}
           />
         </Card>
 
@@ -161,6 +264,16 @@ export function SettingsScreen() {
           />
         </Card>
 
+        <SectionHeader title="Preferences" />
+        <Card style={styles.rowsCard}>
+          <Row
+            icon="language"
+            label="Language"
+            value="English, Hindi, Punjabi, Tamil, Bengali"
+            onPress={() => navigation.navigate('LanguageSelectorApp')}
+          />
+        </Card>
+
         <SectionHeader title="Help" />
         <Card style={styles.rowsCard}>
           <Row
@@ -223,17 +336,41 @@ const styles = StyleSheet.create({
   rowsCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
-    borderRadius: 18,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     padding: 0,
     overflow: 'hidden',
+    ...shadows.card,
   },
   divider: {
     height: 1,
     backgroundColor: colors.border,
     marginLeft: 56,
+  },
+  upgradeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
+  },
+  bannerPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.99 }],
+  },
+  upgradeBannerText: {
+    flex: 1,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12,
+    color: colors.brandDeep,
   },
   footer: {
     alignItems: 'center',

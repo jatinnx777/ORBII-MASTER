@@ -24,6 +24,16 @@ import { ChatThreadScreen } from '@/screens/Friends/ChatThreadScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
 import { SupportChatScreen } from '@/screens/Support/SupportChatScreen';
 import { AboutScreen } from '@/screens/About/AboutScreen';
+import { GhostStartScreen } from '@/screens/Safety/Ghost/StartScreen';
+import { GhostActiveScreen } from '@/screens/Safety/Ghost/ActiveScreen';
+import { DeadmanStartScreen } from '@/screens/Safety/Deadman/StartScreen';
+import { DeadmanActiveScreen } from '@/screens/Safety/Deadman/ActiveScreen';
+import { OEMHelpScreen } from '@/screens/OEMHelp/OEMHelpScreen';
+import { VoiceSetupScreen } from '@/screens/Voice/VoiceSetupScreen';
+import { LanguageSelectorScreen } from '@/screens/Auth/LanguageSelectorScreen';
+import { CircleDetailScreen } from '@/screens/Circles/CircleDetailScreen';
+import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
+import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -180,6 +190,64 @@ export function AppNavigator() {
         name="About"
         component={AboutScreen}
         options={withHeader('About ORBII')}
+      />
+      <Stack.Screen
+        name="GhostStart"
+        component={GhostStartScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="GhostActive"
+        component={GhostActiveScreen}
+        options={{
+          headerShown: false,
+          animation: 'fade',
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="DeadmanStart"
+        component={DeadmanStartScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="DeadmanActive"
+        component={DeadmanActiveScreen}
+        options={{
+          headerShown: false,
+          animation: 'fade',
+          gestureEnabled: false,
+        }}
+      />
+      <Stack.Screen
+        name="OEMHelp"
+        component={OEMHelpScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="VoiceSetup"
+        component={VoiceSetupScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="LanguageSelectorApp"
+        component={LanguageSelectorScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CircleDetail"
+        component={CircleDetailScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CircleCreate"
+        component={CircleCreateScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="CircleInvite"
+        component={CircleInviteScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );

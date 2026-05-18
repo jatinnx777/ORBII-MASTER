@@ -6,6 +6,7 @@ import { listFriendsForUser } from './friend-requests';
 import { syncUsersPublic } from './users-public';
 import { listEmergencyContacts } from './emergency-contacts';
 import { fetchSOSHistory } from './sos-history';
+import { isValidIndianPhone, toE164India } from '@/utils/validation';
 
 // Custom URL scheme registered in app.json. Redirect URI must be hard-coded
 // so it stays stable across Expo Go vs production builds (where
@@ -34,6 +35,19 @@ export const AUTH_REDIRECT_URL = 'orbii://auth/callback';
 // to a local-only fake profile. The UI flow stays identical.
 const DEV_AUTH_MODE = false;
 
+// PHONE OTP TEST BYPASS — accepts a hard-coded OTP for phone sign-in so
+// we can demo the flow before wiring a real SMS gateway (Twilio /
+// MessageBird etc.). When enabled:
+//   • sendPhoneOtp does NOT call Supabase; just returns the E.164 number.
+//   • verifyPhoneOtp accepts only TEST_OTP_CODE and returns a fake
+//     profile with `needsProfile: true` so the user lands in ProfileSetup.
+//   • No real Supabase session is created, so server-side calls
+//     (friends search, messages, sos broadcast) will fail until you
+//     either flip this off OR configure Supabase Phone Auth properly.
+// FLIP TO false before production launch.
+const TEST_OTP_BYPASS = true;
+const TEST_OTP_CODE = '123456';
+
 WebBrowser.maybeCompleteAuthSession();
 
 export type SignInResult = {
@@ -44,6 +58,134 @@ export type SignInResult = {
   // tab is populated immediately on sign-in.
   history: import('@/types').SOSRecord[];
 };
+
+// Sends a 6-digit OTP to the given phone via Supabase Auth (Phone
+// provider). Requires the Supabase project's Auth → Phone settings to
+// have a configured SMS gateway (Twilio / MessageBird / Vonage / built-in
+// test mode). The caller surfaces success/failure as UI state — this
+// function only throws on hard transport errors.
+export async function sendPhoneOtp(rawPhone: string): Promise<string> {
+  if (!isValidIndianPhone(rawPhone)) {
+    throw new Error('Enter a valid 10-digit Indian mobile number.');
+  }
+  // Bypass paths short-circuit before hitting Supabase. UI still feels
+  // like an OTP was sent.
+  if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
+    await delay(400);
+    return toE164India(rawPhone);
+  }
+  const phone = toE164India(rawPhone);
+  const { error } = await supabase.auth.signInWithOtp({ phone });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return phone;
+}
+
+// Verifies the OTP, exchanges it for a session, then runs the same
+// profile-bootstrap flow as Google sign-in (fetches/creates profile,
+// hydrates friends + emergency contacts + history).
+export async function verifyPhoneOtp(
+  phoneE164: string,
+  code: string,
+): Promise<SignInResult> {
+  const cleaned = code.replace(/\D/g, '');
+
+  // Hard-coded test path. Returns a local-only profile so the user can
+  // walk the post-signin flow without a real Supabase session. Server
+  // calls (Supabase reads/writes) will fail under this path — fine for
+  // UI demos, not for production.
+  if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
+    await delay(500);
+    if (cleaned !== TEST_OTP_CODE) {
+      throw new Error(`Test mode is on. Use ${TEST_OTP_CODE} as the OTP.`);
+    }
+    const profile = emptyProfile({
+      uid: `test_${phoneE164.replace(/\D/g, '')}`,
+      email: '',
+      name: null,
+      photo: null,
+    });
+    profile.phone = phoneE164;
+    return { profile, needsProfile: true, history: [] };
+  }
+
+  if (cleaned.length < 4) {
+    throw new Error('Enter the 6-digit OTP you received.');
+  }
+  const { data: sessionData, error: verifyError } = await supabase.auth.verifyOtp({
+    phone: phoneE164,
+    token: cleaned,
+    type: 'sms',
+  });
+  if (verifyError || !sessionData?.user) {
+    throw new Error(verifyError?.message ?? 'OTP verification failed.');
+  }
+  const user = sessionData.user;
+  return bootstrapProfile(user, { fallbackPhone: phoneE164 });
+}
+
+// Shared post-signin bootstrap: pulls profile, friends, contacts,
+// history. Extracted from signInWithGoogle so both auth paths converge
+// on the same flow. Returns a `SignInResult` ready to dispatch.
+async function bootstrapProfile(
+  user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
+  opts: { fallbackPhone?: string } = {},
+): Promise<SignInResult> {
+  let { data: row } = await supabase
+    .from('profiles')
+    .select(
+      'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
+    )
+    .eq('id', user.id)
+    .maybeSingle<ProfileRow>();
+
+  if (!row) {
+    const fallbackUsername = await ensureFallbackProfile(user);
+    if (fallbackUsername) {
+      const { data: refreshed } = await supabase
+        .from('profiles')
+        .select(
+          'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
+        )
+        .eq('id', user.id)
+        .maybeSingle<ProfileRow>();
+      row = refreshed ?? null;
+    }
+  }
+
+  const [friends, emergencyContacts, history] = await Promise.all([
+    listFriendsForUser(user.id),
+    listEmergencyContacts(user.id),
+    fetchSOSHistory(user.id),
+  ]);
+
+  if (row) {
+    const profile = rowToProfile(row, user.email ?? '');
+    profile.friends = friends;
+    profile.emergencyContacts = emergencyContacts;
+    if (!profile.phone && opts.fallbackPhone) profile.phone = opts.fallbackPhone;
+    if (profile.username) {
+      syncUsersPublic(profile).catch(() => undefined);
+    }
+    return {
+      profile,
+      needsProfile: !profile.username || !profile.phone,
+      history,
+    };
+  }
+
+  const profile = emptyProfile({
+    uid: user.id,
+    email: user.email ?? '',
+    name: (user.user_metadata?.full_name as string | undefined) ?? null,
+    photo: (user.user_metadata?.avatar_url as string | undefined) ?? null,
+  });
+  profile.friends = friends;
+  profile.emergencyContacts = emergencyContacts;
+  if (opts.fallbackPhone) profile.phone = opts.fallbackPhone;
+  return { profile, needsProfile: true, history };
+}
 
 function emptyProfile(args: {
   uid: string;
@@ -240,70 +382,10 @@ export async function signInWithGoogle(): Promise<SignInResult> {
   }
   const user = sessionData.user;
 
-  // 4. Look up an existing profiles row for this user. If the row exists,
-  //    they're a returning user; if not, ProfileSetup will fire.
-  //
-  //    Defensive fallback: the SQL trigger in sql/04_profile_triggers.sql
-  //    auto-creates a profile on auth.users insert. If the trigger isn't
-  //    installed yet (or RLS hiccupped), we insert a minimal row from the
-  //    client so the user is immediately searchable.
-  let { data: row } = await supabase
-    .from('profiles')
-    .select(
-      'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
-    )
-    .eq('id', user.id)
-    .maybeSingle<ProfileRow>();
-
-  if (!row) {
-    const fallbackUsername = await ensureFallbackProfile(user);
-    if (fallbackUsername) {
-      const { data: refreshed } = await supabase
-        .from('profiles')
-        .select(
-          'id, email, username, name, phone, photo_uri, is_helper, is_verified, created_at, username_changed_at, photo_changed_at',
-        )
-        .eq('id', user.id)
-        .maybeSingle<ProfileRow>();
-      row = refreshed ?? null;
-    }
-  }
-
-  // Pull friends, emergency contacts, and SOS history from the server so
-  // reinstall / new device restores everything. New users come back with
-  // empty lists.
-  const [friends, emergencyContacts, history] = await Promise.all([
-    listFriendsForUser(user.id),
-    listEmergencyContacts(user.id),
-    fetchSOSHistory(user.id),
-  ]);
-
-  if (row) {
-    const profile = rowToProfile(row, user.email ?? '');
-    profile.friends = friends;
-    profile.emergencyContacts = emergencyContacts;
-    // Backfill users_public on every sign-in. Cheap upsert, ensures
-    // existing accounts created before the table was added get mirrored
-    // so other users can find them in search.
-    if (profile.username) {
-      syncUsersPublic(profile).catch(() => undefined);
-    }
-    return {
-      profile,
-      needsProfile: !profile.username || !profile.phone,
-      history,
-    };
-  }
-
-  const profile = emptyProfile({
-    uid: user.id,
-    email: user.email ?? '',
-    name: (user.user_metadata?.full_name as string | undefined) ?? null,
-    photo: (user.user_metadata?.avatar_url as string | undefined) ?? null,
-  });
-  profile.friends = friends;
-  profile.emergencyContacts = emergencyContacts;
-  return { profile, needsProfile: true, history };
+  // 4. Hand off to the shared bootstrap that fetches/creates the
+  //    profile and hydrates friends + contacts + history. Identical
+  //    flow for Google and Phone sign-in.
+  return bootstrapProfile(user);
 }
 
 export async function signOutFromGoogle(): Promise<void> {

@@ -1,0 +1,353 @@
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import {
+  colors,
+  fontFamilies,
+  radius,
+  spacing,
+  touchTarget,
+  typography,
+} from '@/theme';
+import { useAppDispatch } from '@/redux/store';
+import {
+  signInFailed,
+  signInStarted,
+  signInSucceeded,
+} from '@/redux/slices/userSlice';
+import { historyHydrated } from '@/redux/slices/historySlice';
+import { sendPhoneOtp, verifyPhoneOtp } from '@/services/auth';
+import type { AuthScreenProps } from '@/navigation/types';
+
+// 6-digit OTP entry. Renders as a single TextInput styled to look like
+// 6 boxes — keeps the UX simple while supporting paste-fill from the
+// system SMS suggestion bar.
+const OTP_LENGTH = 6;
+const RESEND_COOLDOWN_S = 30;
+
+export function PhoneVerifyScreen({
+  route,
+  navigation,
+}: AuthScreenProps<'PhoneVerify'>) {
+  const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+  const phone = route.params.phone;
+
+  const [code, setCode] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  const [resending, setResending] = useState(false);
+  const [resendIn, setResendIn] = useState(RESEND_COOLDOWN_S);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const id = setInterval(() => setResendIn((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(id);
+  }, [resendIn]);
+
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 480,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [enter]);
+
+  const ready = code.length === OTP_LENGTH && !verifying;
+
+  const onVerify = async () => {
+    if (!ready) return;
+    setVerifying(true);
+    setError(null);
+    dispatch(signInStarted());
+    try {
+      const { profile, needsProfile, history } = await verifyPhoneOtp(phone, code);
+      dispatch(signInSucceeded({ profile, needsProfile }));
+      dispatch(historyHydrated(history));
+      if (needsProfile) {
+        navigation.reset({ index: 0, routes: [{ name: 'ProfileSetup' }] });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('phone.otpFailed');
+      setError(message);
+      dispatch(signInFailed({ error: message }));
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const onResend = async () => {
+    if (resendIn > 0 || resending) return;
+    setResending(true);
+    setError(null);
+    try {
+      await sendPhoneOtp(phone.replace(/^\+91/, ''));
+      setResendIn(RESEND_COOLDOWN_S);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t('phone.otpFailed'));
+    } finally {
+      setResending(false);
+    }
+  };
+
+  const translateY = enter.interpolate({
+    inputRange: [0, 1],
+    outputRange: [12, 0],
+  });
+
+  return (
+    <View style={styles.root}>
+      <LinearGradient
+        colors={[colors.brandSoft, '#FFFFFF']}
+        start={{ x: 0.3, y: 0 }}
+        end={{ x: 0.7, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.headerRow}>
+            <Pressable
+              onPress={() => navigation.goBack()}
+              hitSlop={12}
+              style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+            >
+              <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
+            </Pressable>
+          </View>
+
+          <Animated.View
+            style={[
+              styles.body,
+              { opacity: enter, transform: [{ translateY }] },
+            ]}
+          >
+            <Text style={styles.title}>{t('phone.verifyTitle')}</Text>
+            <Text style={styles.subtitle}>
+              {t('phone.verifySubtitle', { phone })}
+            </Text>
+            <View style={styles.testHint}>
+              <Ionicons name="flask-outline" size={12} color={colors.brandDeep} />
+              <Text style={styles.testHintText}>{t('phone.testHint')}</Text>
+            </View>
+
+            <TextInput
+              value={code}
+              onChangeText={(v) => {
+                setCode(v.replace(/\D/g, '').slice(0, OTP_LENGTH));
+                if (error) setError(null);
+              }}
+              keyboardType="number-pad"
+              maxLength={OTP_LENGTH}
+              autoComplete="sms-otp"
+              autoFocus
+              textContentType="oneTimeCode"
+              style={styles.otpField}
+            />
+
+            <View style={styles.boxesRow}>
+              {Array.from({ length: OTP_LENGTH }).map((_, i) => {
+                const filled = i < code.length;
+                return (
+                  <View
+                    key={i}
+                    style={[
+                      styles.box,
+                      filled && styles.boxFilled,
+                      i === code.length && styles.boxActive,
+                    ]}
+                  >
+                    <Text style={styles.boxText}>{code[i] ?? ''}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+            <Pressable
+              onPress={onVerify}
+              disabled={!ready}
+              style={({ pressed }) => [
+                styles.primaryBtn,
+                !ready && styles.primaryBtnDisabled,
+                pressed && ready && styles.pressed,
+              ]}
+              accessibilityRole="button"
+            >
+              <Text style={styles.primaryBtnLabel}>
+                {verifying ? t('phone.verifying') : t('phone.verify')}
+              </Text>
+            </Pressable>
+
+            <Pressable
+              onPress={onResend}
+              disabled={resendIn > 0 || resending}
+              style={styles.resendBtn}
+            >
+              <Text
+                style={[
+                  styles.resendText,
+                  resendIn === 0 && !resending && styles.resendActive,
+                ]}
+              >
+                {resendIn > 0
+                  ? t('phone.resendIn', { seconds: resendIn })
+                  : t('phone.resend')}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  flex: { flex: 1 },
+  safe: { flex: 1, paddingHorizontal: spacing.lg },
+  headerRow: { paddingTop: spacing.sm, flexDirection: 'row' },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.9)',
+  },
+  body: {
+    flex: 1,
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+  },
+  title: {
+    ...typography.h2,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+  },
+  subtitle: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 8,
+    paddingHorizontal: spacing.md,
+    lineHeight: 20,
+  },
+  otpField: {
+    position: 'absolute',
+    opacity: 0,
+    width: 1,
+    height: 1,
+  },
+  boxesRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: spacing.xl,
+  },
+  box: {
+    width: 44,
+    height: 56,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  boxFilled: {
+    borderColor: colors.brandDeep,
+    backgroundColor: colors.brandSoft,
+  },
+  boxActive: {
+    borderColor: colors.brandDeep,
+  },
+  boxText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+  },
+  errorText: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12.5,
+    color: colors.error,
+    marginTop: spacing.md,
+  },
+  primaryBtn: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: touchTarget.comfortable,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandDeep,
+    marginTop: spacing.xl,
+    shadowColor: colors.brandDeep,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.30,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  primaryBtnDisabled: { opacity: 0.5 },
+  primaryBtnLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 15,
+    color: colors.textInverse,
+    letterSpacing: 0.3,
+  },
+  resendBtn: {
+    marginTop: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  resendText: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  resendActive: {
+    color: colors.brandDeep,
+    fontFamily: fontFamilies.poppinsSemiBold,
+  },
+  testHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: spacing.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.brandSoft,
+  },
+  testHintText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11,
+    color: colors.brandDeep,
+    letterSpacing: 0.3,
+  },
+  pressed: {
+    opacity: 0.92,
+    transform: [{ scale: 0.98 }],
+  },
+});

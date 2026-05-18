@@ -290,10 +290,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: '#FFD3D3',
-    backgroundColor: '#FFF4F4',
+    borderColor: 'rgba(255, 77, 77, 0.22)',
+    backgroundColor: 'rgba(255, 77, 77, 0.08)',
   },
   emptyContactsText: {
     ...typography.bodyMedium,

@@ -5,6 +5,9 @@ import type { CompositeScreenProps } from '@react-navigation/native';
 export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
+  PhoneSignIn: undefined;
+  PhoneVerify: { phone: string };
+  LanguageSelector: undefined;
   ProfileSetup: undefined;
 };
 
@@ -13,6 +16,7 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 
 export type TabParamList = {
   Home: undefined;
+  Circles: undefined;
   Safety: undefined;
   Membership: undefined;
   Settings: undefined;
@@ -43,6 +47,16 @@ export type AppStackParamList = {
   History: undefined;
   SupportChat: undefined;
   About: undefined;
+  GhostStart: undefined;
+  GhostActive: undefined;
+  DeadmanStart: undefined;
+  DeadmanActive: undefined;
+  OEMHelp: undefined;
+  VoiceSetup: undefined;
+  LanguageSelectorApp: undefined;
+  CircleDetail: { circleId: string };
+  CircleCreate: undefined;
+  CircleInvite: { circleId: string };
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

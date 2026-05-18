@@ -19,6 +19,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
+import { CircleSelectorPill } from './components/CircleSelectorPill';
 import { MLMapView, ScreenContainer, type MLMarker } from '@/components/common';
 import {
   colors,
@@ -55,6 +56,8 @@ import {
 } from '@/services/notifications';
 import { formatDistance, haversineMeters } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
+import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
+import { useSafetyTips } from '@/hooks/useSafetyTips';
 import {
   startListening,
   stopListening,
@@ -314,6 +317,33 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
   const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
+  const unreadCount = useNotificationsBadge();
+  const safetyTips = useSafetyTips();
+  const topTip = safetyTips[0] ?? null;
+
+  const handleTipPress = useCallback(() => {
+    if (!topTip) return;
+    switch (topTip.target) {
+      case 'enable_location':
+        bootstrapPermission();
+        return;
+      case 'add_contact':
+        navigation.navigate('EmergencyContacts');
+        return;
+      case 'invite_friend':
+        navigation.navigate('Friends');
+        return;
+      case 'share_trip':
+        navigation.navigate('SafeJourneyStart');
+        return;
+      case 'community_alerts':
+        navigation.navigate('CommunityAlerts');
+        return;
+      case 'practice_sos':
+        navigation.navigate('SOSCountdown', { test: true });
+        return;
+    }
+  }, [topTip, bootstrapPermission, navigation]);
 
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
@@ -375,8 +405,9 @@ export function HomeScreen() {
         <HomeHeader
           profile={profile}
           initial={initial}
+          unreadCount={unreadCount}
           onProfilePress={() => navigation.navigate('Profile')}
-          onFriendsPress={() => navigation.navigate('Friends')}
+          onNotificationsPress={() => navigation.navigate('Notifications')}
         />
       </View>
 
@@ -386,8 +417,8 @@ export function HomeScreen() {
           <View style={styles.panelTopRow}>
             <View style={styles.legendInline}>
               <LegendDot color={colors.primary} label="You" />
-              <LegendDot color="#FFD600" label="Verified" />
-              <LegendDot color={colors.success} label="Helpers" />
+              <LegendDot color={colors.brandDeep} label="Verified" />
+              <LegendDot color={colors.brand} label="Helpers" />
             </View>
             <Pressable
               onPress={handleSafeModePress}
@@ -513,6 +544,8 @@ export function HomeScreen() {
           count={nearbyAlerts.length}
           onPress={() => navigation.navigate('CommunityAlerts')}
         />
+
+        {topTip ? <SafetyTipCard tip={topTip} onPress={handleTipPress} /> : null}
       </BottomPanel>
     </ScreenContainer>
   );
@@ -620,104 +653,129 @@ function BottomPanel({
   );
 }
 
-// Avatar springs in on screen mount; chat icon fades in just after. Subtle
-// motion on the header so the home doesn't pop into existence all at once.
+// Top floating header — avatar (with online dot) on the left, circle
+// selector pill in the centre (real circles from Supabase; empty state
+// invites the user to create their first one), notification bell with
+// unread dot on the right.
 function HomeHeader({
   profile,
   initial,
+  unreadCount,
   onProfilePress,
-  onFriendsPress,
+  onNotificationsPress,
 }: {
   profile: UserProfile | null;
   initial: string;
+  unreadCount: number;
   onProfilePress: () => void;
-  onFriendsPress: () => void;
+  onNotificationsPress: () => void;
 }) {
-  const avatarScale = useRef(new Animated.Value(0.6)).current;
-  const avatarOpacity = useRef(new Animated.Value(0)).current;
-  const chatOpacity = useRef(new Animated.Value(0)).current;
-  const chatTranslate = useRef(new Animated.Value(8)).current;
-
+  const enter = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.parallel([
-      Animated.spring(avatarScale, {
-        toValue: 1,
-        speed: 14,
-        bounciness: 8,
-        useNativeDriver: true,
-      }),
-      Animated.timing(avatarOpacity, {
-        toValue: 1,
-        duration: 280,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }),
-      Animated.sequence([
-        Animated.delay(120),
-        Animated.parallel([
-          Animated.timing(chatOpacity, {
-            toValue: 1,
-            duration: 260,
-            useNativeDriver: true,
-          }),
-          Animated.timing(chatTranslate, {
-            toValue: 0,
-            duration: 280,
-            easing: Easing.out(Easing.cubic),
-            useNativeDriver: true,
-          }),
-        ]),
-      ]),
-    ]).start();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 360,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [enter]);
 
   const photo = profile?.photoUri ?? null;
+  const translateY = enter.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-6, 0],
+  });
 
   return (
-    <View style={styles.header}>
-      <Animated.View
-        style={{ opacity: avatarOpacity, transform: [{ scale: avatarScale }] }}
+    <Animated.View
+      style={[
+        styles.header,
+        { opacity: enter, transform: [{ translateY }] },
+      ]}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Open profile"
+        hitSlop={8}
+        onPress={onProfilePress}
+        style={({ pressed }) => [
+          styles.avatarWrap,
+          pressed && styles.headerPressed,
+        ]}
       >
-        <Pressable
-          style={styles.avatarWrap}
-          accessibilityRole="button"
-          accessibilityLabel="Open profile"
-          hitSlop={8}
-          onPress={onProfilePress}
-        >
-          <View style={styles.avatar}>
-            {photo ? (
-              <Image source={{ uri: photo }} style={styles.avatarImage} />
-            ) : initial ? (
-              <Text style={styles.avatarInitial}>{initial}</Text>
-            ) : (
-              <Ionicons name="person" size={18} color={colors.textMuted} />
-            )}
-          </View>
-        </Pressable>
-      </Animated.View>
-      <Animated.View
-        style={{
-          opacity: chatOpacity,
-          transform: [{ translateY: chatTranslate }],
-        }}
+        <View style={styles.avatar}>
+          {photo ? (
+            <Image source={{ uri: photo }} style={styles.avatarImage} />
+          ) : initial ? (
+            <Text style={styles.avatarInitial}>{initial}</Text>
+          ) : (
+            <Ionicons name="person" size={18} color={colors.textMuted} />
+          )}
+        </View>
+        <View style={styles.avatarOnlineDot} />
+      </Pressable>
+
+      <CircleSelectorPill />
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          unreadCount > 0 ? `${unreadCount} new notifications` : 'Notifications'
+        }
+        hitSlop={8}
+        onPress={onNotificationsPress}
+        style={({ pressed }) => [
+          styles.bellWrap,
+          pressed && styles.headerPressed,
+        ]}
       >
-        <Pressable
-          style={styles.iconChip}
-          accessibilityRole="button"
-          accessibilityLabel="Friends"
-          hitSlop={8}
-          onPress={onFriendsPress}
-        >
-          <Ionicons
-            name="chatbubble-ellipses-outline"
-            size={20}
-            color={colors.textPrimary}
-          />
-        </Pressable>
-      </Animated.View>
-    </View>
+        <Ionicons
+          name="notifications-outline"
+          size={20}
+          color={colors.textPrimary}
+        />
+        {unreadCount > 0 ? <View style={styles.bellDot} /> : null}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Single dynamic safety tip surfaced based on real app state (no hardcoded
+// copy — see `useSafetyTips`). Renders the top-priority tip with a calm
+// mint-tinted card so it reads as a suggestion, not a warning.
+function SafetyTipCard({
+  tip,
+  onPress,
+}: {
+  tip: ReturnType<typeof useSafetyTips>[number];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.tipCard,
+        pressed && styles.pressedScale,
+      ]}
+      accessibilityRole="button"
+      accessibilityLabel={`${tip.title}. ${tip.cta}`}
+    >
+      <View style={styles.tipIcon}>
+        <Ionicons name="sparkles" size={14} color={colors.brandDeep} />
+      </View>
+      <View style={styles.tipBody}>
+        <Text style={styles.tipTitle} numberOfLines={1}>
+          {tip.title}
+        </Text>
+        <Text style={styles.tipText} numberOfLines={2}>
+          {tip.body}
+        </Text>
+      </View>
+      <View style={styles.tipCta}>
+        <Text style={styles.tipCtaText}>{tip.cta}</Text>
+        <Ionicons name="chevron-forward" size={14} color={colors.brandDeep} />
+      </View>
+    </Pressable>
   );
 }
 
@@ -791,7 +849,7 @@ function AlertsStrip({ count, onPress }: { count: number; onPress: () => void })
       <Ionicons
         name="chevron-forward"
         size={16}
-        color={active ? colors.textInverse : colors.textMuted}
+        color={active ? colors.primary : colors.textMuted}
       />
     </Pressable>
   );
@@ -873,7 +931,85 @@ const styles = StyleSheet.create({
   avatarInitial: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 15,
-    color: colors.primary,
+    color: colors.brandDeep,
+  },
+  avatarOnlineDot: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.success,
+    borderWidth: 2,
+    borderColor: colors.background,
+  },
+  headerPressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.96 }],
+  },
+  bellWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 8,
+    right: 9,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  tipCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+    borderWidth: 1,
+    borderColor: colors.brandMid,
+  },
+  tipIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipBody: { flex: 1, gap: 2 },
+  tipTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  tipText: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 11.5,
+    color: colors.textSecondary,
+    lineHeight: 15,
+  },
+  tipCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  tipCtaText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11.5,
+    color: colors.brandDeep,
+    letterSpacing: 0.2,
   },
   mapDim: {
     ...StyleSheet.absoluteFillObject,
@@ -1034,17 +1170,18 @@ const styles = StyleSheet.create({
   },
   voiceCard: {
     flex: 1,
-    minHeight: 68,
-    borderRadius: radius.md,
-    backgroundColor: colors.background,
+    minHeight: 72,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     gap: 10,
+    ...shadows.card,
   },
   voiceCardActive: {
     borderColor: colors.brandDeep,
@@ -1089,30 +1226,37 @@ const styles = StyleSheet.create({
   tinyPillTextActive: {
     color: colors.textInverse,
   },
+  // Active state — soft danger wash so the user immediately reads "someone
+  // needs help" without the visual aggression of a black bar. Idle state
+  // stays a calm surface card. Both share the premium 24px radius + soft
+  // diffuse shadow from the design tokens.
   alertsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.dark,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255, 77, 77, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 77, 77, 0.25)',
   },
   alertsBannerIdle: {
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.card,
   },
   alertsBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   alertsBadgeIdle: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.brandSoft,
   },
   alertsBadgeText: {
     fontFamily: fontFamilies.poppinsBold,
@@ -1121,8 +1265,8 @@ const styles = StyleSheet.create({
   },
   alertsTitle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13,
-    color: colors.textInverse,
+    fontSize: 13.5,
+    color: colors.primary,
     flex: 1,
   },
   alertsTitleIdle: {
