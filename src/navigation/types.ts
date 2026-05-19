@@ -9,6 +9,7 @@ export type AuthStackParamList = {
   PhoneVerify: { phone: string };
   LanguageSelector: undefined;
   ProfileSetup: undefined;
+  // Note: IdVerification removed alongside the helper system cut.
 };
 
 export type AuthScreenProps<T extends keyof AuthStackParamList> =
@@ -31,32 +32,27 @@ export type AppStackParamList = {
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;
-  HelperVerification: undefined;
-  HelperDashboard: undefined;
-  IdVerification: undefined;
   Notifications: undefined;
-  AcceptSOS: undefined;
-  HelperNavigation: undefined;
-  Withdraw: undefined;
   SafeJourneyStart: undefined;
-  SafeJourneyActive: undefined;
+  // requirePinToEnd: surface the PIN prompt the moment this screen
+  // mounts. Set by the lock-screen "I'm safe" action when the user has
+  // a safety PIN configured.
+  SafeJourneyActive: { requirePinToEnd?: boolean } | undefined;
   CommunityAlerts: undefined;
   Profile: undefined;
   Friends: undefined;
-  ChatThread: { username: string };
   History: undefined;
-  SupportChat: undefined;
   About: undefined;
   GhostStart: undefined;
   GhostActive: undefined;
   DeadmanStart: undefined;
   DeadmanActive: undefined;
   OEMHelp: undefined;
-  VoiceSetup: undefined;
   LanguageSelectorApp: undefined;
   CircleDetail: { circleId: string };
   CircleCreate: undefined;
   CircleInvite: { circleId: string };
+  SafetyPin: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

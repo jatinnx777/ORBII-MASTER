@@ -21,6 +21,7 @@ import {
 } from '@/redux/slices/sosSlice';
 import { getFastLocation, reverseGeocode } from '@/services/location';
 import { createSOS } from '@/services/sos';
+import { broadcastSOSViaWhatsApp } from '@/services/whatsapp-sos';
 import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -142,6 +143,19 @@ export function CountdownScreen() {
         () => undefined,
       );
       navigation.replace('ActiveSOS');
+      // Fire-and-forget WhatsApp broadcast to every emergency contact.
+      // Push + realtime channel still fire on the critical path; WhatsApp
+      // is the high-deliverability secondary that catches contacts who
+      // mute notifications or aren't running ORBII.
+      if (!isTest) {
+        broadcastSOSViaWhatsApp({
+          user: profile,
+          location: { ...point, address: null },
+        }).catch(() => undefined);
+        // Note: audio recording is driven by ActiveSOSScreen's hook so
+        // it ties recorder lifecycle to the React tree. We just navigate
+        // forward and let that screen mount the recorder.
+      }
       // Fire-and-forget address fill so the incident detail later shows a
       // human-readable location. Doesn't block the dispatch path.
       if (!isTest) {

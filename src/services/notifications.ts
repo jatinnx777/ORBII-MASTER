@@ -7,6 +7,8 @@ const PINNED_SHORTCUT_ID = 'orbii-sos-shortcut';
 const PINNED_SHORTCUT_CATEGORY = 'orbii-sos-shortcut';
 const LISTENING_BADGE_ID = 'orbii-voice-listening';
 const VOICE_WAKE_ID = 'orbii-voice-wake';
+const SAFE_JOURNEY_ID = 'orbii-safe-journey';
+const SAFE_JOURNEY_CATEGORY = 'orbii-safe-journey';
 
 function configure() {
   if (configured) return;
@@ -73,6 +75,88 @@ function configure() {
       options: { opensAppToForeground: true },
     },
   ]).catch(() => undefined);
+  // Tap-actions on the Safe Journey lock-screen widget.
+  Notifications.setNotificationCategoryAsync(SAFE_JOURNEY_CATEGORY, [
+    {
+      identifier: 'safe-arrived',
+      buttonTitle: "I'm safe",
+      options: { opensAppToForeground: true },
+    },
+    {
+      identifier: 'extend-eta',
+      buttonTitle: '+15 min',
+      options: { opensAppToForeground: false },
+    },
+  ]).catch(() => undefined);
+
+  if (Platform.OS === 'android') {
+    Notifications.setNotificationChannelAsync('safe-journey', {
+      name: 'Safe Journey',
+      description: 'Live status of an active Safe Journey trip.',
+      importance: Notifications.AndroidImportance.LOW,
+      vibrationPattern: [0],
+      enableVibrate: false,
+      sound: null,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      showBadge: false,
+    }).catch(() => undefined);
+  }
+}
+
+// Lock-screen Safe Journey widget. Posts a persistent notification with
+// the live ETA + an "I'm safe" action button so the user (and anyone
+// glancing at the lock screen) can see and dismiss the trip without
+// unlocking the phone.
+//
+// Re-call this whenever the ETA changes — same identifier means it
+// updates in place rather than stacking.
+export async function showSafeJourneyWidget(args: {
+  label: string;
+  etaMs: number;
+}): Promise<void> {
+  configure();
+  const etaText = new Date(args.etaMs).toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const remainingMs = args.etaMs - Date.now();
+  const minsLeft = Math.max(0, Math.round(remainingMs / 60000));
+  const body =
+    remainingMs > 0
+      ? `ETA ${etaText} · ${minsLeft} min remaining`
+      : `Should have arrived at ${etaText}`;
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: SAFE_JOURNEY_ID,
+      content: {
+        title: `Safe Journey · ${args.label}`,
+        body,
+        categoryIdentifier: SAFE_JOURNEY_CATEGORY,
+        data: { kind: 'safe_journey_widget' },
+        sticky: true,
+        autoDismiss: false,
+        ...(Platform.OS === 'android'
+          ? {
+              priority: Notifications.AndroidNotificationPriority.LOW,
+              color: '#57C691',
+            }
+          : {}),
+      },
+      trigger: Platform.OS === 'android'
+        ? ({ channelId: 'safe-journey' } as Notifications.NotificationTriggerInput)
+        : null,
+    });
+  } catch (err) {
+    console.warn('[notifications] safe journey widget failed', err);
+  }
+}
+
+export async function hideSafeJourneyWidget(): Promise<void> {
+  try {
+    await Notifications.dismissNotificationAsync(SAFE_JOURNEY_ID);
+  } catch {
+    // ignore
+  }
 }
 
 export async function requestNotificationPermission(): Promise<boolean> {

@@ -3,7 +3,6 @@ import { TypedUseSelectorHook, useDispatch, useSelector } from 'react-redux';
 import userReducer from './slices/userSlice';
 import sosReducer from './slices/sosSlice';
 import historyReducer from './slices/historySlice';
-import helperReducer from './slices/helperSlice';
 import appReducer from './slices/appSlice';
 import communityReducer from './slices/communitySlice';
 import safetyModesReducer from './slices/safetyModesSlice';
@@ -14,7 +13,6 @@ export const store = configureStore({
     user: userReducer,
     sos: sosReducer,
     history: historyReducer,
-    helper: helperReducer,
     app: appReducer,
     community: communityReducer,
     safetyModes: safetyModesReducer,

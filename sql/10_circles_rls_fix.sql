@@ -10,15 +10,32 @@
 --   showing the friendly "sign in first" path on the client.
 --
 -- What this script does:
+--   • Adds `phone` to users_public + a search-by-phone index so the new
+--     phone-based circle-invite flow can find registered friends. This
+--     MUST happen first because some policies below reference it.
 --   • Re-applies every policy with `TO authenticated` so anon requests
 --     fail fast with a clear error.
---   • Adds an extra public-write column (`invitee_phone`) lookup index
---     so phone-number invite search is fast.
---   • Adds `phone` to users_public + a search-by-phone index so the new
---     phone-based circle-invite flow can find registered friends.
 
 -- ---------------------------------------------------------------------------
--- 1. CIRCLES policies — scope to authenticated, otherwise unchanged
+-- 1. USERS_PUBLIC — add phone column FIRST (referenced by policies below)
+-- ---------------------------------------------------------------------------
+
+alter table users_public
+  add column if not exists phone text;
+
+create index if not exists users_public_phone_idx
+  on users_public (phone);
+
+-- Backfill phones from existing profiles. Safe to re-run.
+update users_public up
+  set phone = p.phone
+  from profiles p
+  where up.id = p.id
+    and p.phone is not null
+    and (up.phone is null or up.phone <> p.phone);
+
+-- ---------------------------------------------------------------------------
+-- 2. CIRCLES policies — scope to authenticated, otherwise unchanged
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "circles read members" on circles;
@@ -46,7 +63,7 @@ create policy "circles owner delete"
   using (auth.uid() = owner_id);
 
 -- ---------------------------------------------------------------------------
--- 2. CIRCLE_MEMBERS policies
+-- 3. CIRCLE_MEMBERS policies
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "members read same circle" on circle_members;
@@ -74,7 +91,7 @@ create policy "members leave self"
   );
 
 -- ---------------------------------------------------------------------------
--- 3. CIRCLE_INVITES policies
+-- 4. CIRCLE_INVITES policies (references users_public.phone — added above)
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "invites read by inviter or invitee" on circle_invites;
@@ -122,7 +139,7 @@ create policy "invites update by inviter or invitee"
   );
 
 -- ---------------------------------------------------------------------------
--- 4. CIRCLE_EVENTS + SHARED_TRIPS
+-- 5. CIRCLE_EVENTS + SHARED_TRIPS
 -- ---------------------------------------------------------------------------
 
 drop policy if exists "events read members" on circle_events;
@@ -154,21 +171,3 @@ create policy "trips update owner"
   on shared_trips for update
   to authenticated
   using (auth.uid() = owner_id);
-
--- ---------------------------------------------------------------------------
--- 5. USERS_PUBLIC — add phone column for phone-based circle search
--- ---------------------------------------------------------------------------
-
-alter table users_public
-  add column if not exists phone text;
-
-create index if not exists users_public_phone_idx
-  on users_public (phone);
-
--- Backfill phones from existing profiles. Safe to re-run.
-update users_public up
-  set phone = p.phone
-  from profiles p
-  where up.id = p.id
-    and p.phone is not null
-    and (up.phone is null or up.phone <> p.phone);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import {
   Linking,
   Pressable,
@@ -9,11 +9,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  isAccessibilityEnabled,
-  isNativeHardwareAvailable,
-  openAccessibilitySettings,
-} from '@/services/hardware-sos';
 import { useNavigation } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -29,8 +24,8 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
-  hardwareSOSToggled,
   pushEnabledSet,
+  shakeSOSToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
@@ -48,44 +43,12 @@ export function SettingsScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
-  const hardwareSOS = useAppSelector((s) => s.app.hardwareSOS);
   const push = useAppSelector((s) => s.app.pushEnabled);
+  const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
 
-  const [accessibilityOn, setAccessibilityOn] = useState(false);
-  const nativeAvailable = isNativeHardwareAvailable();
-  // Refresh the accessibility flag when the screen mounts and whenever
-  // hardwareSOS toggles — covers the case where the user just toggled
-  // on, opened Settings, came back, and we want to know if they enabled.
-  useEffect(() => {
-    if (!nativeAvailable) return;
-    let cancelled = false;
-    isAccessibilityEnabled().then((on) => {
-      if (!cancelled) setAccessibilityOn(on);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [nativeAvailable, hardwareSOS]);
-
-  const handleToggleHardware = (next: boolean) => {
-    dispatch(hardwareSOSToggled(next));
-    if (next && nativeAvailable && !accessibilityOn) {
-      sheet.confirm({
-        title: 'Enable global hardware SOS',
-        body:
-          'For triple-press to fire SOS even when the screen is off or ORBII is closed, enable the ORBII Accessibility Service. We only listen for volume key events — never your screen content.',
-        confirmLabel: 'Open Accessibility',
-        cancelLabel: 'Skip for now',
-        icon: 'shield-checkmark',
-        onConfirm: () => {
-          openAccessibilitySettings();
-        },
-      });
-    }
-  };
   const sheet = useBrandSheet();
-  const friendsCount = profile?.friends?.length ?? 0;
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
+  const circlesCount = useAppSelector((s) => s.circles.circles.length);
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -141,48 +104,38 @@ export function SettingsScreen() {
         <SectionHeader title="Emergency triggers" />
         <Card style={styles.rowsCard}>
           <Row
-            icon="hardware-chip-outline"
-            label="Hardware button SOS"
+            icon="phone-portrait-outline"
+            label="Shake to SOS"
             value={
-              hardwareSOS
-                ? nativeAvailable && accessibilityOn
-                  ? 'Triple-press volume — works screen-off'
-                  : 'Triple-press volume — works while ORBII is open'
+              shakeSOS
+                ? 'Three hard shakes fires the countdown'
                 : 'Off — only the SOS button fires alerts'
             }
             right={
               <Switch
-                value={hardwareSOS}
-                onValueChange={handleToggleHardware}
+                value={shakeSOS}
+                onValueChange={(v) => {
+                  dispatch(shakeSOSToggled(v));
+                }}
                 trackColor={{ true: colors.brand, false: colors.border }}
-                thumbColor={hardwareSOS ? colors.brandDeep : colors.background}
+                thumbColor={shakeSOS ? colors.brandDeep : colors.background}
               />
             }
           />
-          {hardwareSOS && nativeAvailable && !accessibilityOn ? (
-            <Pressable
-              onPress={() => openAccessibilitySettings()}
-              style={({ pressed }) => [
-                styles.upgradeBanner,
-                pressed && styles.bannerPressed,
-              ]}
-              accessibilityRole="button"
-            >
-              <Ionicons
-                name="sparkles"
-                size={14}
-                color={colors.brandDeep}
-              />
-              <Text style={styles.upgradeBannerText}>
-                Enable ORBII in Accessibility for screen-off coverage
-              </Text>
-              <Ionicons
-                name="chevron-forward"
-                size={14}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          ) : null}
+          <Divider />
+          <Row
+            icon="shield-checkmark-outline"
+            label="Safety PIN"
+            value="Required to cancel an active SOS"
+            onPress={() => navigation.navigate('SafetyPin')}
+          />
+          <Divider />
+          <Row
+            icon="bug-outline"
+            label="Practice SOS"
+            value="Walk through the full countdown — nothing is sent"
+            onPress={() => navigation.navigate('SOSCountdown', { test: true })}
+          />
           <Divider />
           <Row
             icon="hand-left-outline"
@@ -240,20 +193,13 @@ export function SettingsScreen() {
           />
         </Card>
 
-        <SectionHeader title="Circle" />
+        <SectionHeader title="Circles" />
         <Card style={styles.rowsCard}>
           <Row
             icon="people-circle"
-            label="Manage your circle"
-            value={`${friendsCount} ${friendsCount === 1 ? 'friend' : 'friends'} in your circle`}
-            onPress={() => navigation.navigate('Friends')}
-          />
-          <Divider />
-          <Row
-            icon="person-add"
-            label="Add people to circle"
-            value="Search by username or name"
-            onPress={() => navigation.navigate('Friends')}
+            label="Manage circles"
+            value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
+            onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
           />
         </Card>
 
@@ -269,13 +215,6 @@ export function SettingsScreen() {
 
         <SectionHeader title="Help" />
         <Card style={styles.rowsCard}>
-          <Row
-            icon="chatbubbles"
-            label="Chat with support"
-            value="ORBII Assistant — instant replies"
-            onPress={() => navigation.navigate('SupportChat')}
-          />
-          <Divider />
           <Row
             icon="information-circle"
             label="About ORBII"

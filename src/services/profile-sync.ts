@@ -38,8 +38,6 @@ export async function syncProfile(profile: UserProfile): Promise<void> {
         name: profile.name,
         phone: profile.phone,
         photo_uri: profile.photoUri,
-        is_helper: profile.isHelper,
-        is_verified: profile.idVerification === 'verified',
         username_changed_at: profile.usernameChangedAt
           ? new Date(profile.usernameChangedAt).toISOString()
           : null,

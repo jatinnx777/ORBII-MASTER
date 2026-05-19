@@ -81,9 +81,9 @@ const styles = StyleSheet.create({
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.brandSoft,
     borderWidth: 2,
-    borderColor: '#1976D2',
+    borderColor: colors.brandMid,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
   avatarInitial: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 22,
-    color: '#1976D2',
+    color: colors.brandDeep,
   },
   info: { flex: 1, gap: 2 },
   name: {

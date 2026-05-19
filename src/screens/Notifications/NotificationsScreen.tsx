@@ -99,12 +99,16 @@ function iconForKind(kind: NotificationEntry['kind']): {
 } {
   switch (kind) {
     case 'sos':
-      return { name: 'alert-circle', color: colors.primary, bg: '#FFEAEA' };
+      return {
+        name: 'alert-circle',
+        color: colors.primary,
+        bg: 'rgba(255,77,77,0.10)',
+      };
     case 'helper':
       return {
         name: 'people-circle',
-        color: colors.success,
-        bg: '#E5F7EB',
+        color: colors.brandDeep,
+        bg: colors.brandSoft,
       };
     default:
       return {

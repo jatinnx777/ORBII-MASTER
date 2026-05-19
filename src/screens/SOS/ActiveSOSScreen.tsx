@@ -33,6 +33,9 @@ import {
   typography,
 } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { isPinSet, verifyPin } from '@/services/safety-pin';
+import { useSOSRecorder } from '@/services/sos-recording';
+import { PinPrompt } from '@/components/common';
 import {
   sosCancelled,
   sosCleared,
@@ -43,7 +46,7 @@ import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
 import { subscribeLiveLocation } from '@/services/live-location';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
-import type { GeoPoint, HelperSummary } from '@/types';
+import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -76,8 +79,27 @@ export function ActiveSOSScreen() {
   const [resolvedBy, setResolvedBy] = useState<LiveResponder | null>(null);
   const [elapsed, setElapsed] = useState(0);
   const [noHelperWarned, setNoHelperWarned] = useState(false);
+  // PIN guard state for the cancel flow. When the user taps Cancel and a
+  // PIN is set, we open this sheet and only proceed with the cancellation
+  // when verifyPin returns true. The buffered cancel runs after success.
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const pendingCancelRef = useRef<(() => void) | null>(null);
+  // Have we already prompted to escalate to 112? Reset whenever we get
+  // a real responder so a late-arriving acceptor cancels the timer.
+  const [escalationPrompted, setEscalationPrompted] = useState(false);
 
   const sheet = useBrandSheet();
+  const myUid = useAppSelector((s) => s.user.profile?.uid ?? null);
+
+  // 60s audio capture for the SOS. Hook owns recorder lifecycle: starts
+  // on mount when this is a real (non-test) SOS, stops + uploads to
+  // Supabase Storage on unmount or on the 60s timer. See sos-recording.ts.
+  useSOSRecorder({
+    enabled: !!activeSOS && activeSOS.kind !== 'test',
+    userId: myUid,
+    sosId: activeSOS?.id ?? null,
+  });
 
   const userLocation: GeoPoint | null = activeSOS
     ? {
@@ -216,24 +238,41 @@ export function ActiveSOSScreen() {
       confirmLabel: 'Cancel SOS',
       destructive: true,
       icon: 'close-circle',
-      onConfirm: () => {
-        if (activeSOS) {
-          trackEvent('sos_cancelled', { sosId: activeSOS.id });
-          dispatch(sosCancelled());
-          const record = {
-            ...activeSOS,
-            helpers: helperSummaries,
-            status: 'cancelled' as const,
-            resolvedAt: Date.now(),
-            responseTime: Math.round(
-              (Date.now() - activeSOS.timestamp) / 1000,
-            ),
-          };
-          dispatch(historyRecordAdded(record));
-          upsertSOSRecord(record).catch(() => undefined);
+      onConfirm: async () => {
+        const runCancel = () => {
+          // Note: in-flight audio recording stops automatically via
+          // `useSOSRecorder`'s cleanup when this screen unmounts during
+          // the navigation.reset below.
+          if (activeSOS) {
+            trackEvent('sos_cancelled', { sosId: activeSOS.id });
+            dispatch(sosCancelled());
+            const record = {
+              ...activeSOS,
+              responders: helperSummaries,
+              status: 'cancelled' as const,
+              resolvedAt: Date.now(),
+              responseTime: Math.round(
+                (Date.now() - activeSOS.timestamp) / 1000,
+              ),
+            };
+            dispatch(historyRecordAdded(record));
+            upsertSOSRecord(record).catch(() => undefined);
+          }
+          dispatch(sosCleared());
+          navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+        };
+
+        // PIN guard. If the user set a safety PIN, require it before
+        // dismissing the alert — stops an attacker who grabbed the phone
+        // from silently killing the SOS.
+        const guarded = await isPinSet();
+        if (!guarded) {
+          runCancel();
+          return;
         }
-        dispatch(sosCleared());
-        navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+        pendingCancelRef.current = runCancel;
+        setPinError(null);
+        setPinPromptOpen(true);
       },
     });
   }, [activeSOS, dispatch, helperSummaries, navigation, sheet]);
@@ -324,6 +363,69 @@ export function ActiveSOSScreen() {
     return () => clearInterval(id);
   }, [resolved]);
 
+  // India's universal emergency number. Wrapped because we surface it
+  // from two places (the always-visible button + the auto-escalation
+  // prompt) and we don't want the URI string sprinkled around.
+  const dial112 = useCallback(() => {
+    Linking.openURL('tel:112').catch(() => undefined);
+    if (activeSOS) {
+      trackEvent('sos_dialed_112', { sosId: activeSOS.id });
+    }
+  }, [activeSOS]);
+
+  // Auto-escalation: if 90 s pass after firing SOS and zero people from
+  // the user's circle have accepted, prompt to dial 112. The user can
+  // dismiss to keep waiting, but the prompt sits visible until they
+  // either dial or someone responds.
+  const responderCount = Object.keys(responders).length;
+  useEffect(() => {
+    if (!activeSOS || activeSOS.kind === 'test') return;
+    if (resolved) return;
+    if (responderCount > 0) {
+      // A real responder came through. Reset the escalation guard so a
+      // later disconnection re-arms it.
+      setEscalationPrompted(false);
+      return;
+    }
+    if (escalationPrompted) return;
+    const sinceFireMs = Date.now() - activeSOS.timestamp;
+    const remainingMs = 90_000 - sinceFireMs;
+    if (remainingMs <= 0) {
+      // Already past the threshold (e.g. user opened ActiveSOS late).
+      setEscalationPrompted(true);
+      sheet.confirm({
+        title: 'No response yet — call 112?',
+        body: 'Your circle hasn\'t accepted. Calling India\'s universal emergency number now gets professional help dispatched.',
+        confirmLabel: 'Call 112 now',
+        cancelLabel: 'Keep waiting',
+        destructive: true,
+        icon: 'call',
+        onConfirm: dial112,
+      });
+      return;
+    }
+    const id = setTimeout(() => {
+      setEscalationPrompted(true);
+      sheet.confirm({
+        title: 'No response yet — call 112?',
+        body: 'Your circle hasn\'t accepted in 90 seconds. Calling India\'s universal emergency number now gets professional help dispatched.',
+        confirmLabel: 'Call 112 now',
+        cancelLabel: 'Keep waiting',
+        destructive: true,
+        icon: 'call',
+        onConfirm: dial112,
+      });
+    }, remainingMs);
+    return () => clearTimeout(id);
+  }, [
+    activeSOS,
+    resolved,
+    responderCount,
+    escalationPrompted,
+    sheet,
+    dial112,
+  ]);
+
   useEffect(() => {
     if (resolved || !userLocation || !primary) {
       setRoute(null);
@@ -405,6 +507,19 @@ export function ActiveSOSScreen() {
         <View style={styles.statusBanner}>
           <Text style={styles.statusBannerText}>{statusBannerText}</Text>
         </View>
+
+        <Pressable
+          onPress={dial112}
+          style={({ pressed }) => [
+            styles.call112,
+            pressed && { opacity: 0.92, transform: [{ scale: 0.98 }] },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Call 112"
+        >
+          <Ionicons name="call" size={18} color={colors.textInverse} />
+          <Text style={styles.call112Text}>Call 112 (Emergency)</Text>
+        </Pressable>
 
         <View style={styles.mapCard}>
           <MLMapView
@@ -491,6 +606,31 @@ export function ActiveSOSScreen() {
         visible={resolved}
         helperName={resolvedBy?.name ?? ''}
         onSubmit={handleResolved}
+      />
+
+      <PinPrompt
+        visible={pinPromptOpen}
+        mode="verify"
+        title="Enter your safety PIN"
+        body="Required to cancel an active SOS."
+        errorText={pinError}
+        onCancel={() => {
+          setPinPromptOpen(false);
+          pendingCancelRef.current = null;
+          setPinError(null);
+        }}
+        onSubmit={async (pin) => {
+          const ok = await verifyPin(pin);
+          if (!ok) {
+            setPinError('Wrong PIN. Try again.');
+            return;
+          }
+          setPinPromptOpen(false);
+          setPinError(null);
+          const run = pendingCancelRef.current;
+          pendingCancelRef.current = null;
+          run?.();
+        }}
       />
     </View>
   );
@@ -724,22 +864,42 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   statusBanner: {
-    backgroundColor: '#FFEDD5',
+    backgroundColor: colors.brandSoft,
     paddingVertical: 10,
     borderRadius: radius.md,
     alignItems: 'center',
   },
+  call112: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  call112Text: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    color: colors.textInverse,
+    letterSpacing: 0.3,
+  },
   statusBannerText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 13,
-    color: '#B45309',
+    color: colors.brandDeep,
     letterSpacing: 0.2,
   },
   mapCard: {
     height: 280,
     borderRadius: radius.lg,
     overflow: 'hidden',
-    backgroundColor: '#E3E8EE',
+    backgroundColor: colors.brandSoft,
     ...shadows.card,
   },
   map: {
@@ -789,21 +949,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   subStatus: {
-    backgroundColor: '#FFEDD5',
+    backgroundColor: colors.brandSoft,
     paddingVertical: 10,
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
   },
   subStatusText: {
     ...typography.body,
-    color: '#B45309',
+    color: colors.brandDeep,
     fontSize: 13,
     fontFamily: fontFamilies.poppinsMedium,
   },
   tipCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF6EC',
+    backgroundColor: colors.brandSoft,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     paddingLeft: spacing.md,
@@ -843,7 +1003,7 @@ const styles = StyleSheet.create({
   },
   tipPillHighlight: {
     borderColor: colors.primary,
-    backgroundColor: '#FFF7F7',
+    backgroundColor: 'rgba(255,77,77,0.08)',
   },
   tipPillEmoji: {
     fontSize: 14,

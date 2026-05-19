@@ -21,7 +21,8 @@ type EventName =
   | 'safe_journey_started'
   | 'safe_journey_ended'
   | 'community_alerts_viewed'
-  | 'community_responded';
+  | 'community_responded'
+  | 'sos_dialed_112';
 
 export function trackEvent(name: EventName, params: Record<string, unknown> = {}) {
   if (__DEV__) {

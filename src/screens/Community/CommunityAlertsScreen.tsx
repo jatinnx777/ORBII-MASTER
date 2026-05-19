@@ -33,7 +33,6 @@ import {
   alertsLoaded,
   respondingStarted,
 } from '@/redux/slices/communitySlice';
-import { incomingJobReceived } from '@/redux/slices/helperSlice';
 import {
   alertFromBroadcast,
   listNearbyAlerts,
@@ -136,27 +135,11 @@ export function CommunityAlertsScreen() {
               name: profile.name ?? 'Responder',
               photoUri: profile.photoUri,
             });
-            dispatch(
-              incomingJobReceived({
-                id: alertItem.id,
-                user: {
-                  id: alertItem.victim.id,
-                  name: alertItem.victim.name,
-                  photoUri: alertItem.victim.photoUri,
-                  phone: alertItem.victim.phone ?? '',
-                },
-                location: alertItem.location,
-                distanceMeters: alertItem.distanceMeters,
-                etaSeconds: alertItem.etaSeconds,
-                reward: 0,
-                createdAt: alertItem.createdAt,
-              }),
-            );
             trackEvent('community_responded', {
               alertId: alertItem.id,
               distanceMeters: Math.round(alertItem.distanceMeters),
             });
-            navigation.replace('HelperNavigation');
+            navigation.goBack();
           },
         },
       ],
@@ -417,7 +400,7 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
@@ -466,7 +449,7 @@ const cardStyles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#FFE5E5',
+    backgroundColor: 'rgba(255,77,77,0.10)',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,

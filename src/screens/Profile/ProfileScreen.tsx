@@ -29,7 +29,6 @@ export function ProfileScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const history = useAppSelector((s) => s.history.records);
-  const helper = useAppSelector((s) => s.helper);
 
   if (!profile) return null;
 
@@ -78,9 +77,7 @@ export function ProfileScreen() {
                 label="Contacts"
                 value={String(profile.emergencyContacts.length)}
               />
-              {helper.mode ? (
-                <StatPill label="Status" value="Online" color={colors.success} />
-              ) : null}
+              {null}
             </View>
           </View>
         </Card>
@@ -111,34 +108,6 @@ export function ProfileScreen() {
             value={`${sosCount} incident${sosCount === 1 ? '' : 's'}`}
             onPress={() => navigation.navigate('History')}
           />
-        </Card>
-
-        <SectionHeader title="Helper" />
-        <Card style={styles.rowsCard}>
-          {helper.verification === 'verified' ? (
-            <>
-              <Row
-                icon="shield-checkmark"
-                iconColor={colors.success}
-                label="Helper dashboard"
-                value={`${helper.totalJobs} jobs · ₹${helper.pendingBalance} pending`}
-                onPress={() => navigation.navigate('HelperDashboard')}
-              />
-              <Divider />
-              <Row
-                icon="cash"
-                label="Earnings & withdraw"
-                onPress={() => navigation.navigate('Withdraw')}
-              />
-            </>
-          ) : (
-            <Row
-              icon="hand-left"
-              label="Become a helper"
-              value="Earn ₹100 per SOS you respond to"
-              onPress={() => navigation.navigate('HelperVerification')}
-            />
-          )}
         </Card>
 
         <SectionHeader title="Account" />

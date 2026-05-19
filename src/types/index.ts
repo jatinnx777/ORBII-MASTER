@@ -5,14 +5,6 @@ export type EmergencyContact = {
   relation: string;
 };
 
-export type IdDocumentKind = 'aadhaar' | 'pan';
-
-export type IdVerificationStatus =
-  | 'unverified'
-  | 'pending'
-  | 'verified'
-  | 'rejected';
-
 export type Friend = {
   username: string;
   addedAt: number;
@@ -36,7 +28,6 @@ export type UserProfile = {
   // Friends added by username. Stored locally for now; once a Supabase
   // profiles table exists we can resolve these to real user records.
   friends: Friend[];
-  isHelper: boolean;
   isPremium: boolean;
   createdAt: number;
   // Cooldown timestamps. After picking a username or profile photo the
@@ -44,10 +35,6 @@ export type UserProfile = {
   // mirrored to the profiles table so the limit holds across reinstalls.
   usernameChangedAt: number | null;
   photoChangedAt: number | null;
-  idKind: IdDocumentKind | null;
-  idNumber: string | null;
-  idPhotoUri: string | null;
-  idVerification: IdVerificationStatus;
 };
 
 export type AuthStatus =
@@ -68,11 +55,13 @@ export type SOSLocation = GeoPoint & {
 
 export type SOSStatus = 'active' | 'resolved' | 'cancelled';
 
-// 'real' = the user pressed the SOS button. Helpers were notified.
-// 'test' = the user fired a practice SOS from Settings. NO helpers notified.
+// 'real' = the user pressed the SOS button — alerted everyone in their circle.
+// 'test' = practice SOS from Settings. No one is notified.
 export type SOSKind = 'real' | 'test';
 
-export type HelperSummary = {
+// Summary of someone who responded to an SOS — a circle member who tapped
+// "I'm coming to help". Used by the SOS detail screen + history.
+export type Responder = {
   id: string;
   name: string;
   photoUri: string | null;
@@ -87,12 +76,9 @@ export type SOSRecord = {
   location: SOSLocation;
   timestamp: number;
   status: SOSStatus;
-  // 'test' SOS records originate from Settings → Trigger test SOS. No real
-  // helpers are notified. Defaults to 'real' for backwards compat with
-  // already-persisted history rows.
   kind?: SOSKind;
-  helpers: HelperSummary[];
-  responder: HelperSummary | null;
+  responders: Responder[];
+  responder: Responder | null;
   responseTime: number | null;
   resolvedAt: number | null;
   rating: number | null;
@@ -104,39 +90,8 @@ export type LocationPermissionStatus =
   | 'denied'
   | 'restricted';
 
-export type HelperVerificationStatus =
-  | 'unverified'
-  | 'pending'
-  | 'verified'
-  | 'rejected';
-
-export type HelperJobStatus =
-  | 'idle'
-  | 'incoming'
-  | 'accepted'
-  | 'en_route'
-  | 'arrived'
-  | 'completed'
-  | 'declined';
-
-export type HelperJob = {
-  id: string;
-  user: {
-    id: string;
-    name: string;
-    photoUri: string | null;
-    phone: string;
-  };
-  location: SOSLocation;
-  distanceMeters: number;
-  etaSeconds: number;
-  reward: number;
-  createdAt: number;
-};
-
-// CommunityAlert = an active SOS that any nearby user (not just verified
-// helpers) can respond to. This is the "good samaritan" flow — if there are
-// N users near a victim, any of them can step up.
+// CommunityAlert = an active SOS that anyone in the victim's circle can
+// respond to. Circle-scoped, not stranger-broadcast.
 export type CommunityAlert = {
   id: string;
   victim: {
@@ -150,16 +105,4 @@ export type CommunityAlert = {
   etaSeconds: number;
   createdAt: number;
   respondersCount: number;
-};
-
-export type HelperState = {
-  mode: boolean;
-  verification: HelperVerificationStatus;
-  rating: number;
-  totalJobs: number;
-  livesSaved: number;
-  balance: number;
-  pendingBalance: number;
-  currentJob: HelperJob | null;
-  jobStatus: HelperJobStatus;
 };

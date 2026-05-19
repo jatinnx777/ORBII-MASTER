@@ -12,6 +12,9 @@ import { colors, fontFamilies } from '@/theme';
 // budget the user is sensitive to (we're a free-tier MVP). Reanimated-
 // driven primitives give us 60 FPS at 0 KB cost.
 
+// Floating member chips around the hero core. Every chip uses a tone
+// from the official brand palette — the variation is in saturation and
+// position, not hue. Keeps the illustration on-brand.
 const ICON_KINDS: Array<{
   icon: React.ComponentProps<typeof Ionicons>['name'];
   color: string;
@@ -19,10 +22,10 @@ const ICON_KINDS: Array<{
   radius: number; // distance from centre
   delay: number;
 }> = [
-  { icon: 'home', color: '#57C691', angle: -60, radius: 84, delay: 0 },
-  { icon: 'people', color: '#3FB9A1', angle: 30, radius: 96, delay: 180 },
-  { icon: 'airplane', color: '#5BA9E6', angle: 150, radius: 88, delay: 360 },
-  { icon: 'school', color: '#9A7CF5', angle: -150, radius: 92, delay: 540 },
+  { icon: 'home', color: colors.brandDeep, angle: -60, radius: 84, delay: 0 },
+  { icon: 'people', color: colors.brand, angle: 30, radius: 96, delay: 180 },
+  { icon: 'airplane', color: colors.brandDeep, angle: 150, radius: 88, delay: 360 },
+  { icon: 'school', color: colors.brand, angle: -150, radius: 92, delay: 540 },
 ];
 
 export function CirclesHero({ size = 220 }: { size?: number }) {

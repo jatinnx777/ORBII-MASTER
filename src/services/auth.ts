@@ -202,15 +202,10 @@ function emptyProfile(args: {
     photoUri: args.photo,
     emergencyContacts: [],
     friends: [],
-    isHelper: false,
     isPremium: false,
     createdAt: Date.now(),
     usernameChangedAt: null,
     photoChangedAt: args.photo ? Date.now() : null,
-    idKind: null,
-    idNumber: null,
-    idPhotoUri: null,
-    idVerification: 'unverified',
   };
 }
 
@@ -315,7 +310,6 @@ function rowToProfile(row: ProfileRow, fallbackEmail: string): UserProfile {
     photoUri: row.photo_uri ?? null,
     emergencyContacts: [],
     friends: [],
-    isHelper: !!row.is_helper,
     isPremium: false,
     createdAt: row.created_at ? Date.parse(row.created_at) : Date.now(),
     usernameChangedAt: row.username_changed_at
@@ -324,10 +318,6 @@ function rowToProfile(row: ProfileRow, fallbackEmail: string): UserProfile {
     photoChangedAt: row.photo_changed_at
       ? Date.parse(row.photo_changed_at)
       : null,
-    idKind: null,
-    idNumber: null,
-    idPhotoUri: null,
-    idVerification: row.is_verified ? 'verified' : 'unverified',
   };
 }
 

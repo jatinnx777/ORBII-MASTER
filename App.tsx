@@ -32,10 +32,10 @@ import { BrandSheetProvider, OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
   fireVoiceWakeNotification,
-  hideListeningBadge,
   hidePinnedSOSShortcut,
-  showListeningBadge,
+  hideSafeJourneyWidget,
   showPinnedSOSShortcut,
+  showSafeJourneyWidget,
 } from '@/services/notifications';
 import {
   alertFromBroadcast,
@@ -43,14 +43,8 @@ import {
   subscribeToAlerts,
 } from '@/services/community';
 import { alertReceived } from '@/redux/slices/communitySlice';
-import {
-  startListening,
-  stopListening,
-  subscribeKeyword,
-} from '@/services/voice-detection';
-import { startHardwareSOS } from '@/services/hardware-sos';
-import { startBackgroundVoice } from '@/services/wake-word';
-import { getItem, storageKeys } from '@/services/storage';
+import { subscribeKeyword } from '@/services/voice-detection';
+import { startShakeDetector } from '@/services/shake-detection';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -59,6 +53,8 @@ import {
 } from '@/services/circles-bootstrap';
 import { acceptInviteByToken } from '@/services/circles';
 import { circlesReset } from '@/redux/slices/circlesSlice';
+import { safeJourneyEnded, safeJourneyStarted } from '@/redux/slices/appSlice';
+import { isPinSet } from '@/services/safety-pin';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
@@ -71,8 +67,7 @@ function RootNavigator() {
   const status = useAppSelector((s) => s.user.status);
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
-  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
-  const hardwareSOS = useAppSelector((s) => s.app.hardwareSOS);
+  const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
   // signs in / out.
@@ -130,73 +125,37 @@ function RootNavigator() {
     return () => sub.remove();
   }, [status]);
 
-  // Always-on Voice SOS. Tries the native foreground microphone
-  // service first — the provider resolves the access key from the
-  // APK-bundled BuildConfig field, then any user-saved key. Falls
-  // back to the legacy expo-speech-recognition foreground listener
-  // only if the native path is unavailable (no key bundled AND none
-  // saved by the user).
+  // Safe Journey lock-screen widget. While a Safe Journey is active we
+  // post a persistent notification with the live ETA + an "I'm safe"
+  // action button. Re-posting on a 1-minute interval keeps the "X min
+  // remaining" string fresh without burning battery.
+  const safeJourney = useAppSelector((s) => s.app.safeJourney);
   useEffect(() => {
-    if (status !== 'authenticated' || !backgroundVoice) {
-      hideListeningBadge().catch(() => undefined);
+    if (status !== 'authenticated' || !safeJourney) {
+      hideSafeJourneyWidget().catch(() => undefined);
       return;
     }
-    let cancelled = false;
-    let nativeHandle: { stop: () => Promise<void> } | null = null;
-    (async () => {
-      const keyword = await getItem<string>(storageKeys.voiceKeyword);
-      if (cancelled) return;
+    const post = () =>
+      showSafeJourneyWidget({
+        label: safeJourney.label,
+        etaMs: safeJourney.etaMs,
+      }).catch(() => undefined);
+    post();
+    const id = setInterval(post, 60_000);
+    return () => clearInterval(id);
+  }, [status, safeJourney]);
 
-      const handle = await startBackgroundVoice({
-        keyword: (keyword as never) ?? 'JARVIS',
-        onWake: () => {
-          if (navigationRef.isReady()) {
-            // @ts-expect-error - SOSCountdown is in the AppStack only.
-            navigationRef.navigate('SOSCountdown');
-          }
-        },
-      });
-      if (cancelled) {
-        await handle?.stop();
-        return;
-      }
-      if (handle) {
-        nativeHandle = handle;
-        return; // success — native side owns its own notification
-      }
-
-      // Native couldn't start (no key resolved). Fall back to the
-      // foreground-only legacy listener so the toggle still does
-      // something useful while the app is open.
-      const result = await startListening();
-      if (cancelled) return;
-      if (result.ok) {
-        showListeningBadge().catch(() => undefined);
-      } else {
-        hideListeningBadge().catch(() => undefined);
-      }
-    })();
-    return () => {
-      cancelled = true;
-      if (nativeHandle) {
-        nativeHandle.stop().catch(() => undefined);
-      } else {
-        hideListeningBadge().catch(() => undefined);
-        stopListening();
-      }
-    };
-  }, [status, backgroundVoice]);
-
-  // Hardware SOS — triple-press of any volume key when the toggle is
-  // ON. Tries the native AccessibilityService path first (works
-  // backgrounded, screen off, OEM-resistant); falls back to a JS
-  // volume-listener that only works while the app is foregrounded.
+  // Shake-to-SOS. Three hard shakes in 1.5 s → countdown. Runs while
+  // ORBII is foregrounded; background shake needs a foreground service
+  // we haven't built yet. Default ON because it's the single most
+  // intuitive panic gesture (and the cheapest hands-free trigger we have
+  // now that the wake-word stack is cut).
   useEffect(() => {
-    if (status !== 'authenticated' || !hardwareSOS) return;
+    if (status !== 'authenticated' || !shakeSOS) return;
     let handle: { stop: () => void } | null = null;
     let cancelled = false;
     (async () => {
-      const h = await startHardwareSOS(() => {
+      const h = await startShakeDetector(() => {
         Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Warning,
         ).catch(() => undefined);
@@ -206,7 +165,7 @@ function RootNavigator() {
         }
       });
       if (cancelled) {
-        h.stop();
+        h?.stop();
         return;
       }
       handle = h;
@@ -215,7 +174,7 @@ function RootNavigator() {
       cancelled = true;
       handle?.stop();
     };
-  }, [status, hardwareSOS]);
+  }, [status, shakeSOS]);
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
@@ -285,6 +244,51 @@ export default function App() {
         // Tapping the wake notification jumps straight into the countdown.
         // @ts-expect-error - SOSCountdown is in the AppStack only.
         navigationRef.navigate('SOSCountdown');
+        return;
+      }
+      if (data.kind === 'safe_journey_widget') {
+        const journey = store.getState().app.safeJourney;
+        if (!journey) return;
+        if (actionId === 'safe-arrived') {
+          // PIN guard: if the user set a safety PIN, force them into the
+          // app to verify it before ending the journey. Stops an attacker
+          // with the phone from quietly dismissing the lock-screen widget
+          // and bypassing the watch-over-me promise.
+          isPinSet().then((guarded) => {
+            if (guarded) {
+              if (navigationRef.isReady()) {
+                // @ts-expect-error - SafeJourneyActive is in the AppStack only.
+                navigationRef.navigate('SafeJourneyActive', { requirePinToEnd: true });
+              }
+            } else {
+              store.dispatch(safeJourneyEnded());
+              hideSafeJourneyWidget().catch(() => undefined);
+            }
+          });
+          return;
+        }
+        if (actionId === 'extend-eta') {
+          // Push the ETA 15 minutes forward and refresh the widget so the
+          // user gets the extra cushion without opening the app.
+          const newEta = journey.etaMs + 15 * 60 * 1000;
+          store.dispatch(
+            safeJourneyStarted({
+              label: journey.label,
+              etaMs: newEta,
+              trustedContactId: journey.trustedContactId,
+              destination: journey.destination,
+            }),
+          );
+          showSafeJourneyWidget({ label: journey.label, etaMs: newEta }).catch(
+            () => undefined,
+          );
+          return;
+        }
+        // Bare tap with no action → open Active screen
+        if (navigationRef.isReady()) {
+          // @ts-expect-error - SafeJourneyActive is in the AppStack only.
+          navigationRef.navigate('SafeJourneyActive');
+        }
       }
     });
     return () => sub.remove();

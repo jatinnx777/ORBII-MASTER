@@ -1,32 +1,29 @@
-// Two-track palette, aligned to the ORBII premium design spec:
+// Single-brand palette. ORBII has exactly one accent colour — the mint
+// (#57C691). Everything that previously varied (success badges, the
+// secondary mint, the legacy `accent` alias) now resolves to one of four
+// brand tones so the app reads as ONE consistent product.
 //
-// • BRAND (calm) → mint. Everyday voice of the app — tabs, headers,
-//   confirmations, "all good" states. Used on Home, Circles, Safety,
-//   Settings, Membership.
-//
-// • PRIMARY (alarm) → red. Reserved for SOS / emergencies / errors.
-//   We keep the historical name `primary` pointing at red so existing
-//   call sites that mean "emergency action" don't have to change.
-//
-// Background is a soft warm white (#F7FAF8) that pairs cleanly with the
-// mint. Borders are a near-invisible rgba(0,0,0,0.05) so cards feel
-// soft and grounded rather than line-art.
+// • BRAND          (#57C691) — the colour of ORBII. Default for chips,
+//                              dots, active states, "all good" badges.
+// • brandSoft       — wash for tinted card backgrounds.
+// • brandMid        — secondary mint per spec; subtle borders + accents.
+// • brandDeep       — high-contrast CTA / pressed state.
+// • PRIMARY (#FF4D4D) — alarm. SOS only. Never used for non-emergency UI.
 export const colors = {
-  // Primary mint per spec (#57C691). brandSoft is the wash used for card
-  // chips + tinted backgrounds; brandMid is the secondary mint per spec;
-  // brandDeep is the CTA / pressed accent.
   brand: '#57C691',
   brandSoft: '#E2F4EB',
   brandMid: '#AEE8CC',
   brandDeep: '#1E8E5A',
 
-  // Alarm — SOS only. Per spec #FF4D4D.
+  // Alarm — SOS / errors only. Never used for confirmations.
   primary: '#FF4D4D',
 
   secondary: '#FFFFFF',
   dark: '#0F1115',
-  // Spec-aligned success mint (#2FBF71) — used for "all clear" badges.
-  success: '#2FBF71',
+  // `success` is intentionally identical to `brand` so any "OK / all
+  // clear" UI inherits the official ORBII colour automatically. Don't
+  // introduce a separate green elsewhere — use `brand`.
+  success: '#57C691',
   warning: '#F59E0B',
 
   textPrimary: '#111827',
@@ -36,8 +33,6 @@ export const colors = {
 
   background: '#F7FAF8',
   surface: '#FFFFFF',
-  // Near-invisible 5% black; lets cards read as "lifted off the page"
-  // without harsh strokes.
   border: 'rgba(0,0,0,0.05)',
   inputBorder: 'rgba(0,0,0,0.06)',
   inputBackground: '#F7FAF8',
@@ -45,7 +40,9 @@ export const colors = {
   error: '#FF4D4D',
   overlay: 'rgba(0, 0, 0, 0.55)',
 
-  // Legacy aliases — kept so old imports compile. Prefer canonical names.
+  // Legacy aliases — kept ONLY so old imports compile. All resolve to
+  // the official mint so any straggling call site automatically picks
+  // up the brand colour. Prefer canonical names in new code.
   primaryDeep: '#D63A3A',
   accent: '#57C691',
   darkSoft: '#0F1115',

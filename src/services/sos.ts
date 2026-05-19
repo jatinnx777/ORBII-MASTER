@@ -49,7 +49,7 @@ export async function createSOS(
     timestamp: Date.now(),
     status: 'active',
     kind,
-    helpers: [],
+    responders: [],
     responder: null,
     responseTime: null,
     resolvedAt: null,

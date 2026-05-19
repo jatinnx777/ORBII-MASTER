@@ -3,8 +3,6 @@ import type {
   AuthStatus,
   EmergencyContact,
   Friend,
-  IdDocumentKind,
-  IdVerificationStatus,
   UserProfile,
 } from '@/types';
 
@@ -88,30 +86,6 @@ const userSlice = createSlice({
     premiumUpgraded(state) {
       if (state.profile) state.profile.isPremium = true;
     },
-    helperModeToggled(state, action: PayloadAction<boolean>) {
-      if (state.profile) state.profile.isHelper = action.payload;
-    },
-    userIdSubmitted(
-      state,
-      action: PayloadAction<{
-        kind: IdDocumentKind;
-        number: string;
-        photoUri: string;
-      }>,
-    ) {
-      if (state.profile) {
-        state.profile.idKind = action.payload.kind;
-        state.profile.idNumber = action.payload.number;
-        state.profile.idPhotoUri = action.payload.photoUri;
-        state.profile.idVerification = 'pending';
-      }
-    },
-    userIdVerificationChanged(
-      state,
-      action: PayloadAction<IdVerificationStatus>,
-    ) {
-      if (state.profile) state.profile.idVerification = action.payload;
-    },
     profileHydrated(state, action: PayloadAction<UserProfile>) {
       state.profile = action.payload;
       state.status = 'authenticated';
@@ -140,9 +114,6 @@ export const {
   friendAdded,
   friendRemoved,
   premiumUpgraded,
-  helperModeToggled,
-  userIdSubmitted,
-  userIdVerificationChanged,
   profileHydrated,
   signedOut,
   errorCleared,

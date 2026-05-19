@@ -3,17 +3,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const KEYS = {
   onboarded: 'orbii:onboarded',
   history: 'orbii:history',
-  helperEarnings: 'orbii:helper:earnings',
-  helperVerified: 'orbii:helper:verified',
   settings: 'orbii:settings',
   profile: 'orbii:profile',
   notifications: 'orbii:notifications',
   premiumWaitlist: 'orbii:premium:waitlist',
   safetyModes: 'orbii:safety-modes',
-  // Picovoice access key. Stored in SecureStore via the secure-store
-  // hybrid adapter — see `orbii:secure:` prefix mapping.
-  voiceAccessKey: 'orbii:secure:voice-access-key',
-  voiceKeyword: 'orbii:voice-keyword',
   locale: 'orbii:locale',
   activeCircleId: 'orbii:circles:active',
 } as const;

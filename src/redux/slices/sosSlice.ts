@@ -64,8 +64,9 @@ const sosSlice = createSlice({
     ) {
       if (state.activeSOS) {
         const responder =
-          state.activeSOS.helpers.find((h) => h.id === action.payload.responderId) ||
-          null;
+          state.activeSOS.responders.find(
+            (h) => h.id === action.payload.responderId,
+          ) || null;
         state.activeSOS = {
           ...state.activeSOS,
           status: 'resolved',

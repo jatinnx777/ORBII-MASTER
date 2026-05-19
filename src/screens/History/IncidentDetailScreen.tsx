@@ -105,12 +105,12 @@ export function IncidentDetailScreen() {
         />
       </Card>
 
-      <SectionHeader title="Helpers responded" />
+      <SectionHeader title="Who responded" />
       <Card style={styles.card}>
-        {record.helpers.length === 0 ? (
-          <Text style={styles.muted}>No helpers responded.</Text>
+        {record.responders.length === 0 ? (
+          <Text style={styles.muted}>No one responded.</Text>
         ) : (
-          record.helpers.map((h) => (
+          record.responders.map((h) => (
             <View key={h.id} style={styles.helperRow}>
               <View style={styles.helperAvatar}>
                 <Text style={styles.helperInitial}>
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     borderRadius: radius.md,
     overflow: 'hidden',
-    backgroundColor: '#E3E8EE',
+    backgroundColor: colors.brandSoft,
   },
   card: {
     marginHorizontal: spacing.lg,
@@ -210,16 +210,16 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#1976D2',
+    borderColor: colors.brandMid,
   },
   helperInitial: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 14,
-    color: '#1976D2',
+    color: colors.brandDeep,
   },
   helperName: {
     ...typography.bodyMedium,

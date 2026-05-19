@@ -20,7 +20,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
 import { CircleSelectorPill } from './components/CircleSelectorPill';
-import { MLMapView, ScreenContainer, type MLMarker } from '@/components/common';
+import {
+  BatteryWarning,
+  MLMapView,
+  ScreenContainer,
+  type MLMarker,
+} from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -56,6 +61,7 @@ import {
 } from '@/services/notifications';
 import { formatDistance, haversineMeters } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
+import { shouldDampenWork } from '@/services/battery-aware';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
 import { useSafetyTips } from '@/hooks/useSafetyTips';
 import {
@@ -80,9 +86,10 @@ export function HomeScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const { locationPermission, helpersNearby } = useAppSelector((s) => s.sos);
   const safeJourney = useAppSelector((s) => s.app.safeJourney);
-  const helperVerified = useAppSelector(
-    (s) => s.helper.verification === 'verified' && s.helper.mode,
-  );
+  // `helperVerified` is the legacy gig-economy flag (cut). Circle members
+  // are now the only "helpers" — every peer the user trusts is implicitly
+  // verified by virtue of being in their circle.
+  const helperVerified = false;
   const nearbyAlerts = useAppSelector((s) => s.community.alerts);
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -174,6 +181,11 @@ export function HomeScreen() {
   useEffect(() => {
     if (locationPermission !== 'granted') return;
     refreshTimer.current = setInterval(() => {
+      // Skip the ambient refresh when the phone is on low battery and
+      // unplugged. The user can still press SOS — that's the critical
+      // path and never dampened — but we save ~30 seconds of GPS / DB
+      // chatter every cycle until they charge up.
+      if (shouldDampenWork()) return;
       loadLocationAndHelpers();
     }, HELPER_REFRESH_MS);
     return () => {
@@ -449,6 +461,8 @@ export function HomeScreen() {
           </View>
         }
       >
+        <BatteryWarning />
+
         {locationPermission !== 'granted' ? (
           <Pressable
             onPress={bootstrapPermission}
@@ -478,13 +492,13 @@ export function HomeScreen() {
           </View>
         ) : (
           <Pressable
-            onPress={() => navigation.navigate('HelperVerification')}
+            onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
             style={styles.helperChipZero}
             accessibilityRole="button"
           >
             <View style={[styles.helperDot, styles.helperDotIdle]} />
-            <Text style={styles.helperChipText}>0 helpers nearby ·</Text>
-            <Text style={styles.helperChipCta}>Be the first</Text>
+            <Text style={styles.helperChipText}>No circle members nearby ·</Text>
+            <Text style={styles.helperChipCta}>Invite someone</Text>
             <Ionicons name="arrow-forward" size={12} color={colors.brandDeep} />
           </Pressable>
         )}

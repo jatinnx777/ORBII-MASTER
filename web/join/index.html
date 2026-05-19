@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#57C691" />
+    <title>Join an ORBII safety circle</title>
+    <meta
+      name="description"
+      content="Someone you trust has invited you to their ORBII safety circle. Install ORBII to accept and start sharing your live safety status."
+    />
+    <!--
+      Static landing page served at orbii.app/join/<token>. Hosted on
+      whatever you point the orbii.app A-record at (Vercel, Cloudflare
+      Pages, GitHub Pages — anywhere static). The HTML is intentionally
+      self-contained: no JS frameworks, no fonts that need a CDN, no
+      analytics.
+
+      Behaviour:
+        1. On load, try to deep-link into the installed ORBII app via
+           `orbii://join/<token>`. If ORBII is installed, the OS swallows
+           the redirect and the page never paints.
+        2. If ORBII is not installed, the user stays on this page and
+           sees install buttons. The Play Store link auto-passes the
+           token through `referrer=join_<token>` so the app can claim
+           the invite on first run.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter",
+          "Roboto", sans-serif;
+        background: #f7faf8;
+        color: #111827;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        line-height: 1.5;
+      }
+      .card {
+        background: #ffffff;
+        border-radius: 24px;
+        box-shadow: 0 10px 32px rgba(0, 0, 0, 0.06);
+        padding: 32px 24px;
+        max-width: 420px;
+        width: 100%;
+        text-align: center;
+      }
+      .badge {
+        width: 64px;
+        height: 64px;
+        border-radius: 22px;
+        background: #e2f4eb;
+        margin: 0 auto 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #1e8e5a;
+        font-size: 30px;
+      }
+      h1 {
+        font-size: 22px;
+        margin: 0 0 8px;
+        letter-spacing: -0.4px;
+      }
+      p {
+        color: #6b7280;
+        font-size: 14.5px;
+        margin: 0;
+      }
+      .accent { color: #1e8e5a; font-weight: 700; }
+      .actions { display: grid; gap: 10px; margin-top: 24px; }
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-weight: 700;
+        font-size: 14.5px;
+        text-decoration: none;
+        transition: opacity 0.15s, transform 0.15s;
+      }
+      .btn:active { opacity: 0.9; transform: scale(0.98); }
+      .btn-primary { background: #1e8e5a; color: #ffffff; }
+      .btn-secondary {
+        background: #ffffff;
+        color: #111827;
+        border: 1px solid rgba(0, 0, 0, 0.05);
+      }
+      .footnote {
+        margin-top: 20px;
+        font-size: 12px;
+        color: #9ca3af;
+      }
+      .token {
+        font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", monospace;
+        color: #1e8e5a;
+        font-weight: 600;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="badge" aria-hidden="true">🤝</div>
+      <h1>You've been invited to an ORBII safety circle</h1>
+      <p>
+        ORBII is a personal safety app built for India. Someone you trust wants
+        you in their <span class="accent">safety circle</span> so they know
+        you're OK — and so you can know they're OK too.
+      </p>
+
+      <div class="actions">
+        <a id="open-app" class="btn btn-primary" href="#" rel="noopener">
+          Open in ORBII
+        </a>
+        <a
+          id="play-store"
+          class="btn btn-secondary"
+          href="https://play.google.com/store/apps/details?id=com.orbii.app"
+          rel="noopener"
+        >
+          Get ORBII on Google Play
+        </a>
+      </div>
+
+      <p class="footnote">
+        Invite code: <span class="token" id="token">…</span>
+      </p>
+    </main>
+
+    <script>
+      // Pull token out of the path so we never trust JS-injected globals.
+      // URL shape: /join/<token>  (also handles /join?token=<token>)
+      (function () {
+        var path = window.location.pathname || '';
+        var match = path.match(/\/join\/?\?*([^/?#]+)/i);
+        var token = match && match[1] !== 'join' ? match[1] : null;
+        if (!token) {
+          var qs = new URLSearchParams(window.location.search);
+          token = qs.get('token');
+        }
+        if (!token) return;
+
+        document.getElementById('token').textContent = token;
+
+        var deepLink = 'orbii://join/' + encodeURIComponent(token);
+        document.getElementById('open-app').setAttribute('href', deepLink);
+
+        // Google Play install referrer carries the token so the app can
+        // claim the invite on first run. Format must match what
+        // Linking.parseInitialURLAsync will see at cold start.
+        var playStore = document.getElementById('play-store');
+        playStore.setAttribute(
+          'href',
+          'https://play.google.com/store/apps/details?id=com.orbii.app&referrer=' +
+            encodeURIComponent('orbii://join/' + token),
+        );
+
+        // Auto-attempt the deep link. If ORBII is installed, the OS will
+        // swallow the redirect. If not, the page stays put — the install
+        // buttons take over.
+        setTimeout(function () {
+          window.location.href = deepLink;
+        }, 200);
+      })();
+    </script>
+  </body>
+</html>

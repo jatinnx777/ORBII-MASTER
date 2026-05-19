@@ -35,6 +35,10 @@ import type { AppScreenProps } from '@/navigation/types';
 // created Circle which we dispatch into the slice immediately so the
 // CirclesScreen list updates without a refetch.
 
+// Every circle kind uses an ORBII brand tone (mint variants). The two
+// exceptions are intentional and tied to meaning: Emergency uses the
+// danger token because it represents the SOS chain, and General falls
+// back to the muted text colour so it doesn't compete with named kinds.
 const KIND_OPTIONS: Array<{
   kind: CircleKind;
   icon: React.ComponentProps<typeof Ionicons>['name'];
@@ -42,13 +46,13 @@ const KIND_OPTIONS: Array<{
   color: string;
   hint: string;
 }> = [
-  { kind: 'family', icon: 'home', label: 'Family', color: '#57C691', hint: 'Parents, siblings, partner.' },
-  { kind: 'friends', icon: 'people', label: 'Friends', color: '#3FB9A1', hint: 'Your closest friend group.' },
-  { kind: 'trip', icon: 'airplane', label: 'Trip', color: '#5BA9E6', hint: 'A single journey or vacation.' },
-  { kind: 'college', icon: 'school', label: 'College', color: '#9A7CF5', hint: 'Hostel, classmates, batchmates.' },
-  { kind: 'women', icon: 'female', label: 'Women', color: '#E07AB6', hint: 'Women-only safety circle.' },
-  { kind: 'emergency', icon: 'alert-circle', label: 'Emergency', color: '#FF4D4D', hint: 'People who should be alerted in a real SOS.' },
-  { kind: 'general', icon: 'people-circle', label: 'General', color: '#6B7280', hint: 'Any other trusted group.' },
+  { kind: 'family', icon: 'home', label: 'Family', color: colors.brandDeep, hint: 'Parents, siblings, partner.' },
+  { kind: 'friends', icon: 'people', label: 'Friends', color: colors.brand, hint: 'Your closest friend group.' },
+  { kind: 'trip', icon: 'airplane', label: 'Trip', color: colors.brand, hint: 'A single journey or vacation.' },
+  { kind: 'college', icon: 'school', label: 'College', color: colors.brandDeep, hint: 'Hostel, classmates, batchmates.' },
+  { kind: 'women', icon: 'female', label: 'Women', color: colors.brandDeep, hint: 'Women-only safety circle.' },
+  { kind: 'emergency', icon: 'alert-circle', label: 'Emergency', color: colors.primary, hint: 'People who should be alerted in a real SOS.' },
+  { kind: 'general', icon: 'people-circle', label: 'General', color: colors.textMuted, hint: 'Any other trusted group.' },
 ];
 
 export function CircleCreateScreen({

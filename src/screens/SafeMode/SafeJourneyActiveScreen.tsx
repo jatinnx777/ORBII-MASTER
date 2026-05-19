@@ -13,25 +13,40 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { Button, ScreenContainer } from '@/components/common';
+import { Button, PinPrompt, ScreenContainer } from '@/components/common';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { safeJourneyEnded } from '@/redux/slices/appSlice';
 import { getCurrentLocation } from '@/services/location';
+import { isPinSet, verifyPin } from '@/services/safety-pin';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function SafeJourneyActiveScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<RouteProp<AppStackParamList, 'SafeJourneyActive'>>();
   const dispatch = useAppDispatch();
   const journey = useAppSelector((s) => s.app.safeJourney);
   const profile = useAppSelector((s) => s.user.profile);
 
   const [now, setNow] = useState(Date.now());
+  // PIN guard state. When the lock-screen "I'm safe" notification fires,
+  // App.tsx routes here with `requirePinToEnd: true` so we surface the
+  // PIN sheet immediately. Same guard applies before any end-journey
+  // action when the user has a PIN set.
+  const [pinPromptOpen, setPinPromptOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
   const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (route.params?.requirePinToEnd) {
+      setPinPromptOpen(true);
+    }
+  }, [route.params?.requirePinToEnd]);
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
@@ -101,7 +116,7 @@ export function SafeJourneyActiveScreen() {
     (c) => c.id === journey.trustedContactId,
   );
 
-  const handleSafe = () => {
+  const completeSafeArrival = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => undefined,
     );
@@ -109,6 +124,18 @@ export function SafeJourneyActiveScreen() {
     Alert.alert('Welcome back', "We're glad you're safe.", [
       { text: 'Done', onPress: () => navigation.goBack() },
     ]);
+  };
+
+  // Wraps the "I'm safe" path with a PIN check. Attacker grabbed the
+  // phone? They can't end Safe Mode without the PIN.
+  const handleSafe = async () => {
+    const guarded = await isPinSet();
+    if (!guarded) {
+      completeSafeArrival();
+      return;
+    }
+    setPinError(null);
+    setPinPromptOpen(true);
   };
 
   const handleShareLocation = async () => {
@@ -237,6 +264,28 @@ export function SafeJourneyActiveScreen() {
           auto-fire SOS and alert {contact?.name ?? 'your contacts'}.
         </Text>
       </View>
+
+      <PinPrompt
+        visible={pinPromptOpen}
+        mode="verify"
+        title="Enter your safety PIN"
+        body="Required to end Safe Mode."
+        errorText={pinError}
+        onCancel={() => {
+          setPinPromptOpen(false);
+          setPinError(null);
+        }}
+        onSubmit={async (pin) => {
+          const ok = await verifyPin(pin);
+          if (!ok) {
+            setPinError('Wrong PIN. Try again.');
+            return;
+          }
+          setPinPromptOpen(false);
+          setPinError(null);
+          completeSafeArrival();
+        }}
+      />
     </ScreenContainer>
   );
 }
@@ -264,7 +313,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#E8F5E9',
+    backgroundColor: colors.brandSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: radius.circle,
@@ -340,16 +389,16 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E3F2FD',
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#1976D2',
+    borderColor: colors.brandMid,
   },
   contactInitial: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 16,
-    color: '#1976D2',
+    color: colors.brandDeep,
   },
   contactRole: {
     fontFamily: fontFamilies.poppinsSemiBold,

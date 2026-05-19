@@ -8,32 +8,24 @@ import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScre
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
-import { HelperVerificationScreen } from '@/screens/Helper/HelperVerificationScreen';
-import { HelperDashboardScreen } from '@/screens/Helper/HelperDashboardScreen';
-import { AcceptSOSScreen } from '@/screens/Helper/AcceptSOSScreen';
-import { HelperNavigationScreen } from '@/screens/Helper/HelperNavigationScreen';
-import { WithdrawScreen } from '@/screens/Helper/WithdrawScreen';
-import { IdVerificationScreen } from '@/screens/Auth/IdVerificationScreen';
 import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen';
 import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
-import { ChatThreadScreen } from '@/screens/Friends/ChatThreadScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
-import { SupportChatScreen } from '@/screens/Support/SupportChatScreen';
 import { AboutScreen } from '@/screens/About/AboutScreen';
 import { GhostStartScreen } from '@/screens/Safety/Ghost/StartScreen';
 import { GhostActiveScreen } from '@/screens/Safety/Ghost/ActiveScreen';
 import { DeadmanStartScreen } from '@/screens/Safety/Deadman/StartScreen';
 import { DeadmanActiveScreen } from '@/screens/Safety/Deadman/ActiveScreen';
 import { OEMHelpScreen } from '@/screens/OEMHelp/OEMHelpScreen';
-import { VoiceSetupScreen } from '@/screens/Voice/VoiceSetupScreen';
 import { LanguageSelectorScreen } from '@/screens/Auth/LanguageSelectorScreen';
 import { CircleDetailScreen } from '@/screens/Circles/CircleDetailScreen';
 import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
 import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
+import { SafetyPinScreen } from '@/screens/Settings/SafetyPinScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -101,44 +93,6 @@ export function AppNavigator() {
         options={withHeader('ORBII Premium')}
       />
       <Stack.Screen
-        name="HelperVerification"
-        component={HelperVerificationScreen}
-        options={withHeader('Become a helper')}
-      />
-      <Stack.Screen
-        name="HelperDashboard"
-        component={HelperDashboardScreen}
-        options={withHeader('Helper dashboard')}
-      />
-      <Stack.Screen
-        name="AcceptSOS"
-        component={AcceptSOSScreen}
-        options={{
-          presentation: 'fullScreenModal',
-          animation: 'fade',
-          gestureEnabled: false,
-        }}
-      />
-      <Stack.Screen
-        name="HelperNavigation"
-        component={HelperNavigationScreen}
-        options={{
-          presentation: 'fullScreenModal',
-          animation: 'slide_from_bottom',
-          gestureEnabled: false,
-        }}
-      />
-      <Stack.Screen
-        name="Withdraw"
-        component={WithdrawScreen}
-        options={withHeader('Withdraw earnings')}
-      />
-      <Stack.Screen
-        name="IdVerification"
-        component={IdVerificationScreen}
-        options={withHeader('Verify your identity')}
-      />
-      <Stack.Screen
         name="Notifications"
         component={NotificationsScreen}
         options={withHeader('Notifications')}
@@ -172,19 +126,9 @@ export function AppNavigator() {
         options={withHeader('Friends')}
       />
       <Stack.Screen
-        name="ChatThread"
-        component={ChatThreadScreen}
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
         name="History"
         component={HistoryScreen}
         options={withHeader('SOS history')}
-      />
-      <Stack.Screen
-        name="SupportChat"
-        component={SupportChatScreen}
-        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="About"
@@ -225,11 +169,6 @@ export function AppNavigator() {
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
-        name="VoiceSetup"
-        component={VoiceSetupScreen}
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
         name="LanguageSelectorApp"
         component={LanguageSelectorScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
@@ -248,6 +187,11 @@ export function AppNavigator() {
         name="CircleInvite"
         component={CircleInviteScreen}
         options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="SafetyPin"
+        component={SafetyPinScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
     </Stack.Navigator>
   );

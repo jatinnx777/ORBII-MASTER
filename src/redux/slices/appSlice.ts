@@ -21,18 +21,14 @@ type SafeJourney = {
 type AppState = {
   onboarded: boolean;
   isOnline: boolean;
-  voiceDetection: boolean;
-  // Always-on listening: keeps the speech recognizer running even when the
-  // app is backgrounded. Backed by a sticky foreground notification so
-  // Android doesn't kill the process. When a trigger word is heard we wake
-  // the screen via a full-screen-intent notification. Costs battery — opt-in.
-  backgroundVoice: boolean;
   // Buzz the phone when an SOS broadcast lands within 2 km. On by default.
   alertVibration: boolean;
-  // Volume-button triple-press fires SOS countdown. Off by default —
-  // requires the user to opt in from Settings.
-  hardwareSOS: boolean;
   pushEnabled: boolean;
+  // Shake-to-SOS: 3 hard shakes in 1.5 s fires the SOS countdown.
+  // Works while ORBII is in the foreground / lock-screen-on. Background
+  // shake needs a foreground service (planned). On by default — it's the
+  // most reliable hands-free trigger we have.
+  shakeSOS: boolean;
   hydrated: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.
   safeJourney: SafeJourney | null;
@@ -44,11 +40,9 @@ type AppState = {
 const initialState: AppState = {
   onboarded: false,
   isOnline: true,
-  voiceDetection: false,
-  backgroundVoice: false,
   alertVibration: true,
-  hardwareSOS: false,
   pushEnabled: false,
+  shakeSOS: true,
   hydrated: false,
   safeJourney: null,
   policyAcceptedAt: null,
@@ -70,20 +64,14 @@ const appSlice = createSlice({
     connectionChanged(state, action: PayloadAction<boolean>) {
       state.isOnline = action.payload;
     },
-    voiceDetectionToggled(state, action: PayloadAction<boolean>) {
-      state.voiceDetection = action.payload;
-    },
-    backgroundVoiceToggled(state, action: PayloadAction<boolean>) {
-      state.backgroundVoice = action.payload;
-    },
     alertVibrationToggled(state, action: PayloadAction<boolean>) {
       state.alertVibration = action.payload;
     },
-    hardwareSOSToggled(state, action: PayloadAction<boolean>) {
-      state.hardwareSOS = action.payload;
-    },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
+    },
+    shakeSOSToggled(state, action: PayloadAction<boolean>) {
+      state.shakeSOS = action.payload;
     },
     safeJourneyStarted(
       state,
@@ -115,11 +103,9 @@ export const {
   appHydrated,
   onboardingCompleted,
   connectionChanged,
-  voiceDetectionToggled,
-  backgroundVoiceToggled,
   alertVibrationToggled,
-  hardwareSOSToggled,
   pushEnabledSet,
+  shakeSOSToggled,
   safeJourneyStarted,
   safeJourneyEnded,
   policyAccepted,

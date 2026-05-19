@@ -94,12 +94,23 @@ function SectionHeader({ title }: { title: string }) {
 // Active Protection — Ghost Mode + Deadman Timer (both Silver-tier)
 // ---------------------------------------------------------------------------
 
+// "Watch over me" — three variants of the same idea: let your circle
+// know if you don't make it. Safe Journey is the ETA-to-destination
+// variant, Ghost Mode is the silent live-trip variant, Deadman Timer is
+// the pure countdown. We surface them as one section so users see them
+// as related options, not three competing features.
 function ActiveProtectionSection() {
   const navigation = useNavigation<Nav>();
+  const safeJourney = useAppSelector((s) => s.app.safeJourney);
   const ghost = useAppSelector((s) => s.safetyModes.ghost);
   const deadman = useAppSelector((s) => s.safetyModes.deadman);
   const ghostUnlocked = useEntitlement('ghost_mode');
   const deadmanUnlocked = useEntitlement('deadman_timer');
+
+  const openSafeJourney = () => {
+    if (safeJourney) navigation.navigate('SafeJourneyActive');
+    else navigation.navigate('SafeJourneyStart');
+  };
 
   const openGhost = () => {
     if (!ghostUnlocked) {
@@ -126,12 +137,37 @@ function ActiveProtectionSection() {
 
   return (
     <>
-      <SectionHeader title="Active Protection" />
+      <SectionHeader title="Watch over me" />
+
+      <FeatureCard
+        icon="walk"
+        title="Safe Journey"
+        description="Tell ORBII when you'll arrive. Your circle gets alerted if you don't make it."
+        tier="free"
+        onPress={openSafeJourney}
+      >
+        {safeJourney ? (
+          <View style={styles.statusRow}>
+            <View style={[styles.liveDot, styles.liveDotActive]} />
+            <Text style={styles.statusText}>
+              Active · ETA{' '}
+              {new Date(safeJourney.etaMs).toLocaleTimeString('en-IN', {
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+            </Text>
+          </View>
+        ) : (
+          <Text style={styles.cardSub}>
+            Tap to set a destination + ETA. Quick to start, easy to cancel.
+          </Text>
+        )}
+      </FeatureCard>
 
       <FeatureCard
         icon="eye"
         title="Ghost Mode"
-        description="Quietly tracks your trip and flags if anything looks off."
+        description="A silent variant — your circle sees your trip live, but no alarm unless you go missing."
         tier={tierFor('ghost_mode')}
         locked={!ghostUnlocked}
         onUnlock={() => navigation.navigate('PremiumUpgrade')}
@@ -154,7 +190,7 @@ function ActiveProtectionSection() {
       <FeatureCard
         icon="hourglass-outline"
         title="Deadman Timer"
-        description="A countdown that alerts your circle if you don't cancel it."
+        description="A simple countdown. If you don't cancel it before zero, your circle is alerted."
         tier={tierFor('deadman_timer')}
         locked={!deadmanUnlocked}
         onUnlock={() => navigation.navigate('PremiumUpgrade')}
@@ -287,7 +323,6 @@ function PersonalSafetySection() {
 function VoiceSOSCard() {
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>('idle');
   const listening = voiceStatus === 'listening' || voiceStatus === 'starting';
-  const backgroundVoice = useAppSelector((s) => s.app.backgroundVoice);
 
   useEffect(() => subscribeStatus(setVoiceStatus), []);
 
@@ -299,13 +334,11 @@ function VoiceSOSCard() {
     await startListening();
   };
 
-  // Honest framing: foreground listening works; background listening is a
-  // best-effort beta because Android OEMs throttle the mic API. The UI
-  // tells the user exactly what to expect.
+  // Foreground-only voice listening — background wake-word stack was cut
+  // (Picovoice + OrbiiVoiceService). Honest copy: this works while ORBII
+  // is open. Backgrounded listening is intentionally out of scope.
   const statusLine = listening
-    ? backgroundVoice
-      ? 'Listening · background reliability is best-effort'
-      : 'Listening while ORBII is open'
+    ? 'Listening while ORBII is open'
     : 'Tap to start listening for "help", "bachao", or "madad"';
 
   return (
@@ -336,11 +369,6 @@ function VoiceSOSCard() {
             {statusLine}
           </Text>
         </View>
-        {backgroundVoice && listening ? (
-          <View style={styles.betaPill}>
-            <Text style={styles.betaPillText}>BETA</Text>
-          </View>
-        ) : null}
       </View>
     </FeatureCard>
   );
@@ -654,9 +682,11 @@ function TierBadge({ tier, locked }: { tier: Tier; locked?: boolean }) {
     <View
       style={[
         styles.tierBadge,
-        tier === 'silver' && { backgroundColor: '#E6E8EC' },
-        tier === 'gold' && { backgroundColor: '#FFF1CB' },
-        tier === 'platinum' && { backgroundColor: '#E6EAFF' },
+        // Single mint-tone family for all tiers — Silver = palest, Gold =
+        // brand wash, Platinum = brand-mid. Keeps the app to ONE colour.
+        tier === 'silver' && { backgroundColor: colors.background },
+        tier === 'gold' && { backgroundColor: colors.brandSoft },
+        tier === 'platinum' && { backgroundColor: colors.brandMid },
       ]}
     >
       {locked ? (

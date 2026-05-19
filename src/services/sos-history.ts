@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type {
-  HelperSummary,
+  Responder,
   SOSRecord,
   SOSStatus,
   SOSKind,
@@ -36,7 +36,7 @@ function rowToRecord(row: SOSRow): SOSRecord {
     longitude: row.lng,
     address: row.address,
   };
-  const responder: HelperSummary | null = row.responder_id
+  const responder: Responder | null = row.responder_id
     ? {
         id: row.responder_id,
         name: row.responder_name ?? '',
@@ -53,7 +53,7 @@ function rowToRecord(row: SOSRow): SOSRecord {
     timestamp: Date.parse(row.created_at),
     status: row.status,
     kind: row.kind ?? 'real',
-    helpers: [],
+    responders: [],
     responder,
     responseTime: row.response_time,
     resolvedAt: row.resolved_at ? Date.parse(row.resolved_at) : null,

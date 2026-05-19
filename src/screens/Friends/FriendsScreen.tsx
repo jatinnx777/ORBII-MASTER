@@ -296,7 +296,6 @@ export function FriendsScreen() {
             friend={item}
             index={index}
             onRemove={() => handleRemove(item.username)}
-            onChat={() => navigation.navigate('ChatThread', { username: item.username })}
           />
         )}
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
@@ -365,12 +364,10 @@ function FriendRow({
   friend,
   index,
   onRemove,
-  onChat,
 }: {
   friend: Friend;
   index: number;
   onRemove: () => void;
-  onChat: () => void;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -391,12 +388,7 @@ function FriendRow({
 
   return (
     <Animated.View style={{ opacity: enter, transform: [{ translateY }] }}>
-      <Pressable
-        onPress={onChat}
-        style={({ pressed }) => [styles.friendRow, pressed && styles.pressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`Chat with ${friend.username}`}
-      >
+      <View style={styles.friendRow}>
         <View style={styles.friendAvatar}>
           {friend.photoUri ? (
             <Image source={{ uri: friend.photoUri }} style={styles.friendAvatarImg} />
@@ -414,15 +406,6 @@ function FriendRow({
         </View>
         <View style={styles.friendActions}>
           <Pressable
-            onPress={onChat}
-            hitSlop={10}
-            style={({ pressed }) => [styles.chatBtn, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Open chat with ${friend.username}`}
-          >
-            <Ionicons name="chatbubble-ellipses" size={16} color={colors.primary} />
-          </Pressable>
-          <Pressable
             onPress={onRemove}
             hitSlop={10}
             accessibilityRole="button"
@@ -431,7 +414,7 @@ function FriendRow({
             <Ionicons name="close-circle" size={22} color={colors.textMuted} />
           </Pressable>
         </View>
-      </Pressable>
+      </View>
     </Animated.View>
   );
 }

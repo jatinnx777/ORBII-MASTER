@@ -154,24 +154,24 @@ function pillTone(record: SOSRecord): {
     return { label: 'RESOLVED', bg: colors.success, fg: colors.textInverse };
   }
   // status === 'active'
-  if (record.helpers.length === 0) {
+  if (record.responders.length === 0) {
     return { label: 'NO RESPONSE', bg: colors.warning, fg: colors.dark };
   }
   return { label: 'ACTIVE', bg: colors.primary, fg: colors.textInverse };
 }
 
-// Outcome line: never shows a response time when there were no helpers,
-// never shows a helper count for cancelled/test runs.
+// Outcome line: never shows a response time when there were no responders,
+// never shows a responder count for cancelled/test runs.
 function describeOutcome(record: SOSRecord): string {
   if (recordKind(record) === 'test') return 'No real alerts sent';
   if (record.status === 'cancelled') return 'Cancelled during countdown';
-  const helpers = record.helpers.length;
-  if (helpers === 0) return 'No helpers responded';
-  const helperText = `${helpers} helper${helpers === 1 ? '' : 's'}`;
+  const count = record.responders.length;
+  if (count === 0) return 'No one responded yet';
+  const label = `${count} ${count === 1 ? 'responder' : 'responders'}`;
   if (record.responseTime != null) {
-    return `${helperText} · ${formatResponseTime(record.responseTime)}`;
+    return `${label} · ${formatResponseTime(record.responseTime)}`;
   }
-  return helperText;
+  return label;
 }
 
 function formatDateTime(ts: number) {
