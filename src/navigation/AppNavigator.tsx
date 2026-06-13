@@ -12,7 +12,8 @@ import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen
 import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
-import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
+import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
+import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { FriendsScreen } from '@/screens/Friends/FriendsScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
 import { AboutScreen } from '@/screens/About/AboutScreen';
@@ -116,9 +117,14 @@ export function AppNavigator() {
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={withHeader('Profile')}
+        name="Settings"
+        component={SettingsScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Circles"
+        component={CirclesScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Friends"

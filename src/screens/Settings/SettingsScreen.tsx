@@ -31,12 +31,9 @@ import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
-import type { AppStackParamList, TabParamList } from '@/navigation/types';
+import type { AppStackParamList } from '@/navigation/types';
 
-type Nav = CompositeNavigationProp<
-  BottomTabNavigationProp<TabParamList, 'Settings'>,
-  NativeStackNavigationProp<AppStackParamList>
->;
+type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function SettingsScreen() {
   const navigation = useNavigation<Nav>();
@@ -199,7 +196,7 @@ export function SettingsScreen() {
             icon="people-circle"
             label="Manage circles"
             value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
-            onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
+            onPress={() => navigation.navigate('Circles')}
           />
         </Card>
 

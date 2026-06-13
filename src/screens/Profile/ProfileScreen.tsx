@@ -121,7 +121,7 @@ export function ProfileScreen() {
           <Row
             icon="settings"
             label="Settings"
-            onPress={() => navigation.navigate('Tabs', { screen: 'Settings' })}
+            onPress={() => navigation.navigate('Settings')}
           />
           <Divider />
           <Row

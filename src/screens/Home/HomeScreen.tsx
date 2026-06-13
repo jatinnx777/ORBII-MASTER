@@ -372,8 +372,8 @@ export function HomeScreen() {
           profile={profile}
           initial={initial}
           unreadCount={unreadCount}
-          onProfilePress={() => navigation.navigate('Profile')}
-          onSettingsPress={() => navigation.navigate('Tabs', { screen: 'Settings' })}
+          onProfilePress={() => navigation.navigate('Tabs', { screen: 'Profile' })}
+          onSettingsPress={() => navigation.navigate('Settings')}
         />
       </View>
 
@@ -417,7 +417,7 @@ export function HomeScreen() {
         {/* helpers row */}
         <Pressable
           style={styles.helpersRow}
-          onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
+          onPress={() => navigation.navigate('Circles')}
           accessibilityRole="button"
         >
           <View style={styles.avatarStack}>
