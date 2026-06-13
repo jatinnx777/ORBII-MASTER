@@ -4,7 +4,7 @@ import {
   Camera,
   GeoJSONSource,
   Layer,
-  MarkerView,
+  Marker,
   Map as MLMap,
   type CameraRef,
   type MapRef,
@@ -305,7 +305,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
       ) : null}
 
       {avatarMarkers.map((m) => (
-        <MarkerView key={m.id} coordinate={toCoords(m.coordinate)} anchor={{ x: 0.5, y: 1 }}>
+        <Marker key={m.id} coordinate={toCoords(m.coordinate)} anchor={{ x: 0.5, y: 1 }}>
           <View style={styles.avatarPin}>
             <View style={styles.avatarRing}>
               {m.photoUri ? (
@@ -320,7 +320,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
             </View>
             <View style={styles.avatarStem} />
           </View>
-        </MarkerView>
+        </Marker>
       ))}
     </MLMap>
   );
