@@ -319,6 +319,12 @@ export function HomeScreen() {
 
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
+  // Active circle member ids → these peers render as photo avatars, not dots.
+  const memberIds = useMemo(
+    () => new Set(circleMembers.map((m) => m.userId)),
+    [circleMembers],
+  );
+
   const mapMarkers: MLMarker[] = useMemo(() => {
     const out: MLMarker[] = [];
     if (currentLocation) {
@@ -327,6 +333,7 @@ export function HomeScreen() {
     const here = currentLocation;
     presencePeers.forEach((peer) => {
       if (!peer.location) return;
+      if (memberIds.has(peer.userId)) return; // shown as an avatar instead
       if (here) {
         const d = haversineMeters(here, peer.location);
         if (d > MAP_RADIUS_KM * 1000) return;
@@ -338,7 +345,19 @@ export function HomeScreen() {
       });
     });
     return out;
-  }, [currentLocation, presencePeers]);
+  }, [currentLocation, presencePeers, memberIds]);
+
+  // Circle members currently sharing location → avatar pins with their photo.
+  const avatarMarkers: AvatarMarker[] = useMemo(() => {
+    return presencePeers
+      .filter((p) => p.location && memberIds.has(p.userId))
+      .map((p) => ({
+        id: `member:${p.userId}`,
+        coordinate: p.location as GeoPoint,
+        photoUri: p.photoUri,
+        name: p.name,
+      }));
+  }, [presencePeers, memberIds]);
 
   const verifiedCount = useMemo(
     () =>
