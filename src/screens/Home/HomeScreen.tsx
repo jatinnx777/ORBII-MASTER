@@ -285,13 +285,8 @@ export function HomeScreen() {
     return unsub;
   }, []);
 
-  useEffect(() => {
-    const unsub = subscribeKeyword((keyword: VoiceKeyword, transcript: string) => {
-      trackEvent('voice_trigger_fired', { keyword, transcript });
-      navigation.navigate('SOSCountdown');
-    });
-    return unsub;
-  }, [navigation]);
+  // Voice keyword → SOS is handled globally (and quota-gated) in App.tsx,
+  // so Home no longer subscribes here (it would double-fire).
 
   useFocusEffect(
     useCallback(() => {

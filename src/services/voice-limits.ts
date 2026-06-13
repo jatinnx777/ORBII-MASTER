@@ -57,8 +57,9 @@ export async function recordVoiceSOS(): Promise<void> {
   const u = await read();
   await setItem<Usage>(storageKeys.voiceUsage, { period: u.period, count: u.count + 1 });
   // best-effort server mirror (ignored if not signed in / table missing)
-  supabase
-    .rpc('record_voice_sos', { p_period: u.period })
-    .then(() => undefined)
-    .catch(() => undefined);
+  try {
+    await supabase.rpc('record_voice_sos', { p_period: u.period });
+  } catch {
+    // ignore
+  }
 }

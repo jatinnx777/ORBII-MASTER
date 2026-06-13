@@ -22,6 +22,9 @@ type EventName =
   | 'safe_journey_ended'
   | 'community_alerts_viewed'
   | 'community_responded'
+  | 'helper_alert_accepted'
+  | 'helper_alert_declined'
+  | 'helper_alert_ignored'
   | 'sos_dialed_112';
 
 export function trackEvent(name: EventName, params: Record<string, unknown> = {}) {

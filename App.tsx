@@ -252,8 +252,14 @@ export default function App() {
         return;
       }
       if (data.kind === 'community_alert' && navigationRef.isReady()) {
-        // @ts-expect-error - CommunityAlerts is in the AppStack only.
-        navigationRef.navigate('CommunityAlerts');
+        const alertId = typeof data.alertId === 'string' ? data.alertId : null;
+        if (alertId) {
+          // @ts-expect-error - HelperAlert is in the AppStack only.
+          navigationRef.navigate('HelperAlert', { alertId });
+        } else {
+          // @ts-expect-error - CommunityAlerts is in the AppStack only.
+          navigationRef.navigate('CommunityAlerts');
+        }
         return;
       }
       if (data.kind === 'voice_trigger' && navigationRef.isReady()) {
@@ -315,12 +321,39 @@ export default function App() {
   // The wake notification ensures the screen lights up and the SOS flow opens
   // even if the phone was locked.
   useEffect(() => {
-    const unsub = subscribeKeyword((keyword) => {
-      fireVoiceWakeNotification(keyword).catch(() => undefined);
+    const goToSOS = () => {
       if (navigationRef.isReady()) {
         // @ts-expect-error - SOSCountdown is in the AppStack only.
         navigationRef.navigate('SOSCountdown');
       }
+    };
+    const goToPlans = () => {
+      if (navigationRef.isReady()) {
+        // @ts-expect-error - PremiumUpgrade is in the AppStack only.
+        navigationRef.navigate('PremiumUpgrade');
+      }
+    };
+
+    const unsub = subscribeKeyword(async (keyword) => {
+      fireVoiceWakeNotification(keyword).catch(() => undefined);
+      const isPremium = store.getState().user.profile?.isPremium ?? false;
+      const status = await voiceSOSStatus(isPremium);
+      if (status.allowed) {
+        void recordVoiceSOS();
+        goToSOS();
+        return;
+      }
+      // Free monthly voice quota reached. Never block the emergency: offer a
+      // one-tap manual SOS, plus an upgrade path for unlimited voice.
+      Alert.alert(
+        'Voice SOS limit reached',
+        `You've used your ${status.limit} free Voice SOS this month. You can still send an SOS now, or upgrade for unlimited voice.`,
+        [
+          { text: 'Upgrade', onPress: goToPlans },
+          { text: 'Send SOS', onPress: goToSOS },
+          { text: 'Not now', style: 'cancel' },
+        ],
+      );
     });
     return unsub;
   }, []);
@@ -362,6 +395,16 @@ export default function App() {
             ? [0, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800]
             : [0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600];
           Vibration.vibrate(pattern);
+        }
+        // Phase 3: launch the full-screen emergency alert so a nearby helper
+        // can't miss it (works while the app is open). Over-lockscreen
+        // delivery needs an FCM full-screen intent — native follow-up.
+        if (
+          navigationRef.isReady() &&
+          navigationRef.getCurrentRoute()?.name !== 'HelperAlert'
+        ) {
+          // @ts-expect-error HelperAlert lives in the AppStack only.
+          navigationRef.navigate('HelperAlert', { alertId: alert.id });
         }
         return;
       }

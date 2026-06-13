@@ -12,6 +12,7 @@ import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen
 import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
+import { HelperAlertScreen } from '@/screens/Community/HelperAlertScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
@@ -114,6 +115,15 @@ export function AppNavigator() {
         name="CommunityAlerts"
         component={CommunityAlertsScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="HelperAlert"
+        component={HelperAlertScreen}
+        options={{
+          presentation: 'fullScreenModal',
+          animation: 'fade',
+          gestureEnabled: false,
+        }}
       />
       <Stack.Screen
         name="Settings"
