@@ -28,14 +28,76 @@ export async function requestPermission(): Promise<LocationPermissionStatus> {
   return mapPermission(result.status);
 }
 
-export async function getCurrentLocation(): Promise<GeoPoint> {
-  const position = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.High,
+function toPoint(p: Location.LocationObject): GeoPoint {
+  return { latitude: p.coords.latitude, longitude: p.coords.longitude };
+}
+
+// Accurate location read. A single getCurrentPositionAsync often returns an
+// early NETWORK/wifi fix that can be kilometres off indoors — which made two
+// phones 5 m apart look "hours away". We force GPS (BestForNavigation) and
+// CONVERGE: keep the best (lowest accuracy-radius) reading until it's within
+// `targetAccuracyM`, or `timeoutMs` elapses. Never returns 0,0.
+async function getAccurateFix(
+  timeoutMs = 6000,
+  targetAccuracyM = 35,
+): Promise<GeoPoint> {
+  let best: Location.LocationObject | null = null;
+
+  try {
+    best = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.BestForNavigation,
+    });
+    if ((best.coords.accuracy ?? 9999) <= targetAccuracyM) return toPoint(best);
+  } catch {
+    // fall through to the watch loop
+  }
+
+  const converged = await new Promise<GeoPoint | null>((resolve) => {
+    let settled = false;
+    let sub: Location.LocationSubscription | null = null;
+    const finish = (point: GeoPoint | null) => {
+      if (settled) return;
+      settled = true;
+      sub?.remove();
+      resolve(point);
+    };
+    Location.watchPositionAsync(
+      {
+        accuracy: Location.Accuracy.BestForNavigation,
+        timeInterval: 1000,
+        distanceInterval: 0,
+      },
+      (pos) => {
+        if (!best || (pos.coords.accuracy ?? 9999) < (best.coords.accuracy ?? 9999)) {
+          best = pos;
+        }
+        if ((pos.coords.accuracy ?? 9999) <= targetAccuracyM) finish(toPoint(pos));
+      },
+    )
+      .then((s) => {
+        sub = s;
+      })
+      .catch(() => finish(null));
+    setTimeout(() => finish(best ? toPoint(best) : null), timeoutMs);
   });
-  return {
-    latitude: position.coords.latitude,
-    longitude: position.coords.longitude,
-  };
+
+  if (converged) return converged;
+  if (best) return toPoint(best);
+
+  // Last resort: a cached fix, only if it's reasonably recent + accurate.
+  const cached = await Location.getLastKnownPositionAsync({
+    maxAge: 60_000,
+    requiredAccuracy: 100,
+  });
+  if (cached) return toPoint(cached);
+
+  // Nothing usable — surface an error rather than returning 0,0 (which would
+  // make distance maths nonsensical).
+  throw new Error('Could not get an accurate GPS fix. Make sure location is on.');
+}
+
+export async function getCurrentLocation(): Promise<GeoPoint> {
+  return getAccurateFix();
 }
 
 // Optimised for the SOS critical path: returns the cached fix instantly if

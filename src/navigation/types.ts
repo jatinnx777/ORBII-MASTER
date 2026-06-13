@@ -39,6 +39,13 @@ export type AppStackParamList = {
   SafeJourneyActive: { requirePinToEnd?: boolean } | undefined;
   CommunityAlerts: undefined;
   HelperAlert: { alertId: string };
+  HelperNavigation: {
+    name: string;
+    phone: string;
+    lat: number;
+    lng: number;
+    photoUri?: string | null;
+  };
   // Settings + Circles are now stack destinations (reached via the Home
   // gear / helpers row), not tabs — the tab bar is Home/Safety/Plans/Profile.
   Settings: undefined;
