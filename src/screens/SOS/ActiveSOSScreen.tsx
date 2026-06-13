@@ -15,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
 import {
+  Mascot,
   MLMapView,
   useBrandSheet,
   type MLMarker,
@@ -535,7 +536,7 @@ export function ActiveSOSScreen() {
 
         {primary ? (
           <View style={styles.helperCard}>
-            <HelperAvatar />
+            <Mascot pose="shield" size={52} />
             <View style={{ flex: 1 }}>
               <Text style={styles.helperGreeting}>I'm {primary.name},</Text>
               <Text style={styles.helperRole}>your helper</Text>
@@ -573,7 +574,7 @@ export function ActiveSOSScreen() {
             <Text style={styles.tipTitle}>Thank your helper</Text>
             <Text style={styles.tipSub}>A small tip goes a long way</Text>
           </View>
-          <ThankYouArt />
+          <Mascot pose="celebrate" size={56} />
         </View>
 
         <View style={styles.tipRow}>

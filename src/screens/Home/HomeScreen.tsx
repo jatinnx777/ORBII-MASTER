@@ -383,21 +383,29 @@ export function HomeScreen() {
         />
       </View>
 
-      <BottomPanel bottomInset={insets.bottom} message={guardianMessage}>
-        {/* status header */}
-        <View style={styles.statusHeader}>
-          <View style={styles.safeRow}>
-            <View style={styles.safeDot} />
-            <Text style={styles.safeLabel}>You’re Safe</Text>
+      <BottomPanel bottomInset={insets.bottom}>
+        {/* status header + guardian companion */}
+        <View style={styles.statusHeaderRow}>
+          <View style={styles.statusHeader}>
+            <View style={styles.safeRow}>
+              <View style={styles.safeDot} />
+              <Text style={styles.safeLabel}>You’re Safe</Text>
+            </View>
+            <Text style={styles.allClear}>All Clear</Text>
+            <Text style={styles.helpersSub}>
+              {helpersScanState === 'scanning'
+                ? 'Scanning your area…'
+                : helpersNearby > 0
+                  ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
+                  : 'No helpers nearby yet'}
+            </Text>
           </View>
-          <Text style={styles.allClear}>All Clear</Text>
-          <Text style={styles.helpersSub}>
-            {helpersScanState === 'scanning'
-              ? 'Scanning your area…'
-              : helpersNearby > 0
-                ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
-                : 'No helpers nearby yet'}
-          </Text>
+          <View style={styles.guardian}>
+            <View style={styles.guardianBubble}>
+              <Text style={styles.guardianBubbleText}>{guardianMessage}</Text>
+            </View>
+            <Mascot pose="neutral" size={62} />
+          </View>
         </View>
 
         <BatteryWarning />
@@ -606,27 +614,15 @@ function StatusLine({
 function BottomPanel({
   children,
   bottomInset,
-  message,
 }: {
   children: React.ReactNode;
   bottomInset: number;
-  message: string;
 }) {
   const screenHeight = Dimensions.get('window').height;
   const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
 
   return (
     <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
-      {/* guardian peeking over (and holding onto) the sheet edge, with a
-          speech bubble that points back at it */}
-      <View style={styles.mascotPeek} pointerEvents="none">
-        <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>{message}</Text>
-          <View style={styles.speechTail} />
-        </View>
-        <Mascot pose="peek" size={86} />
-      </View>
-
       <View style={styles.handleZone}>
         <View style={styles.handle} />
       </View>
@@ -793,39 +789,30 @@ const styles = StyleSheet.create({
     ...shadows.sheet,
     zIndex: 2,
   },
-  mascotPeek: {
-    position: 'absolute',
-    top: -76,
-    right: 16,
+  statusHeaderRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: spacing.xs,
-    zIndex: 3,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
-  speechBubble: {
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    marginBottom: 18,
-    maxWidth: 150,
-    ...shadows.icon,
+  guardian: {
+    alignItems: 'center',
+    width: 96,
   },
-  speechText: {
-    ...typography.bodyMedium,
-    fontSize: 12.5,
-    lineHeight: 16,
-    color: colors.textPrimary,
+  guardianBubble: {
+    backgroundColor: colors.cream,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    marginBottom: -6,
+    maxWidth: 100,
+    zIndex: 2,
   },
-  speechTail: {
-    position: 'absolute',
-    bottom: -4,
-    right: 18,
-    width: 12,
-    height: 12,
-    backgroundColor: colors.surface,
-    transform: [{ rotate: '45deg' }],
-    borderRadius: 2,
+  guardianBubbleText: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
   },
   handleZone: {
     alignItems: 'center',
@@ -845,9 +832,8 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   statusHeader: {
+    flex: 1,
     marginBottom: spacing.xs,
-    // keep text clear of the peeking mascot at the sheet's top-right
-    paddingRight: 96,
   },
   safeRow: {
     flexDirection: 'row',
