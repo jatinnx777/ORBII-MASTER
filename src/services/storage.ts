@@ -11,6 +11,7 @@ const KEYS = {
   locale: 'orbii:locale',
   activeCircleId: 'orbii:circles:active',
   voiceUsage: 'orbii:voice-usage',
+  voicePhrases: 'orbii:voice-phrases',
 } as const;
 
 export const storageKeys = KEYS;

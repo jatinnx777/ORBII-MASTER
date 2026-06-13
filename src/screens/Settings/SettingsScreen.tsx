@@ -139,6 +139,13 @@ export function SettingsScreen() {
           />
           <Divider />
           <Row
+            icon="mic-outline"
+            label="Voice SOS phrases"
+            value="Set your own secret phrases to trigger an SOS"
+            onPress={() => navigation.navigate('VoicePhrases')}
+          />
+          <Divider />
+          <Row
             icon="shield-checkmark-outline"
             label="Safety PIN"
             value="Required to cancel an active SOS"

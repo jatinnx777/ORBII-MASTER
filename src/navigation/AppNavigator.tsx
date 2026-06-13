@@ -27,6 +27,7 @@ import { CircleDetailScreen } from '@/screens/Circles/CircleDetailScreen';
 import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
 import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
 import { SafetyPinScreen } from '@/screens/Settings/SafetyPinScreen';
+import { VoicePhrasesScreen } from '@/screens/Settings/VoicePhrasesScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -201,6 +202,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="SafetyPin"
         component={SafetyPinScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="VoicePhrases"
+        component={VoicePhrasesScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

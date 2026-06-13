@@ -55,6 +55,7 @@ export type AppStackParamList = {
   CircleCreate: undefined;
   CircleInvite: { circleId: string };
   SafetyPin: undefined;
+  VoicePhrases: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

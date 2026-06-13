@@ -55,7 +55,21 @@ export type VoiceKeyword =
   | 'please help'
   | 'save me'
   | 'bachao'
-  | 'madad';
+  | 'madad'
+  | 'custom';
+
+// User-defined secret phrases (managed by services/voice-phrases.ts). These
+// are matched IN ADDITION to the built-in panic words, and fed to the
+// recogniser as contextual hints. Stored only on device.
+let customPhrasesRaw: string[] = [];
+let customPhrasesNorm: string[] = [];
+
+export function setCustomPhrases(phrases: string[]): void {
+  customPhrasesRaw = phrases.slice();
+  customPhrasesNorm = phrases
+    .map((p) => p.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase())
+    .filter((p) => p.length >= 3);
+}
 
 // Keyword rules. Order matters only for which `keyword` value gets reported;
 // the FIRST matching pattern wins. We keep the strict-original patterns at
@@ -152,6 +166,10 @@ function matchKeyword(text: string): VoiceKeyword | null {
   for (const rule of KEYWORD_RULES) {
     if (rule.pattern.test(normalized)) return rule.keyword;
   }
+  // User's custom secret phrases — substring match on the normalized form.
+  for (const phrase of customPhrasesNorm) {
+    if (normalized.includes(phrase)) return 'custom';
+  }
   return null;
 }
 
@@ -213,6 +231,8 @@ function startNativeSession() {
       'bacha lo', 'bachaaaao',
       'madad', 'madat', 'madad karo', 'koi madad karo', 'madad chahiye',
       'mujhe madad chahiye',
+      // user's own secret phrases (bias the engine toward them)
+      ...customPhrasesRaw,
     ],
     // Android: keep the recognizer tolerant of long silences so it doesn't
     // bail between words. Same values that worked before — not touching

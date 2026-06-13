@@ -47,6 +47,7 @@ import { subscribeKeyword } from '@/services/voice-detection';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
+import { loadPhrases } from '@/services/voice-phrases';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -81,6 +82,11 @@ function RootNavigator() {
       hidePinnedSOSShortcut().catch(() => undefined);
     }
   }, [status]);
+
+  // Prime the voice recogniser with the user's saved secret phrases.
+  useEffect(() => {
+    loadPhrases().catch(() => undefined);
+  }, []);
 
   // Helper Mode runtime: if the user opted in (and is signed in), start
   // advertising their location to helpers_live; otherwise make sure we're
