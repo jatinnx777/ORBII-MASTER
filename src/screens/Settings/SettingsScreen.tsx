@@ -22,11 +22,13 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
+  helperModeSet,
   pushEnabledSet,
   shakeSOSToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
 import type { AppStackParamList } from '@/navigation/types';
@@ -41,9 +43,16 @@ export function SettingsScreen() {
   const push = useAppSelector((s) => s.app.pushEnabled);
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
 
+  const helperMode = useAppSelector((s) => s.app.helperMode);
   const sheet = useBrandSheet();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
   const circlesCount = useAppSelector((s) => s.circles.circles.length);
+
+  const handleHelperMode = (next: boolean) => {
+    dispatch(helperModeSet(next));
+    if (next) void startHelperMode();
+    else void stopHelperMode();
+  };
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -199,13 +208,31 @@ export function SettingsScreen() {
           />
         </Card>
 
-        <SectionHeader title="Circles" />
+        <SectionHeader title="Community" />
         <Card style={styles.rowsCard}>
           <Row
             icon="people-circle"
             label="Manage circles"
             value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
             onPress={() => navigation.navigate('Circles')}
+          />
+          <Divider />
+          <Row
+            icon="hand-right"
+            label="Helper Mode"
+            value={
+              helperMode
+                ? "You're available to help people nearby"
+                : 'Turn on to help people near you in an emergency'
+            }
+            right={
+              <Switch
+                value={helperMode}
+                onValueChange={handleHelperMode}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={helperMode ? colors.brandDeep : colors.background}
+              />
+            }
           />
         </Card>
 

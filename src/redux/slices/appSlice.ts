@@ -29,6 +29,10 @@ type AppState = {
   // shake needs a foreground service (planned). On by default — it's the
   // most reliable hands-free trigger we have.
   shakeSOS: boolean;
+  // Helper Mode: the user volunteers as a nearby helper. Their location is
+  // periodically uploaded to helpers_live so others' SOS can find them.
+  // Off by default — opt-in only.
+  helperMode: boolean;
   hydrated: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.
   safeJourney: SafeJourney | null;
@@ -43,6 +47,7 @@ const initialState: AppState = {
   alertVibration: true,
   pushEnabled: false,
   shakeSOS: true,
+  helperMode: false,
   hydrated: false,
   safeJourney: null,
   policyAcceptedAt: null,
@@ -72,6 +77,9 @@ const appSlice = createSlice({
     },
     shakeSOSToggled(state, action: PayloadAction<boolean>) {
       state.shakeSOS = action.payload;
+    },
+    helperModeSet(state, action: PayloadAction<boolean>) {
+      state.helperMode = action.payload;
     },
     safeJourneyStarted(
       state,
@@ -106,6 +114,7 @@ export const {
   alertVibrationToggled,
   pushEnabledSet,
   shakeSOSToggled,
+  helperModeSet,
   safeJourneyStarted,
   safeJourneyEnded,
   policyAccepted,

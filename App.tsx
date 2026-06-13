@@ -45,6 +45,8 @@ import {
 import { alertReceived } from '@/redux/slices/communitySlice';
 import { subscribeKeyword } from '@/services/voice-detection';
 import { startShakeDetector } from '@/services/shake-detection';
+import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
+import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -68,6 +70,7 @@ function RootNavigator() {
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
+  const helperMode = useAppSelector((s) => s.app.helperMode);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
   // signs in / out.
@@ -78,6 +81,19 @@ function RootNavigator() {
       hidePinnedSOSShortcut().catch(() => undefined);
     }
   }, [status]);
+
+  // Helper Mode runtime: if the user opted in (and is signed in), start
+  // advertising their location to helpers_live; otherwise make sure we're
+  // marked offline. Survives cold start via the persisted helperMode flag.
+  useEffect(() => {
+    if (status === 'authenticated' && helperMode) {
+      void startHelperMode();
+      return () => {
+        void stopHelperMode();
+      };
+    }
+    void stopHelperMode();
+  }, [status, helperMode]);
 
   // Circles bootstrap. Hydrate the cached active-circle id immediately so
   // the Home header doesn't flash a different value while the network
