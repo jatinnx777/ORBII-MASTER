@@ -133,6 +133,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
     zoom = 15,
     style,
     markers = [],
+    avatarMarkers = [],
     route,
     fitAll = false,
     followUser = false,
@@ -150,7 +151,10 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
   // Auto-fit when fitAll is on and we have at least one marker.
   useEffect(() => {
     if (!fitAll) return;
-    const points = markers.map((m) => m.coordinate);
+    const points = [
+      ...markers.map((m) => m.coordinate),
+      ...avatarMarkers.map((m) => m.coordinate),
+    ];
     if (points.length === 0) return;
     const b = bounds(points);
     if (!b) return;
@@ -299,10 +303,61 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
           />
         </GeoJSONSource>
       ) : null}
+
+      {avatarMarkers.map((m) => (
+        <MarkerView key={m.id} coordinate={toCoords(m.coordinate)} anchor={{ x: 0.5, y: 1 }}>
+          <View style={styles.avatarPin}>
+            <View style={styles.avatarRing}>
+              {m.photoUri ? (
+                <Image source={{ uri: m.photoUri }} style={styles.avatarImg} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarInitial}>
+                    {(m.name || '?').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.avatarStem} />
+          </View>
+        </MarkerView>
+      ))}
     </MLMap>
   );
 });
 
+const AVATAR = 40;
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  avatarPin: { alignItems: 'center' },
+  avatarRing: {
+    width: AVATAR,
+    height: AVATAR,
+    borderRadius: AVATAR / 2,
+    backgroundColor: '#FFFFFF',
+    padding: 2.5,
+    shadowColor: '#2D2924',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 5,
+  },
+  avatarImg: { width: '100%', height: '100%', borderRadius: AVATAR / 2 },
+  avatarFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: AVATAR / 2,
+    backgroundColor: '#8E7CC0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { color: '#FFFFFF', fontFamily: 'Poppins_700Bold', fontSize: 16 },
+  avatarStem: {
+    width: 4,
+    height: 8,
+    backgroundColor: '#FFFFFF',
+    marginTop: -2,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2,
+  },
 });

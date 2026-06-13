@@ -13,6 +13,7 @@ export {
   type MLMapViewHandle,
   type MLMarker,
   type MLRoute,
+  type AvatarMarker,
 } from './MLMapView';
 export { Input } from './Input';
 export { OfflineBanner } from './OfflineBanner';

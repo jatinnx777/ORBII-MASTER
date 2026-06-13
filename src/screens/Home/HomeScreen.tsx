@@ -83,6 +83,10 @@ export function HomeScreen() {
   // verified by virtue of being in their circle.
   const helperVerified = false;
   const nearbyAlerts = useAppSelector((s) => s.community.alerts);
+  const activeCircleId = useAppSelector((s) => s.circles.activeCircleId);
+  const circleMembers = useAppSelector((s) =>
+    activeCircleId ? s.circles.membersByCircle[activeCircleId] ?? [] : [],
+  );
 
   const refreshTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   const seenAlertIds = useRef<Set<string>>(new Set());
