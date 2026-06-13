@@ -13,6 +13,7 @@ import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScree
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
 import { CommunityAlertsScreen } from '@/screens/Community/CommunityAlertsScreen';
 import { HelperAlertScreen } from '@/screens/Community/HelperAlertScreen';
+import { HelperNavigationScreen } from '@/screens/Community/HelperNavigationScreen';
 import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
 import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { HistoryScreen } from '@/screens/History/HistoryScreen';
@@ -125,6 +126,11 @@ export function AppNavigator() {
           animation: 'fade',
           gestureEnabled: false,
         }}
+      />
+      <Stack.Screen
+        name="HelperNavigation"
+        component={HelperNavigationScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }}
       />
       <Stack.Screen
         name="Settings"

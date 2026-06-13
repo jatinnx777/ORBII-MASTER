@@ -106,11 +106,15 @@ export function HelperAlertScreen() {
       name: profile.name ?? 'A helper',
       photoUri: profile.photoUri ?? null,
     });
-    // Open turn-by-turn navigation to the person in need (free, device maps).
-    const { latitude, longitude } = alert.location;
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}&travelmode=walking`;
-    Linking.openURL(url).catch(() => undefined);
-    navigation.goBack();
+    // In-app live navigation to the person in need — no bouncing out to
+    // Google Maps. `replace` so the alert screen is removed from the stack.
+    navigation.replace('HelperNavigation', {
+      name: alert.victim.name,
+      phone: alert.victim.phone ?? '',
+      lat: alert.location.latitude,
+      lng: alert.location.longitude,
+      photoUri: alert.victim.photoUri,
+    });
   };
 
   const handleDecline = () => {

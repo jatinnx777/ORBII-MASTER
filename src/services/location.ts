@@ -107,9 +107,11 @@ export async function getCurrentLocation(): Promise<GeoPoint> {
 // precision; reverse-geocoding can be done off the critical path.
 export async function getFastLocation(): Promise<GeoPoint> {
   try {
+    // Only trust a recent + reasonably precise cached fix (≤50 m, ≤15 s old).
+    // A looser cache is what made SOS broadcasts land far from the user.
     const cached = await Location.getLastKnownPositionAsync({
-      maxAge: 30_000,
-      requiredAccuracy: 100,
+      maxAge: 15_000,
+      requiredAccuracy: 50,
     });
     if (cached) {
       return {
@@ -120,8 +122,9 @@ export async function getFastLocation(): Promise<GeoPoint> {
   } catch {
     // ignore, fall through to live read
   }
+  // High (GPS) rather than Balanced (often network) so the fix is real.
   const live = await Location.getCurrentPositionAsync({
-    accuracy: Location.Accuracy.Balanced,
+    accuracy: Location.Accuracy.High,
   });
   return {
     latitude: live.coords.latitude,
