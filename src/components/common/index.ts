@@ -2,6 +2,9 @@ export { BatteryWarning } from './BatteryWarning';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { Button } from './Button';
 export { Card } from './Card';
+export { IconBadge, type BadgeTint } from './IconBadge';
+export { FeatureChip } from './FeatureChip';
+export { Mascot } from './Mascot';
 export { EmptyState } from './EmptyState';
 export { OSMMapView, type OSMMarker, type OSMPolyline } from './OSMMapView';
 export {

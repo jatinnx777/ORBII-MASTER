@@ -1,16 +1,17 @@
-import React, { useRef } from 'react';
+import React, { ReactNode, useRef } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Pressable,
   StyleSheet,
   Text,
+  View,
   ViewStyle,
   TextStyle,
 } from 'react-native';
-import { colors, radius, spacing, touchTarget, typography } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 
-type Variant = 'primary' | 'secondary' | 'outline' | 'ghost';
+type Variant = 'primary' | 'danger' | 'secondary' | 'outline' | 'ghost';
 
 type ButtonProps = {
   label: string;
@@ -19,10 +20,17 @@ type ButtonProps = {
   disabled?: boolean;
   loading?: boolean;
   fullWidth?: boolean;
+  /** Optional element rendered to the right of the label (e.g. an arrow icon). */
+  icon?: ReactNode;
   style?: ViewStyle;
   testID?: string;
 };
 
+/**
+ * The ORBII CTA. `primary` is the warm peach pill seen on every screen
+ * (Get Started / Continue / Next). `danger` is the coral alarm button
+ * (SOS / Call 112). All variants are fully-rounded pills.
+ */
 export function Button({
   label,
   onPress,
@@ -30,6 +38,7 @@ export function Button({
   disabled = false,
   loading = false,
   fullWidth = true,
+  icon,
   style,
   testID,
 }: ButtonProps) {
@@ -45,10 +54,11 @@ export function Button({
   const textStyle: TextStyle[] = [styles.baseText, textStyles[variant]];
 
   const animateTo = (toValue: number) => {
-    Animated.timing(press, {
+    Animated.spring(press, {
       toValue,
-      duration: 150,
       useNativeDriver: true,
+      speed: 40,
+      bounciness: 6,
     }).start();
   };
 
@@ -68,10 +78,13 @@ export function Button({
       >
         {loading ? (
           <ActivityIndicator
-            color={variant === 'primary' ? colors.textInverse : colors.primary}
+            color={variant === 'danger' ? colors.textInverse : colors.textPrimary}
           />
         ) : (
-          <Text style={textStyle}>{label}</Text>
+          <View style={styles.content}>
+            <Text style={textStyle}>{label}</Text>
+            {icon ? <View style={styles.icon}>{icon}</View> : null}
+          </View>
         )}
       </Pressable>
     </Animated.View>
@@ -80,32 +93,55 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: touchTarget.comfortable,
+    minHeight: 58,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderRadius: radius.md,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  content: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  icon: {
+    marginLeft: spacing.sm,
   },
   fullWidth: {
     alignSelf: 'stretch',
   },
   primary: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.peach,
+    shadowColor: colors.peachDeep,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  danger: {
+    backgroundColor: colors.coral,
+    shadowColor: colors.coral,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 4,
   },
   secondary: {
-    backgroundColor: colors.dark,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   outline: {
     backgroundColor: 'transparent',
     borderWidth: 1.5,
-    borderColor: colors.primary,
+    borderColor: colors.peachDeep,
   },
   ghost: {
     backgroundColor: 'transparent',
   },
   disabled: {
-    opacity: 0.5,
+    opacity: 0.45,
   },
   baseText: {
     ...typography.button,
@@ -114,8 +150,9 @@ const styles = StyleSheet.create({
 });
 
 const textStyles: Record<Variant, TextStyle> = {
-  primary: { color: colors.textInverse },
-  secondary: { color: colors.textInverse },
-  outline: { color: colors.primary },
-  ghost: { color: colors.primary },
+  primary: { color: colors.textPrimary },
+  danger: { color: colors.textInverse },
+  secondary: { color: colors.textPrimary },
+  outline: { color: colors.textPrimary },
+  ghost: { color: colors.textSecondary },
 };
