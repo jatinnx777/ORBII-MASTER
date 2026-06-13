@@ -11,11 +11,13 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Card,
+  Mascot,
   Row,
   ScreenContainer,
   SectionHeader,
   useBrandSheet,
 } from '@/components/common';
+import { APP_VERSION } from '@/services/app-info';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
@@ -53,6 +55,10 @@ export function ProfileScreen() {
   return (
     <ScreenContainer padded={false} scroll={false}>
       <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <Mascot pose="neutral" size={52} />
+        </View>
         <Card style={styles.heroCard}>
           <View style={styles.avatarWrap}>
             {profile.photoUri ? (
@@ -132,7 +138,7 @@ export function ProfileScreen() {
           />
         </Card>
 
-        <Text style={styles.versionText}>ORBII · v0.1.0 · demo build</Text>
+        <Text style={styles.versionText}>ORBII · v{APP_VERSION}</Text>
       </ScrollView>
     </ScreenContainer>
   );
@@ -179,10 +185,22 @@ const AVATAR = 72;
 
 const styles = StyleSheet.create({
   scroll: {
-    paddingBottom: spacing.xl,
+    paddingBottom: 110,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  headerTitle: {
+    ...typography.h1,
+    color: colors.textPrimary,
   },
   heroCard: {
     margin: spacing.lg,
+    marginTop: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
@@ -192,24 +210,23 @@ const styles = StyleSheet.create({
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
-    backgroundColor: colors.brandSoft,
+    backgroundColor: colors.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    // Mint border — red is reserved for SOS only per the design spec.
-    borderColor: colors.brandMid,
+    borderColor: colors.peach,
   },
   avatarImg: {
     width: AVATAR,
     height: AVATAR,
     borderRadius: AVATAR / 2,
     borderWidth: 2,
-    borderColor: colors.brandMid,
+    borderColor: colors.peach,
   },
   avatarInitial: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 28,
-    color: colors.brandDeep,
+    color: colors.peachDeep,
   },
   premiumBadge: {
     position: 'absolute',
@@ -218,11 +235,11 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: radius.circle,
-    backgroundColor: colors.brand,
+    backgroundColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: colors.background,
+    borderColor: colors.surface,
   },
   name: {
     fontFamily: fontFamilies.poppinsBold,

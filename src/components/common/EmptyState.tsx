@@ -22,7 +22,7 @@ export function EmptyState({
   return (
     <View style={styles.wrap}>
       <View style={styles.iconWrap}>
-        <Ionicons name={icon} size={56} color={colors.textMuted} />
+        <Ionicons name={icon} size={48} color={colors.peachDeep} />
       </View>
       <Text style={styles.title}>{title}</Text>
       {body ? <Text style={styles.body}>{body}</Text> : null}
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.peachSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },

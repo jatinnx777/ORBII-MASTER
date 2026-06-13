@@ -130,6 +130,15 @@ export function CirclesScreen() {
   return (
     <ScreenContainer padded={false} edges={['top', 'left', 'right']}>
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          hitSlop={10}
+          style={({ pressed }) => [styles.backBtn, pressed && styles.pressedScale]}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+        >
+          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Circles</Text>
           <Text style={styles.subtitle}>
@@ -146,7 +155,7 @@ export function CirclesScreen() {
           accessibilityLabel="Create circle"
           hitSlop={8}
         >
-          <Ionicons name="add" size={22} color={colors.textInverse} />
+          <Ionicons name="add" size={22} color={colors.textPrimary} />
         </Pressable>
       </View>
 
@@ -404,11 +413,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 19,
   },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.icon,
+  },
   addBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: colors.brandDeep,
+    backgroundColor: colors.peach,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,

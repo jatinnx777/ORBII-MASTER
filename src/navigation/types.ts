@@ -42,7 +42,6 @@ export type AppStackParamList = {
   // gear / helpers row), not tabs — the tab bar is Home/Safety/Plans/Profile.
   Settings: undefined;
   Circles: undefined;
-  Friends: undefined;
   History: undefined;
   About: undefined;
   GhostStart: undefined;
