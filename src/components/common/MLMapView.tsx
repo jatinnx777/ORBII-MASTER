@@ -1,14 +1,25 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Camera,
   GeoJSONSource,
   Layer,
+  MarkerView,
   Map as MLMap,
   type CameraRef,
   type MapRef,
 } from '@maplibre/maplibre-react-native';
 import type { GeoPoint } from '@/types';
+
+// Avatar marker — a circle member shown on the map with their photo (or
+// initial), Life360 style. Rendered as a MarkerView overlay so we can use a
+// real profile image instead of a flat dot.
+export type AvatarMarker = {
+  id: string;
+  coordinate: GeoPoint;
+  photoUri: string | null;
+  name: string;
+};
 
 // Native MapLibre wrapper used by Home + SOS. We keep the API small and
 // mirror the shape of the previous OSMMapView so switching screens is a
@@ -39,6 +50,7 @@ type Props = {
   zoom?: number;
   style?: StyleProp<ViewStyle>;
   markers?: MLMarker[];
+  avatarMarkers?: AvatarMarker[];
   route?: MLRoute | null;
   // Fit camera to all markers (with padding). Wins over `center` when set.
   fitAll?: boolean;
