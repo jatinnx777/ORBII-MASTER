@@ -11,10 +11,9 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
-import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { SafetyScreen } from '@/screens/Safety/SafetyScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
-import { SettingsScreen } from '@/screens/Settings/SettingsScreen';
+import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { TabParamList } from './types';
 
@@ -27,22 +26,13 @@ const ICONS: Record<
   { active: IoniconsName; inactive: IoniconsName; label: string }
 > = {
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
-  Circles: {
-    active: 'people-circle',
-    inactive: 'people-circle-outline',
-    label: 'Circles',
-  },
   Safety: {
     active: 'shield-checkmark',
     inactive: 'shield-checkmark-outline',
     label: 'Safety',
   },
-  Membership: { active: 'ribbon', inactive: 'ribbon-outline', label: 'Plans' },
-  Settings: {
-    active: 'settings',
-    inactive: 'settings-outline',
-    label: 'Settings',
-  },
+  Membership: { active: 'star', inactive: 'star-outline', label: 'Plans' },
+  Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
 
 export function TabNavigator() {
@@ -213,18 +203,16 @@ const styles = StyleSheet.create({
   bar: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     paddingHorizontal: 8,
     paddingTop: 10,
     paddingBottom: 10,
     borderRadius: 28,
-    shadowColor: '#0F1115',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.10,
-    shadowRadius: 18,
+    shadowColor: '#9A7B53',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.14,
+    shadowRadius: 20,
     elevation: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(86,197,150,0.10)',
   },
   itemPressable: {
     flex: 1,

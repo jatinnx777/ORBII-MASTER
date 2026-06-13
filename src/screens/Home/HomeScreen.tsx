@@ -14,26 +14,18 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
-import { CircleSelectorPill } from './components/CircleSelectorPill';
 import {
   BatteryWarning,
+  Mascot,
   MLMapView,
   ScreenContainer,
   type MLMarker,
 } from '@/components/common';
-import {
-  colors,
-  fontFamilies,
-  radius,
-  shadows,
-  spacing,
-  typography,
-} from '@/theme';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   helpersNearbyUpdated,
@@ -63,7 +55,6 @@ import { formatDistance, haversineMeters } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
 import { shouldDampenWork } from '@/services/battery-aware';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
-import { useSafetyTips } from '@/hooks/useSafetyTips';
 import {
   startListening,
   stopListening,
@@ -85,7 +76,6 @@ export function HomeScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const { locationPermission, helpersNearby } = useAppSelector((s) => s.sos);
-  const safeJourney = useAppSelector((s) => s.app.safeJourney);
   // `helperVerified` is the legacy gig-economy flag (cut). Circle members
   // are now the only "helpers" — every peer the user trusts is implicitly
   // verified by virtue of being in their circle.
@@ -181,10 +171,6 @@ export function HomeScreen() {
   useEffect(() => {
     if (locationPermission !== 'granted') return;
     refreshTimer.current = setInterval(() => {
-      // Skip the ambient refresh when the phone is on low battery and
-      // unplugged. The user can still press SOS — that's the critical
-      // path and never dampened — but we save ~30 seconds of GPS / DB
-      // chatter every cycle until they charge up.
       if (shouldDampenWork()) return;
       loadLocationAndHelpers();
     }, HELPER_REFRESH_MS);
@@ -192,9 +178,6 @@ export function HomeScreen() {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
     };
   }, [locationPermission, loadLocationAndHelpers]);
-
-  // Alert subscription is now global (App.tsx) so the buzz fires on every
-  // tab. We don't subscribe here anymore, just read alerts from the slice.
 
   const presenceHandleRef = useRef<{
     update: (loc: GeoPoint, isVerified?: boolean) => void;
@@ -317,45 +300,11 @@ export function HomeScreen() {
     }, []),
   );
 
-  const handleSafeModePress = () => {
-    Haptics.selectionAsync().catch(() => undefined);
-    if (safeJourney) {
-      navigation.navigate('SafeJourneyActive');
-    } else {
-      navigation.navigate('SafeJourneyStart');
-    }
-  };
-
   const insets = useSafeAreaInsets();
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
   const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
   const unreadCount = useNotificationsBadge();
-  const safetyTips = useSafetyTips();
-  const topTip = safetyTips[0] ?? null;
-
-  const handleTipPress = useCallback(() => {
-    if (!topTip) return;
-    switch (topTip.target) {
-      case 'enable_location':
-        bootstrapPermission();
-        return;
-      case 'add_contact':
-        navigation.navigate('EmergencyContacts');
-        return;
-      case 'invite_friend':
-        navigation.navigate('Friends');
-        return;
-      case 'share_trip':
-        navigation.navigate('SafeJourneyStart');
-        return;
-      case 'community_alerts':
-        navigation.navigate('CommunityAlerts');
-        return;
-      case 'practice_sos':
-        navigation.navigate('SOSCountdown', { test: true });
-        return;
-    }
-  }, [topTip, bootstrapPermission, navigation]);
+  const contactsCount = profile?.emergencyContacts?.length ?? 0;
 
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
@@ -392,6 +341,11 @@ export function HomeScreen() {
     [presencePeers, currentLocation],
   );
 
+  const helperPhotos = useMemo(
+    () => presencePeers.map((p) => p.photoUri).filter(Boolean).slice(0, 3) as string[],
+    [presencePeers],
+  );
+
   return (
     <ScreenContainer padded={false} edges={['left', 'right']}>
       {currentLocation ? (
@@ -405,7 +359,7 @@ export function HomeScreen() {
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.mapPlaceholder]}>
-          <ActivityIndicator color={colors.primary} />
+          <ActivityIndicator color={colors.peachDeep} />
           <Text style={styles.mapPlaceholderText}>Loading map…</Text>
         </View>
       )}
@@ -419,48 +373,27 @@ export function HomeScreen() {
           initial={initial}
           unreadCount={unreadCount}
           onProfilePress={() => navigation.navigate('Profile')}
-          onNotificationsPress={() => navigation.navigate('Notifications')}
+          onSettingsPress={() => navigation.navigate('Tabs', { screen: 'Settings' })}
         />
       </View>
 
-      <BottomPanel
-        bottomInset={insets.bottom}
-        topRow={
-          <View style={styles.panelTopRow}>
-            <View style={styles.legendInline}>
-              <LegendDot color={colors.primary} label="You" />
-              <LegendDot color={colors.brandDeep} label="Verified" />
-              <LegendDot color={colors.brand} label="Helpers" />
-            </View>
-            <Pressable
-              onPress={handleSafeModePress}
-              style={({ pressed }) => [
-                styles.safeModeChip,
-                !!safeJourney && styles.safeModeChipActive,
-                pressed && styles.pressedScale,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel={
-                safeJourney ? 'Safe Mode active' : 'Start Safe Mode'
-              }
-            >
-              <Ionicons
-                name={safeJourney ? 'shield-checkmark' : 'shield-outline'}
-                size={14}
-                color={safeJourney ? colors.textInverse : colors.brandDeep}
-              />
-              <Text
-                style={[
-                  styles.safeModeChipText,
-                  !!safeJourney && { color: colors.textInverse },
-                ]}
-              >
-                Safe Mode
-              </Text>
-            </Pressable>
+      <BottomPanel bottomInset={insets.bottom}>
+        {/* status header */}
+        <View style={styles.statusHeader}>
+          <View style={styles.safeRow}>
+            <View style={styles.safeDot} />
+            <Text style={styles.safeLabel}>You’re Safe</Text>
           </View>
-        }
-      >
+          <Text style={styles.allClear}>All Clear</Text>
+          <Text style={styles.helpersSub}>
+            {helpersScanState === 'scanning'
+              ? 'Scanning your area…'
+              : helpersNearby > 0
+                ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
+                : 'No helpers nearby yet'}
+          </Text>
+        </View>
+
         <BatteryWarning />
 
         {locationPermission !== 'granted' ? (
@@ -469,127 +402,214 @@ export function HomeScreen() {
             style={styles.permissionBanner}
             accessibilityRole="button"
           >
-            <Ionicons name="location" size={18} color={colors.brandDeep} />
-            <Text style={styles.permissionText}>
-              Enable location for emergencies
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.brandDeep} />
+            <Ionicons name="location" size={18} color={colors.sageDeep} />
+            <Text style={styles.permissionText}>Enable location for emergencies</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.sageDeep} />
           </Pressable>
         ) : null}
 
-        {helpersScanState === 'scanning' ? (
-          <View style={styles.helperChip}>
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-            <Text style={styles.helperChipText}>Scanning your area…</Text>
-          </View>
-        ) : helpersNearby > 0 ? (
-          <View style={styles.helperChip}>
-            <View style={styles.helperDot} />
-            <CountUp value={helpersNearby} style={styles.helperChipNumber} />
-            <Text style={styles.helperChipText}>
-              within 5 km{verifiedCount > 0 ? ` · ${verifiedCount} verified` : ''}
-            </Text>
-          </View>
-        ) : (
-          <Pressable
-            onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
-            style={styles.helperChipZero}
-            accessibilityRole="button"
-          >
-            <View style={[styles.helperDot, styles.helperDotIdle]} />
-            <Text style={styles.helperChipText}>No circle members nearby ·</Text>
-            <Text style={styles.helperChipCta}>Invite someone</Text>
-            <Ionicons name="arrow-forward" size={12} color={colors.brandDeep} />
-          </Pressable>
-        )}
-
+        {/* SOS + Voice cards */}
         <View style={styles.actionRow}>
           <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
-          <Pressable
-            onPress={toggleListening}
-            style={({ pressed }) => [
-              styles.voiceCard,
-              voiceListening && styles.voiceCardActive,
-              pressed && styles.pressedScale,
-            ]}
-            accessibilityRole="button"
-            accessibilityLabel={voiceListening ? 'Stop listening' : 'Start hands-free SOS'}
-          >
-            <View
-              style={[
-                styles.voiceIcon,
-                voiceListening && styles.voiceIconActive,
-              ]}
-            >
-              <Ionicons
-                name={voiceListening ? 'mic' : 'mic-outline'}
-                size={20}
-                color={voiceListening ? colors.textInverse : colors.textPrimary}
-              />
-            </View>
-            <Text
-              style={[
-                styles.voiceCardLabel,
-                voiceListening && styles.voiceCardLabelActive,
-              ]}
-              numberOfLines={1}
-            >
-              Voice SOS
-            </Text>
-            <View
-              style={[
-                styles.tinyPill,
-                voiceListening && styles.tinyPillActive,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.tinyPillText,
-                  voiceListening && styles.tinyPillTextActive,
-                ]}
-              >
-                {voiceListening ? 'LISTENING' : 'TAP TO START'}
-              </Text>
-            </View>
-          </Pressable>
+          <VoiceCard listening={voiceListening} onPress={toggleListening} />
         </View>
 
-        <AlertsStrip
-          count={nearbyAlerts.length}
-          onPress={() => navigation.navigate('CommunityAlerts')}
-        />
+        {/* helpers row */}
+        <Pressable
+          style={styles.helpersRow}
+          onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })}
+          accessibilityRole="button"
+        >
+          <View style={styles.avatarStack}>
+            {helperPhotos.length > 0
+              ? helperPhotos.map((uri, i) => (
+                  <Image
+                    key={i}
+                    source={{ uri }}
+                    style={[styles.stackAvatar, { marginLeft: i === 0 ? 0 : -10 }]}
+                  />
+                ))
+              : [0, 1, 2].map((i) => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.stackAvatar,
+                      styles.stackAvatarEmpty,
+                      { marginLeft: i === 0 ? 0 : -10 },
+                    ]}
+                  >
+                    <Ionicons name="person" size={14} color={colors.lavenderDeep} />
+                  </View>
+                ))}
+          </View>
+          <View style={styles.helpersRowText}>
+            <Text style={styles.helpersRowTitle}>
+              {helpersNearby > 0
+                ? `${helpersNearby} Verified Helper${helpersNearby === 1 ? '' : 's'} Nearby`
+                : 'Build your safety circle'}
+            </Text>
+            <Text style={styles.helpersRowSub}>
+              {helpersNearby > 0 ? 'Tap to view' : 'Tap to invite someone'}
+            </Text>
+          </View>
+          <View style={styles.helpersRowChevron}>
+            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+          </View>
+        </Pressable>
 
-        {topTip ? <SafetyTipCard tip={topTip} onPress={handleTipPress} /> : null}
+        {/* guardian status checklist */}
+        <View style={styles.statusCard}>
+          <StatusLine
+            label="Voice Detection Active"
+            ok={voiceListening}
+            pendingLabel="Voice Detection — tap card above"
+          />
+          <View style={styles.statusDivider} />
+          <StatusLine
+            label="Location Sharing Ready"
+            ok={locationPermission === 'granted'}
+            pendingLabel="Location Sharing — enable above"
+          />
+          <View style={styles.statusDivider} />
+          <StatusLine
+            label="Emergency Contacts Connected"
+            ok={contactsCount > 0}
+            pendingLabel="Add an emergency contact"
+            onPress={contactsCount > 0 ? undefined : () => navigation.navigate('EmergencyContacts')}
+          />
+        </View>
+
+        {nearbyAlerts.length > 0 ? (
+          <AlertsStrip
+            count={nearbyAlerts.length}
+            onPress={() => navigation.navigate('CommunityAlerts')}
+          />
+        ) : null}
       </BottomPanel>
     </ScreenContainer>
   );
 }
 
-// Draggable bottom sheet, two snap points (expanded / collapsed). Designed
-// to feel grounded — top-only shadow, low radius, no glow. Map dims when
-// expanded so the sheet reads as the active surface.
+/* ── voice trigger card ─────────────────────────────────── */
+function VoiceCard({ listening, onPress }: { listening: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.voiceCard, pressed && styles.pressedScale]}
+      accessibilityRole="button"
+      accessibilityLabel={listening ? 'Stop voice trigger' : 'Start hands-free SOS'}
+    >
+      <Text style={styles.voiceTitle}>Voice Trigger</Text>
+      <Text style={styles.voiceHint}>{listening ? 'Listening…' : 'Listening Ready'}</Text>
+      <Waveform active={listening} />
+    </Pressable>
+  );
+}
+
+const BAR_COUNT = 18;
+function Waveform({ active }: { active: boolean }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!active) {
+      anim.stopAnimation();
+      anim.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+        Animated.timing(anim, {
+          toValue: 0,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: false,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [active, anim]);
+
+  return (
+    <View style={styles.waveform}>
+      {Array.from({ length: BAR_COUNT }).map((_, i) => {
+        const base = 6 + Math.abs(Math.sin(i * 0.9)) * 18;
+        const peak = 6 + Math.abs(Math.sin(i * 0.9 + 1)) * 22;
+        const height = active
+          ? anim.interpolate({ inputRange: [0, 1], outputRange: [base, peak] })
+          : base;
+        return (
+          <Animated.View
+            key={i}
+            style={[styles.waveBar, { height: height as never }]}
+          />
+        );
+      })}
+    </View>
+  );
+}
+
+/* ── guardian status line ───────────────────────────────── */
+function StatusLine({
+  label,
+  ok,
+  pendingLabel,
+  onPress,
+}: {
+  label: string;
+  ok: boolean;
+  pendingLabel?: string;
+  onPress?: () => void;
+}) {
+  const content = (
+    <View style={styles.statusLine}>
+      <View style={[styles.statusCheck, !ok && styles.statusCheckPending]}>
+        <Ionicons
+          name={ok ? 'checkmark' : 'ellipse-outline'}
+          size={ok ? 14 : 12}
+          color={ok ? colors.textInverse : colors.textMuted}
+        />
+      </View>
+      <Text style={[styles.statusText, !ok && styles.statusTextPending]}>
+        {ok ? label : pendingLabel ?? label}
+      </Text>
+      {!ok && onPress ? (
+        <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+      ) : null}
+    </View>
+  );
+  if (onPress) {
+    return (
+      <Pressable onPress={onPress} accessibilityRole="button">
+        {content}
+      </Pressable>
+    );
+  }
+  return content;
+}
+
+// Draggable bottom sheet, two snap points (expanded / collapsed). Carries
+// the peeking mascot + speech bubble at its top-right edge.
 function BottomPanel({
   children,
-  topRow,
   bottomInset,
 }: {
   children: React.ReactNode;
-  topRow?: React.ReactNode;
   bottomInset: number;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  // Panel content + nav clearance is ~270px now; collapse to just the
-  // handle peeking above the floating nav.
-  const COLLAPSE_OFFSET = Math.max(240, screenHeight * 0.34);
+  const COLLAPSE_OFFSET = Math.max(300, screenHeight * 0.4);
   const translateY = useRef(new Animated.Value(0)).current;
   const lastSnapRef = useRef(0);
 
-  // Map dim overlay: 1 (fully visible dim) when expanded → 0 when collapsed.
-  // 0.10 max — enough that the bottom sheet reads as the active surface
-  // without making the map feel "off".
   const dimOpacity = translateY.interpolate({
     inputRange: [0, COLLAPSE_OFFSET],
-    outputRange: [0.10, 0],
+    outputRange: [0.08, 0],
     extrapolate: 'clamp',
   });
 
@@ -602,8 +622,6 @@ function BottomPanel({
           translateY.setValue(0);
         },
         onPanResponderMove: (_, g) => {
-          // Resistance past snap points: rubber-band beyond the boundaries
-          // so a hard pull feels like it's pushing against a stop.
           let next = g.dy;
           if (next < 0) next = next * 0.35;
           else if (next > COLLAPSE_OFFSET) {
@@ -614,8 +632,6 @@ function BottomPanel({
         onPanResponderRelease: (_, g) => {
           translateY.flattenOffset();
           const finalRaw = lastSnapRef.current + g.dy;
-          // Clamp velocity so a flick doesn't yeet the sheet past its
-          // snap point with overshoot.
           const vy = Math.max(-1.6, Math.min(1.6, g.vy));
           let snap = finalRaw > COLLAPSE_OFFSET / 2 ? COLLAPSE_OFFSET : 0;
           if (vy > 0.5) snap = COLLAPSE_OFFSET;
@@ -623,8 +639,6 @@ function BottomPanel({
           lastSnapRef.current = snap;
           Animated.spring(translateY, {
             toValue: snap,
-            // Higher damping, lower overshoot — settles cleanly without
-            // the bouncy "card" feel.
             damping: 28,
             stiffness: 240,
             mass: 1,
@@ -649,73 +663,52 @@ function BottomPanel({
         style={[
           styles.bottomPanel,
           {
-            // Floating tab bar lives at bottom: max(insets.bottom, 12)
-            // and is ~64px tall. Reserve that height + insets so the
-            // alerts strip doesn't slip under the bar.
             paddingBottom: Math.max(bottomInset, 12) + 76,
             transform: [{ translateY }],
           },
         ]}
       >
+        {/* peeking mascot + speech bubble */}
+        <View style={styles.mascotPeek} pointerEvents="none">
+          <View style={styles.speechBubble}>
+            <Text style={styles.speechText}>Everything{'\n'}looks good.</Text>
+          </View>
+          <Mascot pose="peek" size={92} />
+        </View>
+
         <View style={styles.handleZone} {...panResponder.panHandlers}>
           <View style={styles.handle} />
         </View>
-        {topRow ? <View style={styles.panelTopRowWrap}>{topRow}</View> : null}
         <View style={styles.panelContent}>{children}</View>
       </Animated.View>
     </>
   );
 }
 
-// Top floating header — avatar (with online dot) on the left, circle
-// selector pill in the centre (real circles from Supabase; empty state
-// invites the user to create their first one), notification bell with
-// unread dot on the right.
+// Top floating header — avatar (→ Profile) on the left, gear (→ Settings)
+// on the right, matching the reference.
 function HomeHeader({
   profile,
   initial,
   unreadCount,
   onProfilePress,
-  onNotificationsPress,
+  onSettingsPress,
 }: {
   profile: UserProfile | null;
   initial: string;
   unreadCount: number;
   onProfilePress: () => void;
-  onNotificationsPress: () => void;
+  onSettingsPress: () => void;
 }) {
-  const enter = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 360,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [enter]);
-
   const photo = profile?.photoUri ?? null;
-  const translateY = enter.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-6, 0],
-  });
-
   return (
-    <Animated.View
-      style={[
-        styles.header,
-        { opacity: enter, transform: [{ translateY }] },
-      ]}
-    >
+    <View style={styles.header}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Open profile"
         hitSlop={8}
         onPress={onProfilePress}
-        style={({ pressed }) => [
-          styles.avatarWrap,
-          pressed && styles.headerPressed,
-        ]}
+        style={({ pressed }) => [styles.avatarWrap, pressed && styles.headerPressed]}
       >
         <View style={styles.avatar}>
           {photo ? (
@@ -726,166 +719,36 @@ function HomeHeader({
             <Ionicons name="person" size={18} color={colors.textMuted} />
           )}
         </View>
-        <View style={styles.avatarOnlineDot} />
       </Pressable>
-
-      <CircleSelectorPill />
 
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={
-          unreadCount > 0 ? `${unreadCount} new notifications` : 'Notifications'
-        }
+        accessibilityLabel="Settings"
         hitSlop={8}
-        onPress={onNotificationsPress}
-        style={({ pressed }) => [
-          styles.bellWrap,
-          pressed && styles.headerPressed,
-        ]}
+        onPress={onSettingsPress}
+        style={({ pressed }) => [styles.gearWrap, pressed && styles.headerPressed]}
       >
-        <Ionicons
-          name="notifications-outline"
-          size={20}
-          color={colors.textPrimary}
-        />
-        {unreadCount > 0 ? <View style={styles.bellDot} /> : null}
+        <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+        {unreadCount > 0 ? <View style={styles.gearDot} /> : null}
       </Pressable>
-    </Animated.View>
-  );
-}
-
-// Single dynamic safety tip surfaced based on real app state (no hardcoded
-// copy — see `useSafetyTips`). Renders the top-priority tip with a calm
-// mint-tinted card so it reads as a suggestion, not a warning.
-function SafetyTipCard({
-  tip,
-  onPress,
-}: {
-  tip: ReturnType<typeof useSafetyTips>[number];
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.tipCard,
-        pressed && styles.pressedScale,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={`${tip.title}. ${tip.cta}`}
-    >
-      <View style={styles.tipIcon}>
-        <Ionicons name="sparkles" size={14} color={colors.brandDeep} />
-      </View>
-      <View style={styles.tipBody}>
-        <Text style={styles.tipTitle} numberOfLines={1}>
-          {tip.title}
-        </Text>
-        <Text style={styles.tipText} numberOfLines={2}>
-          {tip.body}
-        </Text>
-      </View>
-      <View style={styles.tipCta}>
-        <Text style={styles.tipCtaText}>{tip.cta}</Text>
-        <Ionicons name="chevron-forward" size={14} color={colors.brandDeep} />
-      </View>
-    </Pressable>
-  );
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <View style={legendStyles.row}>
-      <View style={[legendStyles.dot, { backgroundColor: color }]} />
-      <Text style={legendStyles.text}>{label}</Text>
     </View>
   );
 }
 
-function CountUp({
-  value,
-  style,
-}: {
-  value: number;
-  style: ReturnType<typeof StyleSheet.create>[string];
-}) {
-  const progress = useRef(new Animated.Value(value)).current;
-  const [display, setDisplay] = useState(value);
-  const prevRef = useRef(value);
-
-  useEffect(() => {
-    const from = prevRef.current;
-    progress.setValue(from);
-    Animated.timing(progress, {
-      toValue: value,
-      duration: 600,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-    const id = progress.addListener(({ value: v }) => {
-      setDisplay(Math.round(v));
-    });
-    prevRef.current = value;
-    return () => progress.removeListener(id);
-  }, [value, progress]);
-
-  return <Text style={style}>{display}</Text>;
-}
-
-// Always-visible "someone needs help" strip. Solid colour switch — no
-// glow / halo. The badge count makes it clear which state we're in.
+// Always-visible "someone needs help" strip (only shown when alerts exist).
 function AlertsStrip({ count, onPress }: { count: number; onPress: () => void }) {
-  const active = count > 0;
-
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.alertsBanner, !active && styles.alertsBannerIdle]}
-      accessibilityRole="button"
-    >
-      <View style={[styles.alertsBadge, !active && styles.alertsBadgeIdle]}>
-        {active ? (
-          <Text style={styles.alertsBadgeText}>{count}</Text>
-        ) : (
-          <Ionicons name="heart-outline" size={14} color={colors.textPrimary} />
-        )}
+    <Pressable onPress={onPress} style={styles.alertsBanner} accessibilityRole="button">
+      <View style={styles.alertsBadge}>
+        <Text style={styles.alertsBadgeText}>{count}</Text>
       </View>
-      <Text
-        style={[styles.alertsTitle, !active && styles.alertsTitleIdle]}
-        numberOfLines={1}
-      >
-        {active
-          ? count === 1
-            ? '1 person needs help nearby'
-            : `${count} people need help nearby`
-          : 'No alerts nearby'}
+      <Text style={styles.alertsTitle} numberOfLines={1}>
+        {count === 1 ? '1 person needs help nearby' : `${count} people need help nearby`}
       </Text>
-      <Ionicons
-        name="chevron-forward"
-        size={16}
-        color={active ? colors.primary : colors.textMuted}
-      />
+      <Ionicons name="chevron-forward" size={16} color={colors.coral} />
     </Pressable>
   );
 }
-
-const legendStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  text: {
-    ...typography.caption,
-    color: colors.textPrimary,
-    fontSize: 11,
-  },
-});
 
 const styles = StyleSheet.create({
   headerFloat: {
@@ -901,133 +764,64 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
-    paddingBottom: spacing.xs,
-  },
-  brandWrap: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  brand: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
-    color: colors.primary,
-    letterSpacing: 3,
-  },
-  iconChip: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   avatarWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: colors.border,
+    ...shadows.icon,
   },
   avatarImage: { width: '100%', height: '100%' },
   avatarInitial: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 15,
-    color: colors.brandDeep,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 18,
+    color: colors.peachDeep,
   },
-  avatarOnlineDot: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.success,
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
-  headerPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.96 }],
-  },
-  bellWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.border,
+  headerPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
+  gearWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.icon,
   },
-  bellDot: {
+  gearDot: {
     position: 'absolute',
-    top: 8,
-    right: 9,
+    top: 11,
+    right: 12,
     width: 9,
     height: 9,
     borderRadius: 4.5,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.coral,
     borderWidth: 2,
-    borderColor: '#FFFFFF',
+    borderColor: colors.surface,
   },
-  tipCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: colors.brandMid,
-  },
-  tipIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+  mapPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.cream,
   },
-  tipBody: { flex: 1, gap: 2 },
-  tipTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  tipText: {
-    fontFamily: fontFamilies.interMedium,
-    fontSize: 11.5,
+  mapPlaceholderText: {
+    ...typography.caption,
     color: colors.textSecondary,
-    lineHeight: 15,
-  },
-  tipCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  tipCtaText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 11.5,
-    color: colors.brandDeep,
-    letterSpacing: 0.2,
   },
   mapDim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: '#2D2924',
     zIndex: 1,
   },
   bottomPanel: {
@@ -1035,255 +829,239 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: colors.cream,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     ...shadows.sheet,
     zIndex: 2,
   },
+  mascotPeek: {
+    position: 'absolute',
+    top: -64,
+    right: 18,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+    zIndex: 3,
+  },
+  speechBubble: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    marginBottom: 12,
+    ...shadows.icon,
+  },
+  speechText: {
+    ...typography.caption,
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.textSecondary,
+  },
   handleZone: {
     alignItems: 'center',
-    paddingTop: 6,
+    paddingTop: 8,
     paddingBottom: 4,
   },
   handle: {
-    width: 32,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#C9C9CE',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.creamDeep,
   },
-  pressedScale: {
-    transform: [{ scale: 0.97 }],
-    opacity: 0.92,
-  },
+  pressedScale: { transform: [{ scale: 0.97 }], opacity: 0.92 },
   panelContent: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    gap: spacing.md,
   },
-  panelTopRowWrap: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
+  statusHeader: {
+    marginBottom: spacing.xs,
   },
-  panelTopRow: {
+  safeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
+    gap: spacing.xs,
   },
-  legendInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
+  safeDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: colors.sage,
   },
-  safeModeChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.circle,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: colors.brandMid,
+  safeLabel: {
+    ...typography.label,
+    color: colors.sageDeep,
   },
-  safeModeChipActive: {
-    backgroundColor: colors.brandDeep,
-    borderColor: colors.brandDeep,
-    // Subtle glow — the only halo effect on Home, reserved for the
-    // signature protective state.
-    shadowColor: colors.brandDeep,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.32,
-    shadowRadius: 12,
-    elevation: 6,
+  allClear: {
+    ...typography.displaySmall,
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
   },
-  safeModeChipText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
-    color: colors.brandDeep,
-    letterSpacing: 0.2,
+  helpersSub: {
+    ...typography.body,
+    color: colors.textSecondary,
+    marginTop: 2,
   },
   permissionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: radius.md,
-    backgroundColor: colors.brandSoft,
-    borderWidth: 1,
-    borderColor: colors.brandMid,
+    backgroundColor: colors.sageSoft,
   },
   permissionText: {
     ...typography.bodyMedium,
     color: colors.textPrimary,
     flex: 1,
   },
-  mapPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.surface,
-  },
-  mapPlaceholderText: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  helperChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
-  },
-  helperChipZero: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    alignSelf: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.circle,
-    backgroundColor: colors.surface,
-  },
-  helperDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  helperDotIdle: {
-    backgroundColor: colors.textMuted,
-  },
-  helperChipNumber: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
-  helperChipText: {
-    fontFamily: fontFamilies.interMedium,
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  helperChipCta: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 12,
-    color: colors.brandDeep,
-  },
   actionRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    gap: spacing.md,
+    minHeight: 168,
   },
   voiceCard: {
     flex: 1,
-    minHeight: 72,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.xxl,
+    backgroundColor: colors.lavenderSoft,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  voiceTitle: {
+    ...typography.h3,
+    color: colors.lavenderDeep,
+  },
+  voiceHint: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  waveform: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    gap: 10,
+    justifyContent: 'center',
+    gap: 3,
+  },
+  waveBar: {
+    width: 3,
+    borderRadius: 2,
+    backgroundColor: colors.lavender,
+  },
+  helpersRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     ...shadows.card,
   },
-  voiceCardActive: {
-    borderColor: colors.brandDeep,
-    backgroundColor: colors.brandSoft,
+  avatarStack: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  voiceIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.background,
+  stackAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    backgroundColor: colors.lavenderSoft,
+  },
+  stackAvatarEmpty: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  voiceIconActive: {
-    backgroundColor: colors.primary,
+  helpersRowText: {
+    flex: 1,
+    marginLeft: spacing.md,
   },
-  voiceCardLabel: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13,
+  helpersRowTitle: {
+    ...typography.bodyMedium,
+    fontFamily: 'Poppins_600SemiBold',
     color: colors.textPrimary,
-    letterSpacing: 0.3,
+  },
+  helpersRowSub: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  helpersRowChevron: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    ...shadows.card,
+  },
+  statusLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+  },
+  statusCheck: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.sage,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusCheckPending: {
+    backgroundColor: colors.creamDeep,
+  },
+  statusText: {
+    ...typography.bodyMedium,
+    fontSize: 15,
+    color: colors.textPrimary,
     flex: 1,
   },
-  voiceCardLabelActive: {
-    color: colors.primary,
+  statusTextPending: {
+    color: colors.textSecondary,
   },
-  tinyPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.circle,
-    backgroundColor: colors.background,
+  statusDivider: {
+    height: 1,
+    backgroundColor: colors.divider,
   },
-  tinyPillActive: {
-    backgroundColor: colors.primary,
-  },
-  tinyPillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 9,
-    letterSpacing: 0.6,
-    color: colors.textMuted,
-  },
-  tinyPillTextActive: {
-    color: colors.textInverse,
-  },
-  // Active state — soft danger wash so the user immediately reads "someone
-  // needs help" without the visual aggression of a black bar. Idle state
-  // stays a calm surface card. Both share the premium 24px radius + soft
-  // diffuse shadow from the design tokens.
   alertsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: 'rgba(255, 77, 77, 0.10)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 77, 77, 0.25)',
-  },
-  alertsBannerIdle: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    ...shadows.card,
+    backgroundColor: colors.coralSoft,
   },
   alertsBadge: {
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  alertsBadgeIdle: {
-    backgroundColor: colors.brandSoft,
-  },
   alertsBadgeText: {
-    fontFamily: fontFamilies.poppinsBold,
+    fontFamily: 'Poppins_700Bold',
     fontSize: 13,
     color: colors.textInverse,
   },
   alertsTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 13.5,
-    color: colors.primary,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: colors.coralDeep,
     flex: 1,
-  },
-  alertsTitleIdle: {
-    color: colors.textPrimary,
   },
 });

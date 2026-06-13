@@ -17,10 +17,9 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 
 export type TabParamList = {
   Home: undefined;
-  Circles: undefined;
   Safety: undefined;
   Membership: undefined;
-  Settings: undefined;
+  Profile: undefined;
 };
 
 export type AppStackParamList = {
@@ -39,7 +38,10 @@ export type AppStackParamList = {
   // a safety PIN configured.
   SafeJourneyActive: { requirePinToEnd?: boolean } | undefined;
   CommunityAlerts: undefined;
-  Profile: undefined;
+  // Settings + Circles are now stack destinations (reached via the Home
+  // gear / helpers row), not tabs — the tab bar is Home/Safety/Plans/Profile.
+  Settings: undefined;
+  Circles: undefined;
   Friends: undefined;
   History: undefined;
   About: undefined;

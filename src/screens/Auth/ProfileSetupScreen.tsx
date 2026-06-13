@@ -13,7 +13,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Button, Input, ScreenContainer } from '@/components/common';
+import { Button, Input, Mascot, ScreenContainer } from '@/components/common';
+import type { MascotPose } from '@/components/common/Mascot';
 import {
   colors,
   fontFamilies,
@@ -310,9 +311,20 @@ function ProgressDots({ index, total }: { index: number; total: number }) {
   );
 }
 
-function StepTitle({ eyebrow, title, subtitle }: { eyebrow: string; title: string; subtitle: string }) {
+function StepTitle({
+  eyebrow,
+  title,
+  subtitle,
+  mascot,
+}: {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  mascot?: MascotPose;
+}) {
   return (
     <View style={styles.titleBlock}>
+      {mascot ? <Mascot pose={mascot} size={110} style={styles.stepMascot} /> : null}
       <Text style={styles.eyebrow}>{eyebrow}</Text>
       <Text style={styles.h1}>{title}</Text>
       <Text style={styles.sub}>{subtitle}</Text>
@@ -336,6 +348,7 @@ function IdentityStep({
   return (
     <View style={styles.stepBody}>
       <StepTitle
+        mascot="wave"
         eyebrow="STEP 1 OF 4"
         title="What should we call you?"
         subtitle="This is what your circle and helpers see when you fire an SOS."
@@ -382,6 +395,7 @@ function PhotoStep({
   return (
     <View style={styles.stepBody}>
       <StepTitle
+        mascot="neutral"
         eyebrow="STEP 2 OF 4"
         title="Add a photo"
         subtitle="Helpers responding to your SOS can recognise you faster. Optional, but recommended."
@@ -425,6 +439,7 @@ function PhoneStep({
   return (
     <View style={styles.stepBody}>
       <StepTitle
+        mascot="headset"
         eyebrow="STEP 3 OF 4"
         title="Your phone number"
         subtitle="Helpers and your emergency contacts use this to reach you."
@@ -467,6 +482,7 @@ function ContactStep({
   return (
     <View style={styles.stepBody}>
       <StepTitle
+        mascot="shield"
         eyebrow="STEP 4 OF 4"
         title="Your first emergency contact"
         subtitle="The person who gets a WhatsApp ping the moment you fire SOS. You can add more later."
@@ -543,26 +559,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   progressDotDone: {
-    backgroundColor: colors.brandMid,
+    backgroundColor: colors.peach,
   },
   progressDotActive: {
-    backgroundColor: colors.brandDeep,
+    backgroundColor: colors.peachDeep,
   },
   titleBlock: {
     marginBottom: spacing.lg,
+    alignItems: 'center',
+  },
+  stepMascot: {
+    marginBottom: spacing.sm,
   },
   eyebrow: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 11,
-    color: colors.brandDeep,
+    color: colors.peachDeep,
     letterSpacing: 1.4,
     textTransform: 'uppercase',
     marginBottom: spacing.xs,
   },
   h1: {
-    ...typography.h2,
+    ...typography.h1,
     color: colors.textPrimary,
     letterSpacing: -0.4,
+    textAlign: 'center',
   },
   sub: {
     ...typography.body,
@@ -570,6 +591,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginTop: 4,
     lineHeight: 20,
+    textAlign: 'center',
+    paddingHorizontal: spacing.md,
   },
   stepBody: {
     minHeight: 380,
@@ -635,8 +658,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   relationChipActive: {
-    backgroundColor: colors.brandDeep,
-    borderColor: colors.brandDeep,
+    backgroundColor: colors.peach,
+    borderColor: colors.peachDeep,
   },
   relationChipText: {
     fontFamily: fontFamilies.poppinsSemiBold,
@@ -644,7 +667,7 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
   },
   relationChipTextActive: {
-    color: colors.textInverse,
+    color: colors.textPrimary,
   },
   errorRow: {
     flexDirection: 'row',

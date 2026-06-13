@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Alert,
-  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -11,109 +10,77 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, ScreenContainer } from '@/components/common';
-import {
-  colors,
-  fontFamilies,
-  radius,
-  shadows,
-  spacing,
-  typography,
-} from '@/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Button, Mascot } from '@/components/common';
+import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// Three subscription tiers — Silver / Gold / Platinum — with a billing
-// cycle toggle (Weekly / Monthly / Yearly). Yearly offers the biggest
-// discount. Payments are not live yet; the upgrade buttons capture
-// waitlist emails.
+// Three tiers per the product spec: Free (₹0), Solo (₹99/mo), Family
+// (₹299/mo) + a coupon field. Payments aren't live yet — choosing a paid
+// plan captures a waitlist email (honest "coming soon").
 
-type PlanId = 'silver' | 'gold' | 'platinum';
-type BillingCycle = 'weekly' | 'monthly' | 'yearly';
+type PlanId = 'free' | 'solo' | 'family';
 
 type Plan = {
   id: PlanId;
   name: string;
+  price: number;
   tagline: string;
-  badge: string;
-  badgeColor: string;
   highlight?: boolean;
-  prices: Record<BillingCycle, number>;
   features: string[];
 };
 
 const PLANS: Plan[] = [
   {
-    id: 'silver',
-    name: 'Silver',
-    tagline: 'Crime visibility for your area.',
-    badge: 'SILVER',
-    badgeColor: '#E6E8EC',
-    prices: { weekly: 29, monthly: 99, yearly: 899 },
+    id: 'free',
+    name: 'Free',
+    price: 0,
+    tagline: 'Everything you need to stay safe.',
     features: [
-      'Crime Reports near you',
-      'Basic priority on SOS dispatch',
-      'Limited SOS history (90 days)',
-      'Email support',
+      'Emergency SOS',
+      'Live Location',
+      'Nearby Helpers',
+      'Emergency Contacts',
+      '2 Voice SOS activations / month',
     ],
   },
   {
-    id: 'gold',
-    name: 'Gold',
-    tagline: 'Priority response when it matters.',
-    badge: 'GOLD',
-    badgeColor: '#FFF1CB',
+    id: 'solo',
+    name: 'Solo',
+    price: 99,
+    tagline: 'Hands-free protection, always on.',
+    features: [
+      'Everything in Free',
+      'Unlimited Voice SOS',
+      'Priority Alerts',
+      'Advanced Safety Features',
+    ],
+  },
+  {
+    id: 'family',
+    name: 'Family',
+    price: 299,
+    tagline: 'Protect everyone you love.',
     highlight: true,
-    prices: { weekly: 59, monthly: 199, yearly: 1799 },
     features: [
-      'Everything in Silver',
-      'Priority alert delivery',
-      'Faster response routing',
-      'Extended location tracking',
-      'Priority support',
+      '4 Family Members',
+      'Shared Safety Circle',
+      'Unlimited Voice SOS',
+      'Priority Alerts',
     ],
   },
-  {
-    id: 'platinum',
-    name: 'Platinum',
-    tagline: 'Full intelligence layer.',
-    badge: 'PLATINUM',
-    badgeColor: '#E6EAFF',
-    prices: { weekly: 99, monthly: 299, yearly: 2699 },
-    features: [
-      'Everything in Gold',
-      'Travel Safety Heatmap',
-      'Advanced safety insights',
-      'Family dashboard (up to 5)',
-      '24/7 helpline',
-    ],
-  },
-];
-
-const CYCLES: { id: BillingCycle; label: string; suffix: string }[] = [
-  { id: 'weekly', label: 'Weekly', suffix: '/wk' },
-  { id: 'monthly', label: 'Monthly', suffix: '/mo' },
-  { id: 'yearly', label: 'Yearly', suffix: '/yr' },
 ];
 
 function formatPrice(amount: number): string {
-  return `₹${amount.toLocaleString('en-IN')}`;
-}
-
-function savingsText(plan: Plan, cycle: BillingCycle): string | null {
-  if (cycle !== 'yearly') return null;
-  const monthlyAnnualised = plan.prices.monthly * 12;
-  const saved = monthlyAnnualised - plan.prices.yearly;
-  if (saved <= 0) return null;
-  const pct = Math.round((saved / monthlyAnnualised) * 100);
-  return `Save ${pct}% vs monthly`;
+  return amount === 0 ? '₹0' : `₹${amount.toLocaleString('en-IN')}`;
 }
 
 type WaitlistEntry = {
   email: string;
   plan: PlanId;
-  cycle: BillingCycle;
+  coupon: string | null;
   createdAt: number;
 };
 
@@ -130,17 +97,27 @@ async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
 export function PremiumUpgradeScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const isPremium = profile?.isPremium ?? false;
-  const [cycle, setCycle] = useState<BillingCycle>('monthly');
   const [waitlistOpen, setWaitlistOpen] = useState<PlanId | null>(null);
   const [email, setEmail] = useState(profile?.email ?? '');
   const [submitting, setSubmitting] = useState(false);
+  const [coupon, setCoupon] = useState('');
+  const [couponApplied, setCouponApplied] = useState(false);
 
   useEffect(() => {
     trackEvent('premium_viewed');
   }, []);
 
-  const handleUpgrade = (planId: PlanId) => {
-    setWaitlistOpen(planId);
+  const applyCoupon = () => {
+    const code = coupon.trim();
+    if (!code) {
+      Alert.alert('Enter a code', 'Type a coupon code first.');
+      return;
+    }
+    setCouponApplied(true);
+    Alert.alert(
+      'Coupon saved',
+      `We'll apply "${code.toUpperCase()}" automatically when paid plans go live.`,
+    );
   };
 
   const submitWaitlist = async () => {
@@ -156,14 +133,10 @@ export function PremiumUpgradeScreen() {
       await joinWaitlist({
         email: trimmed,
         plan: planId,
-        cycle,
+        coupon: couponApplied ? coupon.trim().toUpperCase() : null,
         createdAt: Date.now(),
       });
-      trackEvent('premium_purchased', {
-        plan: planId,
-        cycle,
-        waitlist: true,
-      });
+      trackEvent('premium_purchased', { plan: planId, waitlist: true });
       setWaitlistOpen(null);
       Alert.alert(
         "You're on the list",
@@ -175,200 +148,140 @@ export function PremiumUpgradeScreen() {
   };
 
   return (
-    <ScreenContainer padded={false}>
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.hero}>
-          <Text style={styles.heroTitle}>Upgrade your safety net</Text>
-          <Text style={styles.heroBody}>
-            Unlock crime visibility, faster response, and family-grade
-            insights. Cancel anytime.
+    <View style={styles.root}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.hero}>
+            <Mascot pose="shield" size={120} />
+            <Text style={styles.heroTitle}>Choose your plan</Text>
+            <Text style={styles.heroBody}>
+              Start free. Upgrade anytime for unlimited Voice SOS and family
+              protection.
+            </Text>
+          </View>
+
+          {PLANS.map((plan) => (
+            <PlanCard
+              key={plan.id}
+              plan={plan}
+              current={plan.id === 'free' && !isPremium}
+              onPress={() => setWaitlistOpen(plan.id)}
+            />
+          ))}
+
+          {/* coupon */}
+          <View style={styles.couponCard}>
+            <Text style={styles.couponLabel}>Have a coupon code?</Text>
+            <View style={styles.couponRow}>
+              <TextInput
+                value={coupon}
+                onChangeText={(v) => {
+                  setCoupon(v);
+                  setCouponApplied(false);
+                }}
+                placeholder="Enter code"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={styles.couponInput}
+              />
+              <Pressable
+                onPress={applyCoupon}
+                style={({ pressed }) => [
+                  styles.applyBtn,
+                  couponApplied && styles.applyBtnDone,
+                  pressed && { opacity: 0.9 },
+                ]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.applyText}>
+                  {couponApplied ? 'Applied' : 'Apply'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
+          <Text style={styles.footnote}>
+            Prices in INR, per month, incl. of taxes. Payments are not live yet —
+            you'll be the first to know when they switch on.
           </Text>
-        </View>
-
-        <CycleToggle value={cycle} onChange={setCycle} />
-
-        {PLANS.map((plan, index) => (
-          <PlanCard
-            key={plan.id}
-            plan={plan}
-            cycle={cycle}
-            index={index}
-            current={isPremium && plan.id === 'platinum'}
-            onPress={() => handleUpgrade(plan.id)}
-          />
-        ))}
-
-        <Text style={styles.footnote}>
-          Pricing excludes GST. Plans and limits may evolve as we gather
-          feedback from the SRM pilot.
-        </Text>
-      </ScrollView>
+        </ScrollView>
+      </SafeAreaView>
 
       <WaitlistModal
         visible={waitlistOpen !== null}
         plan={waitlistOpen ? PLANS.find((p) => p.id === waitlistOpen) ?? null : null}
-        cycle={cycle}
         email={email}
         onChangeEmail={setEmail}
         submitting={submitting}
         onClose={() => setWaitlistOpen(null)}
         onSubmit={submitWaitlist}
       />
-    </ScreenContainer>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Billing cycle toggle
-// ---------------------------------------------------------------------------
-
-function CycleToggle({
-  value,
-  onChange,
-}: {
-  value: BillingCycle;
-  onChange: (v: BillingCycle) => void;
-}) {
-  return (
-    <View style={styles.cycleWrap}>
-      {CYCLES.map((c) => {
-        const active = c.id === value;
-        return (
-          <Pressable
-            key={c.id}
-            onPress={() => onChange(c.id)}
-            style={[styles.cycleBtn, active && styles.cycleBtnActive]}
-            accessibilityRole="button"
-            accessibilityState={{ selected: active }}
-          >
-            <Text
-              style={[
-                styles.cycleLabel,
-                active && styles.cycleLabelActive,
-              ]}
-            >
-              {c.label}
-            </Text>
-            {c.id === 'yearly' ? (
-              <View style={styles.bestPill}>
-                <Text style={styles.bestPillText}>BEST VALUE</Text>
-              </View>
-            ) : null}
-          </Pressable>
-        );
-      })}
     </View>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Plan card
-// ---------------------------------------------------------------------------
-
 function PlanCard({
   plan,
-  cycle,
-  index,
   current,
   onPress,
 }: {
   plan: Plan;
-  cycle: BillingCycle;
-  index: number;
   current: boolean;
   onPress: () => void;
 }) {
-  const enter = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 320,
-      delay: index * 70,
-      useNativeDriver: true,
-    }).start();
-  }, [enter, index]);
-
-  const translateY = enter.interpolate({
-    inputRange: [0, 1],
-    outputRange: [12, 0],
-  });
-
-  const cycleSuffix = CYCLES.find((c) => c.id === cycle)?.suffix ?? '';
-  const savings = savingsText(plan, cycle);
-
   return (
-    <Animated.View
-      style={[
-        styles.planCard,
-        plan.highlight && styles.planCardHighlight,
-        { opacity: enter, transform: [{ translateY }] },
-      ]}
-    >
-      <View style={styles.planHead}>
-        <View
-          style={[styles.planBadge, { backgroundColor: plan.badgeColor }]}
-        >
-          <Text style={styles.planBadgeText}>{plan.badge}</Text>
+    <View style={[styles.planCard, plan.highlight && styles.planCardHighlight]}>
+      {plan.highlight ? (
+        <View style={styles.popularPill}>
+          <Text style={styles.popularPillText}>MOST POPULAR</Text>
         </View>
-        {plan.highlight ? (
-          <View style={styles.popularPill}>
-            <Text style={styles.popularPillText}>MOST POPULAR</Text>
-          </View>
-        ) : null}
-      </View>
+      ) : null}
 
-      <Text style={styles.planName}>{plan.name}</Text>
+      <View style={styles.planHead}>
+        <Text style={styles.planName}>{plan.name}</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.price}>{formatPrice(plan.price)}</Text>
+          <Text style={styles.priceSuffix}>{plan.price === 0 ? '' : '/mo'}</Text>
+        </View>
+      </View>
       <Text style={styles.planTagline}>{plan.tagline}</Text>
-
-      <View style={styles.priceRow}>
-        <Text style={styles.price}>{formatPrice(plan.prices[cycle])}</Text>
-        <Text style={styles.priceSuffix}>{cycleSuffix}</Text>
-      </View>
-      {savings ? <Text style={styles.savings}>{savings}</Text> : null}
 
       <View style={styles.divider} />
 
       {plan.features.map((feature) => (
         <View key={feature} style={styles.featureRow}>
-          <Ionicons
-            name="checkmark"
-            size={16}
-            color={colors.brandDeep}
-            style={styles.featureIcon}
-          />
+          <View style={styles.featureCheck}>
+            <Ionicons name="checkmark" size={13} color={colors.textInverse} />
+          </View>
           <Text style={styles.featureText}>{feature}</Text>
         </View>
       ))}
 
-      <View style={{ height: spacing.sm }} />
+      <View style={{ height: spacing.md }} />
 
       {current ? (
         <View style={styles.currentBtn}>
-          <Ionicons name="checkmark-circle" size={16} color={colors.brandDeep} />
+          <Ionicons name="checkmark-circle" size={18} color={colors.sageDeep} />
           <Text style={styles.currentBtnText}>Your current plan</Text>
         </View>
       ) : (
         <Button
-          label={plan.highlight ? 'Join waitlist' : 'Choose plan'}
-          variant={plan.highlight ? 'primary' : 'outline'}
+          label={`Choose ${plan.name}`}
+          variant={plan.highlight ? 'primary' : 'secondary'}
           onPress={onPress}
         />
       )}
-    </Animated.View>
+    </View>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Waitlist modal
-// ---------------------------------------------------------------------------
 
 function WaitlistModal({
   visible,
   plan,
-  cycle,
   email,
   onChangeEmail,
   submitting,
@@ -377,29 +290,24 @@ function WaitlistModal({
 }: {
   visible: boolean;
   plan: Plan | null;
-  cycle: BillingCycle;
   email: string;
   onChangeEmail: (v: string) => void;
   submitting: boolean;
   onClose: () => void;
   onSubmit: () => void;
 }) {
-  const cycleSuffix = CYCLES.find((c) => c.id === cycle)?.suffix ?? '';
-  const priceLabel = plan
-    ? `${formatPrice(plan.prices[cycle])}${cycleSuffix}`
-    : '';
-
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={styles.sheet} onPress={() => undefined}>
           <View style={styles.sheetHandle} />
+          <Mascot pose="headset" size={84} />
           <Text style={styles.sheetTitle}>
-            {plan ? `${plan.name} — ${priceLabel}` : ''}
+            {plan ? `${plan.name} — ${formatPrice(plan.price)}/mo` : ''}
           </Text>
           <Text style={styles.sheetBody}>
-            Payments aren't live yet. Drop your email and we'll let you know
-            the moment they switch on for India.
+            Payments aren't live yet. Drop your email and we'll let you know the
+            moment they switch on for India.
           </Text>
           <TextInput
             value={email}
@@ -417,11 +325,7 @@ function WaitlistModal({
             onPress={onSubmit}
             loading={submitting}
           />
-          <Pressable
-            onPress={onClose}
-            style={styles.dismissBtn}
-            accessibilityRole="button"
-          >
+          <Pressable onPress={onClose} style={styles.dismissBtn} accessibilityRole="button">
             <Text style={styles.dismissText}>Not now</Text>
           </Pressable>
         </Pressable>
@@ -430,185 +334,168 @@ function WaitlistModal({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
-
 const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: colors.cream },
+  safe: { flex: 1 },
   scroll: {
-    paddingHorizontal: spacing.md,
-    paddingBottom: 100,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: 120,
     gap: spacing.md,
   },
   hero: {
-    paddingTop: spacing.lg,
-    paddingHorizontal: spacing.xs,
-    gap: 4,
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    gap: spacing.xs,
   },
   heroTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 26,
+    ...typography.h1,
     color: colors.textPrimary,
-    letterSpacing: -0.4,
+    marginTop: spacing.sm,
   },
   heroBody: {
     ...typography.body,
     color: colors.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  cycleWrap: {
-    flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderRadius: radius.circle,
-    padding: 4,
-    gap: 4,
-  },
-  cycleBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.circle,
-    flexDirection: 'row',
-    gap: 6,
-  },
-  cycleBtnActive: {
-    backgroundColor: colors.background,
-    ...shadows.card,
-  },
-  cycleLabel: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  cycleLabelActive: {
-    color: colors.textPrimary,
-  },
-  bestPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.circle,
-    backgroundColor: colors.brand,
-  },
-  bestPillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 8,
-    color: colors.textInverse,
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    maxWidth: 300,
   },
   planCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
     ...shadows.card,
   },
   planCardHighlight: {
-    borderColor: colors.brand,
-    borderWidth: 1.5,
+    borderWidth: 2,
+    borderColor: colors.peach,
+  },
+  popularPill: {
+    position: 'absolute',
+    top: -10,
+    right: spacing.lg,
+    backgroundColor: colors.peach,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  popularPillText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 10,
+    color: colors.textPrimary,
+    letterSpacing: 0.6,
   },
   planHead: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
   },
-  planBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.circle,
-  },
-  planBadgeText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 10,
-    color: colors.textPrimary,
-    letterSpacing: 0.8,
-  },
-  popularPill: {
-    backgroundColor: colors.brand,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.circle,
-  },
-  popularPillText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 9,
-    color: colors.textInverse,
-    letterSpacing: 0.8,
-  },
   planName: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    ...typography.h2,
     color: colors.textPrimary,
-    marginTop: 10,
-  },
-  planTagline: {
-    fontFamily: fontFamilies.interRegular,
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: 2,
   },
   priceRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    marginTop: spacing.sm,
-    gap: 4,
+    gap: 2,
   },
   price: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 32,
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 28,
     color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   priceSuffix: {
-    fontFamily: fontFamilies.interMedium,
-    fontSize: 14,
+    ...typography.label,
     color: colors.textSecondary,
   },
-  savings: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 11,
-    color: colors.brandDeep,
+  planTagline: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
     marginTop: 2,
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: colors.divider,
     marginVertical: spacing.md,
   },
   featureRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    paddingVertical: 4,
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 5,
   },
-  featureIcon: {
-    marginTop: 1,
+  featureCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.sage,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   featureText: {
     flex: 1,
-    fontFamily: fontFamilies.interMedium,
-    fontSize: 13,
+    ...typography.bodyMedium,
+    fontSize: 14,
     color: colors.textPrimary,
-    lineHeight: 18,
   },
   currentBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 14,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.sageSoft,
   },
   currentBtnText: {
-    fontFamily: fontFamilies.poppinsBold,
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: colors.sageDeep,
+  },
+  couponCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  couponLabel: {
+    ...typography.bodyMedium,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.textPrimary,
+    marginBottom: spacing.sm,
+  },
+  couponRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  couponInput: {
+    flex: 1,
+    borderRadius: radius.md,
+    backgroundColor: colors.cream,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
-    color: colors.brandDeep,
+    color: colors.textPrimary,
+    letterSpacing: 1,
+  },
+  applyBtn: {
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.peach,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  applyBtnDone: {
+    backgroundColor: colors.sageSoft,
+  },
+  applyText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14,
+    color: colors.textPrimary,
   },
   footnote: {
-    fontFamily: fontFamilies.interRegular,
+    ...typography.caption,
     fontSize: 11,
     color: colors.textMuted,
     textAlign: 'center',
@@ -621,51 +508,50 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    backgroundColor: colors.cream,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
     padding: spacing.lg,
     paddingBottom: spacing.xl,
+    alignItems: 'center',
   },
   sheetHandle: {
     width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.border,
-    alignSelf: 'center',
-    marginBottom: spacing.md,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.creamDeep,
+    marginBottom: spacing.sm,
   },
   sheetTitle: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
+    ...typography.h2,
     color: colors.textPrimary,
+    marginTop: spacing.xs,
   },
   sheetBody: {
     ...typography.body,
     color: colors.textSecondary,
-    fontSize: 13,
+    fontSize: 14,
     marginTop: 4,
     marginBottom: spacing.md,
-    lineHeight: 18,
+    textAlign: 'center',
   },
   input: {
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    backgroundColor: colors.inputBackground,
+    alignSelf: 'stretch',
     borderRadius: radius.md,
+    backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    paddingVertical: 12,
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 14,
+    paddingVertical: 14,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
     color: colors.textPrimary,
+    ...shadows.icon,
   },
   dismissBtn: {
     alignItems: 'center',
     paddingVertical: spacing.md,
   },
   dismissText: {
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 13,
+    ...typography.bodyMedium,
     color: colors.textSecondary,
   },
 });

@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
+import { colors, radius, spacing, typography } from '@/theme';
 
 type SOSButtonProps = {
   onPress: () => void;
@@ -16,57 +16,45 @@ type SOSButtonProps = {
   disabled?: boolean;
 };
 
-const BAR_LEN = 22;
-const BAR_THICK = 5;
-
-// SOS card. Solid red, no gradient, no glow. Subtle idle pulse + scale
-// press feedback (0.96, 120ms). Tap = countdown, long-press = instant.
+// Peach SOS card matching the reference: soft coral-washed card, "SOS"
+// title, "Hold for 3 seconds", and a round HOLD button with a breathing
+// ring. Tap = 5s countdown, long-press = fire instantly.
 export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
-  const pulse = useRef(new Animated.Value(1)).current;
+  const ring = useRef(new Animated.Value(0)).current;
   const press = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1.025,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
+        Animated.timing(ring, {
+          toValue: 1,
+          duration: 1400,
+          easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }),
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 1100,
-          easing: Easing.inOut(Easing.ease),
+        Animated.timing(ring, {
+          toValue: 0,
+          duration: 0,
           useNativeDriver: true,
         }),
       ]),
     );
     loop.start();
     return () => loop.stop();
-  }, [pulse]);
+  }, [ring]);
 
-  const handlePressIn = () => {
-    Animated.timing(press, {
-      toValue: 0.96,
-      duration: 120,
-      useNativeDriver: true,
-    }).start();
-  };
+  const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
+  const ringOpacity = ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
 
-  const handlePressOut = () => {
-    Animated.timing(press, {
-      toValue: 1,
-      duration: 120,
-      useNativeDriver: true,
-    }).start();
-  };
+  const handlePressIn = () =>
+    Animated.spring(press, { toValue: 0.94, useNativeDriver: true, speed: 40 }).start();
+  const handlePressOut = () =>
+    Animated.spring(press, { toValue: 1, useNativeDriver: true, speed: 40 }).start();
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
     onPress();
   };
-
   const handleLongPress = () => {
     if (!onLongPress) return;
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
@@ -76,12 +64,10 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   };
 
   return (
-    <Animated.View
-      style={[
-        styles.wrap,
-        { transform: [{ scale: Animated.multiply(pulse, press) }] },
-      ]}
-    >
+    <View style={[styles.card, disabled && styles.disabled]}>
+      <Text style={styles.title}>SOS</Text>
+      <Text style={styles.hint}>Hold for 3 seconds</Text>
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Send SOS alert"
@@ -92,77 +78,72 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
         onLongPress={onLongPress ? handleLongPress : undefined}
         delayLongPress={700}
         disabled={disabled}
-        style={[styles.card, disabled && styles.disabled]}
+        style={styles.holdZone}
         hitSlop={8}
       >
-        <View style={styles.asterisk}>
-          <View style={[styles.bar, { transform: [{ rotate: '0deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '45deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '90deg' }] }]} />
-          <View style={[styles.bar, { transform: [{ rotate: '135deg' }] }]} />
-        </View>
-        <View style={styles.textCol}>
-          <Text style={styles.label}>SOS</Text>
-          <Text style={styles.hint}>Tap or hold</Text>
-        </View>
+        <Animated.View
+          style={[
+            styles.ring,
+            { opacity: ringOpacity, transform: [{ scale: ringScale }] },
+          ]}
+        />
+        <Animated.View style={[styles.hold, { transform: [{ scale: press }] }]}>
+          <Text style={styles.holdText}>HOLD</Text>
+        </Animated.View>
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    flex: 1,
-  },
   card: {
     flex: 1,
-    minHeight: 84,
-    flexDirection: 'row',
+    borderRadius: radius.xxl,
+    backgroundColor: colors.coralSoft,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 12,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    // Soft red lift — premium glow without neon. The shadow colour is
-    // the SOS red itself, very low opacity, so it reads as warmth.
-    shadowColor: '#FF3B30',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 16,
-    elevation: 8,
   },
-  disabled: {
-    opacity: 0.5,
+  disabled: { opacity: 0.5 },
+  title: {
+    ...typography.h3,
+    color: colors.coral,
+    letterSpacing: 1,
   },
-  asterisk: {
-    width: BAR_LEN,
-    height: BAR_LEN,
+  hint: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 2,
+    marginBottom: spacing.md,
+  },
+  holdZone: {
+    width: 84,
+    height: 84,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  textCol: {
-    alignItems: 'flex-start',
-  },
-  bar: {
+  ring: {
     position: 'absolute',
-    width: BAR_LEN,
-    height: BAR_THICK,
-    borderRadius: BAR_THICK / 2,
-    backgroundColor: colors.textInverse,
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.coral,
   },
-  label: {
-    color: colors.textInverse,
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    letterSpacing: 4,
+  hold: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    backgroundColor: colors.surfaceAlt,
+    borderWidth: 2,
+    borderColor: colors.coral,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  hint: {
-    color: 'rgba(255,255,255,0.88)',
-    fontFamily: fontFamilies.poppinsMedium,
-    fontSize: 11,
-    letterSpacing: 0.4,
-    marginTop: 2,
+  holdText: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 15,
+    color: colors.coral,
+    letterSpacing: 1,
   },
 });
