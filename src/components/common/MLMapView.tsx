@@ -16,11 +16,12 @@ import type { GeoPoint } from '@/types';
 // layer (cheap; no per-marker view overhead). The route line is a separate
 // LineLayer fed by the OSRM-returned GeoJSON.
 
-// OpenFreeMap "positron" — community-funded vector basemap, MIT-licensed
-// data, no API key, no rate limits. Renders as a clean Stripe/Uber-style
-// light theme with smooth zoom (vector, not raster). Far more aesthetic
-// than raw OSM tiles. Falls back to OSM raster if the style URL fails.
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
+// OpenFreeMap "liberty" — community-funded vector basemap, MIT-licensed
+// data, NO API key, NO rate limits. The "liberty" style is the warm,
+// colourful Google-Maps-like theme (green parks, blue water, soft cream
+// roads + labels) that matches ORBII's reference design far better than
+// the minimal grey "positron". Vector tiles → smooth zoom, crisp labels.
+const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
 
 export type MLMarker = {
   id: string;
@@ -53,14 +54,14 @@ export type MLMapViewHandle = {
   flyTo: (point: GeoPoint, zoom?: number) => void;
 };
 
-// Pin palette — aligned to the design tokens. Verified helpers use the
-// brand-deep mint so they read as "ORBII-trusted" instead of the legacy
-// yellow that broke the spec's no-orange-no-yellow rule.
+// Pin palette — aligned to the warm design tokens. User is a calm blue
+// dot (as in the reference), helpers are lavender (verified = deeper
+// lavender), destination is the soft coral.
 const COLOURS = {
-  user: '#FF4D4D',
-  helper: '#57C691',
-  'helper-verified': '#1E8E5A',
-  destination: '#FF4D4D',
+  user: '#4A90E2',
+  helper: '#8E7CC0',
+  'helper-verified': '#6F5DA6',
+  destination: '#E07A5F',
 } as const;
 
 function toCoords(p: GeoPoint): [number, number] {

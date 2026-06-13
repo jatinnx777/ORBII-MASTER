@@ -267,7 +267,7 @@ export async function createCircle(input: {
       owner_id: user.id,
       name: trimmed,
       kind: input.kind ?? 'general',
-      color: input.color ?? '#57C691',
+      color: input.color ?? '#7FA86B',
       emoji: input.emoji ?? null,
       is_default: input.isDefault ?? false,
     })

@@ -31,7 +31,7 @@ const ICONS: Record<
     inactive: 'shield-checkmark-outline',
     label: 'Safety',
   },
-  Membership: { active: 'star', inactive: 'star-outline', label: 'Plans' },
+  Membership: { active: 'sparkles', inactive: 'sparkles-outline', label: 'Plans' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
 

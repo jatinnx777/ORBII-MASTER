@@ -7,8 +7,8 @@ import {
   Easing,
   Image,
   Linking,
-  PanResponder,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -593,8 +593,10 @@ function StatusLine({
   return content;
 }
 
-// Draggable bottom sheet, two snap points (expanded / collapsed). Carries
-// the peeking mascot + speech bubble at its top-right edge.
+// Fixed-height bottom sheet — a clean 60:40 split (map ~58% / sheet ~42%).
+// Content scrolls inside so the SOS card stays at the top of the fold while
+// the helpers row + status checklist are a flick away. Carries the peeking
+// mascot + speech bubble at its top-right edge.
 function BottomPanel({
   children,
   bottomInset,
@@ -603,85 +605,31 @@ function BottomPanel({
   bottomInset: number;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  const COLLAPSE_OFFSET = Math.max(300, screenHeight * 0.4);
-  const translateY = useRef(new Animated.Value(0)).current;
-  const lastSnapRef = useRef(0);
-
-  const dimOpacity = translateY.interpolate({
-    inputRange: [0, COLLAPSE_OFFSET],
-    outputRange: [0.08, 0],
-    extrapolate: 'clamp',
-  });
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6,
-        onPanResponderGrant: () => {
-          translateY.setOffset(lastSnapRef.current);
-          translateY.setValue(0);
-        },
-        onPanResponderMove: (_, g) => {
-          let next = g.dy;
-          if (next < 0) next = next * 0.35;
-          else if (next > COLLAPSE_OFFSET) {
-            next = COLLAPSE_OFFSET + (next - COLLAPSE_OFFSET) * 0.35;
-          }
-          translateY.setValue(next);
-        },
-        onPanResponderRelease: (_, g) => {
-          translateY.flattenOffset();
-          const finalRaw = lastSnapRef.current + g.dy;
-          const vy = Math.max(-1.6, Math.min(1.6, g.vy));
-          let snap = finalRaw > COLLAPSE_OFFSET / 2 ? COLLAPSE_OFFSET : 0;
-          if (vy > 0.5) snap = COLLAPSE_OFFSET;
-          if (vy < -0.5) snap = 0;
-          lastSnapRef.current = snap;
-          Animated.spring(translateY, {
-            toValue: snap,
-            damping: 28,
-            stiffness: 240,
-            mass: 1,
-            velocity: vy,
-            overshootClamping: false,
-            restSpeedThreshold: 0.5,
-            restDisplacementThreshold: 0.5,
-            useNativeDriver: true,
-          }).start();
-        },
-      }),
-    [translateY, COLLAPSE_OFFSET],
-  );
+  const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
 
   return (
-    <>
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.mapDim, { opacity: dimOpacity }]}
-      />
-      <Animated.View
-        style={[
-          styles.bottomPanel,
-          {
-            paddingBottom: Math.max(bottomInset, 12) + 76,
-            transform: [{ translateY }],
-          },
+    <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
+      {/* peeking mascot + speech bubble */}
+      <View style={styles.mascotPeek} pointerEvents="none">
+        <View style={styles.speechBubble}>
+          <Text style={styles.speechText}>Everything{'\n'}looks good.</Text>
+        </View>
+        <Mascot pose="peek" size={82} />
+      </View>
+
+      <View style={styles.handleZone}>
+        <View style={styles.handle} />
+      </View>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.panelContent,
+          { paddingBottom: Math.max(bottomInset, 12) + 90 },
         ]}
       >
-        {/* peeking mascot + speech bubble */}
-        <View style={styles.mascotPeek} pointerEvents="none">
-          <View style={styles.speechBubble}>
-            <Text style={styles.speechText}>Everything{'\n'}looks good.</Text>
-          </View>
-          <Mascot pose="peek" size={92} />
-        </View>
-
-        <View style={styles.handleZone} {...panResponder.panHandlers}>
-          <View style={styles.handle} />
-        </View>
-        <View style={styles.panelContent}>{children}</View>
-      </Animated.View>
-    </>
+        {children}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -877,6 +825,8 @@ const styles = StyleSheet.create({
   },
   statusHeader: {
     marginBottom: spacing.xs,
+    // keep text clear of the peeking mascot at the sheet's top-right
+    paddingRight: 96,
   },
   safeRow: {
     flexDirection: 'row',
@@ -920,7 +870,7 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     gap: spacing.md,
-    minHeight: 168,
+    minHeight: 156,
   },
   voiceCard: {
     flex: 1,

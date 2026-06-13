@@ -142,7 +142,7 @@ export function CirclesScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Circles</Text>
           <Text style={styles.subtitle}>
-            The trusted groups who can see your live safety status.
+            Trusted people who get your SOS and share live location with you — 24/7.
           </Text>
         </View>
         <Pressable
@@ -208,11 +208,13 @@ export function CirclesScreen() {
         </View>
       ) : !hasContent ? (
         <View style={styles.emptyWrap}>
-          <CirclesHero size={240} />
+          <CirclesHero size={200} />
           <Text style={styles.emptyTitle}>Your circle starts here</Text>
           <Text style={styles.emptyBody}>
-            Family, friends, a trip group — the people who should know you're safe.
+            Add family or friends. They get your SOS instantly, and you both
+            share live location 24/7 — only with each other.
           </Text>
+          <CircleExplainer />
           <Pressable
             onPress={() => navigation.navigate('CircleCreate')}
             style={({ pressed }) => [
@@ -221,7 +223,7 @@ export function CirclesScreen() {
             ]}
             accessibilityRole="button"
           >
-            <Ionicons name="add" size={16} color={colors.textInverse} />
+            <Ionicons name="add" size={16} color={colors.textPrimary} />
             <Text style={styles.emptyCtaText}>Create your first circle</Text>
           </Pressable>
         </View>
@@ -242,24 +244,27 @@ export function CirclesScreen() {
             gap: spacing.sm,
           }}
           ListHeaderComponent={
-            incomingInvites.length > 0 ? (
-              <View style={styles.invitesWrap}>
-                <Text style={styles.sectionLabel}>Pending invites</Text>
-                {incomingInvites.map((invite) => (
-                  <InviteRow
-                    key={invite.id}
-                    invite={invite}
-                    onAccept={() => handleAccept(invite)}
-                    onDecline={() => handleDecline(invite)}
-                  />
-                ))}
-                {data.length > 0 ? (
+            <View style={styles.invitesWrap}>
+              <CircleExplainer />
+              {incomingInvites.length > 0 ? (
+                <>
                   <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>
-                    Your circles
+                    Pending invites
                   </Text>
-                ) : null}
-              </View>
-            ) : null
+                  {incomingInvites.map((invite) => (
+                    <InviteRow
+                      key={invite.id}
+                      invite={invite}
+                      onAccept={() => handleAccept(invite)}
+                      onDecline={() => handleDecline(invite)}
+                    />
+                  ))}
+                </>
+              ) : null}
+              <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>
+                Your circles
+              </Text>
+            </View>
           }
           refreshControl={
             <RefreshControl
@@ -271,6 +276,55 @@ export function CirclesScreen() {
         />
       )}
     </ScreenContainer>
+  );
+}
+
+// Explains what a circle actually does, in the user's own framing:
+// trusted people who receive your SOS and share live location both ways.
+function CircleExplainer() {
+  const rows: {
+    icon: React.ComponentProps<typeof Ionicons>['name'];
+    bg: string;
+    fg: string;
+    title: string;
+    body: string;
+  }[] = [
+    {
+      icon: 'notifications',
+      bg: colors.coralSoft,
+      fg: colors.coral,
+      title: 'They get your SOS',
+      body: 'Everyone in the circle is alerted the instant you trigger an emergency.',
+    },
+    {
+      icon: 'location',
+      bg: colors.sageSoft,
+      fg: colors.sageDeep,
+      title: 'Live location, both ways',
+      body: 'You and your circle can see each other on the map 24/7 — only if you each allow it.',
+    },
+    {
+      icon: 'lock-closed',
+      bg: colors.lavenderSoft,
+      fg: colors.lavenderDeep,
+      title: 'Only people you invite',
+      body: 'Circles are private. Nothing is ever public, and you can leave anytime.',
+    },
+  ];
+  return (
+    <View style={styles.explainer}>
+      {rows.map((r, i) => (
+        <View key={r.title} style={[styles.explainerRow, i > 0 && styles.explainerDivider]}>
+          <View style={[styles.explainerIcon, { backgroundColor: r.bg }]}>
+            <Ionicons name={r.icon} size={18} color={r.fg} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.explainerTitle}>{r.title}</Text>
+            <Text style={styles.explainerBody}>{r.body}</Text>
+          </View>
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -468,17 +522,54 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: radius.circle,
-    backgroundColor: colors.brandDeep,
-    marginTop: spacing.md,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    backgroundColor: colors.peach,
+    marginTop: spacing.lg,
     ...shadows.card,
   },
   emptyCtaText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 13.5,
-    color: colors.textInverse,
+    color: colors.textPrimary,
     letterSpacing: 0.3,
+  },
+  explainer: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    ...shadows.card,
+  },
+  explainerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  explainerDivider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  explainerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  explainerTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  explainerBody: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    marginTop: 1,
   },
   setupCard: {
     borderRadius: radius.lg,
@@ -637,12 +728,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: radius.circle,
-    backgroundColor: colors.brandDeep,
+    backgroundColor: colors.peach,
   },
   invitePrimaryText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 12,
-    color: colors.textInverse,
+    color: colors.textPrimary,
     letterSpacing: 0.3,
   },
 });

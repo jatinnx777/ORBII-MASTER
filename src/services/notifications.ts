@@ -138,7 +138,7 @@ export async function showSafeJourneyWidget(args: {
         ...(Platform.OS === 'android'
           ? {
               priority: Notifications.AndroidNotificationPriority.LOW,
-              color: '#57C691',
+              color: '#E0AC63',
             }
           : {}),
       },

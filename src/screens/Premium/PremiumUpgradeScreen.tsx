@@ -13,9 +13,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Mascot } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
-import { useAppSelector } from '@/redux/store';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { premiumUpgraded } from '@/redux/slices/userSlice';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
+
+// The launch promo code. Entering this in the coupon field unlocks every
+// Premium feature for free (stored on the local profile via premiumUpgraded).
+const PROMO_CODE = 'ORBII';
 
 // Three tiers per the product spec: Free (₹0), Solo (₹99/mo), Family
 // (₹299/mo) + a coupon field. Payments aren't live yet — choosing a paid
@@ -95,6 +100,7 @@ async function joinWaitlist(entry: WaitlistEntry): Promise<void> {
 }
 
 export function PremiumUpgradeScreen() {
+  const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const isPremium = profile?.isPremium ?? false;
   const [waitlistOpen, setWaitlistOpen] = useState<PlanId | null>(null);
@@ -108,16 +114,23 @@ export function PremiumUpgradeScreen() {
   }, []);
 
   const applyCoupon = () => {
-    const code = coupon.trim();
+    const code = coupon.trim().toUpperCase();
     if (!code) {
       Alert.alert('Enter a code', 'Type a coupon code first.');
       return;
     }
-    setCouponApplied(true);
-    Alert.alert(
-      'Coupon saved',
-      `We'll apply "${code.toUpperCase()}" automatically when paid plans go live.`,
-    );
+    if (code === PROMO_CODE) {
+      dispatch(premiumUpgraded());
+      setCouponApplied(true);
+      trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
+      Alert.alert(
+        '🎉 Premium unlocked!',
+        'Your ORBII coupon is applied — every Premium feature is now free for you.',
+      );
+      return;
+    }
+    setCouponApplied(false);
+    Alert.alert('Invalid code', `"${code}" isn't a valid coupon. Try ORBII.`);
   };
 
   const submitWaitlist = async () => {
@@ -155,13 +168,25 @@ export function PremiumUpgradeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.hero}>
-            <Mascot pose="shield" size={120} />
-            <Text style={styles.heroTitle}>Choose your plan</Text>
+            <Mascot pose={isPremium ? 'celebrate' : 'shield'} size={120} />
+            <Text style={styles.heroTitle}>
+              {isPremium ? 'Premium active' : 'Choose your plan'}
+            </Text>
             <Text style={styles.heroBody}>
-              Start free. Upgrade anytime for unlimited Voice SOS and family
-              protection.
+              {isPremium
+                ? 'Every Premium feature is unlocked for you. Thank you for being an early ORBII member.'
+                : 'Start free. Upgrade anytime for unlimited Voice SOS and family protection.'}
             </Text>
           </View>
+
+          {isPremium ? (
+            <View style={styles.premiumBanner}>
+              <Ionicons name="sparkles" size={16} color={colors.goldDeep} />
+              <Text style={styles.premiumBannerText}>
+                Premium unlocked with the ORBII coupon
+              </Text>
+            </View>
+          ) : null}
 
           {PLANS.map((plan) => (
             <PlanCard
@@ -357,6 +382,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     maxWidth: 300,
+  },
+  premiumBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.goldSoft,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+  },
+  premiumBannerText: {
+    ...typography.label,
+    color: colors.goldDeep,
   },
   planCard: {
     backgroundColor: colors.surface,
