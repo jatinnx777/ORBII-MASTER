@@ -305,7 +305,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
       ) : null}
 
       {avatarMarkers.map((m) => (
-        <Marker key={m.id} coordinate={toCoords(m.coordinate)} anchor="bottom">
+        <Marker key={m.id} lngLat={toCoords(m.coordinate)} anchor="bottom">
           <View style={styles.avatarPin}>
             <View style={styles.avatarRing}>
               {m.photoUri ? (
