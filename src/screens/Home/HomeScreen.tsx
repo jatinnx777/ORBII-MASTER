@@ -25,6 +25,7 @@ import {
   MLMapView,
   ScreenContainer,
   type MLMarker,
+  type AvatarMarker,
 } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -383,6 +384,7 @@ export function HomeScreen() {
           center={currentLocation}
           zoom={15}
           markers={mapMarkers}
+          avatarMarkers={avatarMarkers}
           interactive
           followUser={false}
           style={StyleSheet.absoluteFill}
