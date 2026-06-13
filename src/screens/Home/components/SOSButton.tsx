@@ -98,7 +98,7 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
 const styles = StyleSheet.create({
   card: {
     flex: 1,
-    borderRadius: radius.xxl,
+    borderRadius: radius.xl,
     backgroundColor: colors.coralSoft,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,

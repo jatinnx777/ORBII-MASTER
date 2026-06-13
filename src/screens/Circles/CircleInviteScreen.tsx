@@ -261,7 +261,7 @@ export function CircleInviteScreen({
                       Not on ORBII yet
                     </Text>
                     <Text style={styles.noMatchBody}>
-                      Share an invite link via WhatsApp / SMS — they'll join
+                      Share an invite link via WhatsApp or SMS, and they'll join
                       the circle as soon as they install ORBII and tap the link.
                     </Text>
                   </View>

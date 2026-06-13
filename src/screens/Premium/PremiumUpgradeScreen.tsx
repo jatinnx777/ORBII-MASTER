@@ -1,6 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
@@ -34,6 +36,8 @@ type Plan = {
   price: number;
   tagline: string;
   highlight?: boolean;
+  badge?: string;
+  valueNote?: string;
   features: string[];
 };
 
@@ -56,11 +60,13 @@ const PLANS: Plan[] = [
     name: 'Solo',
     price: 99,
     tagline: 'Hands-free protection, always on.',
+    highlight: true,
+    badge: 'RECOMMENDED',
     features: [
       'Everything in Free',
       'Unlimited Voice SOS',
       'Priority Alerts',
-      'Advanced Safety Features',
+      'Advanced safety features',
     ],
   },
   {
@@ -68,12 +74,13 @@ const PLANS: Plan[] = [
     name: 'Family',
     price: 299,
     tagline: 'Protect everyone you love.',
-    highlight: true,
+    badge: 'BEST FOR FAMILIES',
+    valueNote: 'Just ₹75 per person',
     features: [
-      '4 Family Members',
-      'Shared Safety Circle',
+      'Up to 4 family members',
+      'Shared safety circle',
       'Unlimited Voice SOS',
-      'Priority Alerts',
+      'Family dashboard',
     ],
   },
 ];
@@ -125,7 +132,7 @@ export function PremiumUpgradeScreen() {
       trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
       Alert.alert(
         '🎉 Premium unlocked!',
-        'Your ORBII coupon is applied — every Premium feature is now free for you.',
+        'Your ORBII coupon is applied. Every Premium feature is now free for you.',
       );
       return;
     }
@@ -188,10 +195,11 @@ export function PremiumUpgradeScreen() {
             </View>
           ) : null}
 
-          {PLANS.map((plan) => (
+          {PLANS.map((plan, index) => (
             <PlanCard
               key={plan.id}
               plan={plan}
+              index={index}
               current={plan.id === 'free' && !isPremium}
               onPress={() => setWaitlistOpen(plan.id)}
             />
@@ -230,8 +238,8 @@ export function PremiumUpgradeScreen() {
           </View>
 
           <Text style={styles.footnote}>
-            Prices in INR, per month, incl. of taxes. Payments are not live yet —
-            you'll be the first to know when they switch on.
+            Prices in INR per month, taxes included. Payments aren't live yet.
+            You'll be the first to know when they switch on.
           </Text>
         </ScrollView>
       </SafeAreaView>
@@ -251,18 +259,40 @@ export function PremiumUpgradeScreen() {
 
 function PlanCard({
   plan,
+  index,
   current,
   onPress,
 }: {
   plan: Plan;
+  index: number;
   current: boolean;
   onPress: () => void;
 }) {
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 360,
+      delay: index * 90,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [enter, index]);
+  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] });
+
   return (
-    <View style={[styles.planCard, plan.highlight && styles.planCardHighlight]}>
-      {plan.highlight ? (
-        <View style={styles.popularPill}>
-          <Text style={styles.popularPillText}>MOST POPULAR</Text>
+    <Animated.View
+      style={[
+        styles.planCard,
+        plan.highlight && styles.planCardHighlight,
+        { opacity: enter, transform: [{ translateY }] },
+      ]}
+    >
+      {plan.badge ? (
+        <View style={[styles.popularPill, !plan.highlight && styles.popularPillMuted]}>
+          <Text style={[styles.popularPillText, !plan.highlight && styles.popularPillTextMuted]}>
+            {plan.badge}
+          </Text>
         </View>
       ) : null}
 
@@ -274,6 +304,12 @@ function PlanCard({
         </View>
       </View>
       <Text style={styles.planTagline}>{plan.tagline}</Text>
+      {plan.valueNote ? (
+        <View style={styles.valueNote}>
+          <Ionicons name="pricetag" size={12} color={colors.sageDeep} />
+          <Text style={styles.valueNoteText}>{plan.valueNote}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.divider} />
 
@@ -295,12 +331,12 @@ function PlanCard({
         </View>
       ) : (
         <Button
-          label={`Choose ${plan.name}`}
+          label={plan.highlight ? `Get ${plan.name}` : `Choose ${plan.name}`}
           variant={plan.highlight ? 'primary' : 'secondary'}
           onPress={onPress}
         />
       )}
-    </View>
+    </Animated.View>
   );
 }
 
@@ -416,11 +452,34 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: radius.pill,
   },
+  popularPillMuted: {
+    backgroundColor: colors.lavenderSoft,
+  },
   popularPillText: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 10,
     color: colors.textPrimary,
     letterSpacing: 0.6,
+  },
+  popularPillTextMuted: {
+    color: colors.lavenderDeep,
+  },
+  valueNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.sageSoft,
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    marginTop: spacing.sm,
+  },
+  valueNoteText: {
+    ...typography.caption,
+    fontSize: 11.5,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.sageDeep,
   },
   planHead: {
     flexDirection: 'row',

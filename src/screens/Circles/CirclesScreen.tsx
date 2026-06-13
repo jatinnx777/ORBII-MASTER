@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { EmptyState, ScreenContainer } from '@/components/common';
+import { EmptyState, MascotLoader, ScreenContainer } from '@/components/common';
 import { CirclesHero } from './components/CirclesHero';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -142,7 +142,7 @@ export function CirclesScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Circles</Text>
           <Text style={styles.subtitle}>
-            Trusted people who get your SOS and share live location with you — 24/7.
+            Trusted people who get your SOS and share live location with you, 24/7.
           </Text>
         </View>
         <Pressable
@@ -188,13 +188,13 @@ export function CirclesScreen() {
               accessibilityRole="button"
             >
               <Ionicons name="refresh" size={14} color={colors.brandDeep} />
-              <Text style={styles.setupRetryText}>I've run it — retry</Text>
+              <Text style={styles.setupRetryText}>I've run it, retry</Text>
             </Pressable>
           </View>
         </View>
       ) : status === 'loading' && !hasContent ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.brandDeep} />
+          <MascotLoader message="Loading your circles…" />
         </View>
       ) : status === 'errored' && !hasContent ? (
         <View style={styles.center}>
@@ -212,7 +212,7 @@ export function CirclesScreen() {
           <Text style={styles.emptyTitle}>Your circle starts here</Text>
           <Text style={styles.emptyBody}>
             Add family or friends. They get your SOS instantly, and you both
-            share live location 24/7 — only with each other.
+            share live location 24/7, just with each other.
           </Text>
           <CircleExplainer />
           <Pressable
@@ -301,7 +301,7 @@ function CircleExplainer() {
       bg: colors.sageSoft,
       fg: colors.sageDeep,
       title: 'Live location, both ways',
-      body: 'You and your circle can see each other on the map 24/7 — only if you each allow it.',
+      body: 'You and your circle can see each other on the map 24/7, only if you each allow it.',
     },
     {
       icon: 'lock-closed',

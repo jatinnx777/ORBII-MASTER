@@ -21,6 +21,7 @@ import { SOSButton } from './components/SOSButton';
 import {
   BatteryWarning,
   Mascot,
+  MascotLoader,
   MLMapView,
   ScreenContainer,
   type MLMarker,
@@ -55,6 +56,7 @@ import { formatDistance, haversineMeters } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
 import { shouldDampenWork } from '@/services/battery-aware';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
+import { useGuardianMessage, type GuardianContext } from '@/hooks/useGuardianMessage';
 import {
   startListening,
   stopListening,
@@ -306,6 +308,16 @@ export function HomeScreen() {
   const unreadCount = useNotificationsBadge();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
 
+  const guardianContext: GuardianContext =
+    locationPermission !== 'granted'
+      ? 'permissionMissing'
+      : contactsCount === 0
+        ? 'contactsMissing'
+        : voiceListening
+          ? 'voiceReady'
+          : 'safe';
+  const guardianMessage = useGuardianMessage(guardianContext);
+
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
   const mapMarkers: MLMarker[] = useMemo(() => {
@@ -359,8 +371,7 @@ export function HomeScreen() {
         />
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.mapPlaceholder]}>
-          <ActivityIndicator color={colors.peachDeep} />
-          <Text style={styles.mapPlaceholderText}>Loading map…</Text>
+          <MascotLoader message="Getting your map ready…" />
         </View>
       )}
 
@@ -377,7 +388,7 @@ export function HomeScreen() {
         />
       </View>
 
-      <BottomPanel bottomInset={insets.bottom}>
+      <BottomPanel bottomInset={insets.bottom} message={guardianMessage}>
         {/* status header */}
         <View style={styles.statusHeader}>
           <View style={styles.safeRow}>
@@ -462,13 +473,13 @@ export function HomeScreen() {
           <StatusLine
             label="Voice Detection Active"
             ok={voiceListening}
-            pendingLabel="Voice Detection — tap card above"
+            pendingLabel="Turn on Voice Detection above"
           />
           <View style={styles.statusDivider} />
           <StatusLine
             label="Location Sharing Ready"
             ok={locationPermission === 'granted'}
-            pendingLabel="Location Sharing — enable above"
+            pendingLabel="Turn on Location Sharing above"
           />
           <View style={styles.statusDivider} />
           <StatusLine
@@ -600,21 +611,25 @@ function StatusLine({
 function BottomPanel({
   children,
   bottomInset,
+  message,
 }: {
   children: React.ReactNode;
   bottomInset: number;
+  message: string;
 }) {
   const screenHeight = Dimensions.get('window').height;
   const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
 
   return (
     <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
-      {/* peeking mascot + speech bubble */}
+      {/* guardian peeking over (and holding onto) the sheet edge, with a
+          speech bubble that points back at it */}
       <View style={styles.mascotPeek} pointerEvents="none">
         <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>Everything{'\n'}looks good.</Text>
+          <Text style={styles.speechText}>{message}</Text>
+          <View style={styles.speechTail} />
         </View>
-        <Mascot pose="peek" size={82} />
+        <Mascot pose="peek" size={86} />
       </View>
 
       <View style={styles.handleZone}>
@@ -785,8 +800,8 @@ const styles = StyleSheet.create({
   },
   mascotPeek: {
     position: 'absolute',
-    top: -64,
-    right: 18,
+    top: -76,
+    right: 16,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.xs,
@@ -797,14 +812,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: radius.lg,
-    marginBottom: 12,
+    marginBottom: 18,
+    maxWidth: 150,
     ...shadows.icon,
   },
   speechText: {
-    ...typography.caption,
-    fontSize: 12,
+    ...typography.bodyMedium,
+    fontSize: 12.5,
     lineHeight: 16,
-    color: colors.textSecondary,
+    color: colors.textPrimary,
+  },
+  speechTail: {
+    position: 'absolute',
+    bottom: -4,
+    right: 18,
+    width: 12,
+    height: 12,
+    backgroundColor: colors.surface,
+    transform: [{ rotate: '45deg' }],
+    borderRadius: 2,
   },
   handleZone: {
     alignItems: 'center',
@@ -874,7 +900,7 @@ const styles = StyleSheet.create({
   },
   voiceCard: {
     flex: 1,
-    borderRadius: radius.xxl,
+    borderRadius: radius.xl,
     backgroundColor: colors.lavenderSoft,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.md,
@@ -906,7 +932,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     padding: spacing.md,
     ...shadows.card,
   },
@@ -951,7 +977,7 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs,
     ...shadows.card,

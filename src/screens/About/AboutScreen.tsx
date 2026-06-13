@@ -38,11 +38,11 @@ export function AboutScreen() {
           <Text style={styles.paragraph}>
             ORBII is a community-first safety app for women in India. One tap
             sends an SOS to nearby verified helpers, your circle of trusted
-            friends, and your emergency contacts — within seconds.
+            friends, and your emergency contacts within seconds.
           </Text>
 
           <Text style={styles.sectionTitle}>How it works</Text>
-          <Bullet text="Press SOS — your live location is shared with helpers within 2 km." />
+          <Bullet text="Press SOS and your live location is shared with helpers within 2 km." />
           <Bullet text={'Voice triggers ("help", "bachao", "madad") fire SOS hands-free.'} />
           <Bullet text="Friends in your circle are notified first, no matter the distance." />
           <Bullet text="Helpers are Aadhaar-verified and rated after each response." />

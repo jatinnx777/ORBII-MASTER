@@ -128,15 +128,11 @@ function TabItem({
 
   const pillScale = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.6, 1],
+    outputRange: [0.85, 1],
   });
   const pillOpacity = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 1],
-  });
-  const labelOpacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.6, 1],
   });
 
   const animatePress = (toValue: number) =>
@@ -159,33 +155,28 @@ function TabItem({
       style={styles.itemPressable}
     >
       <Animated.View style={[styles.itemInner, { transform: [{ scale: press }] }]}>
+        {/* soft tinted pill behind the active item */}
         <Animated.View
           pointerEvents="none"
           style={[
-            styles.itemActiveDot,
-            {
-              opacity: pillOpacity,
-              transform: [{ scale: pillScale }],
-            },
+            styles.activePill,
+            { opacity: pillOpacity, transform: [{ scale: pillScale }] },
           ]}
         />
         <Ionicons
           name={icon}
-          size={22}
-          color={focused ? colors.brandDeep : colors.textMuted}
+          size={focused ? 23 : 22}
+          color={focused ? colors.sageDeep : colors.textMuted}
         />
-        <Animated.Text
+        <Text
           style={[
             styles.itemLabel,
-            {
-              color: focused ? colors.brandDeep : colors.textMuted,
-              opacity: labelOpacity,
-            },
+            { color: focused ? colors.sageDeep : colors.textMuted },
           ]}
           numberOfLines={1}
         >
           {label}
-        </Animated.Text>
+        </Text>
       </Animated.View>
     </Pressable>
   );
@@ -215,30 +206,30 @@ const styles = StyleSheet.create({
   },
   itemPressable: {
     flex: 1,
-    minHeight: 44,
+    minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
   },
   itemInner: {
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
+    gap: 3,
+    paddingVertical: 6,
   },
-  // Single-purpose 4 px dot under each tab icon, animated via scale +
-  // opacity. Constrained to its own item cell so it cannot bleed onto
-  // neighbours like the previous expanding-label pill did.
-  itemActiveDot: {
+  // Soft tinted pill behind the active tab — fills the item cell so the
+  // active state reads as a calm highlight rather than a stray dot.
+  activePill: {
     position: 'absolute',
-    bottom: -6,
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.brandDeep,
+    top: 0,
+    bottom: 0,
+    left: 6,
+    right: 6,
+    borderRadius: 18,
+    backgroundColor: colors.sageSoft,
   },
   itemLabel: {
     fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 10,
-    letterSpacing: 0.3,
-    marginTop: 1,
+    fontSize: 10.5,
+    letterSpacing: 0.2,
   },
 });
