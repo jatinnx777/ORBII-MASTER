@@ -17,6 +17,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { profileUpdated } from '@/redux/slices/userSlice';
 import { isValidName } from '@/utils/validation';
 import { isUsernameAvailable } from '@/services/users-public';
+import { updateProfile } from '@/services/auth';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'EditProfile'>;
@@ -99,14 +100,18 @@ export function EditProfileScreen() {
       }
     }
 
+    // updateProfile uploads the photo to storage + persists name/username/
+    // photo to Supabase, so the change survives a re-login. It returns the
+    // profile with the uploaded (remote) photo URL.
+    const updated = await updateProfile(profile, {
+      name: name.trim(),
+      photoUri,
+      username,
+    });
     dispatch(
       profileUpdated({
-        ...profile,
-        name: name.trim(),
-        username,
-        photoUri,
+        ...updated,
         usernameChangedAt: usernameChanged ? now : profile.usernameChangedAt,
-        photoChangedAt: photoChanged ? now : profile.photoChangedAt,
       }),
     );
     navigation.goBack();
