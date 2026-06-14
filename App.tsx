@@ -534,4 +534,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  launch: {
+    backgroundColor: '#FB5012',
+    zIndex: 999,
+  },
 });
