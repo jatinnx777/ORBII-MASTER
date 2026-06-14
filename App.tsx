@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Linking, StyleSheet, Vibration, View } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Animated, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -458,6 +458,8 @@ export default function App() {
     return () => sub.unsubscribe();
   }, []);
 
+  const [showLaunch, setShowLaunch] = useState(true);
+
   if (!ready) {
     return null;
   }
@@ -467,15 +469,45 @@ export default function App() {
       <SafeAreaProvider>
         <BrandSheetProvider>
           <View style={styles.root} onLayout={onReady}>
-            <StatusBar style="dark" />
+            <StatusBar style={showLaunch ? 'light' : 'dark'} />
             <OfflineBanner />
             <NavigationContainer ref={navigationRef}>
               <RootNavigator />
             </NavigationContainer>
           </View>
+          {showLaunch ? <LaunchOverlay onDone={() => setShowLaunch(false)} /> : null}
         </BrandSheetProvider>
       </SafeAreaProvider>
     </Provider>
+  );
+}
+
+// Full-screen branded launch screen (orbii wordmark + tagline). Shown briefly
+// over the app on cold start, then fades out. The native splash uses the same
+// orange so the hand-off is seamless.
+function LaunchOverlay({ onDone }: { onDone: () => void }) {
+  const opacity = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const t = setTimeout(() => {
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 350,
+        useNativeDriver: true,
+      }).start(() => onDone());
+    }, 1100);
+    return () => clearTimeout(t);
+  }, [opacity, onDone]);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, styles.launch, { opacity }]}
+    >
+      <Image
+        source={require('./assets/splash.png')}
+        style={StyleSheet.absoluteFillObject}
+        resizeMode="cover"
+      />
+    </Animated.View>
   );
 }
 
