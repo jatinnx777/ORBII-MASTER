@@ -315,9 +315,10 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 28,
+    fontSize: 34,
+    lineHeight: 40,
     color: colors.textPrimary,
-    letterSpacing: -0.4,
+    letterSpacing: -0.5,
   },
   rowsCard: {
     marginHorizontal: spacing.md,

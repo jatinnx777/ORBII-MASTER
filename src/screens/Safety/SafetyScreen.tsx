@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.xs,
   },
   title: {
-    ...typography.h1,
+    ...typography.displaySmall,
     color: colors.textPrimary,
   },
   subtitle: {

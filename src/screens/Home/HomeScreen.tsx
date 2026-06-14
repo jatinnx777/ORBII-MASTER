@@ -20,7 +20,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
 import {
   BatteryWarning,
-  Mascot,
   MascotLoader,
   MLMapView,
   ScreenContainer,
@@ -409,28 +408,20 @@ export function HomeScreen() {
       </View>
 
       <BottomPanel bottomInset={insets.bottom}>
-        {/* status header + guardian companion */}
-        <View style={styles.statusHeaderRow}>
-          <View style={styles.statusHeader}>
-            <View style={styles.safeRow}>
-              <View style={styles.safeDot} />
-              <Text style={styles.safeLabel}>You’re Safe</Text>
-            </View>
-            <Text style={styles.allClear}>All Clear</Text>
-            <Text style={styles.helpersSub}>
-              {helpersScanState === 'scanning'
-                ? 'Scanning your area…'
-                : helpersNearby > 0
-                  ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
-                  : 'No helpers nearby yet'}
-            </Text>
+        {/* status header */}
+        <View style={styles.statusHeader}>
+          <View style={styles.safeRow}>
+            <View style={styles.safeDot} />
+            <Text style={styles.safeLabel}>{guardianMessage}</Text>
           </View>
-          <View style={styles.guardian}>
-            <View style={styles.guardianBubble}>
-              <Text style={styles.guardianBubbleText}>{guardianMessage}</Text>
-            </View>
-            <Mascot pose="neutral" size={62} />
-          </View>
+          <Text style={styles.allClear}>All Clear</Text>
+          <Text style={styles.helpersSub}>
+            {helpersScanState === 'scanning'
+              ? 'Scanning your area…'
+              : helpersNearby > 0
+                ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
+                : 'No helpers nearby yet'}
+          </Text>
         </View>
 
         <BatteryWarning />

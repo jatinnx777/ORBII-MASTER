@@ -11,7 +11,6 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Card,
-  Mascot,
   Row,
   ScreenContainer,
   SectionHeader,
@@ -57,7 +56,6 @@ export function ProfileScreen() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          <Mascot pose="neutral" size={52} />
         </View>
         <Card style={styles.heroCard}>
           <View style={styles.avatarWrap}>
@@ -188,14 +186,12 @@ const styles = StyleSheet.create({
     paddingBottom: 110,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.xs,
   },
   headerTitle: {
-    ...typography.h1,
+    ...typography.displaySmall,
     color: colors.textPrimary,
   },
   heroCard: {

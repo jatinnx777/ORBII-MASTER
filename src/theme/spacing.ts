@@ -30,33 +30,35 @@ export const touchTarget = {
 //   • sheet — upward shadow under the Home bottom sheet
 //   • hero  — stronger lift for the peach CTA / pressed primary
 //   • icon  — tiny soft pop under the round icon badges
+// iOS-style shadows: neutral, tight, very subtle. Cards read as lifted
+// paper, not glowy. (Replaced the old warm-brown diffuse glow.)
 export const shadows = {
   card: {
-    shadowColor: '#9A7B53',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 18,
-    elevation: 3,
+    shadowColor: '#1C1C1E',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 2,
   },
   sheet: {
-    shadowColor: '#9A7B53',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 24,
+    shadowColor: '#1C1C1E',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 20,
     elevation: 8,
   },
   hero: {
     shadowColor: '#E9B084',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 22,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 5,
   },
   icon: {
-    shadowColor: '#9A7B53',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
+    shadowColor: '#1C1C1E',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 2,
   },
 } as const;
