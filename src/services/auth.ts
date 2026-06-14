@@ -393,14 +393,20 @@ export async function updateProfile(
   current: UserProfile,
   updates: { name: string; photoUri: string | null; username?: string | null },
 ): Promise<UserProfile> {
-  await delay(150);
-  return {
+  // Upload a newly-picked local photo so it survives sign-out / re-login.
+  const photoUri = await uploadAvatar(current.uid, updates.photoUri);
+  const updated: UserProfile = {
     ...current,
     name: updates.name.trim(),
-    photoUri: updates.photoUri,
+    photoUri,
     username:
       updates.username !== undefined ? updates.username : current.username,
+    photoChangedAt: photoUri !== current.photoUri ? Date.now() : current.photoChangedAt,
   };
+  // Persist name / username / photo to Supabase (profiles + users_public) so
+  // the next sign-in loads the new values instead of the old ones.
+  await syncProfile(updated);
+  return updated;
 }
 
 function delay(ms: number): Promise<void> {
