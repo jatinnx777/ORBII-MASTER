@@ -469,7 +469,7 @@ export default function App() {
       <SafeAreaProvider>
         <BrandSheetProvider>
           <View style={styles.root} onLayout={onReady}>
-            <StatusBar style={showLaunch ? 'light' : 'dark'} />
+            <StatusBar style="dark" />
             <OfflineBanner />
             <NavigationContainer ref={navigationRef}>
               <RootNavigator />
@@ -535,7 +535,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   launch: {
-    backgroundColor: '#FB5012',
+    backgroundColor: '#F4ECE3',
     zIndex: 999,
   },
 });

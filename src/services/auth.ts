@@ -4,6 +4,8 @@ import type { UserProfile } from '@/types';
 import { supabase } from './supabase';
 import { listFriendsForUser } from './friend-requests';
 import { syncUsersPublic } from './users-public';
+import { syncProfile } from './profile-sync';
+import { uploadAvatar } from './avatars';
 import { listEmergencyContacts } from './emergency-contacts';
 import { fetchSOSHistory } from './sos-history';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
