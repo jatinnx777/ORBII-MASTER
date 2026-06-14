@@ -22,13 +22,11 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
-  helperModeSet,
   pushEnabledSet,
   shakeSOSToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
-import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
 import type { AppStackParamList } from '@/navigation/types';
@@ -43,16 +41,9 @@ export function SettingsScreen() {
   const push = useAppSelector((s) => s.app.pushEnabled);
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
 
-  const helperMode = useAppSelector((s) => s.app.helperMode);
   const sheet = useBrandSheet();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
   const circlesCount = useAppSelector((s) => s.circles.circles.length);
-
-  const handleHelperMode = (next: boolean) => {
-    dispatch(helperModeSet(next));
-    if (next) void startHelperMode();
-    else void stopHelperMode();
-  };
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -218,6 +209,13 @@ export function SettingsScreen() {
         <SectionHeader title="Community" />
         <Card style={styles.rowsCard}>
           <Row
+            icon="notifications-outline"
+            label="Notifications"
+            value="Alerts, circle requests, and updates"
+            onPress={() => navigation.navigate('Notifications')}
+          />
+          <Divider />
+          <Row
             icon="people-circle"
             label="Manage circles"
             value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
@@ -225,20 +223,21 @@ export function SettingsScreen() {
           />
           <Divider />
           <Row
-            icon="hand-right"
-            label="Helper Mode"
-            value={
-              helperMode
-                ? "You're available to help people nearby"
-                : 'Turn on to help people near you in an emergency'
-            }
+            icon="shield-checkmark-outline"
+            label="Become a verified helper"
+            value="Get verified to help people nearby in an emergency"
             right={
-              <Switch
-                value={helperMode}
-                onValueChange={handleHelperMode}
-                trackColor={{ true: colors.brand, false: colors.border }}
-                thumbColor={helperMode ? colors.brandDeep : colors.background}
-              />
+              <View style={styles.soonPill}>
+                <Text style={styles.soonText}>Soon</Text>
+              </View>
+            }
+            onPress={() =>
+              sheet.notify({
+                title: 'Verification coming soon',
+                body: "We're building a safe, verified helper network. You'll be able to apply here shortly.",
+                tone: 'neutral',
+                icon: 'shield-checkmark',
+              })
             }
           />
         </Card>
@@ -265,12 +264,6 @@ export function SettingsScreen() {
 
         <SectionHeader title="Account" />
         <Card style={styles.rowsCard}>
-          <Row
-            icon="ribbon"
-            label="ORBII plans"
-            onPress={() => navigation.navigate('PremiumUpgrade')}
-          />
-          <Divider />
           <Row
             icon="log-out"
             label="Sign out"
@@ -319,6 +312,18 @@ const styles = StyleSheet.create({
     lineHeight: 40,
     color: colors.textPrimary,
     letterSpacing: -0.5,
+  },
+  soonPill: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    backgroundColor: colors.goldSoft,
+  },
+  soonText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 10,
+    color: colors.goldDeep,
+    letterSpacing: 0.4,
   },
   rowsCard: {
     marginHorizontal: spacing.md,

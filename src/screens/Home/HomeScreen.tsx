@@ -20,6 +20,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
 import {
   BatteryWarning,
+  Mascot,
   MascotLoader,
   MLMapView,
   ScreenContainer,
@@ -404,15 +405,16 @@ export function HomeScreen() {
           unreadCount={unreadCount}
           onProfilePress={() => navigation.navigate('Tabs', { screen: 'Profile' })}
           onSettingsPress={() => navigation.navigate('Settings')}
+          onNotificationsPress={() => navigation.navigate('Notifications')}
         />
       </View>
 
-      <BottomPanel bottomInset={insets.bottom}>
+      <BottomPanel bottomInset={insets.bottom} message={guardianMessage}>
         {/* status header */}
         <View style={styles.statusHeader}>
           <View style={styles.safeRow}>
             <View style={styles.safeDot} />
-            <Text style={styles.safeLabel}>{guardianMessage}</Text>
+            <Text style={styles.safeLabel}>You’re Safe</Text>
           </View>
           <Text style={styles.allClear}>All Clear</Text>
           <Text style={styles.helpersSub}>
@@ -630,15 +632,25 @@ function StatusLine({
 function BottomPanel({
   children,
   bottomInset,
+  message,
 }: {
   children: React.ReactNode;
   bottomInset: number;
+  message: string;
 }) {
   const screenHeight = Dimensions.get('window').height;
   const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
 
   return (
     <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
+      {/* guardian peeking over (and gripping) the sheet's top edge */}
+      <View style={styles.mascotPeek} pointerEvents="none">
+        <View style={styles.speechBubble}>
+          <Text style={styles.speechText}>{message}</Text>
+        </View>
+        <Mascot pose="peek" size={92} />
+      </View>
+
       <View style={styles.handleZone}>
         <View style={styles.handle} />
       </View>
@@ -663,12 +675,14 @@ function HomeHeader({
   unreadCount,
   onProfilePress,
   onSettingsPress,
+  onNotificationsPress,
 }: {
   profile: UserProfile | null;
   initial: string;
   unreadCount: number;
   onProfilePress: () => void;
   onSettingsPress: () => void;
+  onNotificationsPress: () => void;
 }) {
   const photo = profile?.photoUri ?? null;
   return (
@@ -691,16 +705,27 @@ function HomeHeader({
         </View>
       </Pressable>
 
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="Settings"
-        hitSlop={8}
-        onPress={onSettingsPress}
-        style={({ pressed }) => [styles.gearWrap, pressed && styles.headerPressed]}
-      >
-        <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
-        {unreadCount > 0 ? <View style={styles.gearDot} /> : null}
-      </Pressable>
+      <View style={styles.headerRight}>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Notifications"
+          hitSlop={8}
+          onPress={onNotificationsPress}
+          style={({ pressed }) => [styles.gearWrap, pressed && styles.headerPressed]}
+        >
+          <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
+          {unreadCount > 0 ? <View style={styles.gearDot} /> : null}
+        </Pressable>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Settings"
+          hitSlop={8}
+          onPress={onSettingsPress}
+          style={({ pressed }) => [styles.gearWrap, pressed && styles.headerPressed]}
+        >
+          <Ionicons name="settings-outline" size={20} color={colors.textPrimary} />
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -734,6 +759,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   avatarWrap: {
     width: 48,
@@ -805,30 +835,29 @@ const styles = StyleSheet.create({
     ...shadows.sheet,
     zIndex: 2,
   },
-  statusHeaderRow: {
+  mascotPeek: {
+    position: 'absolute',
+    top: -86,
+    right: 20,
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    gap: spacing.xs,
+    zIndex: 3,
   },
-  guardian: {
-    alignItems: 'center',
-    width: 96,
+  speechBubble: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    marginBottom: 34,
+    maxWidth: 140,
+    ...shadows.icon,
   },
-  guardianBubble: {
-    backgroundColor: colors.cream,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-    marginBottom: -6,
-    maxWidth: 100,
-    zIndex: 2,
-  },
-  guardianBubbleText: {
+  speechText: {
     ...typography.caption,
-    fontSize: 11,
-    lineHeight: 14,
+    fontSize: 12,
+    lineHeight: 16,
     color: colors.textSecondary,
-    textAlign: 'center',
   },
   handleZone: {
     alignItems: 'center',

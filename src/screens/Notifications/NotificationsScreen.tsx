@@ -8,19 +8,22 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import {
-  EmptyState,
-  ScreenContainer,
-} from '@/components/common';
-import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
+import { EmptyState, ScreenContainer } from '@/components/common';
+import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import {
   clearNotifications,
   listNotifications,
   markAllRead,
   type NotificationEntry,
 } from '@/services/notification-inbox';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { acceptInvite, declineInvite, type CircleInvite } from '@/services/circles';
+import { inviteResolved } from '@/redux/slices/circlesSlice';
+import { refreshCircles, setActiveCircle } from '@/services/circles-bootstrap';
 
 export function NotificationsScreen() {
+  const dispatch = useAppDispatch();
+  const invites = useAppSelector((s) => s.circles.incomingInvites);
   const [items, setItems] = useState<NotificationEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -41,6 +44,55 @@ export function NotificationsScreen() {
     setItems([]);
   };
 
+  const handleAccept = async (invite: CircleInvite) => {
+    try {
+      await acceptInvite(invite);
+      dispatch(inviteResolved(invite.id));
+      await refreshCircles();
+      await setActiveCircle(invite.circleId);
+    } catch {
+      // ignore — surfaced on the Circles screen if it persists
+    }
+  };
+
+  const handleDecline = async (invite: CircleInvite) => {
+    try {
+      await declineInvite(invite.id);
+      dispatch(inviteResolved(invite.id));
+    } catch {
+      // ignore
+    }
+  };
+
+  const hasContent = invites.length > 0 || items.length > 0;
+
+  const InvitesHeader =
+    invites.length > 0 ? (
+      <View style={styles.invitesWrap}>
+        <Text style={styles.sectionLabel}>Requests</Text>
+        {invites.map((invite) => (
+          <View key={invite.id} style={styles.inviteCard}>
+            <View style={styles.inviteIcon}>
+              <Ionicons name="people" size={18} color={colors.lavenderDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.rowTitle}>Circle invitation</Text>
+              <Text style={styles.rowBody}>Someone invited you to their safety circle.</Text>
+            </View>
+            <Pressable onPress={() => handleDecline(invite)} style={styles.declineBtn} hitSlop={6}>
+              <Text style={styles.declineText}>Decline</Text>
+            </Pressable>
+            <Pressable onPress={() => handleAccept(invite)} style={styles.acceptBtn} hitSlop={6}>
+              <Text style={styles.acceptText}>Accept</Text>
+            </Pressable>
+          </View>
+        ))}
+        {items.length > 0 ? (
+          <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Activity</Text>
+        ) : null}
+      </View>
+    ) : null;
+
   return (
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
@@ -52,22 +104,21 @@ export function NotificationsScreen() {
         ) : null}
       </View>
 
-      {!loading && items.length === 0 ? (
+      {!loading && !hasContent ? (
         <View style={styles.emptyWrap}>
           <EmptyState
             icon="notifications-off-outline"
-            title="No notifications yet"
-            body="SOS alerts, helper updates, and system messages will appear here."
+            title="You're all caught up"
+            body="SOS alerts, circle requests, and helper updates will show up here."
           />
         </View>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          refreshControl={
-            <RefreshControl refreshing={loading} onRefresh={load} />
-          }
+          refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
           contentContainerStyle={styles.listContent}
+          ListHeaderComponent={InvitesHeader}
           renderItem={({ item }) => <Row entry={item} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
@@ -99,23 +150,11 @@ function iconForKind(kind: NotificationEntry['kind']): {
 } {
   switch (kind) {
     case 'sos':
-      return {
-        name: 'alert-circle',
-        color: colors.primary,
-        bg: 'rgba(255,77,77,0.10)',
-      };
+      return { name: 'alert-circle', color: colors.coral, bg: colors.coralSoft };
     case 'helper':
-      return {
-        name: 'people-circle',
-        color: colors.brandDeep,
-        bg: colors.brandSoft,
-      };
+      return { name: 'people-circle', color: colors.lavenderDeep, bg: colors.lavenderSoft };
     default:
-      return {
-        name: 'notifications',
-        color: colors.textSecondary,
-        bg: colors.surface,
-      };
+      return { name: 'notifications', color: colors.textSecondary, bg: colors.cream };
   }
 }
 
@@ -141,54 +180,68 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    fontSize: 28,
     color: colors.textPrimary,
   },
-  clear: {
-    ...typography.bodyMedium,
-    color: colors.primary,
+  clear: { ...typography.bodyMedium, color: colors.coral },
+  emptyWrap: { flex: 1, paddingHorizontal: spacing.lg, justifyContent: 'center' },
+  listContent: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
+  invitesWrap: { paddingTop: spacing.xs },
+  sectionLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    marginBottom: spacing.sm,
   },
-  emptyWrap: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-  },
-  listContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
-  row: {
+  inviteCard: {
     flexDirection: 'row',
-    gap: spacing.md,
-    paddingVertical: spacing.md,
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    ...shadows.card,
   },
-  iconWrap: {
+  inviteIcon: {
     width: 40,
     height: 40,
-    borderRadius: radius.sm,
+    borderRadius: 20,
+    backgroundColor: colors.lavenderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: {
-    flex: 1,
-    gap: 2,
+  declineBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
   },
+  declineText: { ...typography.label, color: colors.textSecondary },
+  acceptBtn: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.peach,
+  },
+  acceptText: { ...typography.label, color: colors.textPrimary },
+  row: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  body: { flex: 1, gap: 2 },
   rowTitle: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 15,
     color: colors.textPrimary,
   },
-  rowBody: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-  rowMeta: {
-    ...typography.caption,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.border,
-  },
+  rowBody: { ...typography.caption, color: colors.textSecondary },
+  rowMeta: { ...typography.caption, color: colors.textMuted, marginTop: 2 },
+  separator: { height: 1, backgroundColor: colors.divider },
 });
