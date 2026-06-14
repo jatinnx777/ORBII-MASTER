@@ -23,7 +23,6 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
   pushEnabledSet,
-  shakeSOSToggled,
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
@@ -39,7 +38,6 @@ export function SettingsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
-  const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
 
   const sheet = useBrandSheet();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
@@ -110,51 +108,10 @@ export function SettingsScreen() {
         <SectionHeader title="Emergency triggers" />
         <Card style={styles.rowsCard}>
           <Row
-            icon="phone-portrait-outline"
-            label="Shake to SOS"
-            value={
-              shakeSOS
-                ? 'Three hard shakes fires the countdown'
-                : 'Off — only the SOS button fires alerts'
-            }
-            right={
-              <Switch
-                value={shakeSOS}
-                onValueChange={(v) => {
-                  dispatch(shakeSOSToggled(v));
-                }}
-                trackColor={{ true: colors.brand, false: colors.border }}
-                thumbColor={shakeSOS ? colors.brandDeep : colors.background}
-              />
-            }
-          />
-          <Divider />
-          <Row
             icon="mic-outline"
             label="Voice SOS phrases"
             value="Set your own secret phrases to trigger an SOS"
             onPress={() => navigation.navigate('VoicePhrases')}
-          />
-          <Divider />
-          <Row
-            icon="shield-checkmark-outline"
-            label="Safety PIN"
-            value="Required to cancel an active SOS"
-            onPress={() => navigation.navigate('SafetyPin')}
-          />
-          <Divider />
-          <Row
-            icon="bug-outline"
-            label="Practice SOS"
-            value="Walk through the full countdown — nothing is sent"
-            onPress={() => navigation.navigate('SOSCountdown', { test: true })}
-          />
-          <Divider />
-          <Row
-            icon="hand-left-outline"
-            label="Background reliability"
-            value="OEM permissions, autostart, battery — walk-through"
-            onPress={() => navigation.navigate('OEMHelp')}
           />
         </Card>
 

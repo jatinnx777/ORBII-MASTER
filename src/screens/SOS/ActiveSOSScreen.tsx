@@ -109,6 +109,34 @@ export function ActiveSOSScreen() {
       }
     : null;
 
+  // Arrival confirmation. When a helper taps "I've reached" (or closes within
+  // 40 m) we ask the victim to confirm they're safe before resolving the SOS.
+  const resolvedRef = useRef(false);
+  useEffect(() => {
+    resolvedRef.current = resolved;
+  }, [resolved]);
+  const lastPromptRef = useRef(0);
+
+  const promptArrival = useCallback(
+    (r: LiveResponder) => {
+      if (resolvedRef.current) return;
+      const now = Date.now();
+      if (now - lastPromptRef.current < 30_000) return;
+      lastPromptRef.current = now;
+      sheet.confirm({
+        title: 'Has your helper reached you?',
+        body: `${r.name ?? 'Your helper'} says they're with you. Confirm only if you're safe.`,
+        confirmLabel: "Yes, I'm safe",
+        icon: 'shield-checkmark',
+        onConfirm: () => {
+          setResolvedBy(r);
+          setResolved(true);
+        },
+      });
+    },
+    [sheet],
+  );
+
   useEffect(() => {
     if (!activeSOS?.id) return;
     const sub = subscribeLiveLocation(activeSOS.id, (payload) => {
@@ -127,9 +155,20 @@ export function ActiveSOSScreen() {
           },
         };
       });
+      if (payload.arrived) {
+        promptArrival({
+          id: payload.responder.id,
+          name: payload.responder.name,
+          photoUri: payload.responder.photoUri,
+          phone: payload.responder.phone,
+          point: payload.point,
+          lastSeenAt: payload.at,
+          firstSeenAt: payload.at,
+        });
+      }
     });
     return () => sub.unsubscribe();
-  }, [activeSOS?.id]);
+  }, [activeSOS?.id, promptArrival]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -158,14 +197,9 @@ export function ActiveSOSScreen() {
     }, null);
     if (!closest) return;
     if (haversineMeters(closest.point, userLocation) <= ARRIVAL_RADIUS_M) {
-      setResolved(true);
-      setResolvedBy(closest);
-      fireLocalNotification(
-        'Help has arrived',
-        `${closest.name ?? 'Your helper'} is with you now.`,
-      );
+      promptArrival(closest);
     }
-  }, [responders, userLocation, resolved]);
+  }, [responders, userLocation, resolved, promptArrival]);
 
   useEffect(() => {
     if (resolved) return;

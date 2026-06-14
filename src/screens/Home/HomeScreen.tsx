@@ -7,6 +7,8 @@ import {
   Easing,
   Image,
   Linking,
+  PermissionsAndroid,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -58,6 +60,16 @@ import { trackEvent } from '@/services/analytics';
 import { shouldDampenWork } from '@/services/battery-aware';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
 import { useGuardianMessage, type GuardianContext } from '@/hooks/useGuardianMessage';
+import {
+  backgroundVoiceAvailable,
+  isBatteryExempt,
+  loadBgVoiceState,
+  requestBatteryExemption,
+  saveBgVoiceState,
+  startBackgroundVoice,
+  stopBackgroundVoice,
+} from '@/services/background-voice';
+import { loadPhrases } from '@/services/voice-phrases';
 import {
   startListening,
   stopListening,
@@ -290,6 +302,82 @@ export function HomeScreen() {
     return unsub;
   }, []);
 
+  // Background Voice SOS: the Home voice card is the single entry point. Tap
+  // it → choose a duration → ORBII listens for the phrase even when closed.
+  const [bgVoiceOn, setBgVoiceOn] = useState(false);
+  useFocusEffect(
+    useCallback(() => {
+      loadBgVoiceState().then((s) => setBgVoiceOn(s.enabled));
+    }, []),
+  );
+
+  const ensureMicPerms = useCallback(async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const mic = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
+    if (typeof Platform.Version === 'number' && Platform.Version >= 33) {
+      await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    }
+    return true;
+  }, []);
+
+  const armBackground = useCallback(
+    async (hours: number) => {
+      const ok = await ensureMicPerms();
+      if (!ok) {
+        Alert.alert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        return;
+      }
+      const phrases = await loadPhrases();
+      const started = await startBackgroundVoice(phrases, hours);
+      if (!started) {
+        Alert.alert('Not available', 'Background protection runs on the installed Android app.');
+        return;
+      }
+      await saveBgVoiceState({ enabled: true, hours });
+      setBgVoiceOn(true);
+
+      // Reliability: phones aggressively kill background services. Exempt
+      // ORBII from battery optimization, then point the user to OEM autostart.
+      const exempt = await isBatteryExempt();
+      if (!exempt) await requestBatteryExemption();
+      setTimeout(() => {
+        Alert.alert(
+          'Keep ORBII running',
+          'So voice protection survives in the background, allow Autostart and remove battery limits for ORBII.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Show me how', onPress: () => navigation.navigate('OEMHelp') },
+          ],
+        );
+      }, 800);
+    },
+    [ensureMicPerms, navigation],
+  );
+
+  const handleVoiceCard = useCallback(async () => {
+    if (!backgroundVoiceAvailable) {
+      toggleListening();
+      return;
+    }
+    if (bgVoiceOn) {
+      await stopBackgroundVoice();
+      await saveBgVoiceState({ enabled: false, hours: 12 });
+      setBgVoiceOn(false);
+      return;
+    }
+    Alert.alert(
+      'Protect me for…',
+      'ORBII will keep listening for your phrase, even in the background.',
+      [
+        { text: '12 hours', onPress: () => armBackground(12) },
+        { text: '24 hours', onPress: () => armBackground(24) },
+        { text: 'Until I turn it off', onPress: () => armBackground(0) },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+    );
+  }, [bgVoiceOn, armBackground, toggleListening]);
+
   // Voice keyword → SOS is handled globally (and quota-gated) in App.tsx,
   // so Home no longer subscribes here (it would double-fire).
 
@@ -443,7 +531,7 @@ export function HomeScreen() {
         {/* SOS + Voice cards */}
         <View style={styles.actionRow}>
           <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
-          <VoiceCard listening={voiceListening} onPress={toggleListening} />
+          <VoiceCard listening={bgVoiceOn || voiceListening} onPress={handleVoiceCard} />
         </View>
 
         {/* helpers row */}
@@ -493,7 +581,7 @@ export function HomeScreen() {
         <View style={styles.statusCard}>
           <StatusLine
             label="Voice Detection Active"
-            ok={voiceListening}
+            ok={bgVoiceOn || voiceListening}
             pendingLabel="Turn on Voice Detection above"
           />
           <View style={styles.statusDivider} />
@@ -531,8 +619,8 @@ function VoiceCard({ listening, onPress }: { listening: boolean; onPress: () => 
       accessibilityRole="button"
       accessibilityLabel={listening ? 'Stop voice trigger' : 'Start hands-free SOS'}
     >
-      <Text style={styles.voiceTitle}>Voice Trigger</Text>
-      <Text style={styles.voiceHint}>{listening ? 'Listening…' : 'Listening Ready'}</Text>
+      <Text style={styles.voiceTitle}>Voice SOS</Text>
+      <Text style={styles.voiceHint}>{listening ? 'Protecting you' : 'Tap to turn on'}</Text>
       <Waveform active={listening} />
     </Pressable>
   );
@@ -766,16 +854,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   avatarWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
@@ -790,9 +878,9 @@ const styles = StyleSheet.create({
   },
   headerPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
   gearWrap: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',

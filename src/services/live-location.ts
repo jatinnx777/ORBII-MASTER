@@ -21,10 +21,14 @@ export type LiveLocationPayload = {
   responder: Responder;
   point: GeoPoint;
   at: number;
+  // true when the helper taps "I've reached" — the victim is then asked to
+  // confirm, and confirming resolves the SOS.
+  arrived?: boolean;
 };
 
 export type LiveLocationHandle = {
   publish: (point: GeoPoint) => void;
+  announceArrived: (point: GeoPoint) => void;
   unsubscribe: () => void;
 };
 
@@ -44,23 +48,22 @@ export function publishLiveLocation(
     subscribed = status === 'SUBSCRIBED';
   });
 
+  const send = (point: GeoPoint, arrived: boolean) => {
+    if (!subscribed) return;
+    try {
+      channel.send({
+        type: 'broadcast',
+        event: 'pos',
+        payload: { responder, point, at: Date.now(), arrived } satisfies LiveLocationPayload,
+      });
+    } catch (err) {
+      console.warn('[live-location] publish failed', err);
+    }
+  };
+
   return {
-    publish: (point: GeoPoint) => {
-      if (!subscribed) return;
-      try {
-        channel.send({
-          type: 'broadcast',
-          event: 'pos',
-          payload: {
-            responder,
-            point,
-            at: Date.now(),
-          } satisfies LiveLocationPayload,
-        });
-      } catch (err) {
-        console.warn('[live-location] publish failed', err);
-      }
-    },
+    publish: (point: GeoPoint) => send(point, false),
+    announceArrived: (point: GeoPoint) => send(point, true),
     unsubscribe: () => {
       try {
         supabase.removeChannel(channel);

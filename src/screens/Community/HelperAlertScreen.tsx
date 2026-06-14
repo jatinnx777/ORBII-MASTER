@@ -109,6 +109,7 @@ export function HelperAlertScreen() {
     // In-app live navigation to the person in need — no bouncing out to
     // Google Maps. `replace` so the alert screen is removed from the stack.
     navigation.replace('HelperNavigation', {
+      sosId: alert.id,
       name: alert.victim.name,
       phone: alert.victim.phone ?? '',
       lat: alert.location.latitude,

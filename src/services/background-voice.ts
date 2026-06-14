@@ -10,6 +10,8 @@ const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {
     startGuard(phrases: string[], durationMs: number): Promise<boolean>;
     stopGuard(): Promise<boolean>;
+    requestDisableBatteryOptimization?(): Promise<boolean>;
+    isIgnoringBatteryOptimization?(): Promise<boolean>;
   };
 };
 
@@ -41,6 +43,26 @@ export async function stopBackgroundVoice(): Promise<void> {
   if (!VoiceGuard) return;
   try {
     await VoiceGuard.stopGuard();
+  } catch {
+    // ignore
+  }
+}
+
+/** True if ORBII is already exempt from battery optimization (Doze). */
+export async function isBatteryExempt(): Promise<boolean> {
+  if (!VoiceGuard?.isIgnoringBatteryOptimization) return true;
+  try {
+    return await VoiceGuard.isIgnoringBatteryOptimization();
+  } catch {
+    return false;
+  }
+}
+
+/** Prompt the system "let ORBII run in the background?" dialog. */
+export async function requestBatteryExemption(): Promise<void> {
+  if (!VoiceGuard?.requestDisableBatteryOptimization) return;
+  try {
+    await VoiceGuard.requestDisableBatteryOptimization();
   } catch {
     // ignore
   }

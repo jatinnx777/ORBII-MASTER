@@ -40,6 +40,7 @@ export type AppStackParamList = {
   CommunityAlerts: undefined;
   HelperAlert: { alertId: string };
   HelperNavigation: {
+    sosId: string;
     name: string;
     phone: string;
     lat: number;

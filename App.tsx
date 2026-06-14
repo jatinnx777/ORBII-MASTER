@@ -187,6 +187,9 @@ function RootNavigator() {
   // intuitive panic gesture (and the cheapest hands-free trigger we have
   // now that the wake-word stack is cut).
   useEffect(() => {
+    // Shake-to-SOS removed for now (declutter). Re-enable by restoring the
+    // status/shakeSOS guard below.
+    if (true) return;
     if (status !== 'authenticated' || !shakeSOS) return;
     let handle: { stop: () => void } | null = null;
     let cancelled = false;
