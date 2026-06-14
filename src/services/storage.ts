@@ -12,6 +12,7 @@ const KEYS = {
   activeCircleId: 'orbii:circles:active',
   voiceUsage: 'orbii:voice-usage',
   voicePhrases: 'orbii:voice-phrases',
+  bgVoice: 'orbii:bg-voice',
 } as const;
 
 export const storageKeys = KEYS;

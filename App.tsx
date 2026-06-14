@@ -48,6 +48,7 @@ import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
 import { loadPhrases } from '@/services/voice-phrases';
+import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -83,9 +84,14 @@ function RootNavigator() {
     }
   }, [status]);
 
-  // Prime the voice recogniser with the user's saved secret phrases.
+  // Prime the voice recogniser with the user's saved secret phrases, and
+  // re-arm background protection if the user left it on.
   useEffect(() => {
-    loadPhrases().catch(() => undefined);
+    loadPhrases().then((phrases) => {
+      loadBgVoiceState().then((bg) => {
+        if (bg.enabled) startBackgroundVoice(phrases, bg.hours).catch(() => undefined);
+      });
+    });
   }, []);
 
   // Helper Mode runtime: if the user opted in (and is signed in), start
@@ -124,6 +130,14 @@ function RootNavigator() {
 
     const handleUrl = async (url: string | null) => {
       if (!url) return;
+      // Background Voice SOS fired (from the VoiceGuard foreground service).
+      if (url.startsWith('orbii://voice-sos')) {
+        if (navigationRef.isReady()) {
+          // @ts-expect-error - SOSCountdown is in the AppStack only.
+          navigationRef.navigate('SOSCountdown');
+        }
+        return;
+      }
       const token = extractJoinToken(url);
       if (!token) return;
       try {

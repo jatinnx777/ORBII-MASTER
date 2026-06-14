@@ -1,8 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  PermissionsAndroid,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -19,15 +23,74 @@ import {
   loadPhrases,
   removePhrase,
 } from '@/services/voice-phrases';
+import {
+  PROTECTION_DURATIONS,
+  backgroundVoiceAvailable,
+  loadBgVoiceState,
+  saveBgVoiceState,
+  startBackgroundVoice,
+  stopBackgroundVoice,
+} from '@/services/background-voice';
 
 export function VoicePhrasesScreen() {
   const navigation = useNavigation();
   const [phrases, setPhrases] = useState<string[]>([]);
   const [input, setInput] = useState('');
+  const [bgEnabled, setBgEnabled] = useState(false);
+  const [bgHours, setBgHours] = useState(12);
 
   useEffect(() => {
     loadPhrases().then(setPhrases);
+    loadBgVoiceState().then((s) => {
+      setBgEnabled(s.enabled);
+      setBgHours(s.hours);
+    });
   }, []);
+
+  const ensureMicPerms = async (): Promise<boolean> => {
+    if (Platform.OS !== 'android') return true;
+    const mic = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    );
+    if (mic !== PermissionsAndroid.RESULTS.GRANTED) return false;
+    if (typeof Platform.Version === 'number' && Platform.Version >= 33) {
+      await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+      );
+    }
+    return true;
+  };
+
+  const toggleBg = async (next: boolean) => {
+    if (next) {
+      if (phrases.length === 0) {
+        Alert.alert('Add a phrase first', 'Set at least one secret phrase before turning on background protection.');
+        return;
+      }
+      const ok = await ensureMicPerms();
+      if (!ok) {
+        Alert.alert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        return;
+      }
+      const started = await startBackgroundVoice(phrases, bgHours);
+      if (!started) {
+        Alert.alert('Not available', 'Background protection runs only on the Android app build.');
+        return;
+      }
+      setBgEnabled(true);
+      saveBgVoiceState({ enabled: true, hours: bgHours });
+    } else {
+      await stopBackgroundVoice();
+      setBgEnabled(false);
+      saveBgVoiceState({ enabled: false, hours: bgHours });
+    }
+  };
+
+  const changeDuration = (hours: number) => {
+    setBgHours(hours);
+    saveBgVoiceState({ enabled: bgEnabled, hours });
+    if (bgEnabled) startBackgroundVoice(phrases, hours);
+  };
 
   const onAdd = async () => {
     const text = input.trim();
@@ -128,6 +191,41 @@ export function VoicePhrasesScreen() {
             </View>
           ) : null}
 
+          {backgroundVoiceAvailable ? (
+            <View style={styles.card}>
+              <View style={styles.bgHead}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bgTitle}>Background protection</Text>
+                  <Text style={styles.bgSub}>
+                    Keep listening for your phrase even when the app is closed.
+                    Runs on-device, nothing is uploaded.
+                  </Text>
+                </View>
+                <Switch
+                  value={bgEnabled}
+                  onValueChange={toggleBg}
+                  trackColor={{ true: colors.sageSoft, false: colors.border }}
+                  thumbColor={bgEnabled ? colors.sage : colors.surface}
+                />
+              </View>
+              {bgEnabled ? (
+                <View style={styles.durations}>
+                  {PROTECTION_DURATIONS.map((d) => (
+                    <Pressable
+                      key={d.label}
+                      onPress={() => changeDuration(d.hours)}
+                      style={[styles.durChip, bgHours === d.hours && styles.durChipOn]}
+                    >
+                      <Text style={[styles.durText, bgHours === d.hours && styles.durTextOn]}>
+                        {d.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={styles.note}>
             <Ionicons name="shield-checkmark" size={16} color={colors.sageDeep} />
             <Text style={styles.noteText}>
@@ -217,6 +315,19 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   phraseText: { flex: 1, ...typography.bodyMedium, color: colors.textPrimary },
+  bgHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  bgTitle: { ...typography.bodyMedium, fontFamily: 'Poppins_600SemiBold', color: colors.textPrimary },
+  bgSub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, lineHeight: 17, marginTop: 2 },
+  durations: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  durChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+  },
+  durChipOn: { backgroundColor: colors.sage },
+  durText: { ...typography.label, color: colors.textSecondary },
+  durTextOn: { color: colors.textInverse },
   note: {
     flexDirection: 'row',
     gap: spacing.sm,
