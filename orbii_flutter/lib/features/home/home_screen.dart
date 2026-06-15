@@ -11,6 +11,8 @@ import '../../router/app_router.dart';
 import '../../services/auth_service.dart';
 import '../../state/location_provider.dart';
 import '../../state/protection_provider.dart';
+import '../../state/voice_provider.dart';
+import '../../services/voice_guard_service.dart';
 import 'widgets/helpers_card.dart';
 import 'widgets/protection_strength.dart';
 import 'widgets/sos_button.dart';
@@ -27,7 +29,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _mapController = MapController();
-  bool _voiceOn = false;
 
   // Default map centre until a GPS fix arrives (New Delhi).
   static const _fallback = LatLng(28.6139, 77.2090);
@@ -56,7 +57,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         break;
       case 'voice':
       case 'background':
-        _snack('Voice SOS setup arrives in the next build.');
+        await _toggleVoice();
         break;
       case 'contacts':
         _snack('Emergency contacts arrive in the next build.');
@@ -68,6 +69,63 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void _snack(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
+  /// Tap on the Voice card → arm (with a duration picker) or disarm the
+  /// background Vosk guard. Mirrors RN `handleVoiceCard`.
+  Future<void> _toggleVoice() async {
+    final voice = ref.read(voiceProvider.notifier);
+    if (ref.read(voiceProvider).enabled) {
+      await voice.disarm();
+      ref.read(protectionProvider.notifier).setVoice(
+            voiceOn: false,
+            backgroundOn: false,
+          );
+      return;
+    }
+
+    final hours = await showModalBottomSheet<int>(
+      context: context,
+      backgroundColor: AppColors.cream,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 16),
+            Text('Protect me for…', style: AppTheme.bold(18)),
+            const SizedBox(height: 4),
+            Text('ORBII keeps listening for your phrase, even in the background.',
+                textAlign: TextAlign.center, style: AppTheme.medium(13)),
+            const SizedBox(height: 8),
+            for (final d in VoiceGuardService.durations)
+              ListTile(
+                title: Text(d.$1, style: AppTheme.semibold(15)),
+                onTap: () => Navigator.of(context).pop(d.$2),
+              ),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+    if (hours == null) return;
+
+    final result = await voice.arm(hours);
+    if (!mounted) return;
+    switch (result) {
+      case ArmResult.armed:
+        ref.read(protectionProvider.notifier).setVoice(
+              voiceOn: true,
+              backgroundOn: true,
+            );
+        _snack('Voice protection is on. Keep ORBII allowed to run in the background.');
+      case ArmResult.micDenied:
+        _snack('Microphone access is needed for Voice SOS.');
+      case ArmResult.unavailable:
+        _snack('Background protection runs on the installed Android app.');
+    }
   }
 
   void _openProtectionSheet() {
@@ -87,6 +145,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final loc = ref.watch(locationProvider);
     final protection = ref.watch(protectionProvider);
+    final voiceOn = ref.watch(voiceProvider).enabled;
     final center = loc.location ?? _fallback;
     final size = MediaQuery.of(context).size;
     final sheetHeight = size.height * 0.42;
@@ -207,12 +266,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                             const SizedBox(width: 16),
                             VoiceCard(
-                              listening: _voiceOn,
-                              onTap: () {
-                                setState(() => _voiceOn = !_voiceOn);
-                                _snack(
-                                    'Full Voice SOS engine arrives in the next build.');
-                              },
+                              listening: voiceOn,
+                              onTap: _toggleVoice,
                             ),
                           ],
                         ),

@@ -7,12 +7,21 @@
 >   **Protection Strength pill + sheet ported**, SOS button → cancellable
 >   countdown screen, Voice card, Helpers card), `geolocator` location service +
 >   `permission_handler` wiring. `flutter analyze` clean.
-> - ⏳ **Stubbed for later phases:** Voice engine (Phase 3, Vosk MethodChannel),
->   Circles/contacts/presence (Phase 4), actual SOS dispatch into `sos_events` +
->   audio recording + live-location broadcast, profile/settings/notifications
->   screens (Phase 5). Map uses raster OSM tiles for now — swap to OpenFreeMap
->   vector for visual parity.
-> - Next: Phase 3 (native voice).
+> - ✅ **Phase 3** — native Voice SOS. `VoiceGuardService.kt` (Vosk + VAD +
+>   phrase matching + full-screen-intent) ported verbatim into `orbii_flutter`;
+>   RN bridge replaced by `VoiceGuardPlugin` MethodChannel (`com.orbii.app/
+>   voiceguard`) registered in `MainActivity`. Dart `VoiceGuardService` +
+>   `voiceProvider` drive arm/disarm with a duration picker; `orbii://voice-sos`
+>   deep link → instant SOS via `app_links`. Manifest (FGS-mic perms, service,
+>   deep link), Vosk/JNA gradle deps + ProGuard rules added. `flutter analyze`
+>   clean. **Native layer needs a Gradle build to fully verify (not done — no
+>   APK per instruction).**
+> - ⏳ **Stubbed for later phases:** foreground `speech_to_text` quick-listen,
+>   custom-phrase editor UI (Phase 3.1); Circles/contacts/presence (Phase 4);
+>   actual SOS dispatch into `sos_events` + audio recording + live-location
+>   broadcast; profile/settings/notifications screens (Phase 5). Map uses raster
+>   OSM tiles for now — swap to OpenFreeMap vector for visual parity.
+> - Next: Phase 4 (Circles + presence).
 > **Goal:** Preserve ORBII *exactly as it works today* (feature parity, not pixel
 > parity) while moving the client codebase from React Native/Expo to Flutter.
 > **Hard constraints:** Keep the existing Supabase backend, schema, RLS, Realtime,
