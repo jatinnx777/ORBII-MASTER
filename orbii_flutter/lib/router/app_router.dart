@@ -7,6 +7,7 @@ import '../services/auth_service.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/home/home_screen.dart';
+import '../features/sos/sos_countdown_screen.dart';
 
 /// App routes. Kept as constants so feature code can `context.go(Routes.home)`
 /// without stringly-typed paths.
@@ -15,6 +16,7 @@ class Routes {
   static const onboarding = '/onboarding';
   static const signIn = '/sign-in';
   static const home = '/';
+  static const sosCountdown = '/sos';
 }
 
 /// GoRouter provider with an auth-aware redirect (replaces React Navigation's
@@ -48,6 +50,13 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.onboarding,
         builder: (context, state) => const OnboardingScreen(),
+      ),
+      GoRoute(
+        path: Routes.sosCountdown,
+        builder: (context, state) {
+          final instant = state.uri.queryParameters['instant'] == 'true';
+          return SosCountdownScreen(instant: instant);
+        },
       ),
     ],
   );
