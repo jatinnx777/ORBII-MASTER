@@ -1,85 +1,78 @@
-// ORBII — Warm "Guardian" palette (v27 rebrand).
+// ORBII — Warm Greige design system (v28 premium pass).
 //
-// The whole app lives on a soft warm CREAM canvas. There are four feeling
-// colours, each lifted straight from the product mockups:
+// Calm, premium, Apple-quality warmth. One soft greige canvas, four feeling
+// accents, each with a `*Soft` tint for badges/fills:
 //
-//   • PEACH   (#F3C6A0) — the ORBII CTA. Big rounded buttons, primary actions.
-//   • SAGE    (#7FA86B) — "you're safe / all clear / active". Calm green.
-//   • CORAL   (#E07A5F) — SOS / alarm / emergency. Soft, never harsh red.
-//   • LAVENDER(#8E7CC0) — voice trigger + trusted network accents.
-//   • GOLD    (#E0AC63) — the mascot / shield / AI-protection accent.
+//   • PRIMARY  (#FFD77A) — warm gold. CTAs, highlights, "protected".
+//   • CORAL    (#FF6B57) — SOS / alarm. Soft, never harsh.
+//   • LAVENDER (#8B7CF8) — Voice SOS / trusted-network accents.
+//   • SAGE     (#7BC47F) — success / safe / all-clear.
 //
-// Each accent has a matching `*Soft` tint used for the round icon badges.
-//
-// IMPORTANT: legacy key names (brand, brandSoft, primary, success, …) are
-// preserved so existing screens keep compiling — they are remapped onto the
-// warm palette, so the app reads warm the instant the theme loads. New code
-// should prefer the canonical names below.
+// Legacy key names (brand, primary, peach, …) are preserved + remapped so
+// every existing screen picks up the new palette automatically.
 export const colors = {
   // ── Canvas ────────────────────────────────────────────────
-  cream: '#F4ECE3', // app background
-  creamDeep: '#ECE1D2', // pressed / alt surface
-  surface: '#FBF7F0', // cards
-  surfaceAlt: '#FFFFFF', // pure-white insets (avatars, toggles)
+  cream: '#F2EEEB', // app background (warm greige)
+  creamDeep: '#EAE4DF', // pressed / alt surface
+  surface: '#FAF8F6', // cards
+  surfaceAlt: '#FFFFFF', // pure-white insets
 
-  // ── Peach (primary CTA) ──────────────────────────────────
-  peach: '#F3C6A0',
-  peachDeep: '#E9B084',
-  peachSoft: '#F9E4D2',
+  // ── Gold (primary accent / CTA) ──────────────────────────
+  peach: '#FFD77A',
+  peachDeep: '#E8B84F',
+  peachSoft: '#FBEFD2',
 
-  // ── Sage (safe / active / all-clear) ─────────────────────
-  sage: '#7FA86B',
-  sageDeep: '#5E8A4D',
-  sageSoft: '#E7EFDD',
+  // ── Sage (success / safe / all-clear) ────────────────────
+  sage: '#7BC47F',
+  sageDeep: '#5BA85F',
+  sageSoft: '#E4F1E5',
 
   // ── Coral (SOS / alarm) ──────────────────────────────────
-  coral: '#E07A5F',
-  coralDeep: '#CB6549',
-  coralSoft: '#F8E3DC',
+  coral: '#FF6B57',
+  coralDeep: '#E8553F',
+  coralSoft: '#FFE3DD',
 
-  // ── Lavender (voice / trusted network) ───────────────────
-  lavender: '#8E7CC0',
-  lavenderDeep: '#6F5DA6',
-  lavenderSoft: '#ECE7F6',
+  // ── Lavender (Voice SOS / trusted network) ───────────────
+  lavender: '#8B7CF8',
+  lavenderDeep: '#6F5DE0',
+  lavenderSoft: '#ECE8FE',
 
-  // ── Gold (mascot / shield / AI) ──────────────────────────
-  gold: '#E0AC63',
-  goldDeep: '#C8924A',
-  goldSoft: '#F7E9D5',
+  // ── Gold (mascot / shield) — same family as primary ──────
+  gold: '#FFD77A',
+  goldDeep: '#E8B84F',
+  goldSoft: '#FBEFD2',
 
   // ── Text ─────────────────────────────────────────────────
-  textPrimary: '#2D2924',
-  textSecondary: '#7C7468',
-  textMuted: '#A89F92',
+  textPrimary: '#2D2D2D',
+  textSecondary: '#8A837D',
+  textMuted: '#B3ABA4',
   textInverse: '#FFFFFF',
 
-  // ── Lines ────────────────────────────────────────────────
-  border: 'rgba(45,41,36,0.06)',
-  divider: 'rgba(45,41,36,0.05)',
-  inputBorder: 'rgba(45,41,36,0.08)',
-  inputBackground: '#F4ECE3',
-  overlay: 'rgba(45, 41, 36, 0.45)',
+  // ── Lines (soft, never dark) ─────────────────────────────
+  border: 'rgba(45,45,45,0.05)',
+  divider: 'rgba(45,45,45,0.04)',
+  inputBorder: 'rgba(45,45,45,0.07)',
+  inputBackground: '#F2EEEB',
+  overlay: 'rgba(40,38,36,0.45)',
 
   // ── Semantic ─────────────────────────────────────────────
-  success: '#7FA86B', // = sage
-  warning: '#E0AC63', // = gold
-  error: '#E07A5F', // = coral
+  success: '#7BC47F',
+  warning: '#FFD77A',
+  error: '#FF6B57',
 
-  // ── Legacy aliases (remapped to warm) ────────────────────
-  // Kept so existing imports compile; values now point at the warm
-  // palette so old call sites pick up the rebrand automatically.
-  brand: '#7FA86B', // was mint → now sage (safe/active states)
-  brandSoft: '#E7EFDD',
-  brandMid: '#BFD6AE',
-  brandDeep: '#5E8A4D',
-  primary: '#E07A5F', // alarm/SOS → coral
-  primaryDeep: '#CB6549',
+  // ── Legacy aliases (remapped) ────────────────────────────
+  brand: '#7BC47F',
+  brandSoft: '#E4F1E5',
+  brandMid: '#B5DEB7',
+  brandDeep: '#5BA85F',
+  primary: '#FF6B57',
+  primaryDeep: '#E8553F',
   secondary: '#FFFFFF',
-  accent: '#F3C6A0', // → peach CTA
-  dark: '#2D2924',
-  darkSoft: '#2D2924',
-  background: '#F4ECE3',
-  surfaceMuted: '#F7E9D5',
+  accent: '#FFD77A',
+  dark: '#2D2D2D',
+  darkSoft: '#2D2D2D',
+  background: '#F2EEEB',
+  surfaceMuted: '#FBEFD2',
 } as const;
 
 export type ColorKey = keyof typeof colors;

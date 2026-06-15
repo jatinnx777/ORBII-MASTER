@@ -465,6 +465,15 @@ export function HomeScreen() {
     [presencePeers],
   );
 
+  // Premium status derivations.
+  const voiceOn = bgVoiceOn || voiceListening;
+  const locationOk = locationPermission === 'granted';
+  const hasContacts = contactsCount > 0;
+  const safetyFactors = [voiceOn, bgVoiceOn, hasContacts, locationOk];
+  const safetyPct = Math.round(
+    (safetyFactors.filter(Boolean).length / safetyFactors.length) * 100,
+  );
+
   return (
     <ScreenContainer padded={false} edges={['left', 'right']}>
       {currentLocation ? (
@@ -498,106 +507,50 @@ export function HomeScreen() {
       </View>
 
       <BottomPanel bottomInset={insets.bottom} message={guardianMessage}>
-        {/* status header */}
-        <View style={styles.statusHeader}>
-          <View style={styles.safeRow}>
-            <View style={styles.safeDot} />
-            <Text style={styles.safeLabel}>You’re Safe</Text>
-          </View>
-          <Text style={styles.allClear}>All Clear</Text>
-          <Text style={styles.helpersSub}>
-            {helpersScanState === 'scanning'
-              ? 'Scanning your area…'
-              : helpersNearby > 0
-                ? `${helpersNearby} verified helper${helpersNearby === 1 ? '' : 's'} nearby`
-                : 'No helpers nearby yet'}
-          </Text>
-        </View>
+        {/* ── Protection status hero ─────────────────────── */}
+        <ProtectionHero
+          voiceOn={voiceOn}
+          bgOn={bgVoiceOn}
+          helpers={helpersNearby}
+          scanning={helpersScanState === 'scanning'}
+        />
 
         <BatteryWarning />
 
-        {locationPermission !== 'granted' ? (
+        {!locationOk ? (
           <Pressable
             onPress={bootstrapPermission}
             style={styles.permissionBanner}
             accessibilityRole="button"
           >
-            <Ionicons name="location" size={18} color={colors.sageDeep} />
+            <Ionicons name="location" size={18} color={colors.coralDeep} />
             <Text style={styles.permissionText}>Enable location for emergencies</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.sageDeep} />
+            <Ionicons name="chevron-forward" size={16} color={colors.coralDeep} />
           </Pressable>
         ) : null}
 
-        {/* SOS + Voice cards */}
+        {/* ── SOS + Voice cards ──────────────────────────── */}
         <View style={styles.actionRow}>
           <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
-          <VoiceCard listening={bgVoiceOn || voiceListening} onPress={handleVoiceCard} />
+          <VoiceCard listening={voiceOn} onPress={handleVoiceCard} />
         </View>
 
-        {/* helpers row */}
-        <Pressable
-          style={styles.helpersRow}
+        {/* ── Safety score ───────────────────────────────── */}
+        <SafetyScoreCard
+          pct={safetyPct}
+          voiceOn={voiceOn}
+          bgOn={bgVoiceOn}
+          hasContacts={hasContacts}
+          locationOk={locationOk}
+          onAddContact={() => navigation.navigate('EmergencyContacts')}
+        />
+
+        {/* ── Helpers ────────────────────────────────────── */}
+        <HelpersCard
+          photos={helperPhotos}
+          count={helpersNearby}
           onPress={() => navigation.navigate('Circles')}
-          accessibilityRole="button"
-        >
-          <View style={styles.avatarStack}>
-            {helperPhotos.length > 0
-              ? helperPhotos.map((uri, i) => (
-                  <Image
-                    key={i}
-                    source={{ uri }}
-                    style={[styles.stackAvatar, { marginLeft: i === 0 ? 0 : -10 }]}
-                  />
-                ))
-              : [0, 1, 2].map((i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.stackAvatar,
-                      styles.stackAvatarEmpty,
-                      { marginLeft: i === 0 ? 0 : -10 },
-                    ]}
-                  >
-                    <Ionicons name="person" size={14} color={colors.lavenderDeep} />
-                  </View>
-                ))}
-          </View>
-          <View style={styles.helpersRowText}>
-            <Text style={styles.helpersRowTitle}>
-              {helpersNearby > 0
-                ? `${helpersNearby} Verified Helper${helpersNearby === 1 ? '' : 's'} Nearby`
-                : 'Build your safety circle'}
-            </Text>
-            <Text style={styles.helpersRowSub}>
-              {helpersNearby > 0 ? 'Tap to view' : 'Tap to invite someone'}
-            </Text>
-          </View>
-          <View style={styles.helpersRowChevron}>
-            <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-          </View>
-        </Pressable>
-
-        {/* guardian status checklist */}
-        <View style={styles.statusCard}>
-          <StatusLine
-            label="Voice Detection Active"
-            ok={bgVoiceOn || voiceListening}
-            pendingLabel="Turn on Voice Detection above"
-          />
-          <View style={styles.statusDivider} />
-          <StatusLine
-            label="Location Sharing Ready"
-            ok={locationPermission === 'granted'}
-            pendingLabel="Turn on Location Sharing above"
-          />
-          <View style={styles.statusDivider} />
-          <StatusLine
-            label="Emergency Contacts Connected"
-            ok={contactsCount > 0}
-            pendingLabel="Add an emergency contact"
-            onPress={contactsCount > 0 ? undefined : () => navigation.navigate('EmergencyContacts')}
-          />
-        </View>
+        />
 
         {nearbyAlerts.length > 0 ? (
           <AlertsStrip
@@ -674,6 +627,174 @@ function Waveform({ active }: { active: boolean }) {
   );
 }
 
+/* ── protection status hero (with breathing glow) ──────── */
+function ProtectionHero({
+  voiceOn,
+  bgOn,
+  helpers,
+  scanning,
+}: {
+  voiceOn: boolean;
+  bgOn: boolean;
+  helpers: number;
+  scanning: boolean;
+}) {
+  const glow = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(glow, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(glow, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [glow]);
+  const glowStyle = {
+    opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] }),
+    transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.2] }) }],
+  };
+  return (
+    <View style={[styles.card, styles.hero]}>
+      <View style={styles.heroIconWrap}>
+        <Animated.View style={[styles.heroGlow, glowStyle]} />
+        <View style={styles.heroIcon}>
+          <Ionicons name="shield-checkmark" size={26} color={colors.sageDeep} />
+        </View>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.heroTitle}>Protected</Text>
+        <Text style={styles.heroSub}>All systems active</Text>
+        <View style={styles.heroPills}>
+          <HeroPill on={voiceOn} label="Voice SOS" />
+          <HeroPill on={bgOn} label="Background" />
+          <HeroPill on={helpers > 0} label={scanning ? 'Scanning…' : `${helpers} nearby`} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function HeroPill({ on, label }: { on: boolean; label: string }) {
+  return (
+    <View style={[styles.heroPill, on && styles.heroPillOn]}>
+      <View style={[styles.heroPillDot, on && styles.heroPillDotOn]} />
+      <Text style={[styles.heroPillText, on && styles.heroPillTextOn]}>{label}</Text>
+    </View>
+  );
+}
+
+/* ── safety score ───────────────────────────────────────── */
+function SafetyScoreCard({
+  pct,
+  voiceOn,
+  bgOn,
+  hasContacts,
+  locationOk,
+  onAddContact,
+}: {
+  pct: number;
+  voiceOn: boolean;
+  bgOn: boolean;
+  hasContacts: boolean;
+  locationOk: boolean;
+  onAddContact: () => void;
+}) {
+  const ringColor = pct >= 75 ? colors.sage : pct >= 40 ? colors.peachDeep : colors.coral;
+  const factors: { label: string; ok: boolean; onPress?: () => void }[] = [
+    { label: 'Voice SOS', ok: voiceOn },
+    { label: 'Background', ok: bgOn },
+    { label: 'Contacts', ok: hasContacts, onPress: hasContacts ? undefined : onAddContact },
+    { label: 'Location', ok: locationOk },
+  ];
+  return (
+    <View style={[styles.card, styles.scoreCard]}>
+      <View style={[styles.scoreRing, { borderColor: ringColor }]}>
+        <Text style={[styles.scoreNum, { color: ringColor }]}>{pct}</Text>
+        <Text style={styles.scorePct}>%</Text>
+      </View>
+      <View style={{ flex: 1, marginLeft: spacing.md }}>
+        <Text style={styles.cardTitle}>Safety Score</Text>
+        <Text style={styles.cardSub}>
+          {pct >= 100 ? "You're fully protected." : 'Finish setup to reach 100%.'}
+        </Text>
+        <View style={styles.factorRow}>
+          {factors.map((f) => (
+            <Pressable
+              key={f.label}
+              disabled={!f.onPress}
+              onPress={f.onPress}
+              style={[styles.factorChip, f.ok && styles.factorChipOn]}
+            >
+              <Ionicons
+                name={f.ok ? 'checkmark' : 'add'}
+                size={11}
+                color={f.ok ? colors.sageDeep : colors.textMuted}
+              />
+              <Text style={[styles.factorText, f.ok && styles.factorTextOn]}>{f.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/* ── helpers card (overlapping avatars) ─────────────────── */
+function HelpersCard({
+  photos,
+  count,
+  onPress,
+}: {
+  photos: string[];
+  count: number;
+  onPress: () => void;
+}) {
+  const avatars = photos.slice(0, 3);
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, styles.helpersCard, pressed && styles.pressedScale]}
+      accessibilityRole="button"
+    >
+      <View style={styles.avatarStack}>
+        {avatars.length > 0
+          ? avatars.map((uri, i) => (
+              <View key={i} style={[styles.stackAvatarWrap, { marginLeft: i === 0 ? 0 : -12, zIndex: 3 - i }]}>
+                <Image source={{ uri }} style={styles.stackAvatar} />
+                <View style={styles.onlineDot} />
+              </View>
+            ))
+          : [0, 1, 2].map((i) => (
+              <View
+                key={i}
+                style={[styles.stackAvatarWrap, styles.stackAvatarEmpty, { marginLeft: i === 0 ? 0 : -12, zIndex: 3 - i }]}
+              >
+                <Ionicons name="person" size={15} color={colors.lavenderDeep} />
+              </View>
+            ))}
+      </View>
+      <View style={{ flex: 1, marginLeft: spacing.md }}>
+        <View style={styles.helpersTitleRow}>
+          <Text style={styles.cardTitle}>
+            {count > 0 ? `${count} Helper${count === 1 ? '' : 's'} nearby` : 'Build your circle'}
+          </Text>
+          {count > 0 ? (
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="shield-checkmark" size={10} color={colors.sageDeep} />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
+          ) : null}
+        </View>
+        <Text style={styles.cardSub}>
+          {count > 0 ? 'Available now, tap to view' : 'Invite people you trust'}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
+
 /* ── guardian status line ───────────────────────────────── */
 function StatusLine({
   label,
@@ -729,15 +850,29 @@ function BottomPanel({
   const screenHeight = Dimensions.get('window').height;
   const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
 
+  // Gentle floating drift for the peeking guardian.
+  const float = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(float, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(float, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [float]);
+  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+
   return (
     <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
       {/* guardian peeking over (and gripping) the sheet's top edge */}
-      <View style={styles.mascotPeek} pointerEvents="none">
+      <Animated.View style={[styles.mascotPeek, { transform: [{ translateY: floatY }] }]} pointerEvents="none">
         <View style={styles.speechBubble}>
           <Text style={styles.speechText}>{message}</Text>
         </View>
         <Mascot pose="peek" size={92} />
-      </View>
+      </Animated.View>
 
       <View style={styles.handleZone}>
         <View style={styles.handle} />
@@ -1054,17 +1189,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  stackAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 2,
+  stackAvatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2.5,
     borderColor: colors.surface,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stackAvatar: {
+    width: 35,
+    height: 35,
+    borderRadius: 17.5,
     backgroundColor: colors.lavenderSoft,
   },
   stackAvatarEmpty: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.lavenderSoft,
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
+    backgroundColor: colors.sage,
+    borderWidth: 2,
+    borderColor: colors.surface,
   },
   helpersRowText: {
     flex: 1,
@@ -1153,5 +1306,177 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.coralDeep,
     flex: 1,
+  },
+
+  /* ── premium glass cards + components ─────────────────── */
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    ...shadows.card,
+  },
+  cardTitle: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15.5,
+    color: colors.textPrimary,
+  },
+  cardSub: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+  /* hero */
+  hero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroIconWrap: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: spacing.md,
+  },
+  heroGlow: {
+    position: 'absolute',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.sage,
+  },
+  heroIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.sageSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 24,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  heroSub: {
+    ...typography.caption,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: -1,
+  },
+  heroPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  heroPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+  },
+  heroPillOn: {
+    backgroundColor: colors.sageSoft,
+  },
+  heroPillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.textMuted,
+  },
+  heroPillDotOn: {
+    backgroundColor: colors.sage,
+  },
+  heroPillText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  heroPillTextOn: {
+    color: colors.sageDeep,
+  },
+  /* safety score */
+  scoreCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  scoreRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 5,
+    backgroundColor: colors.surfaceAlt,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  scoreNum: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 22,
+    letterSpacing: -0.5,
+  },
+  scorePct: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 4,
+  },
+  factorRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  factorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+  },
+  factorChipOn: {
+    backgroundColor: colors.sageSoft,
+  },
+  factorText: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  factorTextOn: {
+    color: colors.sageDeep,
+  },
+  /* helpers */
+  helpersCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  helpersTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: colors.sageSoft,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+  },
+  verifiedText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 9.5,
+    color: colors.sageDeep,
+    letterSpacing: 0.2,
   },
 });
