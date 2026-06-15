@@ -1,6 +1,9 @@
 # ORBII — React Native → Flutter Migration Plan
 
-> **Status:** Planning document. No Flutter code has been written yet.
+> **Status (2026-06-15):** ✅ Phase 1 skeleton scaffolded in `orbii_flutter/`
+> (theme, GoRouter auth gate, Supabase init, Google + phone-OTP sign-in). RN app
+> is **paused** by founder decision (launch-first recommendation was declined).
+> Next: Phase 2 (Home — map + sheet + Protection Strength + SOS).
 > **Goal:** Preserve ORBII *exactly as it works today* (feature parity, not pixel
 > parity) while moving the client codebase from React Native/Expo to Flutter.
 > **Hard constraints:** Keep the existing Supabase backend, schema, RLS, Realtime,

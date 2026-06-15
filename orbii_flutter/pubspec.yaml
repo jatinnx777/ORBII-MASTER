@@ -44,6 +44,12 @@ dependencies:
   flutter_secure_storage: ^9.2.2 # auth tokens (replaces expo-secure-store)
   app_links: ^6.3.2             # deep links (orbii://, OAuth redirect)
 
+  # ── Phase 2: Home (map + location) ────────────────────────
+  flutter_map: ^7.0.2           # OSM map (replaces MapLibre RN)
+  latlong2: ^0.9.1              # LatLng for flutter_map
+  geolocator: ^13.0.2           # GPS (replaces expo-location)
+  permission_handler: ^11.3.1   # runtime permissions
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
