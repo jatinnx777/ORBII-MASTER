@@ -167,6 +167,16 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return req.status === 'granted';
 }
 
+/** Read the current notification permission WITHOUT prompting. */
+export async function getNotificationPermission(): Promise<boolean> {
+  try {
+    const existing = await Notifications.getPermissionsAsync();
+    return existing.status === 'granted';
+  } catch {
+    return false;
+  }
+}
+
 export async function fireLocalNotification(
   title: string,
   body: string,

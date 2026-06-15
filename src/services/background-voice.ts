@@ -1,10 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import { getItem, setItem, storageKeys } from './storage';
 
-// Bridge to the native VoiceGuard foreground service (Android only). The
-// service runs on-device Vosk speech recognition and fires an SOS (via the
-// orbii://voice-sos deep link) when it hears a secret phrase. No keys, no
-// cloud. iOS has no equivalent — background mic isn't permitted by Apple.
 
 const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {

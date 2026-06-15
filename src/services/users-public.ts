@@ -23,7 +23,8 @@ type PublicUserRow = {
   username: string;
   name: string | null;
   photo_url: string | null;
-  phone: string | null;
+  // Only present on the user's own record; directory reads omit it (sql/18).
+  phone?: string | null;
 };
 
 function rowToUser(row: PublicUserRow): PublicUser {
@@ -32,7 +33,9 @@ function rowToUser(row: PublicUserRow): PublicUser {
     username: row.username,
     name: row.name,
     photoUri: row.photo_url,
-    phone: row.phone,
+    // Phone is never returned by directory reads anymore (sql/18) — only the
+    // user's own record carries it, set locally during profile sync.
+    phone: row.phone ?? null,
   };
 }
 
@@ -68,17 +71,19 @@ export async function findUserByPhone(
   excludeUid: string,
 ): Promise<PublicUser | null> {
   if (!phoneE164.startsWith('+')) return null;
-  const { data, error } = await supabase
-    .from('users_public')
-    .select('id, username, name, photo_url, phone')
-    .eq('phone', phoneE164)
-    .neq('id', excludeUid)
-    .maybeSingle<PublicUserRow>();
+  // Phone is no longer a readable column on users_public (see sql/18). We
+  // resolve it through a SECURITY DEFINER RPC that does an exact match and
+  // never returns the number — so the directory can't be scraped.
+  const { data, error } = await supabase.rpc('find_user_by_phone', {
+    p_phone: phoneE164,
+    p_exclude: excludeUid,
+  });
   if (error) {
     console.warn('[users-public] phone search error', error.message);
     return null;
   }
-  return data ? rowToUser(data) : null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return row ? rowToUser({ ...row, phone: null }) : null;
 }
 
 // User search by username OR name. Substring match (matches middle, not
@@ -94,7 +99,7 @@ export async function searchUsers(args: {
   const escaped = q.replace(/[%_]/g, '\\$&');
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url, phone')
+    .select('id, username, name, photo_url')
     .or(`username.ilike.%${escaped}%,name.ilike.%${escaped}%`)
     .neq('id', args.excludeUid)
     .order('username', { ascending: true })
@@ -119,7 +124,7 @@ export async function getPublicUsersByUsernames(
   if (usernames.length === 0) return out;
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url, phone')
+    .select('id, username, name, photo_url')
     .in('username', usernames);
   if (error || !data) return out;
   (data as PublicUserRow[]).forEach((row) => {
@@ -133,7 +138,7 @@ export async function getPublicUserByUsername(
 ): Promise<PublicUser | null> {
   const { data, error } = await supabase
     .from('users_public')
-    .select('id, username, name, photo_url, phone')
+    .select('id, username, name, photo_url')
     .eq('username', username)
     .maybeSingle<PublicUserRow>();
   if (error || !data) return null;
