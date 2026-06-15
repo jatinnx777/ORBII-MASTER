@@ -11,6 +11,7 @@ import '../features/sos/sos_countdown_screen.dart';
 import '../features/circles/circles_screen.dart';
 import '../features/circles/circle_detail_screen.dart';
 import '../features/community/community_alerts_screen.dart';
+import '../features/premium/premium_screen.dart';
 import '../services/circles_service.dart';
 
 /// App routes. Kept as constants so feature code can `context.go(Routes.home)`
@@ -23,6 +24,7 @@ class Routes {
   static const sosCountdown = '/sos';
   static const circles = '/circles';
   static const community = '/community';
+  static const premium = '/premium';
 }
 
 /// GoRouter provider with an auth-aware redirect (replaces React Navigation's
@@ -81,6 +83,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.community,
         builder: (context, state) => const CommunityAlertsScreen(),
+      ),
+      GoRoute(
+        path: Routes.premium,
+        builder: (context, state) => const PremiumScreen(),
       ),
     ],
   );

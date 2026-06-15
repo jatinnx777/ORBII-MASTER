@@ -51,7 +51,7 @@ dependencies:
   permission_handler: ^11.3.1   # runtime permissions
 
   # ── Phase 5: SOS dispatch (audio) ─────────────────────────
-  record: ^5.2.0                # 60s SOS audio capture (replaces expo-audio)
+  record: ^6.0.0                # 60s SOS audio capture (replaces expo-audio)
   path_provider: ^2.1.5         # temp dir for the recording file
 
   # ── Phase 5A: Razorpay Plus ───────────────────────────────

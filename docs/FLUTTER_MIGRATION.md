@@ -38,13 +38,28 @@
 >   (invite sheet), Community Alerts (respond). Home now joins presence, renders
 >   peer markers, shows the live nearby count, and routes to Circles/Community.
 >   `flutter analyze` clean. NO schema/RLS/bucket changes.
-> - ⏳ **Stubbed for later phases:** helper-availability toggle UI + DB-backed
->   nearby-count (service ready, Home uses presence count); live-location wired
->   into an active-SOS responder screen (service ready); actual SOS dispatch into
->   `sos_events` + audio recording; foreground `speech_to_text`; profile/settings
->   /notifications screens (Phase 5). Map raster OSM → OpenFreeMap vector for
->   visual parity.
-> - Next: Phase 5 (SOS dispatch + periphery screens).
+> - ✅ **Phase 5 (SOS dispatch spine)** — `sos_service` (dispatch → insert
+>   `sos_events` + broadcast to responders; resolve; audio upload to the private
+>   `sos-recordings` bucket), `sos_recording_service` (`record` pkg, 60s m4a),
+>   Active SOS screen (map + live responders via `sos-live:{id}` + audio +
+>   resolve). Countdown now dispatches and hands off. Closes the Phase 4
+>   live-location item. Debug **and** release APK build clean.
+> - ✅ **Phase 5A (Razorpay Plus, TEST mode)** — secure flow: `create-order` +
+>   `verify-payment` Supabase Edge Functions (secret stays server-side; client
+>   success never trusted — HMAC verified server-side, entitlement written with
+>   service role). `entitlements` table (sql/19, read-only to clients).
+>   `payment_service` (Razorpay SDK + success/failure/cancel + loading/retry),
+>   `subscription_provider`, `entitlements_service`, redesigned `premium_screen`
+>   (hero + comparison + celebration), `premium_badge`. Home shows the badge +
+>   an upgrade CTA. Razorpay R8 keep-rules added; release build verified.
+> - ⏳ **Still remaining for true parity:** helper-availability toggle UI +
+>   DB-backed nearby count; foreground `speech_to_text` + phrase editor;
+>   History, Notifications inbox, Settings, Profile edit, SafeMode, About, full
+>   Onboarding (Phase 6); OpenFreeMap vector tiles; on-device runtime testing of
+>   voice / SOS / payments. **The migration is NOT 100% complete.**
+> - Required before payments work: apply sql/19; deploy both Edge Functions with
+>   `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` secrets; put your `rzp_test_*` key
+>   id in `orbii_flutter/.env`.
 > **Goal:** Preserve ORBII *exactly as it works today* (feature parity, not pixel
 > parity) while moving the client codebase from React Native/Expo to Flutter.
 > **Hard constraints:** Keep the existing Supabase backend, schema, RLS, Realtime,

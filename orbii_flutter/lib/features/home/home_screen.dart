@@ -16,6 +16,8 @@ import '../../state/presence_provider.dart';
 import '../../services/voice_guard_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/community_service.dart';
+import '../../state/subscription_provider.dart';
+import '../premium/widgets/premium_badge.dart';
 import 'widgets/helpers_card.dart';
 import 'widgets/protection_strength.dart';
 import 'widgets/sos_button.dart';
@@ -345,6 +347,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           count: nearbyPeers.length,
                           onTap: () => context.push(Routes.circles),
                         ),
+                        if (!ref.watch(isPremiumProvider)) ...[
+                          const SizedBox(height: 16),
+                          _UpgradeCta(onTap: () => context.push(Routes.premium)),
+                        ],
                       ],
                     ),
                   ),
@@ -394,12 +400,58 @@ class _ProtectionHero extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Protected', style: AppTheme.bold(24)),
+                Row(
+                  children: [
+                    Text('Protected', style: AppTheme.bold(24)),
+                    const SizedBox(width: 8),
+                    const PremiumBadge(compact: true),
+                  ],
+                ),
                 Text('All systems active', style: AppTheme.medium(13)),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Slim "Upgrade to ORBII Plus" CTA shown to free users in the Home sheet.
+class _UpgradeCta extends StatelessWidget {
+  const _UpgradeCta({required this.onTap});
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFFFFE9B8), AppColors.peach],
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.workspace_premium,
+                color: AppColors.peachDeep, size: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Upgrade to ORBII Plus', style: AppTheme.semibold(15)),
+                  Text('Enhanced protection & priority features',
+                      style: AppTheme.medium(12, color: AppColors.textPrimary)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textPrimary),
+          ],
+        ),
       ),
     );
   }
