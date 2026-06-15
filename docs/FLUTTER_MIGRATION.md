@@ -14,14 +14,37 @@
 >   `voiceProvider` drive arm/disarm with a duration picker; `orbii://voice-sos`
 >   deep link → instant SOS via `app_links`. Manifest (FGS-mic perms, service,
 >   deep link), Vosk/JNA gradle deps + ProGuard rules added. `flutter analyze`
->   clean. **Native layer needs a Gradle build to fully verify (not done — no
->   APK per instruction).**
-> - ⏳ **Stubbed for later phases:** foreground `speech_to_text` quick-listen,
->   custom-phrase editor UI (Phase 3.1); Circles/contacts/presence (Phase 4);
->   actual SOS dispatch into `sos_events` + audio recording + live-location
->   broadcast; profile/settings/notifications screens (Phase 5). Map uses raster
->   OSM tiles for now — swap to OpenFreeMap vector for visual parity.
-> - Next: Phase 4 (Circles + presence).
+>   clean.
+> - ✅ **Phase 3 native verification (2026-06-15):** `flutter build apk --debug`
+>   AND `--release` both succeeded. Kotlin compiles, Vosk + JNA resolve, no
+>   duplicate classes, manifest merges with all perms + `<service>` +
+>   `foregroundServiceType="microphone"` + both deep links, native libs
+>   (`libvosk.so` + `libjnidispatch.so`) packaged for arm64/armeabi-v7a/x86_64,
+>   `org/vosk/{Model,Recognizer}` in dex, MethodChannel name + 4 methods match
+>   both sides, and R8 (release) passes with the Vosk/JNA ProGuard rules (no
+>   `java.awt` error). Added `kotlin.incremental=false` (pub cache on C:, project
+>   on D: broke the incremental cache). **Runtime items (deep-link launch,
+>   service lifecycle, Vosk model download/recognition) NOT run — no device was
+>   connected; left as an on-device checklist.**
+> - ✅ **Phase 4** — safety network layer. Services ported faithfully against the
+>   unchanged backend: `circles_service` (CRUD + members hydrate + invites by
+>   username/phone + accept/decline), `users_service` (search + `find_user_by_
+>   phone` RPC — never a direct phone read), `helpers_service` (`set_helper_
+>   location` + `nearest_helpers` PostGIS RPCs) + `helper_mode_service` (ping
+>   loop), `presence_service` (Realtime presence channel `orbii:presence`),
+>   `community_service` (broadcast `orbii:alerts` + `sos_events` backfill +
+>   `sos_responders`), `live_location_service` (broadcast `sos-live:{id}`).
+>   Providers: circles / presence / helpers. Screens: Circles list + detail
+>   (invite sheet), Community Alerts (respond). Home now joins presence, renders
+>   peer markers, shows the live nearby count, and routes to Circles/Community.
+>   `flutter analyze` clean. NO schema/RLS/bucket changes.
+> - ⏳ **Stubbed for later phases:** helper-availability toggle UI + DB-backed
+>   nearby-count (service ready, Home uses presence count); live-location wired
+>   into an active-SOS responder screen (service ready); actual SOS dispatch into
+>   `sos_events` + audio recording; foreground `speech_to_text`; profile/settings
+>   /notifications screens (Phase 5). Map raster OSM → OpenFreeMap vector for
+>   visual parity.
+> - Next: Phase 5 (SOS dispatch + periphery screens).
 > **Goal:** Preserve ORBII *exactly as it works today* (feature parity, not pixel
 > parity) while moving the client codebase from React Native/Expo to Flutter.
 > **Hard constraints:** Keep the existing Supabase backend, schema, RLS, Realtime,

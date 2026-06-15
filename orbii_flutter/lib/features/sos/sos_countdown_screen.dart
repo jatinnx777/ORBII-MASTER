@@ -1,29 +1,33 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:latlong2/latlong.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/colors.dart';
+import '../../services/sos_service.dart';
+import '../../state/location_provider.dart';
+import 'active_sos_screen.dart';
 
 /// SOS countdown — a cancellable timer before the alert fires. `instant: true`
-/// (from the SOS long-press) skips straight to triggered. Mirrors the RN
-/// `SOSCountdown` screen. The actual dispatch (sos_events insert, audio
-/// recording, live-location broadcast) is wired when those services are ported;
-/// here we own the countdown UX + cancel guard.
-class SosCountdownScreen extends StatefulWidget {
+/// (from the SOS long-press) skips straight to dispatch. Mirrors the RN
+/// `SOSCountdown` screen. On fire it dispatches the SOS (sos_events insert +
+/// broadcast) and hands off to the Active SOS screen.
+class SosCountdownScreen extends ConsumerStatefulWidget {
   const SosCountdownScreen({super.key, this.instant = false});
 
   final bool instant;
 
   @override
-  State<SosCountdownScreen> createState() => _SosCountdownScreenState();
+  ConsumerState<SosCountdownScreen> createState() => _SosCountdownScreenState();
 }
 
-class _SosCountdownScreenState extends State<SosCountdownScreen> {
+class _SosCountdownScreenState extends ConsumerState<SosCountdownScreen> {
   static const _start = 5;
   late int _seconds = widget.instant ? 0 : _start;
   Timer? _timer;
-  bool _fired = false;
+  bool _firing = false;
 
   @override
   void initState() {
@@ -39,11 +43,21 @@ class _SosCountdownScreenState extends State<SosCountdownScreen> {
     }
   }
 
-  void _fire() {
+  Future<void> _fire() async {
+    if (_firing) return;
     _timer?.cancel();
-    setState(() => _fired = true);
-    // TODO(phase): dispatch SOS — insert sos_events, start audio recording,
-    // begin live-location broadcast, notify circle. Ported with sos service.
+    setState(() => _firing = true);
+
+    final loc = ref.read(locationProvider);
+    final origin = loc.location ?? const LatLng(28.6139, 77.2090);
+    final sosId = await SosService.dispatch(location: origin);
+    if (!mounted) return;
+    // Replace the countdown with the live incident screen.
+    Navigator.of(context).pushReplacement(
+      MaterialPageRoute(
+        builder: (_) => ActiveSosScreen(sosId: sosId, origin: origin),
+      ),
+    );
   }
 
   void _cancel() {
@@ -73,27 +87,22 @@ class _SosCountdownScreenState extends State<SosCountdownScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
-              Icon(_fired ? Icons.check_circle_outline : Icons.sos_rounded,
+              const Icon(Icons.sos_rounded,
                   size: 72, color: AppColors.textInverse),
               const SizedBox(height: 24),
               Text(
-                _fired ? 'SOS sent' : 'Sending SOS in',
+                _firing ? 'Sending SOS…' : 'Sending SOS in',
                 textAlign: TextAlign.center,
                 style: AppTheme.bold(26, color: AppColors.textInverse),
               ),
-              if (!_fired) ...[
+              if (!_firing) ...[
                 const SizedBox(height: 8),
                 Text('$_seconds',
                     textAlign: TextAlign.center,
                     style: AppTheme.bold(72, color: AppColors.textInverse)),
-              ] else ...[
-                const SizedBox(height: 8),
-                Text('Your trusted contacts are being alerted.',
-                    textAlign: TextAlign.center,
-                    style: AppTheme.medium(14, color: const Color(0xE6FFFFFF))),
               ],
               const Spacer(),
-              if (!_fired)
+              if (!_firing)
                 FilledButton(
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.textInverse,
@@ -101,15 +110,6 @@ class _SosCountdownScreenState extends State<SosCountdownScreen> {
                   ),
                   onPressed: _cancel,
                   child: const Text("I'm safe — cancel"),
-                )
-              else
-                FilledButton(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.textInverse,
-                    foregroundColor: AppColors.coralDeep,
-                  ),
-                  onPressed: () => context.go('/'),
-                  child: const Text('Done'),
                 ),
             ],
           ),

@@ -12,7 +12,10 @@ import '../../services/auth_service.dart';
 import '../../state/location_provider.dart';
 import '../../state/protection_provider.dart';
 import '../../state/voice_provider.dart';
+import '../../state/presence_provider.dart';
 import '../../services/voice_guard_service.dart';
+import '../../services/presence_service.dart';
+import '../../services/community_service.dart';
 import 'widgets/helpers_card.dart';
 import 'widgets/protection_strength.dart';
 import 'widgets/sos_button.dart';
@@ -32,6 +35,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   // Default map centre until a GPS fix arrives (New Delhi).
   static const _fallback = LatLng(28.6139, 77.2090);
+
+  @override
+  void initState() {
+    super.initState();
+    CommunityService.prewarm();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _joinPresence());
+  }
+
+  Future<void> _joinPresence() async {
+    final session = AuthService.currentSession;
+    if (session == null) return;
+    await PresenceService.join(
+      userId: session.user.id,
+      name: session.user.userMetadata?['full_name'] as String? ?? 'You',
+      photoUri: session.user.userMetadata?['avatar_url'] as String?,
+      location: ref.read(locationProvider).location,
+    );
+  }
+
+  void _publishPresence(LatLng location) {
+    final session = AuthService.currentSession;
+    if (session == null) return;
+    PresenceService.update(
+      userId: session.user.id,
+      name: session.user.userMetadata?['full_name'] as String? ?? 'You',
+      photoUri: session.user.userMetadata?['avatar_url'] as String?,
+      location: location,
+    );
+  }
 
   @override
   void dispose() {
@@ -146,9 +178,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final loc = ref.watch(locationProvider);
     final protection = ref.watch(protectionProvider);
     final voiceOn = ref.watch(voiceProvider).enabled;
+    final peers = ref.watch(presencePeersProvider).valueOrNull ?? const [];
     final center = loc.location ?? _fallback;
     final size = MediaQuery.of(context).size;
     final sheetHeight = size.height * 0.42;
+
+    // Re-publish presence whenever our location changes (mirrors RN's
+    // presence `update` on currentLocation change).
+    ref.listen(locationProvider, (prev, next) {
+      final here = next.location;
+      if (here != null) _publishPresence(here);
+    });
+
+    // Peers near us (within the map radius), excluding self → map markers +
+    // the "helpers nearby" count.
+    final me = AuthService.currentSession?.user.id;
+    const distance = Distance();
+    final nearbyPeers = peers.where((p) {
+      if (p.userId == me) return false;
+      final pl = p.location;
+      if (pl == null) return false;
+      if (loc.location == null) return true;
+      return distance.as(LengthUnit.Meter, loc.location!, pl) <= 5000;
+    }).toList();
 
     return Scaffold(
       body: Stack(
@@ -171,9 +223,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.orbii.app',
               ),
-              if (loc.location != null)
-                MarkerLayer(
-                  markers: [
+              MarkerLayer(
+                markers: [
+                  // Nearby helpers / circle peers — green if verified-helper,
+                  // lavender otherwise (mirrors RN pin colours).
+                  for (final p in nearbyPeers)
+                    Marker(
+                      point: p.location!,
+                      width: 22,
+                      height: 22,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: p.isVerified
+                              ? AppColors.sage
+                              : AppColors.lavender,
+                          shape: BoxShape.circle,
+                          border:
+                              Border.all(color: AppColors.surface, width: 2.5),
+                        ),
+                      ),
+                    ),
+                  if (loc.location != null)
                     Marker(
                       point: loc.location!,
                       width: 26,
@@ -182,17 +252,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         decoration: BoxDecoration(
                           color: AppColors.coral,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                              color: AppColors.surface, width: 3),
+                          border:
+                              Border.all(color: AppColors.surface, width: 3),
                           boxShadow: const [
-                            BoxShadow(
-                                color: Color(0x33000000), blurRadius: 6),
+                            BoxShadow(color: Color(0x33000000), blurRadius: 6),
                           ],
                         ),
                       ),
                     ),
-                  ],
-                ),
+                ],
+              ),
             ],
           ),
 
@@ -202,7 +271,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: _Header(
                 onProfile: () => _snack('Profile arrives in a later phase.'),
-                onSettings: () => _snack('Settings arrive in a later phase.'),
+                onAlerts: () => context.push(Routes.community),
                 onSignOut: AuthService.signOut,
               ),
             ),
@@ -273,9 +342,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 16),
                         HelpersCard(
-                          count: 0,
-                          onTap: () =>
-                              _snack('Circles arrive in a later phase.'),
+                          count: nearbyPeers.length,
+                          onTap: () => context.push(Routes.circles),
                         ),
                       ],
                     ),
@@ -371,12 +439,12 @@ class _PermissionBanner extends StatelessWidget {
 class _Header extends StatelessWidget {
   const _Header({
     required this.onProfile,
-    required this.onSettings,
+    required this.onAlerts,
     required this.onSignOut,
   });
 
   final VoidCallback onProfile;
-  final VoidCallback onSettings;
+  final VoidCallback onAlerts;
   final VoidCallback onSignOut;
 
   @override
@@ -387,7 +455,7 @@ class _Header extends StatelessWidget {
         _circleButton(Icons.person_outline, onProfile),
         Row(
           children: [
-            _circleButton(Icons.notifications_outlined, onSettings),
+            _circleButton(Icons.notifications_outlined, onAlerts),
             const SizedBox(width: 8),
             _circleButton(Icons.logout, onSignOut),
           ],

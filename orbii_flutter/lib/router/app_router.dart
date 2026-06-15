@@ -8,6 +8,10 @@ import '../features/auth/sign_in_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/sos/sos_countdown_screen.dart';
+import '../features/circles/circles_screen.dart';
+import '../features/circles/circle_detail_screen.dart';
+import '../features/community/community_alerts_screen.dart';
+import '../services/circles_service.dart';
 
 /// App routes. Kept as constants so feature code can `context.go(Routes.home)`
 /// without stringly-typed paths.
@@ -17,6 +21,8 @@ class Routes {
   static const signIn = '/sign-in';
   static const home = '/';
   static const sosCountdown = '/sos';
+  static const circles = '/circles';
+  static const community = '/community';
 }
 
 /// GoRouter provider with an auth-aware redirect (replaces React Navigation's
@@ -57,6 +63,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           final instant = state.uri.queryParameters['instant'] == 'true';
           return SosCountdownScreen(instant: instant);
         },
+      ),
+      GoRoute(
+        path: Routes.circles,
+        builder: (context, state) => const CirclesScreen(),
+        routes: [
+          GoRoute(
+            path: ':id',
+            builder: (context, state) {
+              final circle = state.extra as Circle?;
+              if (circle == null) return const CirclesScreen();
+              return CircleDetailScreen(circle: circle);
+            },
+          ),
+        ],
+      ),
+      GoRoute(
+        path: Routes.community,
+        builder: (context, state) => const CommunityAlertsScreen(),
       ),
     ],
   );

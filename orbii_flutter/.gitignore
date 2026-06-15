@@ -43,3 +43,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Razorpay env (publishable id placeholder is committed via .env.example only)
+.env
