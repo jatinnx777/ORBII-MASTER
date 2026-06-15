@@ -1,9 +1,18 @@
 # ORBII — React Native → Flutter Migration Plan
 
-> **Status (2026-06-15):** ✅ Phase 1 skeleton scaffolded in `orbii_flutter/`
-> (theme, GoRouter auth gate, Supabase init, Google + phone-OTP sign-in). RN app
-> is **paused** by founder decision (launch-first recommendation was declined).
-> Next: Phase 2 (Home — map + sheet + Protection Strength + SOS).
+> **Status (2026-06-15):** RN app **paused** by founder decision.
+> - ✅ **Phase 1** — skeleton (theme, GoRouter auth gate, Supabase init,
+>   Google + phone-OTP sign-in).
+> - ✅ **Phase 2** — Home (flutter_map 60% + fixed 42% sheet, Protection hero,
+>   **Protection Strength pill + sheet ported**, SOS button → cancellable
+>   countdown screen, Voice card, Helpers card), `geolocator` location service +
+>   `permission_handler` wiring. `flutter analyze` clean.
+> - ⏳ **Stubbed for later phases:** Voice engine (Phase 3, Vosk MethodChannel),
+>   Circles/contacts/presence (Phase 4), actual SOS dispatch into `sos_events` +
+>   audio recording + live-location broadcast, profile/settings/notifications
+>   screens (Phase 5). Map uses raster OSM tiles for now — swap to OpenFreeMap
+>   vector for visual parity.
+> - Next: Phase 3 (native voice).
 > **Goal:** Preserve ORBII *exactly as it works today* (feature parity, not pixel
 > parity) while moving the client codebase from React Native/Expo to Flutter.
 > **Hard constraints:** Keep the existing Supabase backend, schema, RLS, Realtime,
