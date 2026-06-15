@@ -307,10 +307,36 @@ export function HomeScreen() {
   // Background Voice SOS: the Home voice card is the single entry point. Tap
   // it → choose a duration → ORBII listens for the phrase even when closed.
   const [bgVoiceOn, setBgVoiceOn] = useState(false);
+  // Device-level signals that feed Protection Strength. Refreshed every time
+  // Home regains focus so the score reflects the latest permission state.
+  const [batteryExempt, setBatteryExempt] = useState(false);
+  const [notifOk, setNotifOk] = useState(false);
+  const [micOk, setMicOk] = useState(false);
+  const [protectionSheetOpen, setProtectionSheetOpen] = useState(false);
+
+  const refreshProtectionSignals = useCallback(async () => {
+    try {
+      setBatteryExempt(await isBatteryExempt());
+      setNotifOk(await getNotificationPermission());
+      if (Platform.OS === 'android') {
+        setMicOk(
+          await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          ),
+        );
+      } else {
+        setMicOk(true);
+      }
+    } catch {
+      // best-effort — leave prior values
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadBgVoiceState().then((s) => setBgVoiceOn(s.enabled));
-    }, []),
+      refreshProtectionSignals();
+    }, [refreshProtectionSignals]),
   );
 
   const ensureMicPerms = useCallback(async (): Promise<boolean> => {
@@ -471,9 +497,76 @@ export function HomeScreen() {
   const voiceOn = bgVoiceOn || voiceListening;
   const locationOk = locationPermission === 'granted';
   const hasContacts = contactsCount > 0;
-  const safetyFactors = [voiceOn, bgVoiceOn, hasContacts, locationOk];
-  const safetyPct = Math.round(
-    (safetyFactors.filter(Boolean).length / safetyFactors.length) * 100,
+
+  // ── Protection Strength ──────────────────────────────────
+  // Eight weighted factors → a single 0-100% score. Background-reliability
+  // (battery + autostart) and the two SOS engines carry the most weight
+  // because they're what actually keeps protection alive when the phone is
+  // pocketed. Autostart can't be queried on Android, so we treat the battery
+  // exemption (granted in the same OEM flow) as its proxy.
+  const protectionFactors = useMemo(
+    () => [
+      { key: 'voice', label: 'Voice SOS', weight: 20, ok: voiceOn },
+      { key: 'background', label: 'Background protection', weight: 20, ok: bgVoiceOn },
+      { key: 'battery', label: 'Battery optimization off', weight: 15, ok: batteryExempt },
+      { key: 'notifications', label: 'Notifications enabled', weight: 15, ok: notifOk },
+      { key: 'microphone', label: 'Microphone access', weight: 10, ok: micOk },
+      { key: 'location', label: 'Location access', weight: 10, ok: locationOk },
+      { key: 'contacts', label: 'Emergency contacts', weight: 5, ok: hasContacts },
+      { key: 'autostart', label: 'Autostart allowed', weight: 5, ok: batteryExempt },
+    ],
+    [voiceOn, bgVoiceOn, batteryExempt, notifOk, micOk, locationOk, hasContacts],
+  );
+  const protectionPct = useMemo(
+    () =>
+      protectionFactors.reduce((sum, f) => (f.ok ? sum + f.weight : sum), 0),
+    [protectionFactors],
+  );
+
+  // Route a single unmet factor to the action that fixes it. Used by both the
+  // per-row tap and the sheet's "Fix Now" button (which targets the highest-
+  // weighted unmet factor).
+  const handleFixFactor = useCallback(
+    async (key: string) => {
+      switch (key) {
+        case 'voice':
+        case 'background':
+          setProtectionSheetOpen(false);
+          handleVoiceCard();
+          break;
+        case 'battery':
+          await requestBatteryExemption();
+          await refreshProtectionSignals();
+          break;
+        case 'autostart':
+          setProtectionSheetOpen(false);
+          navigation.navigate('OEMHelp');
+          break;
+        case 'notifications':
+          await requestNotificationPermission();
+          await refreshProtectionSignals();
+          break;
+        case 'microphone':
+          await ensureMicPerms();
+          await refreshProtectionSignals();
+          break;
+        case 'location':
+          setProtectionSheetOpen(false);
+          await bootstrapPermission();
+          break;
+        case 'contacts':
+          setProtectionSheetOpen(false);
+          navigation.navigate('EmergencyContacts');
+          break;
+      }
+    },
+    [
+      handleVoiceCard,
+      refreshProtectionSignals,
+      ensureMicPerms,
+      bootstrapPermission,
+      navigation,
+    ],
   );
 
   return (
@@ -517,6 +610,12 @@ export function HomeScreen() {
           scanning={helpersScanState === 'scanning'}
         />
 
+        {/* ── Protection Strength (slim status pill) ─────── */}
+        <ProtectionStrengthPill
+          pct={protectionPct}
+          onPress={() => setProtectionSheetOpen(true)}
+        />
+
         <BatteryWarning />
 
         {!locationOk ? (
@@ -537,16 +636,6 @@ export function HomeScreen() {
           <VoiceCard listening={voiceOn} onPress={handleVoiceCard} />
         </View>
 
-        {/* ── Safety score ───────────────────────────────── */}
-        <SafetyScoreCard
-          pct={safetyPct}
-          voiceOn={voiceOn}
-          bgOn={bgVoiceOn}
-          hasContacts={hasContacts}
-          locationOk={locationOk}
-          onAddContact={() => navigation.navigate('EmergencyContacts')}
-        />
-
         {/* ── Helpers ────────────────────────────────────── */}
         <HelpersCard
           photos={helperPhotos}
@@ -561,6 +650,14 @@ export function HomeScreen() {
           />
         ) : null}
       </BottomPanel>
+
+      <ProtectionSheet
+        visible={protectionSheetOpen}
+        pct={protectionPct}
+        factors={protectionFactors}
+        onClose={() => setProtectionSheetOpen(false)}
+        onFix={handleFixFactor}
+      />
     </ScreenContainer>
   );
 }
@@ -686,59 +783,165 @@ function HeroPill({ on, label }: { on: boolean; label: string }) {
   );
 }
 
-/* ── safety score ───────────────────────────────────────── */
-function SafetyScoreCard({
+/* ── protection strength ────────────────────────────────── */
+type ProtectionFactor = {
+  key: string;
+  label: string;
+  weight: number;
+  ok: boolean;
+};
+
+// One source of truth for the colour band + headline copy at a given score.
+// Four colour bands, three copy tiers (medium spans the two amber bands).
+function protectionBand(pct: number): {
+  color: string;
+  soft: string;
+  label: string;
+} {
+  if (pct >= 95) return { color: colors.sage, soft: colors.sageSoft, label: 'Excellent Protection' };
+  if (pct >= 75) return { color: colors.peachDeep, soft: colors.peachSoft, label: 'Almost Ready' };
+  if (pct >= 50) return { color: '#E59A4F', soft: '#FBEBD9', label: 'Almost Ready' };
+  return { color: colors.coral, soft: colors.coralSoft, label: 'Action Needed' };
+}
+
+// Slim premium status pill — modelled on Apple's Battery Health row. One
+// compact card: label + score on top, a thin progress bar + headline below.
+// Tapping opens the detail sheet. NOT a section, NOT a big card.
+function ProtectionStrengthPill({
   pct,
-  voiceOn,
-  bgOn,
-  hasContacts,
-  locationOk,
-  onAddContact,
+  onPress,
 }: {
   pct: number;
-  voiceOn: boolean;
-  bgOn: boolean;
-  hasContacts: boolean;
-  locationOk: boolean;
-  onAddContact: () => void;
+  onPress: () => void;
 }) {
-  const ringColor = pct >= 75 ? colors.sage : pct >= 40 ? colors.peachDeep : colors.coral;
-  const factors: { label: string; ok: boolean; onPress?: () => void }[] = [
-    { label: 'Voice SOS', ok: voiceOn },
-    { label: 'Background', ok: bgOn },
-    { label: 'Contacts', ok: hasContacts, onPress: hasContacts ? undefined : onAddContact },
-    { label: 'Location', ok: locationOk },
-  ];
+  const band = protectionBand(pct);
   return (
-    <View style={[styles.card, styles.scoreCard]}>
-      <View style={[styles.scoreRing, { borderColor: ringColor }]}>
-        <Text style={[styles.scoreNum, { color: ringColor }]}>{pct}</Text>
-        <Text style={styles.scorePct}>%</Text>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.strengthPill, pressed && styles.pressedScale]}
+      accessibilityRole="button"
+      accessibilityLabel={`Protection strength ${pct} percent. ${band.label}. Tap for details.`}
+    >
+      <View style={styles.strengthTopRow}>
+        <View style={[styles.strengthIcon, { backgroundColor: band.soft }]}>
+          <Ionicons name="shield-checkmark" size={13} color={band.color} />
+        </View>
+        <Text style={styles.strengthLabel}>Protection Strength</Text>
+        <Text style={[styles.strengthPct, { color: band.color }]}>{pct}%</Text>
+        <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
       </View>
-      <View style={{ flex: 1, marginLeft: spacing.md }}>
-        <Text style={styles.cardTitle}>Safety Score</Text>
-        <Text style={styles.cardSub}>
-          {pct >= 100 ? "You're fully protected." : 'Finish setup to reach 100%.'}
-        </Text>
-        <View style={styles.factorRow}>
+      <View style={styles.strengthBarTrack}>
+        <View
+          style={[
+            styles.strengthBarFill,
+            { width: `${Math.max(pct, 4)}%`, backgroundColor: band.color },
+          ]}
+        />
+      </View>
+      <Text style={[styles.strengthStatus, { color: band.color }]}>{band.label}</Text>
+    </Pressable>
+  );
+}
+
+// Bottom sheet (Modal) — the checklist behind the score. Each factor shows a
+// ✓ when satisfied or a ⚠ + weight when missing. "Fix Now" targets the
+// highest-impact unmet factor.
+function ProtectionSheet({
+  visible,
+  pct,
+  factors,
+  onClose,
+  onFix,
+}: {
+  visible: boolean;
+  pct: number;
+  factors: ProtectionFactor[];
+  onClose: () => void;
+  onFix: (key: string) => void;
+}) {
+  const band = protectionBand(pct);
+  // Highest-weighted unmet factor — what "Fix Now" should target.
+  const nextFix = factors
+    .filter((f) => !f.ok)
+    .sort((a, b) => b.weight - a.weight)[0];
+
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <Pressable style={styles.sheetBackdrop} onPress={onClose} />
+      <View style={styles.sheet}>
+        <View style={styles.sheetHandle} />
+        <View style={styles.sheetHeader}>
+          <View>
+            <Text style={styles.sheetTitle}>Protection Strength</Text>
+            <Text style={[styles.sheetStatus, { color: band.color }]}>{band.label}</Text>
+          </View>
+          <Text style={[styles.sheetPct, { color: band.color }]}>{pct}%</Text>
+        </View>
+
+        <View style={styles.sheetBarTrack}>
+          <View
+            style={[
+              styles.sheetBarFill,
+              { width: `${Math.max(pct, 4)}%`, backgroundColor: band.color },
+            ]}
+          />
+        </View>
+
+        <View style={styles.sheetList}>
           {factors.map((f) => (
             <Pressable
-              key={f.label}
-              disabled={!f.onPress}
-              onPress={f.onPress}
-              style={[styles.factorChip, f.ok && styles.factorChipOn]}
+              key={f.key}
+              disabled={f.ok}
+              onPress={() => onFix(f.key)}
+              style={styles.sheetRow}
             >
-              <Ionicons
-                name={f.ok ? 'checkmark' : 'add'}
-                size={11}
-                color={f.ok ? colors.sageDeep : colors.textMuted}
-              />
-              <Text style={[styles.factorText, f.ok && styles.factorTextOn]}>{f.label}</Text>
+              <View
+                style={[
+                  styles.sheetRowIcon,
+                  { backgroundColor: f.ok ? colors.sageSoft : colors.coralSoft },
+                ]}
+              >
+                <Ionicons
+                  name={f.ok ? 'checkmark' : 'warning'}
+                  size={14}
+                  color={f.ok ? colors.sageDeep : colors.coralDeep}
+                />
+              </View>
+              <Text style={styles.sheetRowLabel}>{f.label}</Text>
+              {f.ok ? (
+                <Text style={styles.sheetRowDone}>+{f.weight}%</Text>
+              ) : (
+                <Text style={styles.sheetRowFix}>Fix</Text>
+              )}
             </Pressable>
           ))}
         </View>
+
+        {nextFix ? (
+          <Pressable
+            style={({ pressed }) => [styles.sheetCta, pressed && styles.pressedScale]}
+            onPress={() => onFix(nextFix.key)}
+            accessibilityRole="button"
+          >
+            <Ionicons name="flash" size={16} color={colors.textInverse} />
+            <Text style={styles.sheetCtaText}>Fix Now — {nextFix.label}</Text>
+          </Pressable>
+        ) : (
+          <View style={[styles.sheetCta, styles.sheetCtaDone]}>
+            <Ionicons name="shield-checkmark" size={16} color={colors.sageDeep} />
+            <Text style={[styles.sheetCtaText, { color: colors.sageDeep }]}>
+              You're fully protected
+            </Text>
+          </View>
+        )}
       </View>
-    </View>
+    </Modal>
   );
 }
 
@@ -1404,57 +1607,167 @@ const styles = StyleSheet.create({
   heroPillTextOn: {
     color: colors.sageDeep,
   },
-  /* safety score */
-  scoreCard: {
+  /* protection strength — slim pill */
+  strengthPill: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    ...shadows.card,
+  },
+  strengthTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 7,
   },
-  scoreRing: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 5,
-    backgroundColor: colors.surfaceAlt,
+  strengthIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    flexDirection: 'row',
   },
-  scoreNum: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 22,
-    letterSpacing: -0.5,
-  },
-  scorePct: {
+  strengthLabel: {
+    flex: 1,
     fontFamily: 'Poppins_600SemiBold',
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 4,
+    fontSize: 13.5,
+    color: colors.textPrimary,
   },
-  factorRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: spacing.sm,
+  strengthPct: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 14,
+    letterSpacing: -0.3,
   },
-  factorChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-    backgroundColor: colors.cream,
+  strengthBarTrack: {
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.creamDeep,
+    marginTop: 9,
+    overflow: 'hidden',
   },
-  factorChipOn: {
-    backgroundColor: colors.sageSoft,
+  strengthBarFill: {
+    height: '100%',
+    borderRadius: 3,
   },
-  factorText: {
+  strengthStatus: {
     fontFamily: 'Poppins_500Medium',
     fontSize: 11,
-    color: colors.textMuted,
+    marginTop: 5,
   },
-  factorTextOn: {
+
+  /* protection strength — bottom sheet */
+  sheetBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.overlay,
+  },
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.cream,
+    borderTopLeftRadius: radius.xxl,
+    borderTopRightRadius: radius.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xxl,
+    ...shadows.sheet,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: colors.creamDeep,
+    marginBottom: spacing.md,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  sheetTitle: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 20,
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+  },
+  sheetStatus: {
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 13,
+    marginTop: 1,
+  },
+  sheetPct: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 30,
+    letterSpacing: -0.5,
+  },
+  sheetBarTrack: {
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.creamDeep,
+    marginTop: spacing.md,
+    overflow: 'hidden',
+  },
+  sheetBarFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  sheetList: {
+    marginTop: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    paddingHorizontal: spacing.md,
+    ...shadows.card,
+  },
+  sheetRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 13,
+  },
+  sheetRowIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sheetRowLabel: {
+    flex: 1,
+    fontFamily: 'Poppins_500Medium',
+    fontSize: 14.5,
+    color: colors.textPrimary,
+  },
+  sheetRowDone: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12.5,
     color: colors.sageDeep,
+  },
+  sheetRowFix: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 12.5,
+    color: colors.coralDeep,
+  },
+  sheetCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.coral,
+  },
+  sheetCtaDone: {
+    backgroundColor: colors.sageSoft,
+  },
+  sheetCtaText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 15,
+    color: colors.textInverse,
   },
   /* helpers */
   helpersCard: {
