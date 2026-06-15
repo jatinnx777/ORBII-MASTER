@@ -7,6 +7,7 @@ import {
   Easing,
   Image,
   Linking,
+  Modal,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -53,6 +54,7 @@ import {
 import { alertsLoaded } from '@/redux/slices/communitySlice';
 import {
   fireLocalNotification,
+  getNotificationPermission,
   requestNotificationPermission,
 } from '@/services/notifications';
 import { formatDistance, haversineMeters } from '@/utils/geo';
