@@ -208,8 +208,15 @@ export function CirclesScreen() {
           />
         </View>
       ) : !hasContent ? (
-        <View style={styles.emptyWrap}>
-          <CirclesHero size={200} />
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.emptyWrap,
+            { paddingBottom: insets.bottom + 32 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          <CirclesHero size={160} />
           <Text style={styles.emptyTitle}>Your circle starts here</Text>
           <Text style={styles.emptyBody}>
             Add family or friends. They get your SOS instantly, and you both
@@ -227,7 +234,7 @@ export function CirclesScreen() {
             <Ionicons name="add" size={16} color={colors.textPrimary} />
             <Text style={styles.emptyCtaText}>Create your first circle</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={data}
@@ -497,10 +504,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   emptyWrap: {
-    flex: 1,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
     gap: spacing.sm,
   },
   emptyTitle: {
