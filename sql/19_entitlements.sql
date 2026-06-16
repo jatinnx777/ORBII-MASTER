@@ -11,7 +11,7 @@
 create table if not exists entitlements (
   user_id        uuid primary key references auth.users(id) on delete cascade,
   plan_type      text not null default 'free'
-                   check (plan_type in ('free', 'plus')),
+                   check (plan_type in ('free', 'solo', 'family', 'plus')),
   status         text not null default 'inactive'
                    check (status in ('inactive', 'active', 'cancelled', 'expired')),
   premium_enabled boolean not null default false,
@@ -19,6 +19,12 @@ create table if not exists entitlements (
   razorpay_payment_id text,
   updated_at     timestamptz not null default now()
 );
+
+-- Widen plan_type to the Solo/Family tiers (safe to re-run on an existing
+-- table that only had 'free'/'plus').
+alter table entitlements drop constraint if exists entitlements_plan_type_check;
+alter table entitlements add constraint entitlements_plan_type_check
+  check (plan_type in ('free', 'solo', 'family', 'plus'));
 
 alter table entitlements enable row level security;
 

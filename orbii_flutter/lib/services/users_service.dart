@@ -36,13 +36,19 @@ class UsersService {
   static Future<PublicUser?> findByPhone(String phoneE164,
       {String? excludeUid}) async {
     if (!phoneE164.startsWith('+')) return null;
-    final data = await _c.rpc('find_user_by_phone', params: {
-      'p_phone': phoneE164,
-      'p_exclude': excludeUid,
-    });
-    final list = (data as List?) ?? const [];
-    if (list.isEmpty) return null;
-    return PublicUser.fromRow(Map<String, dynamic>.from(list.first as Map));
+    try {
+      final data = await _c.rpc('find_user_by_phone', params: {
+        'p_phone': phoneE164,
+        'p_exclude': excludeUid,
+      });
+      final list = (data as List?) ?? const [];
+      if (list.isEmpty) return null;
+      return PublicUser.fromRow(Map<String, dynamic>.from(list.first as Map));
+    } catch (_) {
+      // RPC not installed (sql/18) or offline → treat as "not a known ORBII
+      // user". The caller can still share an invite link via WhatsApp.
+      return null;
+    }
   }
 
   /// Username/name substring search, capped at 10, excluding the caller.

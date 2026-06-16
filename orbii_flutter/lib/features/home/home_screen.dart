@@ -17,6 +17,7 @@ import '../../services/voice_guard_service.dart';
 import '../../services/presence_service.dart';
 import '../../services/community_service.dart';
 import '../../state/subscription_provider.dart';
+import '../../state/shell_provider.dart';
 import '../premium/widgets/premium_badge.dart';
 import 'widgets/helpers_card.dart';
 import 'widgets/protection_strength.dart';
@@ -219,10 +220,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             children: [
               TileLayer(
-                // Free, no-key raster tiles. TODO(parity): swap to OpenFreeMap
-                // vector (Liberty/warm) via vector_map_tiles to match RN.
+                // CARTO Voyager — warm, light, keyless raster basemap that
+                // sits closer to ORBII's greige palette than raw OSM.
                 urlTemplate:
-                    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                    'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.orbii.app',
               ),
               MarkerLayer(
@@ -272,8 +273,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
               child: _Header(
-                onProfile: () => _snack('Profile arrives in a later phase.'),
-                onAlerts: () => context.push(Routes.community),
+                onProfile: () =>
+                    ref.read(shellTabProvider.notifier).state = 3,
+                onAlerts: () => context.push(Routes.notifications),
                 onSignOut: AuthService.signOut,
               ),
             ),

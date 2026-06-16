@@ -36,13 +36,13 @@ class PaymentService {
 
   static final _fn = SupabaseService.client.functions;
 
-  /// Run the full ORBII Plus purchase. Resolves when the user completes,
+  /// Run a plan purchase ('solo' | 'family'). Resolves when the user completes,
   /// cancels, or the payment fails.
-  Future<PaymentResult> purchasePlus() async {
+  Future<PaymentResult> purchase(String plan) async {
     final completer = Completer<PaymentResult>();
     _pending = completer;
     try {
-      final res = await _fn.invoke('create-order', body: {'plan': 'plus'});
+      final res = await _fn.invoke('create-order', body: {'plan': plan});
       final data = res.data as Map?;
       final orderId = data?['orderId'] as String?;
       if (orderId == null) {
@@ -51,7 +51,7 @@ class PaymentService {
         return completer.future;
       }
       _orderId = orderId;
-      _plan = 'plus';
+      _plan = plan;
       final keyId =
           (data?['keyId'] as String?) ?? dotenv.env['RAZORPAY_KEY_ID'] ?? '';
       _razorpay.open({
@@ -59,8 +59,9 @@ class PaymentService {
         'order_id': orderId,
         'amount': data?['amount'],
         'currency': data?['currency'] ?? 'INR',
-        'name': 'ORBII Plus',
-        'description': 'Enhanced protection',
+        'name': plan == 'family' ? 'ORBII Family' : 'ORBII Plus',
+        'description':
+            plan == 'family' ? 'Protect up to 4 people' : 'Enhanced protection',
         'theme': {'color': '#FF6B57'},
       });
     } catch (e) {

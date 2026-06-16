@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/app_theme.dart';
 import 'router/app_router.dart';
+import 'services/circles_service.dart';
 
 /// Root widget — `MaterialApp.router` wired to the auth-gated GoRouter, plus a
 /// deep-link listener that turns `orbii://voice-sos` (fired by the native Voice
@@ -35,9 +36,34 @@ class _OrbiiAppState extends ConsumerState<OrbiiApp> {
   void _handle(Uri uri) {
     if (uri.scheme == 'orbii' && uri.host == 'voice-sos') {
       ref.read(routerProvider).go('${Routes.sosCountdown}?instant=true');
+      return;
     }
-    // Supabase OAuth redirects (com.orbii.app://login-callback) are consumed by
-    // supabase_flutter's own listener; no action needed here.
+    // Circle invite links: orbii://join/<token> or .../join/<token>.
+    final token = _joinToken(uri);
+    if (token != null) {
+      _acceptInvite(token);
+      return;
+    }
+    // Supabase OAuth redirects (orbii://auth/callback?code=…) are consumed by
+    // supabase_flutter's own deep-link listener, which exchanges the PKCE code
+    // for a session automatically; no action needed here.
+  }
+
+  String? _joinToken(Uri uri) {
+    final segs = uri.pathSegments;
+    if (uri.scheme == 'orbii' && uri.host == 'join' && segs.isNotEmpty) {
+      return segs.first;
+    }
+    // https://orbii.app/join/<token>
+    if (segs.length >= 2 && segs.first == 'join') return segs[1];
+    return null;
+  }
+
+  Future<void> _acceptInvite(String token) async {
+    try {
+      await CirclesService.acceptInviteByToken(token);
+    } catch (_) {/* invalid/expired — silently ignore */}
+    ref.read(routerProvider).go(Routes.circles);
   }
 
   @override

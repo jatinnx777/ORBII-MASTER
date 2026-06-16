@@ -17,7 +17,22 @@ class Entitlement {
   final String status; // 'inactive' | 'active' | ...
   final DateTime? purchaseDate;
 
-  bool get isPlus => premiumEnabled && planType == 'plus' && status == 'active';
+  /// Any active paid tier (solo / family / plus) counts as premium.
+  bool get isPlus =>
+      premiumEnabled && status == 'active' && planType != 'free';
+
+  /// Human label for the active tier.
+  String get label {
+    switch (planType) {
+      case 'family':
+        return 'ORBII Family';
+      case 'solo':
+      case 'plus':
+        return 'ORBII Plus';
+      default:
+        return 'Free';
+    }
+  }
 
   static const free = Entitlement(
     planType: 'free',

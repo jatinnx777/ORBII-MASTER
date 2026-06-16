@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/colors.dart';
+import '../../core/widgets/orbii_dialog.dart';
 import '../../services/circles_service.dart';
 import '../../state/circles_provider.dart';
 
@@ -77,25 +78,13 @@ class CirclesScreen extends ConsumerWidget {
   }
 
   Future<void> _createDialog(BuildContext context, WidgetRef ref) async {
-    final ctrl = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('New circle'),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'e.g. Family, College'),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Create')),
-        ],
-      ),
+    final name = await showOrbiiPrompt(
+      context,
+      title: 'New circle',
+      subtitle: 'A private group of people you trust.',
+      hint: 'e.g. Family, College',
+      confirmLabel: 'Create',
+      icon: Icons.group_add,
     );
     if (name == null || name.isEmpty) return;
     try {

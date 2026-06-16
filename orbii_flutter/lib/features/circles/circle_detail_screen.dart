@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/colors.dart';
+import '../../core/widgets/orbii_dialog.dart';
 import '../../services/auth_service.dart';
 import '../../services/circles_service.dart';
 import '../../services/users_service.dart';
@@ -110,13 +112,15 @@ class CircleDetailScreen extends ConsumerWidget {
           children: [
             const SizedBox(height: 12),
             ListTile(
-              leading: const Icon(Icons.alternate_email),
-              title: const Text('Invite by username'),
+              leading: const Icon(Icons.ios_share, color: AppColors.sageDeep),
+              title: const Text('Share invite link'),
+              subtitle: const Text('Send via WhatsApp, SMS, anywhere'),
               onTap: () {
                 Navigator.pop(context);
-                _inviteByUsername(context, ref);
+                _shareInviteLink(context);
               },
             ),
+            const Divider(height: 1),
             ListTile(
               leading: const Icon(Icons.phone_outlined),
               title: const Text('Invite by phone number'),
@@ -125,11 +129,44 @@ class CircleDetailScreen extends ConsumerWidget {
                 _inviteByPhone(context, ref);
               },
             ),
+            ListTile(
+              leading: const Icon(Icons.alternate_email),
+              title: const Text('Invite by username'),
+              onTap: () {
+                Navigator.pop(context);
+                _inviteByUsername(context, ref);
+              },
+            ),
             const SizedBox(height: 12),
           ],
         ),
       ),
     );
+  }
+
+  String _linkFor(String token) => 'https://orbii.app/join/$token';
+
+  String _messageFor(String link) =>
+      'Join my ORBII safety circle "${circle.name}". Tap to accept and share '
+      'your live location during emergencies: $link';
+
+  /// Create a generic share link for the circle and open the system share
+  /// sheet (WhatsApp / SMS / anything). Works regardless of sql/18.
+  Future<void> _shareInviteLink(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final invite = await CirclesService.createInviteLink(circle.id);
+      final token = invite.token;
+      if (token == null) {
+        messenger.showSnackBar(
+            const SnackBar(content: Text('Could not create invite link.')));
+        return;
+      }
+      await Share.share(_messageFor(_linkFor(token)),
+          subject: 'Join my ORBII safety circle');
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
   }
 
   Future<void> _inviteByUsername(BuildContext context, WidgetRef ref) async {
@@ -150,27 +187,48 @@ class CircleDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _inviteByPhone(BuildContext context, WidgetRef ref) async {
-    final value = await _promptText(
+    final raw = await _promptText(
       context,
       title: 'Invite by phone',
       hint: '+9198…',
       keyboard: TextInputType.phone,
     );
-    if (value == null || value.isEmpty || !context.mounted) return;
+    if (raw == null || raw.isEmpty || !context.mounted) return;
+    final phone = _toE164(raw);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      // Resolve via the SECURITY DEFINER RPC first (never a direct phone read).
       final uid = AuthService.currentSession?.user.id;
-      final found = await UsersService.findByPhone(value, excludeUid: uid);
-      await CirclesService.inviteByPhone(circle.id, value);
-      messenger.showSnackBar(SnackBar(
-        content: Text(found != null
-            ? 'Invite sent to ${found.name ?? '@${found.username}'}'
-            : 'Invite saved — they\'ll see it when they join ORBII.'),
-      ));
+      // Best-effort: is this number already an ORBII user? (Won't throw even
+      // if find_user_by_phone / sql/18 isn't installed.)
+      final found = await UsersService.findByPhone(phone, excludeUid: uid);
+      // Always create the invite so we get a token to share.
+      final invite = await CirclesService.inviteByPhone(circle.id, phone);
+
+      if (found != null) {
+        messenger.showSnackBar(SnackBar(
+            content: Text(
+                'Invite sent to ${found.name ?? '@${found.username}'} — they\'ll see it in ORBII.')));
+      }
+      // Offer to share the link via WhatsApp/SMS regardless (covers people not
+      // on ORBII yet — the main use case).
+      final token = invite.token;
+      if (token != null) {
+        await Share.share(_messageFor(_linkFor(token)),
+            subject: 'Join my ORBII safety circle');
+      }
     } catch (e) {
       messenger.showSnackBar(SnackBar(content: Text('$e')));
     }
+  }
+
+  /// Normalise a typed number to E.164. Adds +91 (India) when no country code
+  /// is present, matching the RN `toE164India` helper.
+  String _toE164(String input) {
+    var s = input.trim().replaceAll(RegExp(r'[\s\-()]'), '');
+    if (s.startsWith('+')) return s;
+    s = s.replaceFirst(RegExp(r'^0+'), '');
+    if (s.length == 10) return '+91$s';
+    return '+$s';
   }
 
   Future<String?> _promptText(
@@ -179,26 +237,13 @@ class CircleDetailScreen extends ConsumerWidget {
     required String hint,
     TextInputType keyboard = TextInputType.text,
   }) {
-    final ctrl = TextEditingController();
-    return showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: ctrl,
-          autofocus: true,
-          keyboardType: keyboard,
-          decoration: InputDecoration(hintText: hint),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
-          FilledButton(
-              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
-              child: const Text('Send')),
-        ],
-      ),
+    return showOrbiiPrompt(
+      context,
+      title: title,
+      hint: hint,
+      confirmLabel: 'Send',
+      icon: Icons.person_add_alt,
+      keyboard: keyboard,
     );
   }
 

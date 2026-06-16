@@ -6,12 +6,17 @@ import 'package:go_router/go_router.dart';
 import '../services/auth_service.dart';
 import '../features/auth/sign_in_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
-import '../features/home/home_screen.dart';
+import '../features/shell/app_shell.dart';
 import '../features/sos/sos_countdown_screen.dart';
 import '../features/circles/circles_screen.dart';
 import '../features/circles/circle_detail_screen.dart';
 import '../features/community/community_alerts_screen.dart';
 import '../features/premium/premium_screen.dart';
+import '../features/history/history_screen.dart';
+import '../features/settings/settings_screen.dart';
+import '../features/about/about_screen.dart';
+import '../features/safemode/safe_mode_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import '../services/circles_service.dart';
 
 /// App routes. Kept as constants so feature code can `context.go(Routes.home)`
@@ -25,6 +30,11 @@ class Routes {
   static const circles = '/circles';
   static const community = '/community';
   static const premium = '/premium';
+  static const history = '/history';
+  static const settings = '/settings';
+  static const about = '/about';
+  static const safeMode = '/safe-mode';
+  static const notifications = '/notifications';
 }
 
 /// GoRouter provider with an auth-aware redirect (replaces React Navigation's
@@ -49,7 +59,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: Routes.home,
-        builder: (context, state) => const HomeScreen(),
+        builder: (context, state) => const AppShell(),
       ),
       GoRoute(
         path: Routes.signIn,
@@ -87,6 +97,26 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: Routes.premium,
         builder: (context, state) => const PremiumScreen(),
+      ),
+      GoRoute(
+        path: Routes.history,
+        builder: (context, state) => const HistoryScreen(),
+      ),
+      GoRoute(
+        path: Routes.settings,
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: Routes.about,
+        builder: (context, state) => const AboutScreen(),
+      ),
+      GoRoute(
+        path: Routes.safeMode,
+        builder: (context, state) => const SafeModeScreen(),
+      ),
+      GoRoute(
+        path: Routes.notifications,
+        builder: (context, state) => const NotificationsScreen(),
       ),
     ],
   );

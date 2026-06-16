@@ -20,6 +20,15 @@ class AuthService {
     );
   }
 
+  /// Apple OAuth (web flow on Android — same redirect handoff as Google).
+  static Future<void> signInWithApple() {
+    return _c.auth.signInWithOAuth(
+      OAuthProvider.apple,
+      redirectTo: SupabaseConfig.authRedirect,
+      authScreenLaunchMode: LaunchMode.externalApplication,
+    );
+  }
+
   /// Sends a 6-digit OTP to an E.164 phone number.
   static Future<void> sendPhoneOtp(String phoneE164) {
     return _c.auth.signInWithOtp(phone: phoneE164);

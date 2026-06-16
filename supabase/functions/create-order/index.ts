@@ -16,8 +16,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const KEY_ID = Deno.env.get('RAZORPAY_KEY_ID') ?? '';
 const KEY_SECRET = Deno.env.get('RAZORPAY_KEY_SECRET') ?? '';
 
-// ORBII Plus price (in paise). ₹99.00 = 9900. Adjust as needed.
-const PLAN_AMOUNT: Record<string, number> = { plus: 9900 };
+// Plan prices in paise (₹99 = 9900). Mirrors the RN tiers: Solo + Family.
+const PLAN_AMOUNT: Record<string, number> = {
+  solo: 9900, // ₹99/mo
+  family: 29900, // ₹299/mo
+  plus: 9900, // legacy alias → Solo
+};
 
 const cors = {
   'Access-Control-Allow-Origin': '*',

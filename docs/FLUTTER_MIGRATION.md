@@ -52,11 +52,19 @@
 >   `subscription_provider`, `entitlements_service`, redesigned `premium_screen`
 >   (hero + comparison + celebration), `premium_badge`. Home shows the badge +
 >   an upgrade CTA. Razorpay R8 keep-rules added; release build verified.
-> - ⏳ **Still remaining for true parity:** helper-availability toggle UI +
->   DB-backed nearby count; foreground `speech_to_text` + phrase editor;
->   History, Notifications inbox, Settings, Profile edit, SafeMode, About, full
->   Onboarding (Phase 6); OpenFreeMap vector tiles; on-device runtime testing of
->   voice / SOS / payments. **The migration is NOT 100% complete.**
+> - ✅ **Phase 6 (periphery + carried items)** — bottom-nav `AppShell`
+>   (Home/Safety/Plans/Profile), Safety screen (**helper-availability toggle** +
+>   **voice-phrase editor** — closes both carried items + battery help), Profile
+>   (identity, name edit, Plus badge, nav), Settings (permission shortcuts),
+>   History (`sos_events`), About, Safe Mode (giant SOS), full multi-slide
+>   Onboarding. `profile_service` + `sos_history_service`. `flutter analyze`
+>   clean; debug APK builds.
+> - ⏳ **Still remaining for true parity:** foreground `speech_to_text`
+>   quick-listen; DB-backed nearby count (presence count used now); OpenFreeMap
+>   vector tiles; avatar upload in Profile edit; a dedicated Notifications inbox
+>   (currently routed to Community alerts); **on-device runtime QA of voice / SOS
+>   / payments (Phase 7 — needs a physical device).** The migration is feature-
+>   complete on the spine but NOT yet device-verified end to end.
 > - Required before payments work: apply sql/19; deploy both Edge Functions with
 >   `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET` secrets; put your `rzp_test_*` key
 >   id in `orbii_flutter/.env`.
