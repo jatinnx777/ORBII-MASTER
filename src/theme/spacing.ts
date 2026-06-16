@@ -61,4 +61,31 @@ export const shadows = {
     shadowRadius: 6,
     elevation: 2,
   },
+  // Neumorphism — a soft, extruded surface on the warm canvas. RN allows one
+  // shadow per view, so a neu card renders the warm-grey drop shadow here and
+  // pairs it with a top/left white highlight border in the component.
+  neu: {
+    shadowColor: '#B7AEA4',
+    shadowOffset: { width: 7, height: 7 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 5,
+  },
+  // Pressed / inset neumorphic feel — tighter, lower.
+  neuPressed: {
+    shadowColor: '#B7AEA4',
+    shadowOffset: { width: 2, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 5,
+    elevation: 1,
+  },
+} as const;
+
+// Glassmorphism tokens — pair with an expo-blur <BlurView>. The fill is a
+// translucent surface; the hairline highlight sells the frosted edge.
+export const glass = {
+  fill: 'rgba(250,248,246,0.55)',
+  fillStrong: 'rgba(250,248,246,0.72)',
+  highlight: 'rgba(255,255,255,0.65)',
+  border: 'rgba(255,255,255,0.55)',
 } as const;

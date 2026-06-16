@@ -30,4 +30,13 @@
 -dontwarn com.sun.jna.**
 -dontwarn java.awt.**
 
+# Razorpay (react-native-razorpay) — keep SDK + payment callbacks; silence
+# optional deps it references but we don't ship.
+-keep class com.razorpay.** { *; }
+-keep class proguard.annotation.** { *; }
+-keepclasseswithmembers class * { public void onPayment*(...); }
+-dontwarn com.razorpay.**
+-dontwarn proguard.annotation.**
+-optimizations !method/inlining/*
+
 # Add any project specific keep options here:

@@ -17,6 +17,7 @@ import { Button, Mascot } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { premiumUpgraded } from '@/redux/slices/userSlice';
+import { purchasePlan, fetchEntitlement, type PlanId as PaidPlanId } from '@/services/razorpay';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
@@ -115,10 +116,39 @@ export function PremiumUpgradeScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
+  const [paying, setPaying] = useState<PaidPlanId | null>(null);
 
   useEffect(() => {
     trackEvent('premium_viewed');
-  }, []);
+    // Sync premium from the server entitlement so it persists across
+    // re-login / reinstall (the source of truth is the entitlements table).
+    fetchEntitlement().then((active) => {
+      if (active) dispatch(premiumUpgraded());
+    });
+  }, [dispatch]);
+
+  // Live Razorpay (test mode) checkout for a paid plan.
+  const handlePay = async (planId: PaidPlanId) => {
+    if (paying) return;
+    setPaying(planId);
+    try {
+      const result = await purchasePlan(planId);
+      if (result.ok) {
+        dispatch(premiumUpgraded());
+        trackEvent('premium_purchased', { plan: planId });
+        Alert.alert(
+          '🎉 Welcome to ORBII ' + (planId === 'family' ? 'Family' : 'Plus'),
+          'Your premium protection is now active. Stay safe out there.',
+        );
+      } else if (result.cancelled) {
+        // Silent — the user chose to cancel.
+      } else {
+        Alert.alert('Payment failed', result.error ?? 'Please try again.');
+      }
+    } finally {
+      setPaying(null);
+    }
+  };
 
   const applyCoupon = () => {
     const code = coupon.trim().toUpperCase();
@@ -201,7 +231,11 @@ export function PremiumUpgradeScreen() {
               plan={plan}
               index={index}
               current={plan.id === 'free' && !isPremium}
-              onPress={() => setWaitlistOpen(plan.id)}
+              loading={paying === plan.id}
+              onPress={() => {
+                if (plan.id === 'free') return;
+                handlePay(plan.id as PaidPlanId);
+              }}
             />
           ))}
 
@@ -238,8 +272,8 @@ export function PremiumUpgradeScreen() {
           </View>
 
           <Text style={styles.footnote}>
-            Prices in INR per month, taxes included. Payments aren't live yet.
-            You'll be the first to know when they switch on.
+            Prices in INR per month, taxes included. Secure payments by Razorpay
+            (test mode) — use any Razorpay test card to try checkout.
           </Text>
         </ScrollView>
       </SafeAreaView>
@@ -261,11 +295,13 @@ function PlanCard({
   plan,
   index,
   current,
+  loading,
   onPress,
 }: {
   plan: Plan;
   index: number;
   current: boolean;
+  loading?: boolean;
   onPress: () => void;
 }) {
   const enter = useRef(new Animated.Value(0)).current;
@@ -331,8 +367,9 @@ function PlanCard({
         </View>
       ) : (
         <Button
-          label={plan.highlight ? `Get ${plan.name}` : `Choose ${plan.name}`}
+          label={plan.highlight ? `Get ${plan.name} · ₹${plan.price}/mo` : `Choose ${plan.name}`}
           variant={plan.highlight ? 'primary' : 'secondary'}
+          loading={loading}
           onPress={onPress}
         />
       )}
@@ -434,12 +471,18 @@ const styles = StyleSheet.create({
     color: colors.goldDeep,
   },
   planCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.cream,
     borderRadius: radius.xxl,
     padding: spacing.lg,
-    ...shadows.card,
+    marginBottom: spacing.md,
+    // Neumorphic raised surface on the warm canvas.
+    ...shadows.neu,
+    borderTopWidth: 1.5,
+    borderLeftWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.85)',
   },
   planCardHighlight: {
+    backgroundColor: colors.surface,
     borderWidth: 2,
     borderColor: colors.peach,
   },

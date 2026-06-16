@@ -2,6 +2,8 @@ export { BatteryWarning } from './BatteryWarning';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { Button } from './Button';
 export { Card } from './Card';
+export { GlassCard } from './GlassCard';
+export { NeuCard } from './NeuCard';
 export { IconBadge, type BadgeTint } from './IconBadge';
 export { FeatureChip } from './FeatureChip';
 export { Mascot } from './Mascot';
