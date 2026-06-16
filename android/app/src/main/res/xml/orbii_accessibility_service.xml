@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    AccessibilityService config for hardware-button SOS.
+
+    The two flags that matter:
+      • flagRequestFilterKeyEvents — required for onKeyEvent to fire
+      • canRequestFilterKeyEvents — declared capability
+
+    accessibilityEventTypes is set to typeAllMask because Android requires
+    a non-zero value, but our service ignores accessibility content events
+    (we override onAccessibilityEvent as a no-op).
+-->
+<accessibility-service
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagDefault|flagRequestFilterKeyEvents"
+    android:canRequestFilterKeyEvents="true"
+    android:notificationTimeout="100"
+    android:description="@string/orbii_accessibility_description"
+    android:summary="@string/orbii_accessibility_summary" />

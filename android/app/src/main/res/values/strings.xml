@@ -1,0 +1,7 @@
+<resources>
+  <string name="app_name">ORBII</string>
+  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
+  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+  <string name="orbii_accessibility_summary">Triple-press volume to fire SOS, even with the screen off.</string>
+  <string name="orbii_accessibility_description">ORBII listens for a triple press of the volume button so you can fire an emergency SOS without unlocking the phone or opening the app. ORBII never reads on-screen content; only volume key events.</string>
+</resources>

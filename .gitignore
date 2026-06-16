@@ -13,4 +13,17 @@ web-build/
 .env.local
 .env.*.local
 ios/
-android/
+
+# --- Android (RN native): track SOURCE, exclude build artifacts + secrets ---
+/android/build/
+/android/.gradle/
+/android/.cxx/
+/android/app/build/
+/android/app/.cxx/
+# Secrets — kept ONLY in the local tar.gz backup, never in git:
+/android/keystore.properties
+/android/app/orbii-release.keystore
+/android/local.properties
+# Flutter native dir (Flutter retired; orbii_flutter slated for removal)
+/orbii_flutter/android/
+/orbii_flutter/ios/
