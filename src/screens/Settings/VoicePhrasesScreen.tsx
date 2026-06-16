@@ -31,9 +31,12 @@ import {
   startBackgroundVoice,
   stopBackgroundVoice,
 } from '@/services/background-voice';
+import { useIsPremium, FREE_VOICE_PHRASE_LIMIT } from '@/services/entitlements';
+import { promptUpgrade } from '@/services/paywall';
 
 export function VoicePhrasesScreen() {
   const navigation = useNavigation();
+  const isPremium = useIsPremium();
   const [phrases, setPhrases] = useState<string[]>([]);
   const [input, setInput] = useState('');
   const [bgEnabled, setBgEnabled] = useState(false);
@@ -63,6 +66,14 @@ export function VoicePhrasesScreen() {
 
   const toggleBg = async (next: boolean) => {
     if (next) {
+      // Background voice monitoring is an ORBII Plus feature.
+      if (!isPremium) {
+        promptUpgrade({
+          feature: 'Background voice monitoring',
+          onUpgrade: () => navigation.navigate('PremiumUpgrade' as never),
+        });
+        return;
+      }
       if (phrases.length === 0) {
         Alert.alert('Add a phrase first', 'Set at least one secret phrase before turning on background protection.');
         return;
@@ -95,6 +106,18 @@ export function VoicePhrasesScreen() {
   const onAdd = async () => {
     const text = input.trim();
     if (text.length < VOICE_PHRASE_LIMITS.min) return;
+    // Free tier: one trigger phrase. ORBII Plus: unlimited (up to the
+    // technical max).
+    if (!isPremium && phrases.length >= FREE_VOICE_PHRASE_LIMIT) {
+      promptUpgrade({
+        feature: 'Unlimited voice trigger phrases',
+        body:
+          'Free includes one trigger phrase. Upgrade to ORBII Plus (₹99/month) ' +
+          'for unlimited custom phrases and multiple emergency keywords.',
+        onUpgrade: () => navigation.navigate('PremiumUpgrade' as never),
+      });
+      return;
+    }
     const next = await addPhrase(text);
     setPhrases(next);
     setInput('');
@@ -104,7 +127,10 @@ export function VoicePhrasesScreen() {
     setPhrases(await removePhrase(p));
   };
 
-  const atLimit = phrases.length >= VOICE_PHRASE_LIMITS.max;
+  const effectiveMax = isPremium
+    ? VOICE_PHRASE_LIMITS.max
+    : FREE_VOICE_PHRASE_LIMIT;
+  const atLimit = phrases.length >= effectiveMax;
 
   return (
     <View style={styles.root}>

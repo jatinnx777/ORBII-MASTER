@@ -43,7 +43,6 @@ export function SafetyScreen() {
         <WatchOverMe />
         <SectionHeader title="Personal Safety" />
         <VoiceSOSCard />
-        <EmergencySOSCard />
       </ScrollView>
     </ScreenContainer>
   );
@@ -238,70 +237,6 @@ function Waveform({ active }: { active: boolean }) {
           ]}
         />
       ))}
-    </View>
-  );
-}
-
-/* ── Emergency SOS ──────────────────────────────────────── */
-function EmergencySOSCard() {
-  const sheet = useBrandSheet();
-  const navigation = useNavigation<Nav>();
-  const profile = useAppSelector((s) => s.user.profile);
-  const lastSOS = useAppSelector((s) => s.history.records.find((r) => r.kind !== 'test') ?? null);
-  const activeSOS = useAppSelector((s) => s.sos.activeSOS);
-  const [firing, setFiring] = useState(false);
-
-  const lastLabel = lastSOS
-    ? new Date(lastSOS.timestamp).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
-    : 'No alerts yet';
-
-  const handleTest = async () => {
-    if (!profile) return;
-    setFiring(true);
-    try {
-      await createSOS(profile, { latitude: 0, longitude: 0, address: 'Test location' }, 'test');
-      trackEvent('sos_triggered', { kind: 'test', source: 'safety_tab' });
-      sheet.notify({
-        title: 'Test alert sent',
-        body: 'No real helpers were notified. That was a practice run.',
-        tone: 'success',
-        icon: 'shield-checkmark',
-      });
-    } finally {
-      setFiring(false);
-    }
-  };
-
-  return (
-    <View style={styles.card}>
-      <View style={styles.cardHead}>
-        <IconBadge icon="alert-circle" tint="coral" size={42} />
-        <View style={{ flex: 1, marginLeft: spacing.md }}>
-          <Text style={styles.cardTitle}>Emergency SOS</Text>
-          <Text style={styles.cardDesc}>Alerts your circle and nearby helpers with your live location.</Text>
-        </View>
-      </View>
-      <View style={styles.metaRow}>
-        <Meta label="Status" value={activeSOS ? 'Active' : 'Ready'} highlight={!!activeSOS} />
-        <Meta label="Last alert" value={lastLabel} />
-      </View>
-      <View style={styles.actionRow}>
-        <Pressable
-          onPress={handleTest}
-          disabled={firing}
-          style={({ pressed }) => [styles.secondaryBtn, (pressed || firing) && styles.pressed]}
-        >
-          <Ionicons name="flash" size={14} color={colors.textPrimary} />
-          <Text style={styles.secondaryBtnText}>{firing ? 'Sending…' : 'Practice'}</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => navigation.navigate('SOSCountdown')}
-          style={({ pressed }) => [styles.primaryBtn, pressed && styles.pressed]}
-        >
-          <Ionicons name="warning" size={14} color={colors.textInverse} />
-          <Text style={styles.primaryBtnText}>Send SOS</Text>
-        </Pressable>
-      </View>
     </View>
   );
 }

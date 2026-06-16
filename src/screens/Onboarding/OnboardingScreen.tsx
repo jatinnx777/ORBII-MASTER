@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
+  Easing,
   FlatList,
   Pressable,
   ScrollView,
@@ -12,9 +13,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, IconBadge, FeatureChip, Mascot } from '@/components/common';
+import { Button, IconBadge, FeatureChip } from '@/components/common';
 import type { BadgeTint } from '@/components/common';
-import type { MascotPose } from '@/components/common/Mascot';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
@@ -168,19 +168,54 @@ function Dots({
   );
 }
 
-/* ── mascot with orbiting icon badges ───────────────────── */
-function OrbitMascot({
-  pose,
-  badges,
+/* ── animated guardian hero (breathing glow + float, no mascot) ── */
+function AnimatedHero({
+  icon = 'shield-checkmark',
   size = 180,
+  badges = [],
 }: {
-  pose: MascotPose;
-  badges: { icon: keyof typeof Ionicons.glyphMap; tint: BadgeTint; pos: object }[];
+  icon?: keyof typeof Ionicons.glyphMap;
   size?: number;
+  badges?: { icon: keyof typeof Ionicons.glyphMap; tint: BadgeTint; pos: object }[];
 }) {
+  const glow = useRef(new Animated.Value(0)).current;
+  const float = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = (v: Animated.Value, d: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+    const a = loop(glow, 2000);
+    const b = loop(float, 2600);
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [glow, float]);
+  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0.55] });
+  const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.25] });
   return (
     <View style={[styles.orbitWrap, { height: size + 24 }]}>
-      <Mascot pose={pose} size={size} />
+      <Animated.View
+        style={[
+          styles.heroGlow,
+          { width: size, height: size, borderRadius: size / 2, opacity: glowOpacity, transform: [{ scale: glowScale }] },
+        ]}
+      />
+      <Animated.View
+        style={[
+          styles.heroCore,
+          { width: size * 0.78, height: size * 0.78, borderRadius: (size * 0.78) / 2, transform: [{ translateY: floatY }] },
+        ]}
+      >
+        <Ionicons name={icon} size={size * 0.38} color={colors.goldDeep} />
+      </Animated.View>
       {badges.map((b, i) => (
         <IconBadge
           key={i}
@@ -215,8 +250,8 @@ function HeroSlide() {
         need it most.
       </Text>
 
-      <OrbitMascot
-        pose="neutral"
+      <AnimatedHero
+        icon="shield-checkmark"
         size={180}
         badges={[
           { icon: 'shield-outline', tint: 'gold', pos: { top: 8, right: 24 } },
@@ -278,7 +313,7 @@ function FeaturesSlide() {
             ORBII keeps an eye on what matters and is always ready to protect you.
           </Text>
         </View>
-        <Mascot pose="shield" size={120} />
+        <AnimatedHero icon="shield-checkmark" size={120} />
       </View>
 
       <View style={{ gap: spacing.md, marginTop: spacing.lg }}>
@@ -341,7 +376,7 @@ function StepsSlide() {
             with nearby verified helpers.
           </Text>
         </View>
-        <Mascot pose="shield" size={120} />
+        <AnimatedHero icon="shield-checkmark" size={120} />
       </View>
 
       <View style={styles.stepsCard}>
@@ -457,6 +492,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginVertical: spacing.lg,
+  },
+  heroGlow: {
+    position: 'absolute',
+    backgroundColor: colors.gold,
+  },
+  heroCore: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.goldSoft,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    ...shadows.card,
   },
   orbitBadge: {
     position: 'absolute',

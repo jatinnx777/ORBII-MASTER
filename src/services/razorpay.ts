@@ -1,5 +1,6 @@
 import RazorpayCheckout from 'react-native-razorpay';
 import { supabase } from './supabase';
+import { getItem, setItem, storageKeys } from './storage';
 
 // Razorpay TEST-mode checkout for ORBII paid plans (Solo / Family). The secret
 // key NEVER lives in the app:
@@ -104,18 +105,50 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
   return { ok: true };
 }
 
-/// Reads the user's entitlement so premium persists across re-login / restart.
+// ORBII Plus lasts one month from purchase. We expire it client-side off the
+// server `purchase_date` so a reinstall within the month stays active, but the
+// subscription is dismissed once the month is up.
+const PLUS_VALID_DAYS = 30;
+
+/// Reads the user's entitlement so premium persists across re-login / reinstall
+/// — but only while it's within the 1-month validity window.
 export async function fetchEntitlement(): Promise<boolean> {
   const uid = (await supabase.auth.getUser()).data.user?.id;
   if (!uid) return false;
   try {
     const { data } = await supabase
       .from('entitlements')
-      .select('premium_enabled, status')
+      .select('premium_enabled, status, purchase_date')
       .eq('user_id', uid)
       .maybeSingle();
-    return !!data?.premium_enabled && data?.status === 'active';
+    if (!data?.premium_enabled || data.status !== 'active') return false;
+    const purchasedAt = data.purchase_date ? Date.parse(data.purchase_date) : 0;
+    if (!purchasedAt) return false;
+    const ageMs = Date.now() - purchasedAt;
+    return ageMs <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
   } catch {
     return false;
   }
+}
+
+/// Record an ORBII coupon redemption (also gives one month of Plus).
+export async function markCouponRedeemed(): Promise<void> {
+  await setItem(storageKeys.premiumCoupon, Date.now());
+}
+
+async function couponPremiumActive(): Promise<boolean> {
+  const at = await getItem<number>(storageKeys.premiumCoupon);
+  if (!at) return false;
+  return Date.now() - at <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
+}
+
+/// The single source of truth for "is Plus active right now": a paid
+/// subscription (server, survives reinstall) OR a coupon redemption (local) —
+/// each within the 1-month window. Call on launch to reconcile `isPremium`.
+export async function resolvePremiumActive(): Promise<boolean> {
+  const [paid, coupon] = await Promise.all([
+    fetchEntitlement(),
+    couponPremiumActive(),
+  ]);
+  return paid || coupon;
 }

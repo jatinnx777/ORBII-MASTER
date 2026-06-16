@@ -16,8 +16,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Mascot } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { premiumUpgraded } from '@/redux/slices/userSlice';
-import { purchasePlan, fetchEntitlement, type PlanId as PaidPlanId } from '@/services/razorpay';
+import { premiumUpgraded, premiumStatusResolved } from '@/redux/slices/userSlice';
+import {
+  purchasePlan,
+  resolvePremiumActive,
+  markCouponRedeemed,
+  type PlanId as PaidPlanId,
+} from '@/services/razorpay';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
@@ -45,43 +50,36 @@ type Plan = {
 const PLANS: Plan[] = [
   {
     id: 'free',
-    name: 'Free',
+    name: 'ORBII Free',
     price: 0,
-    tagline: 'Everything you need to stay safe.',
+    tagline: 'Core emergency protection, free forever.',
     features: [
-      'Emergency SOS',
-      'Live Location',
-      'Nearby Helpers',
-      'Emergency Contacts',
-      '2 Voice SOS activations / month',
+      'Manual SOS button',
+      'Live location sharing',
+      'Up to 3 emergency contacts',
+      'Auto audio recording during SOS',
+      'Safe Journey mode',
+      'SOS history (last 7 days)',
+      'Helper alerts from nearby users',
+      'One voice trigger phrase',
     ],
   },
   {
     id: 'solo',
-    name: 'Solo',
+    name: 'ORBII Plus',
     price: 99,
-    tagline: 'Hands-free protection, always on.',
+    tagline: 'Family circles, advanced voice & full protection.',
     highlight: true,
-    badge: 'RECOMMENDED',
+    badge: 'MOST POPULAR',
     features: [
-      'Everything in Free',
-      'Unlimited Voice SOS',
-      'Priority Alerts',
-      'Advanced safety features',
-    ],
-  },
-  {
-    id: 'family',
-    name: 'Family',
-    price: 299,
-    tagline: 'Protect everyone you love.',
-    badge: 'BEST FOR FAMILIES',
-    valueNote: 'Just ₹75 per person',
-    features: [
-      'Up to 4 family members',
-      'Shared safety circle',
-      'Unlimited Voice SOS',
-      'Family dashboard',
+      'Family Circles + unlimited members',
+      'Real-time family tracking during SOS',
+      'Unlimited custom voice phrases',
+      'Background voice monitoring',
+      'Advanced Protection Strength',
+      'Priority helper matching + ETA',
+      'Dead Man’s Switch & Trusted Places',
+      'WhatsApp emergency automation',
     ],
   },
 ];
@@ -122,8 +120,8 @@ export function PremiumUpgradeScreen() {
     trackEvent('premium_viewed');
     // Sync premium from the server entitlement so it persists across
     // re-login / reinstall (the source of truth is the entitlements table).
-    fetchEntitlement().then((active) => {
-      if (active) dispatch(premiumUpgraded());
+    resolvePremiumActive().then((active) => {
+      dispatch(premiumStatusResolved(active));
     });
   }, [dispatch]);
 
@@ -158,6 +156,7 @@ export function PremiumUpgradeScreen() {
     }
     if (code === PROMO_CODE) {
       dispatch(premiumUpgraded());
+      markCouponRedeemed();
       setCouponApplied(true);
       trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
       Alert.alert(

@@ -49,6 +49,10 @@ export function AppNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
+        // Smooth slide-over between pages (SOS/emergency screens override this
+        // with their own fade / slide-from-bottom below).
+        animation: 'slide_from_right',
+        animationDuration: 280,
       }}
     >
       <Stack.Screen name="Tabs" component={TabNavigator} />

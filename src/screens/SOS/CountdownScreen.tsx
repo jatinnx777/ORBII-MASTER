@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
+  Animated,
   AppState,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -53,6 +55,26 @@ export function CountdownScreen() {
   const [triggering, setTriggering] = useState(false);
   const cancelledRef = useRef(false);
   const triggeredRef = useRef(false);
+
+  // Macro-animation: a ring that smoothly drains over the countdown + a soft
+  // pulse on the number each second, so the wait feels alive, not static.
+  const progress = useRef(new Animated.Value(1)).current;
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (isInstant) return;
+    Animated.timing(progress, {
+      toValue: 0,
+      duration: COUNTDOWN_SECONDS * 1000,
+      easing: Easing.linear,
+      useNativeDriver: false,
+    }).start();
+  }, [isInstant, progress]);
+  useEffect(() => {
+    Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.12, duration: 140, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+      Animated.spring(pulse, { toValue: 1, friction: 4, useNativeDriver: true }),
+    ]).start();
+  }, [seconds, pulse]);
   const lastBuzzedSecondRef = useRef<number>(COUNTDOWN_SECONDS);
 
   useEffect(() => {
@@ -197,15 +219,32 @@ export function CountdownScreen() {
         <Text style={styles.heading}>
           {isTest ? 'Practice SOS in' : 'Sending SOS in'}
         </Text>
-        <Text style={styles.number}>
+        <Animated.Text
+          style={[styles.number, { transform: [{ scale: pulse }] }]}
+        >
           {triggering ? '…' : Math.max(seconds, 0)}
-        </Text>
+        </Animated.Text>
+        {!isInstant && !triggering ? (
+          <View style={styles.progressTrack}>
+            <Animated.View
+              style={[
+                styles.progressFill,
+                {
+                  width: progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['0%', '100%'],
+                  }),
+                },
+              ]}
+            />
+          </View>
+        ) : null}
         <Text style={styles.caption}>
           {triggering
             ? isTest
               ? 'Test SOS recorded. No real alerts dispatched.'
-              : 'Dispatching helpers and alerting police…'
-            : 'Release to cancel accidental alerts.'}
+              : 'Dispatching helpers and alerting police.'
+            : 'Tap cancel to stop an accidental alert.'}
         </Text>
       </View>
 
@@ -220,7 +259,7 @@ export function CountdownScreen() {
           triggering && styles.cancelDisabled,
         ]}
       >
-        <Text style={styles.cancelText}>Cancel</Text>
+        <Text style={styles.cancelText}>CANCEL SOS</Text>
       </Pressable>
     </View>
   );
@@ -275,25 +314,43 @@ const styles = StyleSheet.create({
   },
   cancel: {
     alignSelf: 'stretch',
-    minHeight: touchTarget.comfortable,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: colors.textInverse,
+    minHeight: touchTarget.comfortable + 6,
+    borderRadius: 18,
+    backgroundColor: '#D81B1B', // full, solid red cancel button
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
   },
   cancelPressed: {
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: '#B00000',
+    transform: [{ scale: 0.98 }],
   },
   cancelDisabled: {
     opacity: 0.5,
   },
   cancelText: {
     ...typography.button,
-    fontSize: 20,
+    fontSize: 19,
     color: colors.textInverse,
-    letterSpacing: 1,
+    letterSpacing: 1.5,
+  },
+  progressTrack: {
+    height: 6,
+    width: '70%',
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginTop: spacing.md,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 3,
+    backgroundColor: colors.textInverse,
   },
 });

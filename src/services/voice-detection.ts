@@ -191,10 +191,11 @@ function cleanupSubs() {
   subs = [];
 }
 
-function scheduleRestart(delayMs = 250) {
+function scheduleRestart(delayMs = 120) {
   if (restartTimer) clearTimeout(restartTimer);
   if (!shouldBeListening) return;
-  // Short delay so the native engine can tear down before we reopen.
+  // Keep the "deaf" window between recognition sessions as short as the native
+  // engine allows, so a phrase spoken right after a restart isn't missed.
   restartTimer = setTimeout(() => {
     if (shouldBeListening) startNativeSession();
   }, delayMs);
@@ -250,7 +251,7 @@ function startNativeSession() {
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'start failed';
     setStatus('error', msg);
-    scheduleRestart(800);
+    scheduleRestart(400);
   }
 }
 

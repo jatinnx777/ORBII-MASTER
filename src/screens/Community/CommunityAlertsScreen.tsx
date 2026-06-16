@@ -32,6 +32,7 @@ import {
   alertsLoadStarted,
   alertsLoaded,
   respondingStarted,
+  alertDismissed,
 } from '@/redux/slices/communitySlice';
 import {
   alertFromBroadcast,
@@ -211,7 +212,11 @@ export function CommunityAlertsScreen() {
           }
           ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
           renderItem={({ item }) => (
-            <AlertCard alert={item} onRespond={() => handleRespond(item)} />
+            <AlertCard
+              alert={item}
+              onRespond={() => handleRespond(item)}
+              onDismiss={() => dispatch(alertDismissed(item.id))}
+            />
           )}
         />
       )}
@@ -222,9 +227,11 @@ export function CommunityAlertsScreen() {
 function AlertCard({
   alert: item,
   onRespond,
+  onDismiss,
 }: {
   alert: CommunityAlert;
   onRespond: () => void;
+  onDismiss: () => void;
 }) {
   const [pulse] = useState(new Animated.Value(0));
 
@@ -315,7 +322,9 @@ function AlertCard({
       </View>
 
       <View style={cardStyles.footerRow}>
-        <Text style={cardStyles.ageText}>{ageText}</Text>
+        <Pressable onPress={onDismiss} style={cardStyles.dismissBtn} hitSlop={8}>
+          <Text style={cardStyles.dismissText}>Not available</Text>
+        </Pressable>
         <Pressable onPress={onRespond} style={cardStyles.respondBtn}>
           <Ionicons name="arrow-forward" size={16} color={colors.textInverse} />
           <Text style={cardStyles.respondText}>I'll help</Text>
@@ -524,6 +533,17 @@ const cardStyles = StyleSheet.create({
     ...typography.caption,
     color: colors.textMuted,
     fontSize: 12,
+  },
+  dismissBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceMuted,
+  },
+  dismissText: {
+    ...typography.button,
+    fontSize: 13,
+    color: colors.textSecondary,
   },
   respondBtn: {
     flexDirection: 'row',

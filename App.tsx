@@ -43,6 +43,8 @@ import {
   subscribeToAlerts,
 } from '@/services/community';
 import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
+import { premiumStatusResolved } from '@/redux/slices/userSlice';
+import { resolvePremiumActive } from '@/services/razorpay';
 import { subscribeKeyword } from '@/services/voice-detection';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
@@ -117,6 +119,16 @@ function RootNavigator() {
     } else if (status === 'idle') {
       store.dispatch(circlesReset());
     }
+  }, [status]);
+
+  // Reconcile ORBII Plus on every sign-in / launch: active if a paid
+  // subscription (server, survives reinstall) or coupon redemption is within
+  // its 1-month window; otherwise the subscription is dismissed.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    resolvePremiumActive()
+      .then((active) => store.dispatch(premiumStatusResolved(active)))
+      .catch(() => undefined);
   }, [status]);
 
   // Deep-link join handler. Listens for orbii://join/<token> AND
@@ -388,7 +400,10 @@ export default function App() {
   // alert from buzzing phones in Mumbai.
   useEffect(() => {
     const seen = new Set<string>();
-    const pending = new Map<string, { broadcast: ReturnType<typeof Object>; alert: ReturnType<typeof Object> }>();
+    const pending = new Map<
+      string,
+      { broadcast: ReturnType<typeof Object>; alert: ReturnType<typeof Object>; distance: number }
+    >();
 
     const handleAlert = (broadcastPayload: Parameters<typeof alertFromBroadcast>[0]) => {
       const state = store.getState();
@@ -398,8 +413,11 @@ export default function App() {
       if (!alert) return;
       if (seen.has(alert.id)) return;
       const distance = alert.distanceMeters;
+      // Search starts at 2 km; the victim escalates the ring to 5 km then
+      // 10 km if not enough helpers respond. Helpers up to 10 km are held
+      // pending and revealed when the ring reaches them.
       const within2km = distance < 0 || distance <= 2000;
-      const within5km = distance < 0 || distance <= 5000;
+      const within10km = distance < 0 || distance <= 10000;
       // Friends in the victim's circle get the alert regardless of distance,
       // with a stronger vibration. The receiver still sees an accurate
       // distance/ETA in the alert card.
@@ -431,15 +449,17 @@ export default function App() {
         }
         return;
       }
-      if (within5km) {
-        pending.set(alert.id, { broadcast: broadcastPayload, alert });
+      if (within10km) {
+        pending.set(alert.id, { broadcast: broadcastPayload, alert, distance });
       }
       // else: silently drop, this user is too far to help
     };
 
-    const handleExpand = (sosId: string) => {
+    const handleExpand = (sosId: string, radiusKm: number) => {
       const cached = pending.get(sosId);
       if (!cached) return;
+      // Only reveal this helper if the expanded ring now reaches them.
+      if (cached.distance >= 0 && cached.distance > radiusKm * 1000) return;
       pending.delete(sosId);
       seen.add(sosId);
       const state = store.getState();

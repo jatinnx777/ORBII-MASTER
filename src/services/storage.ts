@@ -7,6 +7,7 @@ const KEYS = {
   profile: 'orbii:profile',
   notifications: 'orbii:notifications',
   premiumWaitlist: 'orbii:premium:waitlist',
+  premiumCoupon: 'orbii:premium:coupon-at',
   safetyModes: 'orbii:safety-modes',
   locale: 'orbii:locale',
   activeCircleId: 'orbii:circles:active',

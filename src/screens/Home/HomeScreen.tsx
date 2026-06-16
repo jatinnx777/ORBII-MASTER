@@ -23,7 +23,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SOSButton } from './components/SOSButton';
 import {
   BatteryWarning,
-  Mascot,
   MascotLoader,
   MLMapView,
   ScreenContainer,
@@ -61,7 +60,6 @@ import { formatDistance, haversineMeters } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
 import { shouldDampenWork } from '@/services/battery-aware';
 import { useNotificationsBadge } from '@/hooks/useNotificationsBadge';
-import { useGuardianMessage, type GuardianContext } from '@/hooks/useGuardianMessage';
 import {
   backgroundVoiceAvailable,
   isBatteryExempt,
@@ -71,6 +69,7 @@ import {
   startBackgroundVoice,
   stopBackgroundVoice,
 } from '@/services/background-voice';
+import { useIsPremium } from '@/services/entitlements';
 import { loadPhrases } from '@/services/voice-phrases';
 import {
   startListening,
@@ -92,6 +91,7 @@ export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
+  const isPremium = useIsPremium();
   const { locationPermission, helpersNearby } = useAppSelector((s) => s.sos);
   // `helperVerified` is the legacy gig-economy flag (cut). Circle members
   // are now the only "helpers" — every peer the user trusts is implicitly
@@ -388,6 +388,12 @@ export function HomeScreen() {
       toggleListening();
       return;
     }
+    // Free tier: in-app (foreground) voice trigger only — their one Voice SOS.
+    // Background voice monitoring is an ORBII Plus feature.
+    if (!isPremium) {
+      toggleListening();
+      return;
+    }
     if (bgVoiceOn) {
       await stopBackgroundVoice();
       await saveBgVoiceState({ enabled: false, hours: 12 });
@@ -404,7 +410,7 @@ export function HomeScreen() {
         { text: 'Cancel', style: 'cancel' },
       ],
     );
-  }, [bgVoiceOn, armBackground, toggleListening]);
+  }, [bgVoiceOn, armBackground, toggleListening, isPremium]);
 
   // Voice keyword → SOS is handled globally (and quota-gated) in App.tsx,
   // so Home no longer subscribes here (it would double-fire).
@@ -420,19 +426,10 @@ export function HomeScreen() {
 
   const insets = useSafeAreaInsets();
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
+  const firstName = (profile?.name ?? '').trim().split(/\s+/)[0] || 'there';
   const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
   const unreadCount = useNotificationsBadge();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
-
-  const guardianContext: GuardianContext =
-    locationPermission !== 'granted'
-      ? 'permissionMissing'
-      : contactsCount === 0
-        ? 'contactsMissing'
-        : voiceListening
-          ? 'voiceReady'
-          : 'safe';
-  const guardianMessage = useGuardianMessage(guardianContext);
 
   // Build the marker list for the map. Keep markers within MAP_RADIUS_KM of
   // the user so the map stays focused on their immediate neighbourhood.
@@ -601,14 +598,26 @@ export function HomeScreen() {
         />
       </View>
 
-      <BottomPanel bottomInset={insets.bottom} message={guardianMessage}>
-        {/* ── Protection status hero ─────────────────────── */}
-        <ProtectionHero
-          voiceOn={voiceOn}
-          bgOn={bgVoiceOn}
-          helpers={helpersNearby}
-          scanning={helpersScanState === 'scanning'}
-        />
+      <BottomPanel bottomInset={insets.bottom}>
+        {/* ── Greeting + all-clear status ────────────────── */}
+        <View style={styles.greetingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greetingHi} numberOfLines={1}>
+              Hi {firstName}
+            </Text>
+            <Text style={styles.greetingSub}>
+              {locationOk
+                ? "You're all set. Help is one tap away."
+                : 'Enable location so we can dispatch help.'}
+            </Text>
+          </View>
+          <View
+            style={[
+              styles.statusDot,
+              { backgroundColor: locationOk ? colors.sage : colors.peachDeep },
+            ]}
+          />
+        </View>
 
         {/* ── Protection Strength (slim status pill) ─────── */}
         <ProtectionStrengthPill
@@ -722,63 +731,6 @@ function Waveform({ active }: { active: boolean }) {
           />
         );
       })}
-    </View>
-  );
-}
-
-/* ── protection status hero (with breathing glow) ──────── */
-function ProtectionHero({
-  voiceOn,
-  bgOn,
-  helpers,
-  scanning,
-}: {
-  voiceOn: boolean;
-  bgOn: boolean;
-  helpers: number;
-  scanning: boolean;
-}) {
-  const glow = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(glow, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(glow, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [glow]);
-  const glowStyle = {
-    opacity: glow.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0.65] }),
-    transform: [{ scale: glow.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.2] }) }],
-  };
-  return (
-    <View style={[styles.card, styles.hero]}>
-      <View style={styles.heroIconWrap}>
-        <Animated.View style={[styles.heroGlow, glowStyle]} />
-        <View style={styles.heroIcon}>
-          <Ionicons name="shield-checkmark" size={26} color={colors.sageDeep} />
-        </View>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.heroTitle}>Protected</Text>
-        <Text style={styles.heroSub}>All systems active</Text>
-        <View style={styles.heroPills}>
-          <HeroPill on={voiceOn} label="Voice SOS" />
-          <HeroPill on={bgOn} label="Background" />
-          <HeroPill on={helpers > 0} label={scanning ? 'Scanning…' : `${helpers} nearby`} />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function HeroPill({ on, label }: { on: boolean; label: string }) {
-  return (
-    <View style={[styles.heroPill, on && styles.heroPillOn]}>
-      <View style={[styles.heroPillDot, on && styles.heroPillDotOn]} />
-      <Text style={[styles.heroPillText, on && styles.heroPillTextOn]}>{label}</Text>
     </View>
   );
 }
@@ -930,7 +882,7 @@ function ProtectionSheet({
             accessibilityRole="button"
           >
             <Ionicons name="flash" size={16} color={colors.textInverse} />
-            <Text style={styles.sheetCtaText}>Fix Now — {nextFix.label}</Text>
+            <Text style={styles.sheetCtaText}>Fix Now: {nextFix.label}</Text>
           </Pressable>
         ) : (
           <View style={[styles.sheetCta, styles.sheetCtaDone]}>
@@ -1046,39 +998,16 @@ function StatusLine({
 function BottomPanel({
   children,
   bottomInset,
-  message,
 }: {
   children: React.ReactNode;
   bottomInset: number;
-  message: string;
 }) {
   const screenHeight = Dimensions.get('window').height;
-  const SHEET_HEIGHT = Math.round(screenHeight * 0.42);
-
-  // Gentle floating drift for the peeking guardian.
-  const float = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [float]);
-  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+  // Taller now that the mascot peek is gone — the sheet owns the lower half.
+  const SHEET_HEIGHT = Math.round(screenHeight * 0.5);
 
   return (
     <View style={[styles.bottomPanel, { height: SHEET_HEIGHT }]}>
-      {/* guardian peeking over (and gripping) the sheet's top edge */}
-      <Animated.View style={[styles.mascotPeek, { transform: [{ translateY: floatY }] }]} pointerEvents="none">
-        <View style={styles.speechBubble}>
-          <Text style={styles.speechText}>{message}</Text>
-        </View>
-        <Mascot pose="peek" size={92} />
-      </Animated.View>
-
       <View style={styles.handleZone}>
         <View style={styles.handle} />
       </View>
@@ -1303,6 +1232,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     gap: spacing.md,
+  },
+  greetingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingTop: spacing.xs,
+  },
+  greetingHi: {
+    fontFamily: 'Poppins_700Bold',
+    fontSize: 22,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  greetingSub: {
+    ...typography.caption,
+    fontSize: 13,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  statusDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   statusHeader: {
     flex: 1,

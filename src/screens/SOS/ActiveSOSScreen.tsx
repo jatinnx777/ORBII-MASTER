@@ -58,7 +58,11 @@ const STALE_PING_MS = 45_000;
 const NO_HELPER_WARN_MS = 120_000;
 // Sender expands the alert radius from 2 km → 5 km if no responder pings
 // the live-location channel within this window.
-const EXPAND_RADIUS_AFTER_MS = 60_000;
+// Progressive search ring. Start at 2 km; if fewer than HELPER_TARGET helpers
+// have responded, widen to 5 km, then 10 km.
+const HELPER_TARGET = 4;
+const EXPAND_TO_5KM_MS = 30_000;
+const EXPAND_TO_10KM_MS = 75_000;
 
 type LiveResponder = {
   id: string;
@@ -223,20 +227,33 @@ export function ActiveSOSScreen() {
     return () => clearTimeout(id);
   }, [responderList.length, resolved, noHelperWarned, sheet]);
 
-  // Radius expansion: if no one responds in 60s, broadcast an expand
-  // pulse so users 2-5 km away get this alert too. Fires only once per
-  // active SOS — once any responder pings, we cancel the timer.
-  const expandedRef = useRef(false);
+  // Progressive radius expansion. Start broadcasting at 2 km; if fewer than
+  // HELPER_TARGET (4) helpers have responded, widen the ring to 5 km at 30s
+  // and 10 km at 75s. Each expansion is gated on the live responder count, so
+  // it stops escalating the moment enough helpers are on the way.
+  const responderCountRef = useRef(0);
   useEffect(() => {
-    if (expandedRef.current || resolved || !activeSOS?.id) return;
-    if (responderList.length > 0) return;
-    const id = setTimeout(() => {
-      if (expandedRef.current || responderList.length > 0) return;
-      expandedRef.current = true;
-      broadcastExpandRadius(activeSOS.id).catch(() => undefined);
-    }, EXPAND_RADIUS_AFTER_MS);
-    return () => clearTimeout(id);
-  }, [responderList.length, resolved, activeSOS?.id]);
+    responderCountRef.current = responderList.length;
+  }, [responderList.length]);
+
+  useEffect(() => {
+    if (resolved || !activeSOS?.id) return;
+    const sosId = activeSOS.id;
+    const t5 = setTimeout(() => {
+      if (responderCountRef.current < HELPER_TARGET) {
+        broadcastExpandRadius(sosId, 5).catch(() => undefined);
+      }
+    }, EXPAND_TO_5KM_MS);
+    const t10 = setTimeout(() => {
+      if (responderCountRef.current < HELPER_TARGET) {
+        broadcastExpandRadius(sosId, 10).catch(() => undefined);
+      }
+    }, EXPAND_TO_10KM_MS);
+    return () => {
+      clearTimeout(t5);
+      clearTimeout(t10);
+    };
+  }, [resolved, activeSOS?.id]);
 
   const helperSummaries = useMemo<HelperSummary[]>(
     () =>
@@ -434,7 +451,7 @@ export function ActiveSOSScreen() {
       // Already past the threshold (e.g. user opened ActiveSOS late).
       setEscalationPrompted(true);
       sheet.confirm({
-        title: 'No response yet — call 112?',
+        title: 'No response yet. Call 112?',
         body: 'Your circle hasn\'t accepted. Calling India\'s universal emergency number now gets professional help dispatched.',
         confirmLabel: 'Call 112 now',
         cancelLabel: 'Keep waiting',
@@ -447,7 +464,7 @@ export function ActiveSOSScreen() {
     const id = setTimeout(() => {
       setEscalationPrompted(true);
       sheet.confirm({
-        title: 'No response yet — call 112?',
+        title: 'No response yet. Call 112?',
         body: 'Your circle hasn\'t accepted in 90 seconds. Calling India\'s universal emergency number now gets professional help dispatched.',
         confirmLabel: 'Call 112 now',
         cancelLabel: 'Keep waiting',

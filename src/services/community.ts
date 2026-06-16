@@ -221,17 +221,19 @@ export async function broadcastAlert(alert: AlertBroadcast): Promise<void> {
   }
 }
 
-// Tells every receiver listening on the alerts channel that the SOS with
-// the given id should now be considered "expanded" — receivers between
-// 2 km and 5 km of the victim will start showing it. Sender fires this
-// after 60 s with no responder.
-export async function broadcastExpandRadius(sosId: string): Promise<void> {
+// Tells every receiver that the SOS should now reach a wider radius. The
+// victim escalates the search ring (2 km → 5 km → 10 km) when not enough
+// helpers have responded, so receivers within `radiusKm` start showing it.
+export async function broadcastExpandRadius(
+  sosId: string,
+  radiusKm: number,
+): Promise<void> {
   const channel = ensureBroadcastChannel();
   try {
     await channel.send({
       type: 'broadcast',
       event: 'expand-radius',
-      payload: { id: sosId },
+      payload: { id: sosId, radiusKm },
     });
   } catch (err) {
     console.warn('[community] expand-radius broadcast failed', err);
@@ -256,7 +258,7 @@ export async function broadcastResolved(sosId: string): Promise<void> {
 
 export function subscribeToAlerts(handlers: {
   onAlert: (alert: AlertBroadcast) => void;
-  onExpand?: (sosId: string) => void;
+  onExpand?: (sosId: string, radiusKm: number) => void;
   onResolved?: (sosId: string) => void;
 }): { unsubscribe: () => void } {
   const channel = supabase
@@ -270,9 +272,9 @@ export function subscribeToAlerts(handlers: {
       handlers.onAlert(payload);
     })
     .on('broadcast', { event: 'expand-radius' }, (msg) => {
-      const payload = msg.payload as { id?: string } | undefined;
+      const payload = msg.payload as { id?: string; radiusKm?: number } | undefined;
       if (!payload?.id) return;
-      handlers.onExpand?.(payload.id);
+      handlers.onExpand?.(payload.id, payload.radiusKm ?? 5);
     })
     .on('broadcast', { event: 'resolved' }, (msg) => {
       const payload = msg.payload as { id?: string } | undefined;

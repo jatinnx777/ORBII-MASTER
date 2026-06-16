@@ -86,6 +86,11 @@ const userSlice = createSlice({
     premiumUpgraded(state) {
       if (state.profile) state.profile.isPremium = true;
     },
+    // Set premium from the server entitlement (true within the 1-month window,
+    // false once it lapses). Keeps reinstalls active + expires stale ones.
+    premiumStatusResolved(state, action: PayloadAction<boolean>) {
+      if (state.profile) state.profile.isPremium = action.payload;
+    },
     profileHydrated(state, action: PayloadAction<UserProfile>) {
       state.profile = action.payload;
       state.status = 'authenticated';
@@ -114,6 +119,7 @@ export const {
   friendAdded,
   friendRemoved,
   premiumUpgraded,
+  premiumStatusResolved,
   profileHydrated,
   signedOut,
   errorCleared,

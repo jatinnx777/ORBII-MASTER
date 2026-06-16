@@ -31,6 +31,8 @@ import {
   type CircleKind,
 } from '@/services/circles';
 import { inviteResolved } from '@/redux/slices/circlesSlice';
+import { useIsPremium } from '@/services/entitlements';
+import { promptUpgrade } from '@/services/paywall';
 import {
   colors,
   fontFamilies,
@@ -63,6 +65,23 @@ const KIND_META: Record<
 export function CirclesScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
+  const isPremium = useIsPremium();
+
+  // Family Circle creation is an ORBII Plus feature — the circle owner must be
+  // a subscriber. Joining a circle (via invite) stays free.
+  const handleCreatePress = () => {
+    if (!isPremium) {
+      promptUpgrade({
+        feature: 'Family Circles',
+        body:
+          'Creating a Family Circle is part of ORBII Plus (₹99/month). The ' +
+          'circle owner needs Plus — members you invite join for free.',
+        onUpgrade: () => navigation.navigate('PremiumUpgrade'),
+      });
+      return;
+    }
+    navigation.navigate('CircleCreate');
+  };
   const insets = useSafeAreaInsets();
   const { circles, incomingInvites, activeCircleId, status, error, setupNeeded } =
     useAppSelector((s) => s.circles);
@@ -147,7 +166,7 @@ export function CirclesScreen() {
           </Text>
         </View>
         <Pressable
-          onPress={() => navigation.navigate('CircleCreate')}
+          onPress={handleCreatePress}
           style={({ pressed }) => [
             styles.addBtn,
             pressed && styles.pressedScale,
@@ -224,7 +243,7 @@ export function CirclesScreen() {
           </Text>
           <CircleExplainer />
           <Pressable
-            onPress={() => navigation.navigate('CircleCreate')}
+            onPress={handleCreatePress}
             style={({ pressed }) => [
               styles.emptyCta,
               pressed && styles.pressedScale,
