@@ -166,9 +166,12 @@ export async function watchLocation(
 ): Promise<LocationWatcher> {
   const sub = await Location.watchPositionAsync(
     {
-      accuracy: Location.Accuracy.High,
-      distanceInterval: opts.distanceIntervalMeters ?? 8,
-      timeInterval: opts.timeIntervalMs ?? 4000,
+      // BestForNavigation forces the full GPS chipset for turn-by-turn grade
+      // precision — during an emergency we want the tightest fix possible for
+      // both the victim and the responder. Tighter intervals = fresher dots.
+      accuracy: Location.Accuracy.BestForNavigation,
+      distanceInterval: opts.distanceIntervalMeters ?? 4,
+      timeInterval: opts.timeIntervalMs ?? 2000,
     },
     (position) => {
       onUpdate({

@@ -75,11 +75,10 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
     return () => loop.stop();
   }, [enter, breathe]);
 
-  const handleSignIn = async () => {
-    if (!policyOk) {
-      setPolicyOpen(true);
-      return;
-    }
+  // The actual Google sign-in. Separated so the policy modal can call it
+  // directly on accept — the user no longer has to tap "Sign in" a second
+  // time after agreeing to the terms.
+  const doGoogleSignIn = async () => {
     dispatch(signInStarted());
     try {
       const { profile, needsProfile, history } = await signInWithGoogle();
@@ -96,6 +95,23 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         Alert.alert("Couldn't sign in", message);
       }
     }
+  };
+
+  const handleSignIn = async () => {
+    // Not agreed yet → open the terms. Accepting there continues straight
+    // into sign-in (see the modal's onAccept), so this is a single flow.
+    if (!policyOk) {
+      setPolicyOpen(true);
+      return;
+    }
+    await doGoogleSignIn();
+  };
+
+  // Tapping the inline checkbox toggles agreement directly (no modal needed),
+  // so a user who's happy to agree can do it in one tap then sign in.
+  const togglePolicy = () => {
+    if (policyOk) return; // already agreed — leave it on
+    dispatch(policyAccepted());
   };
 
   const translateY = enter.interpolate({
@@ -165,7 +181,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
           </Pressable>
 
           <Pressable
-            onPress={() => setPolicyOpen(true)}
+            onPress={togglePolicy}
             style={styles.policyRow}
             hitSlop={8}
             accessibilityRole="checkbox"
@@ -178,7 +194,13 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
             </View>
             <Text style={styles.policyText}>
               I agree to ORBII's{' '}
-              <Text style={styles.policyLink}>Privacy Policy and Terms</Text>.
+              <Text
+                style={styles.policyLink}
+                onPress={() => setPolicyOpen(true)}
+              >
+                Privacy Policy and Terms
+              </Text>
+              .
             </Text>
           </Pressable>
 
@@ -203,6 +225,8 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         onAccept={() => {
           dispatch(policyAccepted());
           setPolicyOpen(false);
+          // Continue straight into sign-in — no second tap needed.
+          void doGoogleSignIn();
         }}
         onDecline={() => setPolicyOpen(false)}
       />

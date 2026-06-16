@@ -274,6 +274,23 @@ export async function createCircle(input: {
     .select('*')
     .single();
   if (error) throw wrap(error);
+
+  // Ensure the owner is a member. A DB trigger (sql/14) is supposed to do
+  // this, but if it isn't installed the circle would be created yet never
+  // show up (listCircles reads via circle_members) — the "create does
+  // nothing" bug. This self-insert is idempotent: it's a no-op (duplicate
+  // key) when the trigger already added the row, and passes RLS because the
+  // user is adding themselves.
+  const { error: memberErr } = await supabase
+    .from('circle_members')
+    .insert({ circle_id: data.id, user_id: user.id, role: 'owner' });
+  if (
+    memberErr &&
+    !/(duplicate|already exists|unique)/i.test(memberErr.message ?? '')
+  ) {
+    console.warn('[circles] owner membership insert:', memberErr.message);
+  }
+
   return rowToCircle(data as CircleRow);
 }
 

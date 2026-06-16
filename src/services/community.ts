@@ -238,9 +238,26 @@ export async function broadcastExpandRadius(sosId: string): Promise<void> {
   }
 }
 
+// Tells every receiver that the SOS with this id has ended (cancelled or
+// resolved). Receivers remove it from their alert list + dismiss any open
+// full-screen helper alert, so a cancelled SOS doesn't keep buzzing helpers.
+export async function broadcastResolved(sosId: string): Promise<void> {
+  const channel = ensureBroadcastChannel();
+  try {
+    await channel.send({
+      type: 'broadcast',
+      event: 'resolved',
+      payload: { id: sosId },
+    });
+  } catch (err) {
+    console.warn('[community] resolved broadcast failed', err);
+  }
+}
+
 export function subscribeToAlerts(handlers: {
   onAlert: (alert: AlertBroadcast) => void;
   onExpand?: (sosId: string) => void;
+  onResolved?: (sosId: string) => void;
 }): { unsubscribe: () => void } {
   const channel = supabase
     .channel(ALERTS_CHANNEL, {
@@ -256,6 +273,11 @@ export function subscribeToAlerts(handlers: {
       const payload = msg.payload as { id?: string } | undefined;
       if (!payload?.id) return;
       handlers.onExpand?.(payload.id);
+    })
+    .on('broadcast', { event: 'resolved' }, (msg) => {
+      const payload = msg.payload as { id?: string } | undefined;
+      if (!payload?.id) return;
+      handlers.onResolved?.(payload.id);
     })
     .subscribe((status) => {
       console.log('[community] subscription status', status);

@@ -22,7 +22,7 @@ import {
   type MLMapViewHandle,
   type MLRoute,
 } from '@/components/common';
-import { broadcastExpandRadius } from '@/services/community';
+import { broadcastExpandRadius, broadcastResolved } from '@/services/community';
 import { fetchRoute, formatEta } from '@/services/osrm';
 import { upsertSOSRecord } from '@/services/sos-history';
 import {
@@ -281,6 +281,9 @@ export function ActiveSOSScreen() {
           if (activeSOS) {
             trackEvent('sos_cancelled', { sosId: activeSOS.id });
             dispatch(sosCancelled());
+            // Tell every nearby helper the SOS is over so it stops showing
+            // "someone needs help" on their phones.
+            broadcastResolved(activeSOS.id).catch(() => undefined);
             const record = {
               ...activeSOS,
               responders: helperSummaries,
@@ -329,6 +332,8 @@ export function ActiveSOSScreen() {
           responderId: responder?.id ?? null,
         });
         dispatch(sosResolved({ responderId: responder?.id ?? null, rating }));
+        // Clear the alert from every nearby helper's phone.
+        broadcastResolved(activeSOS.id).catch(() => undefined);
         const record = {
           ...activeSOS,
           helpers: helperSummaries,

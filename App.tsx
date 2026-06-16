@@ -42,7 +42,7 @@ import {
   prewarmBroadcastChannel,
   subscribeToAlerts,
 } from '@/services/community';
-import { alertReceived } from '@/redux/slices/communitySlice';
+import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { subscribeKeyword } from '@/services/voice-detection';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
@@ -454,7 +454,30 @@ export default function App() {
       }
     };
 
-    const sub = subscribeToAlerts({ onAlert: handleAlert, onExpand: handleExpand });
+    const handleResolved = (sosId: string) => {
+      // The victim cancelled or resolved — clear it everywhere so no helper
+      // keeps seeing "someone needs help".
+      seen.delete(sosId);
+      pending.delete(sosId);
+      store.dispatch(alertDismissed(sosId));
+      // If a helper is staring at the full-screen alert for this SOS, kick
+      // them back to the app — the emergency is over.
+      if (
+        navigationRef.isReady() &&
+        navigationRef.getCurrentRoute()?.name === 'HelperAlert' &&
+        (navigationRef.getCurrentRoute()?.params as { alertId?: string } | undefined)
+          ?.alertId === sosId
+      ) {
+        // @ts-expect-error - Tabs lives in the AppStack.
+        navigationRef.navigate('Tabs');
+      }
+    };
+
+    const sub = subscribeToAlerts({
+      onAlert: handleAlert,
+      onExpand: handleExpand,
+      onResolved: handleResolved,
+    });
     return () => sub.unsubscribe();
   }, []);
 
