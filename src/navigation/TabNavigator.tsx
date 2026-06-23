@@ -39,7 +39,11 @@ export function TabNavigator() {
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{
+        headerShown: false,
+        // Animated cross-fade/shift when switching tabs (v7).
+        animation: 'shift',
+      }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Safety" component={SafetyScreen} />

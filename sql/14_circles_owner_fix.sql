@@ -36,4 +36,4 @@ create policy "circles read members"
 insert into public.circle_members (circle_id, user_id, role)
 select c.id, c.owner_id, 'owner'
 from public.circles c
-on conflict (circle_id, user_id) do nothing;
+on conflict (circle_id, user_id) do nothing; 
