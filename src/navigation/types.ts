@@ -28,6 +28,7 @@ export type AppStackParamList = {
   ActiveSOS: undefined;
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
+  SafetyReadiness: undefined;
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;

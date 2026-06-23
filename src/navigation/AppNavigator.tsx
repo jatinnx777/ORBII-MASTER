@@ -5,6 +5,7 @@ import { CountdownScreen } from '@/screens/SOS/CountdownScreen';
 import { ActiveSOSScreen } from '@/screens/SOS/ActiveSOSScreen';
 import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
+import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
@@ -83,6 +84,11 @@ export function AppNavigator() {
         name="EmergencyContacts"
         component={EmergencyContactsScreen}
         options={withHeader('Emergency contacts')}
+      />
+      <Stack.Screen
+        name="SafetyReadiness"
+        component={SafetyReadinessScreen}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="ContactForm"

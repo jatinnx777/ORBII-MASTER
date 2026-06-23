@@ -5,7 +5,10 @@ import {
   ImageStyle,
   StyleProp,
   StyleSheet,
+  View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
 export type MascotPose =
   | 'neutral'
@@ -15,39 +18,55 @@ export type MascotPose =
   | 'headset'
   | 'celebrate';
 
-// Static requires so Metro can bundle the assets.
-const POSES: Record<MascotPose, ImageSourcePropType> = {
-  neutral: require('../../../assets/mascot/neutral.png'),
-  peek: require('../../../assets/mascot/peek.png'),
-  wave: require('../../../assets/mascot/wave.png'),
-  shield: require('../../../assets/mascot/shield.png'),
-  headset: require('../../../assets/mascot/headset.png'),
-  celebrate: require('../../../assets/mascot/celebrate.png'),
+// NOTE: the old mascot PNGs were removed. Until the new Orbi artwork is dropped
+// into the repo, the mascot renders a soft icon placeholder so the build keeps
+// working. Pass `source` (a require'd image) to show the real artwork.
+const POSE_ICON: Record<MascotPose, React.ComponentProps<typeof Ionicons>['name']> = {
+  neutral: 'happy',
+  peek: 'happy',
+  wave: 'hand-left',
+  shield: 'shield-checkmark',
+  headset: 'headset',
+  celebrate: 'sparkles',
 };
 
 type Props = {
-  /** Which guardian pose to show. */
   pose?: MascotPose;
-  /** Override with a custom image (rarely needed). */
+  /** Override with the real Orbi artwork (a require'd PNG). */
   source?: ImageSourcePropType;
-  /** Rendered height in px. Width follows the artwork's aspect ratio. */
   size?: number;
   style?: StyleProp<ImageStyle>;
 };
 
 /** ORBII's guardian mascot. */
 export function Mascot({ pose = 'neutral', source, size = 160, style }: Props) {
+  if (source) {
+    return (
+      <Image
+        source={source}
+        style={[{ width: size, height: size }, styles.img, style as StyleProp<ImageStyle>]}
+        resizeMode="contain"
+      />
+    );
+  }
   return (
-    <Image
-      source={source ?? POSES[pose]}
-      style={[{ width: size, height: size }, styles.img, style]}
-      resizeMode="contain"
-    />
+    <View
+      style={[
+        styles.fallback,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
+      <Ionicons name={POSE_ICON[pose]} size={size * 0.5} color={colors.peachDeep} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  img: {
+  img: { alignSelf: 'center' },
+  fallback: {
     alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.peachSoft,
   },
 });

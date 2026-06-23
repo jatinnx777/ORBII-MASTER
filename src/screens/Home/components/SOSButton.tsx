@@ -16,8 +16,7 @@ type SOSButtonProps = {
   disabled?: boolean;
 };
 
-// Peach SOS card matching the reference: soft coral-washed card, "SOS"
-// title, "Hold for 3 seconds", and a round HOLD button with a breathing
+// Peach SOS card: "SOS" title, hint, and a round HOLD button with a breathing
 // ring. Tap = 5s countdown, long-press = fire instantly.
 export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   const ring = useRef(new Animated.Value(0)).current;
@@ -66,7 +65,7 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   return (
     <View style={[styles.card, disabled && styles.disabled]}>
       <Text style={styles.title}>SOS</Text>
-      <Text style={styles.hint}>Hold for 3 seconds</Text>
+      <Text style={styles.hint}>Tap to send · hold for instant</Text>
 
       <Pressable
         accessibilityRole="button"
@@ -88,7 +87,7 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
           ]}
         />
         <Animated.View style={[styles.hold, { transform: [{ scale: press }] }]}>
-          <Text style={styles.holdText}>HOLD</Text>
+          <Text style={styles.holdText}>SOS</Text>
         </Animated.View>
       </Pressable>
     </View>
@@ -112,10 +111,11 @@ const styles = StyleSheet.create({
   },
   hint: {
     ...typography.caption,
-    fontSize: 12,
+    fontSize: 11,
     color: colors.textSecondary,
     marginTop: 2,
     marginBottom: spacing.md,
+    textAlign: 'center',
   },
   holdZone: {
     width: 84,
@@ -134,16 +134,14 @@ const styles = StyleSheet.create({
     width: 78,
     height: 78,
     borderRadius: 39,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 2,
-    borderColor: colors.coral,
+    backgroundColor: colors.coral,
     alignItems: 'center',
     justifyContent: 'center',
   },
   holdText: {
     fontFamily: 'Poppins_700Bold',
-    fontSize: 15,
-    color: colors.coral,
+    fontSize: 17,
+    color: colors.textInverse,
     letterSpacing: 1,
   },
 });

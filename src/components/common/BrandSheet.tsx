@@ -11,11 +11,13 @@ import {
   Animated,
   Easing,
   Modal,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -121,15 +123,20 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
 
   const slide = useRef(new Animated.Value(0)).current;
   const fade = useRef(new Animated.Value(0)).current;
+  // Finger-following drag offset (downward, >= 0). Combined with the open
+  // animation so the sheet tracks the thumb and bounces back on release.
+  const drag = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (visible) {
+      drag.setValue(0);
       Animated.parallel([
-        Animated.timing(slide, {
+        // Spring entrance for a soft overshoot/settle (Apple Maps feel).
+        Animated.spring(slide, {
           toValue: 1,
-          duration: 280,
-          easing: Easing.out(Easing.cubic),
           useNativeDriver: true,
+          friction: 9,
+          tension: 70,
         }),
         Animated.timing(fade, {
           toValue: 1,
@@ -140,8 +147,9 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
     } else {
       slide.setValue(0);
       fade.setValue(0);
+      drag.setValue(0);
     }
-  }, [visible, slide, fade]);
+  }, [visible, slide, fade, drag]);
 
   const hide = useCallback(() => {
     Animated.parallel([
@@ -161,6 +169,38 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
       setConfig(null);
     });
   }, [slide, fade]);
+
+  // Drag-to-dismiss: slide the sheet down past a threshold to close.
+  const dismissByDrag = useCallback(() => {
+    Animated.parallel([
+      Animated.timing(drag, { toValue: 520, duration: 200, easing: Easing.in(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fade, { toValue: 0, duration: 180, useNativeDriver: true }),
+    ]).start(() => {
+      setVisible(false);
+      setConfig(null);
+      drag.setValue(0);
+      slide.setValue(0);
+    });
+  }, [drag, fade, slide]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_, g) => {
+        drag.setValue(Math.max(0, g.dy));
+      },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 120 || g.vy > 0.8) {
+          dismissByDrag();
+        } else {
+          Animated.spring(drag, { toValue: 0, useNativeDriver: true, friction: 7, tension: 90 }).start();
+        }
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(drag, { toValue: 0, useNativeDriver: true, friction: 7 }).start();
+      },
+    }),
+  ).current;
 
   const show = useCallback((next: SheetConfig) => {
     setConfig(next);
@@ -211,10 +251,12 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
   );
 
   const tone: Tone = config?.tone ?? 'neutral';
-  const translateY = slide.interpolate({
+  const openTranslate = slide.interpolate({
     inputRange: [0, 1],
-    outputRange: [320, 0],
+    outputRange: [340, 0],
   });
+  // Combine the open animation with the live finger drag.
+  const translateY = Animated.add(openTranslate, drag);
 
   return (
     <Ctx.Provider value={value}>
@@ -227,8 +269,10 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
         onRequestClose={hide}
       >
         <Animated.View style={[styles.backdrop, { opacity: fade }]}>
+          <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
           <Pressable style={styles.backdropTap} onPress={hide} />
           <Animated.View
+            {...pan.panHandlers}
             style={[
               styles.sheet,
               {
@@ -241,7 +285,9 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
               },
             ]}
           >
-            <View style={styles.handle} />
+            <View style={styles.handleZone}>
+              <View style={styles.handle} />
+            </View>
             {config?.icon ? (
               <View
                 style={[
@@ -344,7 +390,8 @@ function SheetButtonView({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: colors.overlay,
+    // Lighter scrim — the BlurView behind does the heavy lifting now.
+    backgroundColor: 'rgba(20,18,16,0.28)',
     justifyContent: 'flex-end',
   },
   backdropTap: {
@@ -355,17 +402,28 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
+    paddingTop: 0,
     paddingBottom: spacing.xl,
     gap: spacing.sm,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  // Larger grab area so the drag-to-dismiss handle is easy to catch.
+  handleZone: {
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   handle: {
     width: 44,
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.border,
-    marginTop: 4,
     marginBottom: spacing.sm,
   },
   iconWrap: {

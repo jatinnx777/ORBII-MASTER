@@ -40,6 +40,7 @@ export function SafetyScreen() {
           <Text style={styles.title}>Safety</Text>
           <Text style={styles.subtitle}>Everything that keeps you protected, in one place.</Text>
         </View>
+        <SafetyReadinessCard />
         <WatchOverMe />
         <SectionHeader title="Personal Safety" />
         <VoiceSOSCard />
@@ -50,6 +51,27 @@ export function SafetyScreen() {
 
 function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
+}
+
+// Duolingo-style entry into the Safety Readiness setup journey.
+function SafetyReadinessCard() {
+  const navigation = useNavigation<Nav>();
+  return (
+    <Pressable
+      onPress={() => navigation.navigate('SafetyReadiness')}
+      style={({ pressed }) => [styles.readinessCard, pressed && { transform: [{ scale: 0.98 }] }]}
+      accessibilityRole="button"
+    >
+      <View style={styles.readinessIcon}>
+        <Ionicons name="shield-checkmark" size={24} color={colors.peachDeep} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.readinessTitle}>Safety Readiness</Text>
+        <Text style={styles.readinessBody}>Finish your setup so ORBII can protect you fully.</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={20} color={colors.peachDeep} />
+    </Pressable>
+  );
 }
 
 /* ── Watch Over Me — one unified experience ─────────────── */
@@ -276,6 +298,35 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginTop: spacing.sm,
+  },
+  /* safety readiness entry */
+  readinessCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.peachSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  readinessIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readinessTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15.5,
+    color: colors.textPrimary,
+  },
+  readinessBody: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
   /* watch over me */
   watchCard: {

@@ -25,6 +25,7 @@ import {
   BatteryWarning,
   MascotLoader,
   MLMapView,
+  PopIn,
   ScreenContainer,
   type MLMarker,
   type AvatarMarker,
@@ -600,30 +601,34 @@ export function HomeScreen() {
 
       <BottomPanel bottomInset={insets.bottom}>
         {/* ── Greeting + all-clear status ────────────────── */}
-        <View style={styles.greetingRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greetingHi} numberOfLines={1}>
-              Hi {firstName}
-            </Text>
-            <Text style={styles.greetingSub}>
-              {locationOk
-                ? "You're all set. Help is one tap away."
-                : 'Enable location so we can dispatch help.'}
-            </Text>
+        <PopIn delay={0}>
+          <View style={styles.greetingRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.greetingHi} numberOfLines={1}>
+                Hi {firstName}
+              </Text>
+              <Text style={styles.greetingSub}>
+                {locationOk
+                  ? "You're all set. Help is one tap away."
+                  : 'Enable location so we can dispatch help.'}
+              </Text>
+            </View>
+            <View
+              style={[
+                styles.statusDot,
+                { backgroundColor: locationOk ? colors.sage : colors.peachDeep },
+              ]}
+            />
           </View>
-          <View
-            style={[
-              styles.statusDot,
-              { backgroundColor: locationOk ? colors.sage : colors.peachDeep },
-            ]}
-          />
-        </View>
+        </PopIn>
 
         {/* ── Protection Strength (slim status pill) ─────── */}
-        <ProtectionStrengthPill
-          pct={protectionPct}
-          onPress={() => setProtectionSheetOpen(true)}
-        />
+        <PopIn delay={60}>
+          <ProtectionStrengthPill
+            pct={protectionPct}
+            onPress={() => setProtectionSheetOpen(true)}
+          />
+        </PopIn>
 
         <BatteryWarning />
 
@@ -640,17 +645,21 @@ export function HomeScreen() {
         ) : null}
 
         {/* ── SOS + Voice cards ──────────────────────────── */}
-        <View style={styles.actionRow}>
-          <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
-          <VoiceCard listening={voiceOn} onPress={handleVoiceCard} />
-        </View>
+        <PopIn delay={120}>
+          <View style={styles.actionRow}>
+            <SOSButton onPress={handleSOSPress} onLongPress={handleSOSLongPress} />
+            <VoiceCard listening={voiceOn} onPress={handleVoiceCard} />
+          </View>
+        </PopIn>
 
         {/* ── Helpers ────────────────────────────────────── */}
-        <HelpersCard
-          photos={helperPhotos}
-          count={helpersNearby}
-          onPress={() => navigation.navigate('Circles')}
-        />
+        <PopIn delay={220}>
+          <HelpersCard
+            photos={helperPhotos}
+            count={helpersNearby}
+            onPress={() => navigation.navigate('Circles')}
+          />
+        </PopIn>
 
         {nearbyAlerts.length > 0 ? (
           <AlertsStrip
