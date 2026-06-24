@@ -47,16 +47,6 @@
           "cameraPermission": "ORBII needs camera access to take your profile picture."
         }
       ],
-      [
-        "expo-speech-recognition",
-        {
-          "microphonePermission": "ORBII listens for trigger words like \"help\" or \"bachao\" to fire an SOS hands-free.",
-          "speechRecognitionPermission": "ORBII uses on-device speech recognition to detect emergency trigger words without sending your audio anywhere.",
-          "androidSpeechServicePackages": [
-            "com.google.android.googlequicksearchbox"
-          ]
-        }
-      ],
       "expo-asset",
       "expo-web-browser",
       "expo-audio"

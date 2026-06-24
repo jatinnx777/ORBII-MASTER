@@ -31,7 +31,6 @@ import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
 import { AppDialogHost, appAlert, BrandSheetProvider, OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
-  fireVoiceWakeNotification,
   hidePinnedSOSShortcut,
   hideSafeJourneyWidget,
   showPinnedSOSShortcut,
@@ -45,7 +44,6 @@ import {
 import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { premiumStatusResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumActive } from '@/services/razorpay';
-import { subscribeKeyword } from '@/services/voice-detection';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
