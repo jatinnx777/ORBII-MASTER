@@ -20,8 +20,8 @@ class SosDispatchTaskService : HeadlessJsTaskService() {
     return HeadlessJsTaskConfig(
       "OrbiiSOSDispatch",
       Arguments.createMap(),
-      30000, // timeout (ms) — plenty for a location fix + broadcast
-      true,  // allowedInForeground — let it run even if the app is visible
+      30000L, // timeout (ms) — plenty for a location fix + broadcast
+      true,   // allowedInForeground — let it run even if the app is visible
     )
   }
 }

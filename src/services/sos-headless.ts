@@ -42,7 +42,7 @@ export async function sosDispatchTask(): Promise<void> {
     } catch {
       // No fix available — still fire so the user's circle (notified
       // regardless of distance) gets the alert.
-      location = { latitude: 0, longitude: 0, accuracy: null, address: null };
+      location = { latitude: 0, longitude: 0, address: null };
     }
 
     addBreadcrumb({
