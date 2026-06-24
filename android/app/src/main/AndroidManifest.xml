@@ -63,5 +63,13 @@
       android:name=".voice.VoiceGuardService"
       android:exported="false"
       android:foregroundServiceType="microphone"/>
+    <!--
+      Voice SOS dispatch — a HeadlessJS task that runs the SOS broadcast with
+      no UI when VoiceGuardService's cancel countdown expires (so the alert
+      fires with the screen locked / app killed).
+    -->
+    <service
+      android:name=".voice.SosDispatchTaskService"
+      android:exported="false"/>
   </application>
 </manifest>

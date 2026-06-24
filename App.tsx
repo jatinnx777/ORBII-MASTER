@@ -46,7 +46,9 @@ import { premiumStatusResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumActive } from '@/services/razorpay';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
-import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
+import { getItem, removeItem, storageKeys } from '@/services/storage';
+import { sosDispatchSucceeded } from '@/redux/slices/sosSlice';
+import type { ActiveSosHandoff } from '@/services/sos-headless';
 import { loadPhrases } from '@/services/voice-phrases';
 import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
@@ -140,42 +142,13 @@ function RootNavigator() {
 
     const handleUrl = async (url: string | null) => {
       if (!url) return;
-      // Voice SOS fired by the on-device VoiceGuard engine (in-app OR
-      // background). Quota-gate free-tier voice here, since this is now the
-      // single entry point for every voice trigger.
-      if (url.startsWith('orbii://voice-sos')) {
-        const goToSOS = () => {
-          if (navigationRef.isReady()) {
-            // @ts-expect-error - SOSCountdown is in the AppStack only.
-            navigationRef.navigate('SOSCountdown');
-          }
-        };
-        const isPremium = store.getState().user.profile?.isPremium ?? false;
-        const vstatus = await voiceSOSStatus(isPremium);
-        if (vstatus.allowed) {
-          void recordVoiceSOS();
-          goToSOS();
-        } else {
-          // Free monthly voice quota reached. Never block the emergency: offer
-          // a one-tap manual SOS, plus an upgrade path for unlimited voice.
-          appAlert(
-            'Voice SOS limit reached',
-            `You've used your ${vstatus.limit} free Voice SOS this month. You can still send an SOS now, or upgrade for unlimited voice.`,
-            [
-              {
-                text: 'Upgrade',
-                onPress: () => {
-                  if (navigationRef.isReady()) {
-                    // @ts-expect-error - PremiumUpgrade is in the AppStack only.
-                    navigationRef.navigate('PremiumUpgrade');
-                  }
-                },
-              },
-              { text: 'Send SOS', onPress: goToSOS },
-              { text: 'Not now', style: 'cancel' },
-            ],
-          );
-        }
+      // Voice SOS was already dispatched headlessly by VoiceGuardService (its
+      // native countdown owns the cancel window, so the alert fires even while
+      // the phone is locked). Here we only surface the active incident in the
+      // UI — we must NOT re-dispatch. The handoff may not be written yet if we
+      // were launched the instant the countdown expired, so we retry briefly.
+      if (url.startsWith('orbii://active-sos')) {
+        await showActiveSosFromHandoff(12);
         return;
       }
       const token = extractJoinToken(url);
@@ -197,6 +170,9 @@ function RootNavigator() {
     };
 
     Linking.getInitialURL().then(handleUrl).catch(() => undefined);
+    // Also catch a Voice SOS that fired headlessly while the app was killed and
+    // the user reopens from the launcher (no deep link in that case).
+    showActiveSosFromHandoff(1).catch(() => undefined);
     const sub = Linking.addEventListener('url', (ev) => handleUrl(ev.url));
     return () => sub.remove();
   }, [status]);
@@ -551,6 +527,31 @@ function LaunchOverlay({ onDone }: { onDone: () => void }) {
 //   https://orbii.app/join?token=<token>
 // Returns null when the URL is not a join link, so any other deep link
 // (auth callback, etc.) falls through to its own handler.
+// Surface an already-dispatched (headless) Voice SOS in the UI. Reads the
+// handoff the dispatch task wrote, pushes the record into the store, and opens
+// ActiveSOS — WITHOUT re-firing. Retries briefly because the task may still be
+// writing the handoff when we're launched right at countdown expiry.
+let activeSosConsumed = false;
+async function showActiveSosFromHandoff(retries = 1): Promise<void> {
+  for (let i = 0; i < retries; i++) {
+    const handoff = await getItem<ActiveSosHandoff>(storageKeys.activeSos);
+    if (handoff?.record) {
+      const fresh = Date.now() - handoff.at < 15 * 60 * 1000;
+      if (fresh && !activeSosConsumed) {
+        activeSosConsumed = true;
+        store.dispatch(sosDispatchSucceeded(handoff.record));
+        if (navigationRef.isReady()) {
+          // @ts-expect-error - ActiveSOS is in the AppStack only.
+          navigationRef.navigate('ActiveSOS');
+        }
+      }
+      await removeItem(storageKeys.activeSos);
+      return;
+    }
+    if (i < retries - 1) await new Promise((r) => setTimeout(r, 300));
+  }
+}
+
 function extractJoinToken(url: string): string | null {
   try {
     const match = url.match(/(?:orbii:\/\/|https?:\/\/[^/]+\/)join\/?\??([^?&/#]+)/i);

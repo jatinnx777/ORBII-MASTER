@@ -16,6 +16,9 @@ const KEYS = {
   voicePhrases: 'orbii:voice-phrases',
   bgVoice: 'orbii:bg-voice',
   voiceLang: 'orbii:voice-lang',
+  // Handoff written by the headless voice-SOS dispatch task so the UI can
+  // surface the already-sent SOS (ActiveSOS) without re-dispatching.
+  activeSos: 'orbii:active-sos-handoff',
 } as const;
 
 export const storageKeys = KEYS;
