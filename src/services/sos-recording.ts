@@ -6,27 +6,40 @@ import {
 } from 'expo-audio';
 import * as FileSystem from 'expo-file-system';
 import { useEffect, useRef } from 'react';
-import { supabase } from './supabase';
 import { addBreadcrumb, reportError } from './error-reporting';
 
 // SOS audio recorder.
 //
-// `expo-audio` only exposes recording via the `useAudioRecorder` hook
-// (the underlying recorder is React-lifecycle scoped), so we wrap the
-// hook in `useSOSRecorder` and let the ActiveSOS screen drive it: start
-// recording on mount, stop on unmount, upload to Supabase Storage when
-// finished.
+// `expo-audio` only exposes recording via the `useAudioRecorder` hook, so we
+// wrap it in `useSOSRecorder` and let the ActiveSOS screen drive it: start on
+// mount, stop on unmount, and save the clip permanently ON THE DEVICE.
 //
 // Privacy posture:
-//   • Recording starts ONLY when the user has fired an SOS.
-//   • The file uploads to the private `sos-recordings` bucket under the
-//     path `<userId>/<sosId>.m4a`. RLS gives read access only to the
-//     uploader. SQL setup in sql/11_sos_audio.sql.
-//   • If the user cancels the SOS before the 60s timer, we stop early
-//     and still upload whatever was captured.
+//   • Recording starts ONLY when the user has fired a real SOS.
+//   • The clip is saved on-device at `<documents>/sos-recordings/<sosId>.m4a`
+//     (NOT uploaded anywhere). It shows up in SOS History where the user can
+//     play it back or share it with their circle.
+//   • If the user cancels before the 60s timer, we stop early and still keep
+//     whatever was captured.
 
 const DEFAULT_DURATION_MS = 60_000;
-const BUCKET = 'sos-recordings';
+const REC_DIR = 'sos-recordings';
+
+/** Permanent on-device path for an SOS recording (deterministic from sosId). */
+export function sosRecordingUri(sosId: string): string {
+  const dir = new FileSystem.Directory(FileSystem.Paths.document, REC_DIR);
+  return new FileSystem.File(dir, `${sosId}.m4a`).uri;
+}
+
+/** Whether a saved recording exists on-device for this SOS. */
+export function hasSosRecording(sosId: string): boolean {
+  try {
+    const dir = new FileSystem.Directory(FileSystem.Paths.document, REC_DIR);
+    return new FileSystem.File(dir, `${sosId}.m4a`).exists;
+  } catch {
+    return false;
+  }
+}
 
 export async function isMicPermissionGranted(): Promise<boolean> {
   const s = await AudioModule.getRecordingPermissionsAsync().catch(() => null);
@@ -109,7 +122,7 @@ export function useSOSRecorder(args: {
         clearTimeout(timerRef.current);
         timerRef.current = null;
       }
-      // Stop + upload. Fire-and-forget; we don't block React unmount.
+      // Stop + persist on-device. Fire-and-forget; we don't block unmount.
       (async () => {
         if (stoppedRef.current) return;
         stoppedRef.current = true;
@@ -119,18 +132,21 @@ export function useSOSRecorder(args: {
           // recorder may already be stopped
         }
         const localUri = recorder.uri ?? null;
-        if (!localUri || !args.userId || !args.sosId) return;
-        await uploadRecording({
-          localUri,
-          userId: args.userId,
-          sosId: args.sosId,
-        }).catch((err) => {
+        if (!localUri || !args.sosId) return;
+        try {
+          saveRecordingLocally(localUri, args.sosId);
+          addBreadcrumb({
+            category: 'sos.recording',
+            severity: 'info',
+            message: `recording saved on-device for SOS ${args.sosId}`,
+          });
+        } catch (err) {
           reportError(err, {
             category: 'sos.recording',
-            message: 'upload failed',
+            message: 'local save failed',
             tags: { sosId: args.sosId ?? '' },
           });
-        });
+        }
       })();
     };
     // We only want this effect to fire when the SOS identity changes —
@@ -139,45 +155,11 @@ export function useSOSRecorder(args: {
   }, [args.enabled, args.userId, args.sosId]);
 }
 
-async function uploadRecording(args: {
-  localUri: string;
-  userId: string;
-  sosId: string;
-}): Promise<void> {
-  const path = `${args.userId}/${args.sosId}.m4a`;
-  try {
-    const file = new FileSystem.File(args.localUri);
-    const bytes = await file.bytes();
-    const { error } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, bytes, {
-        contentType: 'audio/m4a',
-        upsert: true,
-      });
-    if (error) {
-      reportError(error, {
-        category: 'sos.recording',
-        message: 'supabase upload returned error',
-        tags: { sosId: args.sosId },
-      });
-      return;
-    }
-    // Attach the audio path to the sos_events row so the responder side
-    // can show a playback button. Soft-fail when the column is missing
-    // (i.e. the migration in sql/11_sos_audio.sql hasn't been run yet).
-    try {
-      await supabase
-        .from('sos_events')
-        .update({ audio_path: path })
-        .eq('id', args.sosId);
-    } catch {
-      // ignore
-    }
-  } catch (err) {
-    reportError(err, {
-      category: 'sos.recording',
-      message: 'uploadRecording threw',
-      tags: { sosId: args.sosId },
-    });
-  }
+// Move the recorder's temp clip to a permanent on-device location.
+function saveRecordingLocally(localUri: string, sosId: string): void {
+  const dir = new FileSystem.Directory(FileSystem.Paths.document, REC_DIR);
+  if (!dir.exists) dir.create({ idempotent: true, intermediates: true });
+  const dest = new FileSystem.File(dir, `${sosId}.m4a`);
+  if (dest.exists) dest.delete();
+  new FileSystem.File(localUri).copy(dest);
 }

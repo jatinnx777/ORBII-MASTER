@@ -7,6 +7,7 @@ export { NeuCard } from './NeuCard';
 export { IconBadge, type BadgeTint } from './IconBadge';
 export { FeatureChip } from './FeatureChip';
 export { Mascot } from './Mascot';
+export { OrbiBee } from './OrbiBee';
 export { PopIn } from './PopIn';
 export { MascotLoader } from './MascotLoader';
 export { EmptyState } from './EmptyState';

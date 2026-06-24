@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Linking,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,6 +9,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoute, RouteProp } from '@react-navigation/native';
+import { useAudioPlayer } from 'expo-audio';
+import * as Sharing from 'expo-sharing';
 import {
   Button,
   Card,
@@ -17,6 +20,7 @@ import {
 } from '@/components/common';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
+import { hasSosRecording, sosRecordingUri } from '@/services/sos-recording';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Route = RouteProp<AppStackParamList, 'IncidentDetail'>;
@@ -105,6 +109,8 @@ export function IncidentDetailScreen() {
         />
       </Card>
 
+      <RecordingCard sosId={record.id} />
+
       <SectionHeader title="Who responded" />
       <Card style={styles.card}>
         {record.responders.length === 0 ? (
@@ -156,6 +162,79 @@ export function IncidentDetailScreen() {
   );
 }
 
+// On-device SOS audio: play it back, or share it with your circle. Only shown
+// when a recording was captured + saved for this incident.
+function RecordingCard({ sosId }: { sosId: string }) {
+  const exists = useMemo(() => hasSosRecording(sosId), [sosId]);
+  const uri = useMemo(() => sosRecordingUri(sosId), [sosId]);
+  const player = useAudioPlayer(exists ? uri : null);
+  const [playing, setPlaying] = useState(false);
+
+  if (!exists) return null;
+
+  const toggle = () => {
+    if (playing) {
+      player.pause();
+      setPlaying(false);
+    } else {
+      try {
+        player.seekTo(0);
+      } catch {
+        // ignore
+      }
+      player.play();
+      setPlaying(true);
+    }
+  };
+
+  const share = async () => {
+    try {
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          dialogTitle: 'Share SOS recording with your circle',
+          mimeType: 'audio/m4a',
+        });
+      }
+    } catch {
+      // user dismissed / share unavailable
+    }
+  };
+
+  return (
+    <>
+      <SectionHeader title="Voice recording" />
+      <Card style={styles.card}>
+        <Text style={styles.muted}>
+          Saved on this phone. Play it back, or share it with the people in your
+          circle.
+        </Text>
+        <View style={styles.recRow}>
+          <Pressable
+            onPress={toggle}
+            style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name={playing ? 'pause' : 'play'}
+              size={20}
+              color={colors.textInverse}
+            />
+            <Text style={styles.playText}>{playing ? 'Pause' : 'Play recording'}</Text>
+          </Pressable>
+          <Pressable
+            onPress={share}
+            style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+          >
+            <Ionicons name="share-social" size={18} color={colors.brandDeep} />
+            <Text style={styles.shareText}>Share</Text>
+          </Pressable>
+        </View>
+      </Card>
+    </>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: {
     paddingBottom: spacing.xxl,
@@ -199,6 +278,40 @@ const styles = StyleSheet.create({
   muted: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  recRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.md,
+  },
+  playBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brand,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+  },
+  playText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textInverse,
+  },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.lg,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+  },
+  shareText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.brandDeep,
   },
   helperRow: {
     flexDirection: 'row',

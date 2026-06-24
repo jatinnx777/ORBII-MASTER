@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { OrbiBee } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
@@ -218,7 +219,7 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
         </Text>
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
 
-        <Hero icon={slide.heroIcon} orbit={slide.orbit} image={ORBI[slide.id]} />
+        <Hero orbit={slide.orbit} image={ORBI[slide.id]} />
 
         {slide.layout === 'row' ? (
           <View style={styles.rowCard}>
@@ -266,7 +267,7 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
   );
 }
 
-function Hero({ icon, orbit, image }: { icon: IconName; orbit: IconName[]; image?: ImageSourcePropType }) {
+function Hero({ orbit, image }: { orbit: IconName[]; image?: ImageSourcePropType }) {
   const glow = useRef(new Animated.Value(0)).current;
   const float = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -305,8 +306,8 @@ function Hero({ icon, orbit, image }: { icon: IconName; orbit: IconName[]; image
           <Image source={image} style={styles.heroImage} resizeMode="contain" />
         </Animated.View>
       ) : (
-        <Animated.View style={[styles.heroCore, { transform: [{ translateY: floatY }] }]}>
-          <Ionicons name={icon} size={56} color={C.yellow} />
+        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+          <OrbiBee size={190} />
         </Animated.View>
       )}
       {orbit.slice(0, 4).map((o, i) => (
