@@ -27,3 +27,6 @@ ios/
 # Flutter native dir (Flutter retired; orbii_flutter slated for removal)
 /orbii_flutter/android/
 /orbii_flutter/ios/
+
+# Vosk model download scratch (models live in android assets)
+.voskdl/

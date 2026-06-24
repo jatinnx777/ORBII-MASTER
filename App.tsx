@@ -142,11 +142,41 @@ function RootNavigator() {
 
     const handleUrl = async (url: string | null) => {
       if (!url) return;
-      // Background Voice SOS fired (from the VoiceGuard foreground service).
+      // Voice SOS fired by the on-device VoiceGuard engine (in-app OR
+      // background). Quota-gate free-tier voice here, since this is now the
+      // single entry point for every voice trigger.
       if (url.startsWith('orbii://voice-sos')) {
-        if (navigationRef.isReady()) {
-          // @ts-expect-error - SOSCountdown is in the AppStack only.
-          navigationRef.navigate('SOSCountdown');
+        const goToSOS = () => {
+          if (navigationRef.isReady()) {
+            // @ts-expect-error - SOSCountdown is in the AppStack only.
+            navigationRef.navigate('SOSCountdown');
+          }
+        };
+        const isPremium = store.getState().user.profile?.isPremium ?? false;
+        const vstatus = await voiceSOSStatus(isPremium);
+        if (vstatus.allowed) {
+          void recordVoiceSOS();
+          goToSOS();
+        } else {
+          // Free monthly voice quota reached. Never block the emergency: offer
+          // a one-tap manual SOS, plus an upgrade path for unlimited voice.
+          appAlert(
+            'Voice SOS limit reached',
+            `You've used your ${vstatus.limit} free Voice SOS this month. You can still send an SOS now, or upgrade for unlimited voice.`,
+            [
+              {
+                text: 'Upgrade',
+                onPress: () => {
+                  if (navigationRef.isReady()) {
+                    // @ts-expect-error - PremiumUpgrade is in the AppStack only.
+                    navigationRef.navigate('PremiumUpgrade');
+                  }
+                },
+              },
+              { text: 'Send SOS', onPress: goToSOS },
+              { text: 'Not now', style: 'cancel' },
+            ],
+          );
         }
         return;
       }
@@ -351,47 +381,9 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
-  // Global voice trigger handler — fires whether the keyword is heard from
-  // the foreground HomeScreen listener OR the always-on background listener.
-  // The wake notification ensures the screen lights up and the SOS flow opens
-  // even if the phone was locked.
-  useEffect(() => {
-    const goToSOS = () => {
-      if (navigationRef.isReady()) {
-        // @ts-expect-error - SOSCountdown is in the AppStack only.
-        navigationRef.navigate('SOSCountdown');
-      }
-    };
-    const goToPlans = () => {
-      if (navigationRef.isReady()) {
-        // @ts-expect-error - PremiumUpgrade is in the AppStack only.
-        navigationRef.navigate('PremiumUpgrade');
-      }
-    };
-
-    const unsub = subscribeKeyword(async (keyword) => {
-      fireVoiceWakeNotification(keyword).catch(() => undefined);
-      const isPremium = store.getState().user.profile?.isPremium ?? false;
-      const status = await voiceSOSStatus(isPremium);
-      if (status.allowed) {
-        void recordVoiceSOS();
-        goToSOS();
-        return;
-      }
-      // Free monthly voice quota reached. Never block the emergency: offer a
-      // one-tap manual SOS, plus an upgrade path for unlimited voice.
-      appAlert(
-        'Voice SOS limit reached',
-        `You've used your ${status.limit} free Voice SOS this month. You can still send an SOS now, or upgrade for unlimited voice.`,
-        [
-          { text: 'Upgrade', onPress: goToPlans },
-          { text: 'Send SOS', onPress: goToSOS },
-          { text: 'Not now', style: 'cancel' },
-        ],
-      );
-    });
-    return unsub;
-  }, []);
+  // Voice triggers are now handled entirely in the deep-link handler above
+  // (the on-device VoiceGuard engine fires `orbii://voice-sos` directly), so
+  // there's no JS keyword subscription to wire up here anymore.
 
   // Global SOS broadcast receiver. Two-stage radius: alerts within 2 km of
   // the receiver fire immediately. Alerts 2-5 km away are cached pending

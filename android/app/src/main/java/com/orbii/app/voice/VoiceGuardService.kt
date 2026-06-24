@@ -23,16 +23,21 @@ import org.vosk.Model
 import org.vosk.Recognizer
 import java.io.File
 import java.io.FileOutputStream
-import java.net.URL
-import java.util.zip.ZipInputStream
 import kotlin.concurrent.thread
 
 /**
- * Background Voice SOS. A microphone foreground service that runs on-device
- * speech recognition (Vosk) and fires an SOS when it hears the user's secret
- * phrase. No audio ever leaves the phone; no API keys.
+ * Voice SOS — a microphone foreground service that runs on-device speech
+ * recognition (Vosk) and fires an SOS when it hears the user's secret phrase.
  *
- * Battery: a cheap RMS energy gate (VAD) only feeds audio to the recognizer
+ * Fully offline & API-free:
+ *   • The speech models (English + Hindi) are BUNDLED in the APK under
+ *     assets/vosk-model-en and assets/vosk-model-hi. Nothing is ever
+ *     downloaded; no audio ever leaves the phone; no API keys.
+ *   • On first run we copy the bundled models from assets into the app's
+ *     private storage once (Vosk needs a real filesystem path), then load
+ *     both so English ("help", "save me") and Hindi ("बचाओ", "मदद") trigger.
+ *
+ * Battery: a cheap RMS energy gate (VAD) only feeds audio to the recognizers
  * when there is actual sound, so silence costs almost nothing. The service
  * also auto-stops after the user-chosen duration.
  */
@@ -47,13 +52,20 @@ class VoiceGuardService : Service() {
     private const val CH_ONGOING = "orbii-protection"
     private const val CH_ALERT = "orbii-voice-alert"
     private const val SAMPLE_RATE = 16000
-    private const val MODEL_URL = "https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip"
-    private const val MODEL_DIR = "vosk-model-en"
+    // Bundled model folders (assets/<name> → filesDir/<name>).
+    private val MODEL_DIRS = listOf("vosk-model-en", "vosk-model-hi")
     // RMS threshold below which we treat the frame as silence (skip ASR).
     private const val VAD_RMS = 550.0
 
     // Always-on panic words, matched on top of the user's custom phrases.
-    private val BUILT_IN = listOf("help", "help me", "save me", "bachao", "madad")
+    // English is matched against the en model's Latin output; Hindi is matched
+    // against the hi model's Devanagari output.
+    private val BUILT_IN = listOf(
+      // English
+      "help", "help me", "save me", "bachao", "madad",
+      // Hindi (Devanagari — what the Hindi model actually emits)
+      "बचाओ", "मदद", "मदद करो", "बचाओ बचाओ", "मुझे बचाओ", "कोई बचाओ",
+    )
   }
 
   @Volatile private var running = false
@@ -95,19 +107,26 @@ class VoiceGuardService : Service() {
 
   // ── recognition loop ──────────────────────────────────────
   private fun listenLoop() {
-    val model = try {
-      Model(ensureModel().absolutePath)
-    } catch (e: Exception) {
-      // Most common cause: the one-time Vosk model download needs Wi-Fi and
-      // hasn't completed. Don't die silently — tell the user so they can
-      // reopen ORBII on Wi-Fi to finish setting up voice protection.
-      Log.e(TAG, "model load failed", e)
+    // Load every bundled model (English + Hindi). Each gets its own recognizer
+    // and we feed the same audio to all of them, so a phrase in either
+    // language triggers. If one model fails to load we carry on with the rest.
+    val models = ArrayList<Model>()
+    val recognizers = ArrayList<Recognizer>()
+    for (name in MODEL_DIRS) {
+      try {
+        val m = Model(ensureModel(name).absolutePath)
+        models.add(m)
+        recognizers.add(Recognizer(m, SAMPLE_RATE.toFloat()))
+      } catch (e: Exception) {
+        Log.e(TAG, "model load failed: $name", e)
+      }
+    }
+    if (recognizers.isEmpty()) {
       notifyProtectionError()
       stopSelf()
       return
     }
 
-    val recognizer = Recognizer(model, SAMPLE_RATE.toFloat())
     val minBuf = AudioRecord.getMinBufferSize(
       SAMPLE_RATE,
       AudioFormat.CHANNEL_IN_MONO,
@@ -124,6 +143,8 @@ class VoiceGuardService : Service() {
       )
     } catch (e: SecurityException) {
       Log.e(TAG, "mic permission missing", e)
+      recognizers.forEach { it.close() }
+      models.forEach { it.close() }
       stopSelf()
       return
     }
@@ -135,10 +156,12 @@ class VoiceGuardService : Service() {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
         if (rms(buffer, n) < VAD_RMS) continue // VAD: skip silence
-        if (recognizer.acceptWaveForm(buffer, n)) {
-          handleText(JSONObject(recognizer.result).optString("text"))
-        } else {
-          handleText(JSONObject(recognizer.partialResult).optString("partial"))
+        for (rec in recognizers) {
+          if (rec.acceptWaveForm(buffer, n)) {
+            handleText(JSONObject(rec.result).optString("text"))
+          } else {
+            handleText(JSONObject(rec.partialResult).optString("partial"))
+          }
         }
       }
     } catch (e: Exception) {
@@ -146,8 +169,8 @@ class VoiceGuardService : Service() {
     } finally {
       try { record.stop() } catch (_: Exception) {}
       record.release()
-      recognizer.close()
-      model.close()
+      recognizers.forEach { it.close() }
+      models.forEach { it.close() }
     }
   }
 
@@ -196,8 +219,8 @@ class VoiceGuardService : Service() {
     try { startActivity(deepLink) } catch (_: Exception) {}
   }
 
-  // Surface a tappable notification when voice protection can't start (almost
-  // always the first-run model download failing on a metered/offline network).
+  // Surface a tappable notification if voice protection can't start (e.g. the
+  // bundled model couldn't be unpacked — extremely rare, e.g. no free storage).
   private fun notifyProtectionError() {
     val open = packageManager.getLaunchIntentForPackage(packageName)
     val pi = PendingIntent.getActivity(
@@ -205,45 +228,42 @@ class VoiceGuardService : Service() {
     )
     val n = Notification.Builder(this, CH_ALERT)
       .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
-      .setContentTitle("Voice protection needs setup")
-      .setContentText("Open ORBII on Wi-Fi to finish enabling Voice SOS.")
+      .setContentTitle("Voice protection couldn't start")
+      .setContentText("Free up a little storage and reopen ORBII to enable Voice SOS.")
       .setContentIntent(pi)
       .setAutoCancel(true)
       .build()
     nm().notify(ALERT_ID + 1, n)
   }
 
-  // ── model management (download + unzip once) ──────────────
-  private fun ensureModel(): File {
-    val dir = File(filesDir, MODEL_DIR)
+  // ── model management (copy bundled model from assets, once) ─
+  private fun ensureModel(name: String): File {
+    val dir = File(filesDir, name)
     // Vosk model folders contain a "conf" subdir when fully unpacked.
     if (File(dir, "conf").exists()) return dir
     dir.deleteRecursively()
     dir.mkdirs()
-    Log.i(TAG, "downloading vosk model…")
-    val tmp = File(cacheDir, "vosk.zip")
-    URL(MODEL_URL).openStream().use { input ->
-      FileOutputStream(tmp).use { out -> input.copyTo(out, 1 shl 16) }
-    }
-    ZipInputStream(tmp.inputStream()).use { zip ->
-      var entry = zip.nextEntry
-      while (entry != null) {
-        // strip the top-level folder name from the zip
-        val rel = entry.name.substringAfter('/')
-        if (rel.isNotEmpty()) {
-          val outFile = File(dir, rel)
-          if (entry.isDirectory) {
-            outFile.mkdirs()
-          } else {
-            outFile.parentFile?.mkdirs()
-            FileOutputStream(outFile).use { fos -> zip.copyTo(fos, 1 shl 16) }
-          }
-        }
-        entry = zip.nextEntry
-      }
-    }
-    tmp.delete()
+    Log.i(TAG, "unpacking bundled model $name…")
+    copyAsset(name, dir)
     return dir
+  }
+
+  // Recursively copy an assets/ subtree to a real directory. AssetManager.list
+  // returns child names for a folder and an empty array for a file.
+  private fun copyAsset(assetPath: String, outFile: File) {
+    val children = assets.list(assetPath)
+    if (children.isNullOrEmpty()) {
+      // Leaf → it's a file. Stream it out.
+      outFile.parentFile?.mkdirs()
+      assets.open(assetPath).use { input ->
+        FileOutputStream(outFile).use { out -> input.copyTo(out, 1 shl 16) }
+      }
+      return
+    }
+    outFile.mkdirs()
+    for (child in children) {
+      copyAsset("$assetPath/$child", File(outFile, child))
+    }
   }
 
   // ── foreground notification plumbing ──────────────────────
