@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -90,13 +90,13 @@ export function CircleInviteScreen({
     setSubmitting('match');
     try {
       await inviteByUsername(circleId, match.username);
-      Alert.alert(
+      appAlert(
         'Invite sent',
         `${match.name?.trim() || `@${match.username}`} will see your invite the next time they open ORBII. They'll start sharing their location with the circle as soon as they accept.`,
         [{ text: 'Done', onPress: () => navigation.goBack() }],
       );
     } catch (err) {
-      Alert.alert(
+      appAlert(
         'Could not send invite',
         err instanceof Error ? err.message : 'Try again.',
       );
@@ -122,7 +122,7 @@ export function CircleInviteScreen({
       }
       navigation.goBack();
     } catch (err) {
-      Alert.alert(
+      appAlert(
         'Could not create invite link',
         err instanceof Error ? err.message : 'Try again.',
       );

@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from '@/components/common';
+import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Input, ScreenContainer } from '@/components/common';
@@ -48,7 +49,7 @@ export function ContactFormScreen() {
 
   const handleSave = () => {
     if (!canSave) {
-      Alert.alert('Check the form', 'Name, relation and 10-digit phone required.');
+      appAlert('Check the form', 'Name, relation and 10-digit phone required.');
       return;
     }
     const e164 = toE164India(phone);

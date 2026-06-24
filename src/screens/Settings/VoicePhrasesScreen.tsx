@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   PermissionsAndroid,
   Platform,
   Pressable,
@@ -75,17 +75,17 @@ export function VoicePhrasesScreen() {
         return;
       }
       if (phrases.length === 0) {
-        Alert.alert('Add a phrase first', 'Set at least one secret phrase before turning on background protection.');
+        appAlert('Add a phrase first', 'Set at least one secret phrase before turning on background protection.');
         return;
       }
       const ok = await ensureMicPerms();
       if (!ok) {
-        Alert.alert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
         return;
       }
       const started = await startBackgroundVoice(phrases, bgHours);
       if (!started) {
-        Alert.alert('Not available', 'Background protection runs only on the Android app build.');
+        appAlert('Not available', 'Background protection runs only on the Android app build.');
         return;
       }
       setBgEnabled(true);

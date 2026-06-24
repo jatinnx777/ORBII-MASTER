@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import {
   Animated,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -18,6 +19,42 @@ import { colors, fontFamilies } from '@/theme';
 import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
+
+// Card-swap transition between tabs. `current.progress` runs -1 (off-screen
+// right) → 0 (focused) → 1 (off-screen left). We slide + scale + fade each
+// scene so switching tabs feels like one card sliding away as the next slides
+// in, instead of a hard cut.
+const forCardSwap = ({
+  current,
+}: {
+  current: { progress: Animated.AnimatedInterpolation<number> };
+}) => ({
+  sceneStyle: {
+    opacity: current.progress.interpolate({
+      inputRange: [-1, 0, 1],
+      outputRange: [0, 1, 0],
+    }),
+    transform: [
+      {
+        translateX: current.progress.interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [70, 0, -70],
+        }),
+      },
+      {
+        scale: current.progress.interpolate({
+          inputRange: [-1, 0, 1],
+          outputRange: [0.93, 1, 0.93],
+        }),
+      },
+    ],
+  },
+});
+
+const CARD_SWAP_SPEC = {
+  animation: 'timing' as const,
+  config: { duration: 240, easing: Easing.out(Easing.cubic) },
+};
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -41,8 +78,10 @@ export function TabNavigator() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // Animated cross-fade/shift when switching tabs (v7).
+        // Card-swap slide between tabs (custom interpolator + spec).
         animation: 'shift',
+        transitionSpec: CARD_SWAP_SPEC,
+        sceneStyleInterpolator: forCardSwap,
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Animated,
   Easing,
   Modal,
@@ -134,14 +134,14 @@ export function PremiumUpgradeScreen() {
       if (result.ok) {
         dispatch(premiumUpgraded());
         trackEvent('premium_purchased', { plan: planId });
-        Alert.alert(
+        appAlert(
           '🎉 Welcome to ORBII ' + (planId === 'family' ? 'Family' : 'Plus'),
           'Your premium protection is now active. Stay safe out there.',
         );
       } else if (result.cancelled) {
         // Silent — the user chose to cancel.
       } else {
-        Alert.alert('Payment failed', result.error ?? 'Please try again.');
+        appAlert('Payment failed', result.error ?? 'Please try again.');
       }
     } finally {
       setPaying(null);
@@ -151,7 +151,7 @@ export function PremiumUpgradeScreen() {
   const applyCoupon = () => {
     const code = coupon.trim().toUpperCase();
     if (!code) {
-      Alert.alert('Enter a code', 'Type a coupon code first.');
+      appAlert('Enter a code', 'Type a coupon code first.');
       return;
     }
     if (code === PROMO_CODE) {
@@ -159,14 +159,14 @@ export function PremiumUpgradeScreen() {
       markCouponRedeemed();
       setCouponApplied(true);
       trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
-      Alert.alert(
+      appAlert(
         '🎉 Premium unlocked!',
         'Your ORBII coupon is applied. Every Premium feature is now free for you.',
       );
       return;
     }
     setCouponApplied(false);
-    Alert.alert('Invalid code', `"${code}" isn't a valid coupon. Try ORBII.`);
+    appAlert('Invalid code', `"${code}" isn't a valid coupon. Try ORBII.`);
   };
 
   const submitWaitlist = async () => {
@@ -174,7 +174,7 @@ export function PremiumUpgradeScreen() {
     if (!planId) return;
     const trimmed = email.trim().toLowerCase();
     if (!/^\S+@\S+\.\S+$/.test(trimmed)) {
-      Alert.alert('Invalid email', 'Enter a valid email so we can reach you.');
+      appAlert('Invalid email', 'Enter a valid email so we can reach you.');
       return;
     }
     setSubmitting(true);
@@ -187,7 +187,7 @@ export function PremiumUpgradeScreen() {
       });
       trackEvent('premium_purchased', { plan: planId, waitlist: true });
       setWaitlistOpen(null);
-      Alert.alert(
+      appAlert(
         "You're on the list",
         "We'll email you the moment paid plans go live.",
       );

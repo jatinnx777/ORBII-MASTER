@@ -1,6 +1,6 @@
 import React from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   FlatList,
   Pressable,
   StyleSheet,
@@ -36,7 +36,7 @@ export function EmergencyContactsScreen() {
   const atLimit = contacts.length >= max;
 
   const handleRemove = (id: string, name: string) => {
-    Alert.alert('Remove contact?', `${name} will no longer be alerted.`, [
+    appAlert('Remove contact?', `${name} will no longer be alerted.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',

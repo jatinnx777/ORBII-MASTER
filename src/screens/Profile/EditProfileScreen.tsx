@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Image,
   Pressable,
   StyleSheet,
@@ -36,7 +36,7 @@ export function EditProfileScreen() {
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
-      Alert.alert('Permission needed', 'Enable photo access to change your picture.');
+      appAlert('Permission needed', 'Enable photo access to change your picture.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -53,11 +53,11 @@ export function EditProfileScreen() {
   const handleSave = async () => {
     if (!profile) return;
     if (!isValidName(name)) {
-      Alert.alert('Name required', 'Please enter a valid name.');
+      appAlert('Name required', 'Please enter a valid name.');
       return;
     }
     if (!usernameValid) {
-      Alert.alert(
+      appAlert(
         'Username invalid',
         'Username must be 3 to 20 lowercase letters, numbers, or underscores.',
       );
@@ -72,7 +72,7 @@ export function EditProfileScreen() {
     if (usernameChanged && profile.usernameChangedAt) {
       const remaining = profile.usernameChangedAt + COOLDOWN_MS - now;
       if (remaining > 0) {
-        Alert.alert(
+        appAlert(
           'Username locked',
           `You can change your username again in ${formatDays(remaining)}.`,
         );
@@ -82,7 +82,7 @@ export function EditProfileScreen() {
     if (usernameChanged) {
       const available = await isUsernameAvailable(username, profile.uid);
       if (!available) {
-        Alert.alert(
+        appAlert(
           'Username taken',
           `@${username} is already taken. Pick another.`,
         );
@@ -92,7 +92,7 @@ export function EditProfileScreen() {
     if (photoChanged && profile.photoChangedAt) {
       const remaining = profile.photoChangedAt + COOLDOWN_MS - now;
       if (remaining > 0) {
-        Alert.alert(
+        appAlert(
           'Photo locked',
           `You can change your profile photo again in ${formatDays(remaining)}.`,
         );

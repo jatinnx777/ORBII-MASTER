@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -245,7 +245,7 @@ export function HomeScreen() {
 
   const ensureLocationOrPrompt = (): boolean => {
     if (locationPermission === 'granted') return true;
-    Alert.alert(
+    appAlert(
       'Enable location',
       'ORBII needs your location to dispatch helpers during an emergency.',
       [
@@ -278,7 +278,7 @@ export function HomeScreen() {
     const result = await startListening();
     if (!result.ok) {
       if (result.reason === 'permission-denied') {
-        Alert.alert(
+        appAlert(
           'Microphone access needed',
           'ORBII listens for trigger words like "help" or "bachao" to fire an SOS hands-free. Enable microphone access in settings to turn this on.',
           [
@@ -290,12 +290,12 @@ export function HomeScreen() {
           ],
         );
       } else if (result.reason === 'expo-go' || result.reason === 'native-unavailable') {
-        Alert.alert(
+        appAlert(
           'Voice SOS needs a dev build',
           'Voice detection uses a native module that Expo Go cannot load.',
         );
       } else {
-        Alert.alert('Could not start listening', result.reason ?? 'Unknown error');
+        appAlert('Could not start listening', result.reason ?? 'Unknown error');
       }
     }
   }, [voiceStatus]);
@@ -354,13 +354,13 @@ export function HomeScreen() {
     async (hours: number) => {
       const ok = await ensureMicPerms();
       if (!ok) {
-        Alert.alert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
         return;
       }
       const phrases = await loadPhrases();
       const started = await startBackgroundVoice(phrases, hours);
       if (!started) {
-        Alert.alert('Not available', 'Background protection runs on the installed Android app.');
+        appAlert('Not available', 'Background protection runs on the installed Android app.');
         return;
       }
       await saveBgVoiceState({ enabled: true, hours });
@@ -371,7 +371,7 @@ export function HomeScreen() {
       const exempt = await isBatteryExempt();
       if (!exempt) await requestBatteryExemption();
       setTimeout(() => {
-        Alert.alert(
+        appAlert(
           'Keep ORBII running',
           'So voice protection survives in the background, allow Autostart and remove battery limits for ORBII.',
           [
@@ -401,7 +401,7 @@ export function HomeScreen() {
       setBgVoiceOn(false);
       return;
     }
-    Alert.alert(
+    appAlert(
       'Protect me for…',
       'ORBII will keep listening for your phrase, even in the background.',
       [
@@ -622,13 +622,7 @@ export function HomeScreen() {
           </View>
         </PopIn>
 
-        {/* ── Protection Strength (slim status pill) ─────── */}
-        <PopIn delay={60}>
-          <ProtectionStrengthPill
-            pct={protectionPct}
-            onPress={() => setProtectionSheetOpen(true)}
-          />
-        </PopIn>
+        {/* Protection Strength moved to the Safety tab → Safety Readiness. */}
 
         <BatteryWarning />
 
@@ -668,14 +662,6 @@ export function HomeScreen() {
           />
         ) : null}
       </BottomPanel>
-
-      <ProtectionSheet
-        visible={protectionSheetOpen}
-        pct={protectionPct}
-        factors={protectionFactors}
-        onClose={() => setProtectionSheetOpen(false)}
-        onFix={handleFixFactor}
-      />
     </ScreenContainer>
   );
 }

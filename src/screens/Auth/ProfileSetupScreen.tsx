@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Animated,
   Easing,
   Image,
@@ -117,7 +117,7 @@ export function ProfileSetupScreen() {
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert(
+        appAlert(
           'Permission needed',
           'Allow photo access to set a profile picture.',
         );
@@ -135,7 +135,7 @@ export function ProfileSetupScreen() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not open photo picker.';
-      Alert.alert('Something went wrong', message);
+      appAlert('Something went wrong', message);
     }
   };
 

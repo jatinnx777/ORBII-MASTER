@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Animated,
   AppState,
   Easing,
@@ -138,7 +138,7 @@ export function CountdownScreen() {
 
   const triggerSOS = async () => {
     if (!profile) {
-      Alert.alert('Sign in required', 'Please sign in before sending SOS.');
+      appAlert('Sign in required', 'Please sign in before sending SOS.');
       navigation.goBack();
       return;
     }
@@ -201,7 +201,7 @@ export function CountdownScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
         () => undefined,
       );
-      Alert.alert('SOS failed', message, [
+      appAlert('SOS failed', message, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     }

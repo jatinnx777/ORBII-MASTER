@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Pressable,
@@ -68,7 +68,7 @@ export function CircleDetailScreen({
   }, [circleId]);
 
   const confirmLeave = () => {
-    Alert.alert(
+    appAlert(
       'Leave circle?',
       'You will stop receiving safety alerts from this group.',
       [
@@ -82,7 +82,7 @@ export function CircleDetailScreen({
               dispatch(circleRemoved(circleId));
               navigation.goBack();
             } catch (err) {
-              Alert.alert(
+              appAlert(
                 'Could not leave',
                 err instanceof Error ? err.message : 'Try again.',
               );
@@ -94,7 +94,7 @@ export function CircleDetailScreen({
   };
 
   const confirmDelete = () => {
-    Alert.alert(
+    appAlert(
       'Delete circle?',
       `Everyone will be removed from "${circle?.name ?? 'this circle'}". This can't be undone.`,
       [
@@ -108,7 +108,7 @@ export function CircleDetailScreen({
               dispatch(circleRemoved(circleId));
               navigation.goBack();
             } catch (err) {
-              Alert.alert(
+              appAlert(
                 'Could not delete',
                 err instanceof Error ? err.message : 'Try again.',
               );

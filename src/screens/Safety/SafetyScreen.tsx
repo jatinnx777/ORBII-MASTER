@@ -25,6 +25,7 @@ import {
   type VoiceDetectionStatus,
 } from '@/services/voice-detection';
 import { useEntitlement } from '@/services/entitlements';
+import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -44,6 +45,7 @@ export function SafetyScreen() {
         <WatchOverMe />
         <SectionHeader title="Personal Safety" />
         <VoiceSOSCard />
+        <Text style={styles.disclaimer}>{SAFETY_DISCLAIMER}</Text>
       </ScrollView>
     </ScreenContainer>
   );
@@ -53,23 +55,44 @@ function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
 }
 
-// Duolingo-style entry into the Safety Readiness setup journey.
+// Protection Strength — the live readiness score now lives here on the Safety
+// tab (moved off Home). Shows the capped % + a progress bar; tapping opens the
+// full checklist to fix what's missing.
 function SafetyReadinessCard() {
   const navigation = useNavigation<Nav>();
+  const { pct, doneCount, total } = useReadiness();
+  const ready = pct >= READINESS_CAP;
+  const barColor = ready ? colors.sage : colors.peachDeep;
+
   return (
     <Pressable
       onPress={() => navigation.navigate('SafetyReadiness')}
       style={({ pressed }) => [styles.readinessCard, pressed && { transform: [{ scale: 0.98 }] }]}
       accessibilityRole="button"
+      accessibilityLabel={`Protection strength ${pct} percent. Tap to improve.`}
     >
-      <View style={styles.readinessIcon}>
-        <Ionicons name="shield-checkmark" size={24} color={colors.peachDeep} />
+      <View style={styles.readinessTop}>
+        <View style={styles.readinessIcon}>
+          <Ionicons name="shield-checkmark" size={22} color={colors.peachDeep} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.readinessTitle}>Protection Strength</Text>
+          <Text style={styles.readinessBody}>
+            {ready
+              ? "You're fully set up and protected."
+              : `${doneCount} of ${total} steps done — finish to protect yourself fully.`}
+          </Text>
+        </View>
+        <Text style={[styles.readinessPct, { color: barColor }]}>{pct}%</Text>
       </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.readinessTitle}>Safety Readiness</Text>
-        <Text style={styles.readinessBody}>Finish your setup so ORBII can protect you fully.</Text>
+      <View style={styles.readinessBarTrack}>
+        <View
+          style={[
+            styles.readinessBarFill,
+            { width: `${Math.max(pct, 4)}%`, backgroundColor: barColor },
+          ]}
+        />
       </View>
-      <Ionicons name="chevron-forward" size={20} color={colors.peachDeep} />
     </Pressable>
   );
 }
@@ -299,15 +322,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginTop: spacing.sm,
   },
-  /* safety readiness entry */
+  /* protection strength / safety readiness entry */
   readinessCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
     backgroundColor: colors.peachSoft,
     borderRadius: radius.xl,
     padding: spacing.md,
     marginBottom: spacing.sm,
+  },
+  readinessTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
   },
   readinessIcon: {
     width: 46,
@@ -327,6 +352,31 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.textSecondary,
     marginTop: 1,
+  },
+  readinessPct: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  readinessBarTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.surface,
+    marginTop: spacing.md,
+    overflow: 'hidden',
+  },
+  readinessBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  disclaimer: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 9.5,
+    lineHeight: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.md,
+    paddingHorizontal: spacing.xs,
   },
   /* watch over me */
   watchCard: {

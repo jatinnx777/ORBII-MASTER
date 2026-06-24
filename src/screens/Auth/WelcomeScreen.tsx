@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { appAlert } from '@/components/common';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +47,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed.';
       dispatch(signInFailed({ error: message }));
-      if (!/cancel/i.test(message)) Alert.alert("Couldn't sign in", message);
+      if (!/cancel/i.test(message)) appAlert("Couldn't sign in", message);
     }
   };
 
@@ -59,7 +60,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   };
 
   const comingSoon = (method: string) =>
-    Alert.alert(
+    appAlert(
       `${method} sign-in coming soon`,
       'For now, please continue with Google or sign up with your phone.',
     );

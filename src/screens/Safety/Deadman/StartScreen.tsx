@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -66,7 +66,7 @@ export function DeadmanStartScreen() {
 
   const handleArm = async () => {
     if (picked.size === 0) {
-      Alert.alert(
+      appAlert(
         'Pick at least one person',
         'Your timer alerts the people in this list when it expires.',
       );

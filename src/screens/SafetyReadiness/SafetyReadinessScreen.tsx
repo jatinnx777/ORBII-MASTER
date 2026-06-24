@@ -18,12 +18,10 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenContainer } from '@/components/common';
 import { useAppSelector } from '@/redux/store';
-import { getCurrentPermission, requestPermission } from '@/services/location';
-import {
-  getNotificationPermission,
-  requestNotificationPermission,
-} from '@/services/notifications';
-import { getItem, setItem, storageKeys } from '@/services/storage';
+import { requestPermission } from '@/services/location';
+import { requestNotificationPermission } from '@/services/notifications';
+import { setItem, storageKeys } from '@/services/storage';
+import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -45,58 +43,23 @@ type ChecklistItem = {
   done: boolean;
 };
 
-async function micGranted(): Promise<boolean> {
-  if (Platform.OS !== 'android') return true;
-  try {
-    return await PermissionsAndroid.check(
-      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-    );
-  } catch {
-    return false;
-  }
-}
-
 export function SafetyReadinessScreen() {
   const navigation = useNavigation<Nav>();
-  const profile = useAppSelector((s) => s.user.profile);
-  const contacts = profile?.emergencyContacts?.length ?? 0;
+  const { signals, doneCount, total, pct, reload } = useReadiness();
 
-  const [state, setState] = useState({
-    voice: false,
-    notifications: false,
-    location: false,
-    test: false,
-  });
   const [simOpen, setSimOpen] = useState(false);
   const [busy, setBusy] = useState<ItemId | null>(null);
 
-  const load = useCallback(async () => {
-    const [voice, notifications, location, test] = await Promise.all([
-      micGranted(),
-      getNotificationPermission(),
-      getCurrentPermission().then((p) => p === 'granted'),
-      getItem<boolean>(storageKeys.safetyTest).then((v) => !!v),
-    ]);
-    setState({ voice, notifications, location, test });
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  const load = reload;
 
   const items: ChecklistItem[] = [
-    { id: 'account', icon: 'person-circle', title: 'Create your account', body: 'You’re signed in and ready.', done: !!profile },
-    { id: 'contact', icon: 'people', title: 'Add an emergency contact', body: 'Someone we alert the moment you need help.', done: contacts > 0 },
-    { id: 'voice', icon: 'mic', title: 'Enable Voice SOS', body: 'Say your phrase to get help hands-free.', done: state.voice },
-    { id: 'notifications', icon: 'notifications', title: 'Turn on notifications', body: 'So you never miss an alert.', done: state.notifications },
-    { id: 'location', icon: 'location', title: 'Share your location', body: 'So help can reach the right place fast.', done: state.location },
-    { id: 'test', icon: 'shield-checkmark', title: 'Run a safety test', body: 'See ORBII spring into action, safely.', done: state.test },
+    { id: 'account', icon: 'person-circle', title: 'Create your account', body: 'You’re signed in and ready.', done: signals.account },
+    { id: 'contact', icon: 'people', title: 'Add an emergency contact', body: 'Someone we alert the moment you need help.', done: signals.contact },
+    { id: 'voice', icon: 'mic', title: 'Enable Voice SOS', body: 'Say your phrase to get help hands-free.', done: signals.voice },
+    { id: 'notifications', icon: 'notifications', title: 'Turn on notifications', body: 'So you never miss an alert.', done: signals.notifications },
+    { id: 'location', icon: 'location', title: 'Share your location', body: 'So help can reach the right place fast.', done: signals.location },
+    { id: 'test', icon: 'shield-checkmark', title: 'Run a safety test', body: 'See ORBII spring into action, safely.', done: signals.test },
   ];
-
-  const doneCount = items.filter((i) => i.done).length;
-  const pct = Math.round((doneCount / items.length) * 100);
 
   // animated progress bar + headline number
   const progress = useRef(new Animated.Value(0)).current;
@@ -135,7 +98,7 @@ export function SafetyReadinessScreen() {
   };
 
   const headline =
-    pct >= 100
+    pct >= READINESS_CAP
       ? "You're fully protected 🎉"
       : pct >= 60
         ? "Almost there — you're well protected."
@@ -165,17 +128,25 @@ export function SafetyReadinessScreen() {
                   styles.barFill,
                   {
                     width: progress.interpolate({ inputRange: [0, 1], outputRange: ['4%', '100%'] }),
-                    backgroundColor: pct >= 100 ? colors.sage : colors.peachDeep,
+                    backgroundColor: pct >= READINESS_CAP ? colors.sage : colors.peachDeep,
                   },
                 ]}
               />
             </View>
             <Text style={styles.barCaption}>{doneCount} of {items.length} done</Text>
+            {pct >= READINESS_CAP ? (
+              <Text style={styles.capNote}>
+                We cap protection at {READINESS_CAP}%. No safety system can ever
+                promise 100%.
+              </Text>
+            ) : null}
           </View>
 
           {items.map((item, i) => (
             <ChecklistRow key={item.id} item={item} index={i} onPress={() => handleItem(item)} loading={busy === item.id} />
           ))}
+
+          <Text style={styles.disclaimer}>{SAFETY_DISCLAIMER}</Text>
         </ScrollView>
       </SafeAreaView>
 
@@ -337,6 +308,16 @@ const styles = StyleSheet.create({
   barTrack: { height: 12, borderRadius: 6, backgroundColor: colors.creamDeep, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 6 },
   barCaption: { ...typography.caption, color: colors.textSecondary, marginTop: spacing.xs },
+  capNote: { ...typography.caption, fontSize: 11, color: colors.textMuted, marginTop: spacing.xs },
+  disclaimer: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 9.5,
+    lineHeight: 13,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.lg,
+    paddingHorizontal: spacing.xs,
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
+import { Animated, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -28,7 +28,7 @@ import { hydrateStore } from '@/redux/persist';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
-import { BrandSheetProvider, OfflineBanner } from '@/components/common';
+import { AppDialogHost, appAlert, BrandSheetProvider, OfflineBanner } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
   fireVoiceWakeNotification,
@@ -161,7 +161,7 @@ function RootNavigator() {
           navigationRef.navigate('CircleDetail', { circleId });
         }
       } catch (err) {
-        Alert.alert(
+        appAlert(
           'Could not join circle',
           err instanceof Error ? err.message : 'The invite link is no longer valid.',
         );
@@ -380,7 +380,7 @@ export default function App() {
       }
       // Free monthly voice quota reached. Never block the emergency: offer a
       // one-tap manual SOS, plus an upgrade path for unlimited voice.
-      Alert.alert(
+      appAlert(
         'Voice SOS limit reached',
         `You've used your ${status.limit} free Voice SOS this month. You can still send an SOS now, or upgrade for unlimited voice.`,
         [
@@ -519,6 +519,7 @@ export default function App() {
             </NavigationContainer>
           </View>
           {showLaunch ? <LaunchOverlay onDone={() => setShowLaunch(false)} /> : null}
+          <AppDialogHost />
         </BrandSheetProvider>
       </SafeAreaProvider>
     </Provider>

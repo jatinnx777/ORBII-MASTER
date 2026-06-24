@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -47,7 +47,7 @@ export function GhostStartScreen() {
 
   const handleStart = async () => {
     if (destination.trim().length < 2) {
-      Alert.alert(
+      appAlert(
         'Add a destination',
         'Tell ORBII where you\'re heading so it can flag if you go off-route.',
       );

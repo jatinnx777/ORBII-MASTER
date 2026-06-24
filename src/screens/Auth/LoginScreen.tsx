@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Animated,
   Easing,
   Image,
@@ -92,7 +92,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         err instanceof Error ? err.message : 'Google sign-in failed.';
       dispatch(signInFailed({ error: message }));
       if (!/cancel/i.test(message)) {
-        Alert.alert("Couldn't sign in", message);
+        appAlert("Couldn't sign in", message);
       }
     }
   };

@@ -7,6 +7,7 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { appAlert } from './AppDialog';
 import {
   Animated,
   Easing,
@@ -28,7 +29,7 @@ import {
   typography,
 } from '@/theme';
 
-// Replacement for the system Alert.alert() dialog. Bottom-sheet modal with
+// Replacement for the system appAlert() dialog. Bottom-sheet modal with
 // an icon halo, branded gradient header, and animated entrance. One-button
 // (acknowledge) and two-button (cancel + confirm) shapes both supported.
 //

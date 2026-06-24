@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   FlatList,
@@ -119,7 +119,7 @@ export function CirclesScreen() {
         await refreshCircles();
         await setActiveCircle(invite.circleId);
       } catch (err) {
-        Alert.alert(
+        appAlert(
           'Could not accept',
           err instanceof Error ? err.message : 'Something went wrong.',
         );
@@ -134,7 +134,7 @@ export function CirclesScreen() {
         await declineInvite(invite.id);
         dispatch(inviteResolved(invite.id));
       } catch (err) {
-        Alert.alert(
+        appAlert(
           'Could not decline',
           err instanceof Error ? err.message : 'Something went wrong.',
         );

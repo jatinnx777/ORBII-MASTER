@@ -1,3 +1,4 @@
+export { AppDialogHost, appAlert, type AppDialogButton } from './AppDialog';
 export { BatteryWarning } from './BatteryWarning';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { Button } from './Button';

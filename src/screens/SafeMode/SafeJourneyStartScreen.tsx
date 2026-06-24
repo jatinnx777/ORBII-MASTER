@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -57,7 +57,7 @@ export function SafeJourneyStartScreen() {
 
   const handleStart = () => {
     if (!label.trim()) {
-      Alert.alert('Pick a label', 'Tell us what this journey is.');
+      appAlert('Pick a label', 'Tell us what this journey is.');
       return;
     }
     dispatch(

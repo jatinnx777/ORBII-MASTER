@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -148,7 +148,7 @@ export function SafetyPinScreen({ navigation }: AppScreenProps<'SafetyPin'>) {
             await setPin(pin);
             setSetSheetOpen(false);
             await refresh();
-            Alert.alert('PIN saved', 'Your safety PIN is active.');
+            appAlert('PIN saved', 'Your safety PIN is active.');
           } catch (err) {
             setPinError(err instanceof Error ? err.message : 'Could not save PIN.');
           }
@@ -177,7 +177,7 @@ export function SafetyPinScreen({ navigation }: AppScreenProps<'SafetyPin'>) {
           if (pendingAction === 'clear') {
             await clearPin();
             await refresh();
-            Alert.alert('PIN removed', 'Cancelling an SOS no longer needs a PIN.');
+            appAlert('PIN removed', 'Cancelling an SOS no longer needs a PIN.');
           } else if (pendingAction === 'set') {
             setSetSheetOpen(true);
           }

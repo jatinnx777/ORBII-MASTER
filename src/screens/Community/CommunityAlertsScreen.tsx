@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   FlatList,
@@ -120,7 +120,7 @@ export function CommunityAlertsScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => undefined,
     );
-    Alert.alert(
+    appAlert(
       "You're about to help",
       `Navigate to ${alertItem.victim.name}? We'll share your live ETA so the person in need knows help is on the way.`,
       [

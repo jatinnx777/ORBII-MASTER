@@ -1,4 +1,5 @@
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import { appAlert } from '@/components/common';
 import type { EmergencyContact, SOSLocation, UserProfile } from '@/types';
 
 // WhatsApp deep-link broadcast.
@@ -100,7 +101,7 @@ export async function broadcastSOSViaWhatsApp(args: {
   }
   await openWhatsAppFor(contacts[0], message);
   if (contacts.length > 1) {
-    Alert.alert(
+    appAlert(
       'Sent to first contact',
       `WhatsApp opened with ${contacts[0].name}. After sending, tap "Send to next" to alert the remaining ${contacts.length - 1}.`,
       [

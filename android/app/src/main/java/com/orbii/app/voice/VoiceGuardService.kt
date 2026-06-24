@@ -98,7 +98,11 @@ class VoiceGuardService : Service() {
     val model = try {
       Model(ensureModel().absolutePath)
     } catch (e: Exception) {
+      // Most common cause: the one-time Vosk model download needs Wi-Fi and
+      // hasn't completed. Don't die silently — tell the user so they can
+      // reopen ORBII on Wi-Fi to finish setting up voice protection.
       Log.e(TAG, "model load failed", e)
+      notifyProtectionError()
       stopSelf()
       return
     }
@@ -177,15 +181,36 @@ class VoiceGuardService : Service() {
     val n = Notification.Builder(this, CH_ALERT)
       .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
       .setContentTitle("ORBII SOS")
-      .setContentText("Voice trigger heard — opening emergency")
+      .setContentText("Voice trigger heard — tap to open emergency")
       .setPriority(Notification.PRIORITY_MAX)
       .setCategory(Notification.CATEGORY_ALARM)
       .setFullScreenIntent(pi, true)
+      // Android 14+ demotes full-screen intents for non-calling apps, so we
+      // ALSO set a content intent — that keeps the notification tappable so
+      // the SOS screen still opens when the user taps it.
+      .setContentIntent(pi)
       .setAutoCancel(true)
       .build()
     nm().notify(ALERT_ID, n)
     // also try to launch directly
     try { startActivity(deepLink) } catch (_: Exception) {}
+  }
+
+  // Surface a tappable notification when voice protection can't start (almost
+  // always the first-run model download failing on a metered/offline network).
+  private fun notifyProtectionError() {
+    val open = packageManager.getLaunchIntentForPackage(packageName)
+    val pi = PendingIntent.getActivity(
+      this, 2, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+    val n = Notification.Builder(this, CH_ALERT)
+      .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
+      .setContentTitle("Voice protection needs setup")
+      .setContentText("Open ORBII on Wi-Fi to finish enabling Voice SOS.")
+      .setContentIntent(pi)
+      .setAutoCancel(true)
+      .build()
+    nm().notify(ALERT_ID + 1, n)
   }
 
   // ── model management (download + unzip once) ──────────────

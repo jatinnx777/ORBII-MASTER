@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -83,12 +83,12 @@ export function CircleCreateScreen({
       navigation.replace('CircleDetail', { circleId: circle.id });
     } catch (err) {
       if (err instanceof CirclesNotInstalledError) {
-        Alert.alert(
+        appAlert(
           'Backend setup needed',
           'The circles tables are not installed on your Supabase project yet. Open Supabase → SQL Editor → paste the contents of sql/09_circles.sql → Run. Then try again.',
         );
       } else {
-        Alert.alert(
+        appAlert(
           'Could not create circle',
           err instanceof Error ? err.message : 'Try again in a moment.',
         );

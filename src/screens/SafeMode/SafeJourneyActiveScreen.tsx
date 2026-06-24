@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { appAlert } from '@/components/common';
 import {
-  Alert,
   Animated,
   Easing,
   Linking,
@@ -82,7 +82,7 @@ export function SafeJourneyActiveScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
       () => undefined,
     );
-    Alert.alert(
+    appAlert(
       'Journey overdue',
       "You haven't marked yourself safe. Starting SOS.",
       [
@@ -121,7 +121,7 @@ export function SafeJourneyActiveScreen() {
       () => undefined,
     );
     dispatch(safeJourneyEnded());
-    Alert.alert('Welcome back', "We're glad you're safe.", [
+    appAlert('Welcome back', "We're glad you're safe.", [
       { text: 'Done', onPress: () => navigation.goBack() },
     ]);
   };
@@ -155,7 +155,7 @@ export function SafeJourneyActiveScreen() {
         Share.share({ message: msg });
       }
     } catch (err) {
-      Alert.alert(
+      appAlert(
         'Could not get location',
         err instanceof Error ? err.message : 'Unknown error',
       );
@@ -163,7 +163,7 @@ export function SafeJourneyActiveScreen() {
   };
 
   const handleEnd = () => {
-    Alert.alert(
+    appAlert(
       'End Safe Mode?',
       'Make sure you are actually safe before ending.',
       [
