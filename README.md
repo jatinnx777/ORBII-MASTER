@@ -1,114 +1,196 @@
-# ORBII 
+# ORBII
 
-## Protecting people before it’s too late.
+### AI-Powered Emergency Safety Platform
 
-ORBII is a real time personal safety platform that helps people to stay connected, protected and reachable during emergencies.
+ORBII is an emergency response and personal safety platform designed to help people quickly alert trusted contacts and nearby helpers during dangerous situations.
 
-ORBII integrates live safety technology, intelligent SOS systems and a trusted human network into one seamless experience built for modern life.
-
-Our mission is easy:
-
-Immediate. Available. Trustworthy. Safety for everyone.
---- 
-
-# What Does ORBII Do
-
-ORBII allows users to react faster in hazardous situations by:
-
-- SOS voice-activated
-- Emergency alerts in real-time
-- Real-time location sharing
-- Safe circles of trusted contacts
-- Helper visibility close
-- Emergency real-time communication
-- Crime awareness and safety advice
-- Monitoring of data breaches
-- Travel safety help- Transparency of system status
-
-The platform is designed to operate in real world conditions where speed is paramount.
+Built with an offline-first approach, ORBII focuses on rapid emergency activation, real-time location sharing, and voice-triggered SOS detection, even when the user cannot manually access their phone.
 
 ---
-# Main Features Voice SOS
 
-Hands free emergency activation with custom voice triggers
+## The Problem
 
-Designed for when you might not be able to unlock or reach your device in time.
+In many emergency situations, victims may not have enough time to unlock their phones, navigate through menus, or manually contact emergency services.
 
---- 
+Traditional safety tools often depend on:
 
-## Instant SOS Notifications
+* Internet connectivity
+* Manual interaction
+* Multiple taps
+* Visible phone usage
 
-Emergency alerts are issued immediately to:
-- Trusted contacts 
-- Verified helpers in your area
-- Circles of emergency
+ORBII aims to reduce the time between danger and response.
 
-Including: - Real-time location
-- Status in real-time
-- Updates at regular intervals
-
---- 
-
-### Safety ring
-
-Users can create private trusted groups that are on the list to be alerted first in an emergency.
-
-The objective is simple:
-Ask for help from people who care about you.
-
---- 
-
-## Helping Neighbours
-
-ORBII enables verified users nearby to assist in emergencies if they are able.
-
-It is designed to reduce response time in critical situations.
-----
-ORBII provides users with local crime and incident awareness so they can make safer decisions when traveling or moving through unfamiliar areas.
-## Support for Travel Security
-
-Heatmaps and safety indicators give users a sense of areas with higher emergency activity or reported incidents.
---- ## Current System Status
-
-The real time view of the operational status of ORBII services consists of:Alerting systems
-- Servers 
-- Requests (Continued)
-- Safety Network Availability
-
-Transparency breeds trust.
---- 
-
-## Design Philosophy
-
-Designed to feel:- Serene
-- contemporary
-- Humano
-- Emotionally secure
-
-We believe safety products should help ease anxiety, not create it.
 ---
-Experience is on:
-- Minimalistic look
-- Soft interactions 
-- quick response
-- Clear communicationTrust-driven UI
 
---- ## Technology
+## Key Features
 
-ORBII is being built with:- Flutter (https://flutter.dev/
-Supabase
-- Systems in real time
-- Background Security Services
-- Location infrastructure in real time
+### Voice SOS Detection
 
-Concentrate on performance, scalability, and reliability.
-# Vision
+Offline voice recognition continuously listens for emergency phrases and can trigger an SOS event without requiring internet access.
 
-We don’t think personal safety should be a matter of chance.
+### One-Touch SOS
 
-ORBII is building a future where:- assistance is quicker
-- people keep in touch
-- improved management of emergencies
-- safety goes from reactive to proactive
+Users can instantly activate emergency mode through a dedicated emergency interface.
 
-This is just the beginning. 
+### Real-Time Location Sharing
+
+Emergency contacts receive the user's live location during active SOS events.
+
+### Nearby Helper Network
+
+ORBII can notify nearby verified users who may be able to assist during emergencies.
+
+### Emergency Contact Alerts
+
+Trusted contacts are informed immediately when an SOS is triggered.
+
+### Background Protection
+
+Voice detection and emergency monitoring continue to operate even when the application is not actively open.
+
+### Offline-First Design
+
+Critical safety functionality remains available without relying on cloud-based speech recognition.
+
+---
+
+## Technical Challenges Solved
+
+* Offline speech recognition on mobile devices
+* Android background service management
+* Android 14 lock-screen restrictions
+* Wake-lock and battery optimization
+* Real-time emergency dispatch architecture
+* Voice-triggered SOS activation
+* Foreground service reliability
+* Realtime location synchronization
+* Secure authentication and user management
+* Emergency workflow state management
+
+---
+
+## Technology Stack
+
+### Frontend
+
+* React Native
+* TypeScript
+
+### Backend
+
+* Supabase
+* PostgreSQL
+* Realtime Subscriptions
+
+### Mobile Systems
+
+* Android Native Modules
+* Foreground Services
+* Lock-Screen Activities
+* Deep Links
+* Notification Channels
+
+### AI & Voice Processing
+
+* Vosk Speech Recognition
+* Offline Voice Detection
+* Voice Activity Detection (VAD)
+
+---
+
+## Vision
+
+ORBII aims to make emergency assistance faster, more accessible, and more reliable through intelligent mobile technology.
+
+The long-term goal is to build a trusted safety ecosystem that connects individuals, communities, institutions, and emergency responders.
+
+---
+
+## Current Status
+
+Development Stage: MVP Complete
+
+Current Focus:
+
+* User testing
+* Reliability validation
+* Community onboarding
+* Campus deployments
+* Emergency response optimization
+
+---
+
+```
+                      ORBII Architecture
+```
+
+┌─────────────────────────────┐
+│           USER              │
+└──────────────┬──────────────┘
+│
+▼
+┌─────────────────────────────┐
+│      React Native App       │
+│                             │
+│ • Home Screen               │
+│ • SOS Interface             │
+│ • Voice Settings            │
+│ • Active SOS Tracking       │
+└──────────────┬──────────────┘
+│
+▼
+┌─────────────────────────────┐
+│ Android Native Services     │
+│                             │
+│ • VoiceGuard Service        │
+│ • Background Monitoring     │
+│ • Lock Screen Activation    │
+│ • Notifications             │
+└──────────────┬──────────────┘
+│
+▼
+┌─────────────────────────────┐
+│ Offline Voice Engine        │
+│                             │
+│ • Vosk                      │
+│ • Voice Activity Detection  │
+│ • Custom Trigger Phrases    │
+└──────────────┬──────────────┘
+│
+▼
+┌─────────────────────────────┐
+│ Emergency Dispatch Layer    │
+│                             │
+│ • SOS Creation              │
+│ • Contact Alerts            │
+│ • Helper Notifications      │
+│ • Location Updates          │
+└──────────────┬──────────────┘
+│
+▼
+┌─────────────────────────────┐
+│          Supabase           │
+│                             │
+│ • Authentication            │
+│ • Database                  │
+│ • Realtime                  │
+│ • Storage                   │
+└──────────────┬──────────────┘
+│
+┌────────┴────────┐
+▼                 ▼
+
+┌─────────────┐   ┌─────────────┐
+│ Emergency   │   │ Nearby      │
+│ Contacts    │   │ Helpers     │
+└─────────────┘   └─────────────┘
+
+
+## Founder
+
+Jatin Kumar
+
+Founder, ORBII
+
+Building technology focused on safety, emergency response, and offline-first systems.
