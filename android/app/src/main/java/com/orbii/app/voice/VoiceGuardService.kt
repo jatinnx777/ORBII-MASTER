@@ -8,7 +8,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.drawable.Icon
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -50,14 +49,9 @@ class VoiceGuardService : Service() {
     private const val TAG = "VoiceGuard"
     private const val ONGOING_ID = 4101
     private const val ALERT_ID = 4102
-    private const val SOS_NOTIF_ID = 4103
     private const val CH_ONGOING = "orbii-protection"
     private const val CH_ALERT = "orbii-voice-alert"
     private const val SAMPLE_RATE = 16000
-    // Cancel-countdown window, owned natively so it runs with the screen
-    // locked / app killed (the React UI can't). Mirrors the manual SOS 5s.
-    const val ACTION_CANCEL_SOS = "com.orbii.app.voice.CANCEL_SOS"
-    private const val SOS_COUNTDOWN_MS = 5000L
     // English ships INSIDE the apk (assets/vosk-model-en, copied to filesDir
     // once). Hindi is an optional on-demand download that lands directly in
     // filesDir/vosk-model-hi — loaded only when present, so English-only users
@@ -65,7 +59,10 @@ class VoiceGuardService : Service() {
     private const val MODEL_EN = "vosk-model-en"
     private const val MODEL_HI = "vosk-model-hi"
     // RMS threshold below which we treat the frame as silence (skip ASR).
-    private const val VAD_RMS = 550.0
+    // Lowered for higher recall — quieter / first-time utterances used to be
+    // gated out, so the user had to repeat the phrase. 200 still skips true
+    // silence (which reads ~0–80) while letting soft speech through.
+    private const val VAD_RMS = 200.0
 
     // Always-on panic words, matched on top of the user's custom phrases.
     // English is matched against the en model's Latin output; Hindi is matched
@@ -86,13 +83,6 @@ class VoiceGuardService : Service() {
   override fun onBind(intent: Intent?): IBinder? = null
 
   override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-    // Cancel tap from the countdown notification — stop the pending SOS and
-    // keep listening. The service is already foreground here.
-    if (intent?.action == ACTION_CANCEL_SOS) {
-      cancelSosCountdown()
-      return START_STICKY
-    }
-
     // Persist phrases + duration so a START_STICKY restart (null intent, after
     // the OS kills us) keeps listening for the SAME custom phrases.
     val prefs = getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
@@ -213,107 +203,46 @@ class VoiceGuardService : Service() {
     val t = text.lowercase()
     if (phrases.none { t.contains(it) }) return
     val now = System.currentTimeMillis()
-    if (now - lastFire < 8000) return // debounce
+    if (now - lastFire < 6000) return // debounce
     lastFire = now
-    // Hand off to the main thread — the countdown timer + notifications must
-    // not run on the audio recognition thread.
-    main.post { startSosCountdown() }
+    fireSos()
   }
 
-  // ── native cancel countdown (lock-screen safe) ────────────
-  // The countdown lives here in the service, NOT in the React UI, so it starts
-  // the instant the phrase is heard even while the phone is locked. The user
-  // cancels from the high-priority notification's action button; on expiry we
-  // dispatch the SOS headlessly (no UI required).
-  private val sosHandler = Handler(Looper.getMainLooper())
-  @Volatile private var sosCounting = false
-  private var sosRemaining = 0
-
-  private val sosTick = object : Runnable {
-    override fun run() {
-      if (!sosCounting) return
-      if (sosRemaining <= 0) {
-        sosCounting = false
-        dispatchSos()
-        return
-      }
-      showCountdownNotification(sosRemaining)
-      sosRemaining -= 1
-      sosHandler.postDelayed(this, 1000)
-    }
-  }
-
-  private fun startSosCountdown() {
-    if (sosCounting) return
-    sosCounting = true
-    sosRemaining = (SOS_COUNTDOWN_MS / 1000).toInt()
-    sosHandler.post(sosTick)
-  }
-
-  private fun cancelSosCountdown() {
-    sosCounting = false
-    sosHandler.removeCallbacks(sosTick)
-    nm().cancel(SOS_NOTIF_ID)
-  }
-
-  // Heads-up, lock-screen-visible countdown with a Cancel action. IMPORTANCE
-  // is HIGH (CH_ALERT) so it surfaces over the lock screen; PUBLIC visibility
-  // shows the full content + action there.
-  private fun showCountdownNotification(remaining: Int) {
-    val cancelPi = PendingIntent.getService(
-      this, 7,
-      Intent(this, VoiceGuardService::class.java).setAction(ACTION_CANCEL_SOS),
-      PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-    )
-    val n = Notification.Builder(this, CH_ALERT)
-      .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
-      .setContentTitle("Sending SOS in ${remaining}s")
-      .setContentText("Tap Cancel to stop an accidental alert.")
-      .setPriority(Notification.PRIORITY_MAX)
-      .setCategory(Notification.CATEGORY_ALARM)
-      .setOngoing(true)
-      .setOnlyAlertOnce(true)
-      .setVisibility(Notification.VISIBILITY_PUBLIC)
-      .addAction(
-        Notification.Action.Builder(null as Icon?, "Cancel SOS", cancelPi).build(),
-      )
-      .build()
-    nm().notify(SOS_NOTIF_ID, n)
-  }
-
-  // Countdown expired → actually dispatch. The alert is sent by a HeadlessJS
-  // task (runs with no UI, so it works locked / killed); we also swap the
-  // notification for a tappable "SOS sent" one and best-effort open the app.
-  private fun dispatchSos() {
-    try {
-      startService(Intent(this, SosDispatchTaskService::class.java))
-    } catch (e: Exception) {
-      Log.e(TAG, "failed to start dispatch task", e)
-    }
-
-    val open = Intent(Intent.ACTION_VIEW, Uri.parse("orbii://active-sos")).apply {
+  // Voice trigger → bring up the SOS countdown SCREEN over the lock screen, so
+  // the user sees the real 5s countdown and can cancel WITHOUT unlocking. The
+  // React CountdownScreen owns the timer + dispatch + the live ActiveSOS map;
+  // this service's only job is to launch it reliably.
+  //
+  // Two paths for resilience: a full-screen-intent notification (the OS's
+  // mechanism for showing UI over a locked screen) AND a direct startActivity
+  // from this microphone foreground service (exempt from background-activity
+  // limits while it runs). MainActivity is showWhenLocked + turnScreenOn, so
+  // whichever lands wakes the screen and shows the countdown immediately.
+  private fun fireSos() {
+    val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("orbii://voice-sos")).apply {
       setPackage(packageName)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
     val pi = PendingIntent.getActivity(
-      this, 8, open,
+      this, 0, deepLink,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
     val n = Notification.Builder(this, CH_ALERT)
       .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
-      .setContentTitle("SOS sent")
-      .setContentText("Your circle has been alerted. Tap to open.")
+      .setContentTitle("ORBII SOS")
+      .setContentText("Opening emergency…")
       .setPriority(Notification.PRIORITY_MAX)
       .setCategory(Notification.CATEGORY_ALARM)
       .setFullScreenIntent(pi, true)
       .setContentIntent(pi)
       .setAutoCancel(true)
       .build()
-    nm().notify(SOS_NOTIF_ID, n)
-    // Best-effort: bring the app up over the lock screen (MainActivity is
-    // showWhenLocked). If the OS blocks the background launch, the tappable
-    // notification above still gets the user there.
-    try { startActivity(open) } catch (_: Exception) {}
+    nm().notify(ALERT_ID, n)
+    try {
+      startActivity(deepLink)
+    } catch (e: Exception) {
+      Log.e(TAG, "startActivity failed", e)
+    }
   }
 
   // Surface a tappable notification if voice protection can't start (e.g. the
@@ -407,7 +336,6 @@ class VoiceGuardService : Service() {
 
   override fun onDestroy() {
     running = false
-    sosHandler.removeCallbacks(sosTick)
     try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
     super.onDestroy()
   }

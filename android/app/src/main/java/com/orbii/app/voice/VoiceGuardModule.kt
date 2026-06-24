@@ -132,6 +132,42 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  // ── full-screen-intent access (Android 14+) ───────────────
+  // On Android 14+ the OS revokes USE_FULL_SCREEN_INTENT from non-calling apps
+  // by default, which DEMOTES our SOS full-screen intent to a silent
+  // notification — so the countdown screen never appears over the lock screen.
+  // These let JS check + send the user to grant it.
+  @ReactMethod
+  fun canUseFullScreenIntent(promise: Promise) {
+    try {
+      if (Build.VERSION.SDK_INT >= 34) {
+        val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE)
+          as android.app.NotificationManager
+        promise.resolve(nm.canUseFullScreenIntent())
+      } else {
+        promise.resolve(true) // granted by default below 14
+      }
+    } catch (e: Exception) {
+      promise.resolve(true)
+    }
+  }
+
+  @ReactMethod
+  fun requestFullScreenIntentPermission(promise: Promise) {
+    try {
+      if (Build.VERSION.SDK_INT >= 34) {
+        val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).apply {
+          data = Uri.parse("package:${ctx.packageName}")
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        ctx.startActivity(intent)
+      }
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
   // NativeEventEmitter compatibility no-ops.
   @ReactMethod fun addListener(eventName: String) {}
   @ReactMethod fun removeListeners(count: Double) {}

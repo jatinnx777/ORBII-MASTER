@@ -1,5 +1,6 @@
 import { NativeModules, Platform } from 'react-native';
 import { getItem, setItem, storageKeys } from './storage';
+import { appAlert } from '@/components/common/AppDialog';
 
 
 const { VoiceGuard } = NativeModules as {
@@ -8,8 +9,40 @@ const { VoiceGuard } = NativeModules as {
     stopGuard(): Promise<boolean>;
     requestDisableBatteryOptimization?(): Promise<boolean>;
     isIgnoringBatteryOptimization?(): Promise<boolean>;
+    canUseFullScreenIntent?(): Promise<boolean>;
+    requestFullScreenIntentPermission?(): Promise<boolean>;
   };
 };
+
+// On Android 14+ the OS demotes our SOS full-screen intent (which is what shows
+// the countdown screen over the lock screen) unless the user grants the
+// "full-screen notifications" special access. Prompt once when they enable any
+// Voice SOS, so locked-phone triggers actually surface the screen.
+export async function ensureFullScreenIntentAccess(): Promise<void> {
+  if (!VoiceGuard?.canUseFullScreenIntent) return;
+  try {
+    const ok = await VoiceGuard.canUseFullScreenIntent();
+    if (ok) return;
+    const asked = await getItem<boolean>(storageKeys.fsiAsked);
+    if (asked) return;
+    await setItem(storageKeys.fsiAsked, true);
+    appAlert(
+      'Show SOS over your lock screen',
+      'Allow ORBII to show the SOS countdown on your lock screen, so Voice SOS works even when your phone is locked.',
+      [
+        { text: 'Later', style: 'cancel' },
+        {
+          text: 'Allow',
+          onPress: () => {
+            VoiceGuard?.requestFullScreenIntentPermission?.().catch(() => undefined);
+          },
+        },
+      ],
+    );
+  } catch {
+    // ignore — best effort
+  }
+}
 
 export const backgroundVoiceAvailable = Platform.OS === 'android' && !!VoiceGuard;
 
@@ -29,6 +62,7 @@ export async function startBackgroundVoice(
   try {
     const durationMs = durationHours > 0 ? durationHours * 3600_000 : 0;
     await VoiceGuard.startGuard(phrases, durationMs);
+    void ensureFullScreenIntentAccess();
     return true;
   } catch {
     return false;

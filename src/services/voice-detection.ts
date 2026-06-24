@@ -11,7 +11,10 @@
 // works whether the app is foreground, backgrounded, or locked.
 
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
-import { loadBgVoiceState } from '@/services/background-voice';
+import {
+  ensureFullScreenIntentAccess,
+  loadBgVoiceState,
+} from '@/services/background-voice';
 
 const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {
@@ -115,6 +118,7 @@ export async function startListening(): Promise<{ ok: boolean; reason?: string }
   try {
     // duration 0 = listen until explicitly stopped.
     await VoiceGuard!.startGuard(customPhrases, 0);
+    void ensureFullScreenIntentAccess();
     listening = true;
     setStatus('listening');
     return { ok: true };
