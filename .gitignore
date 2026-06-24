@@ -30,3 +30,6 @@ ios/
 
 # Vosk model download scratch (models live in android assets)
 .voskdl/
+
+# Kotlin compiler daemon session artifacts
+android/.kotlin/
