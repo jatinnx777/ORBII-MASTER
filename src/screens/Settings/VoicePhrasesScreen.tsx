@@ -33,6 +33,13 @@ import {
 } from '@/services/background-voice';
 import { useIsPremium, FREE_VOICE_PHRASE_LIMIT } from '@/services/entitlements';
 import { promptUpgrade } from '@/services/paywall';
+import {
+  downloadHindiPack,
+  HINDI_PACK,
+  hindiPackSupported,
+  isHindiReady,
+  removeHindiPack,
+} from '@/services/voice-language';
 
 export function VoicePhrasesScreen() {
   const navigation = useNavigation();
@@ -217,6 +224,8 @@ export function VoicePhrasesScreen() {
             </View>
           ) : null}
 
+          <LanguageCard />
+
           {backgroundVoiceAvailable ? (
             <View style={styles.card}>
               <View style={styles.bgHead}>
@@ -255,12 +264,111 @@ export function VoicePhrasesScreen() {
           <View style={styles.note}>
             <Ionicons name="shield-checkmark" size={16} color={colors.sageDeep} />
             <Text style={styles.noteText}>
-              The words "help", "bachao", and "madad" always work, even without
-              a custom phrase. Your phrases never leave this device.
+              The words "help" and "save me" always work in English, even without
+              a custom phrase. Add the Hindi pack above for "bachao" and "madad".
+              Your phrases never leave this device.
             </Text>
           </View>
         </ScrollView>
       </SafeAreaView>
+    </View>
+  );
+}
+
+// Manage voice languages. English is bundled (always on); Hindi is an optional
+// pack the user can download or remove here to control storage use.
+function LanguageCard() {
+  const supported = hindiPackSupported();
+  const [ready, setReady] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    isHindiReady().then(setReady);
+  }, []);
+
+  if (!supported) return null;
+
+  const onDownload = async () => {
+    setDownloading(true);
+    setProgress(0);
+    const ok = await downloadHindiPack(setProgress);
+    setDownloading(false);
+    if (ok) setReady(true);
+    else
+      appAlert(
+        'Download failed',
+        'Could not download the Hindi pack. Check your connection and try again.',
+      );
+  };
+
+  const onRemove = () => {
+    appAlert(
+      'Remove Hindi pack?',
+      'Voice SOS keeps working in English. You can re-download Hindi anytime, free.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            await removeHindiPack();
+            setReady(false);
+          },
+        },
+      ],
+    );
+  };
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.label}>Languages</Text>
+
+      <View style={styles.langRow}>
+        <IconBadge icon="globe-outline" tint="sage" size={36} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.langName}>English</Text>
+          <Text style={styles.bgSub}>Always on · built in</Text>
+        </View>
+        <View style={styles.langOnPill}>
+          <Text style={styles.langOnText}>On</Text>
+        </View>
+      </View>
+
+      <View style={styles.langDivider} />
+
+      <View style={styles.langRow}>
+        <IconBadge icon="language-outline" tint="lavender" size={36} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.langName}>Hindi</Text>
+          <Text style={styles.bgSub}>
+            {ready
+              ? 'Installed · बचाओ, मदद'
+              : `Optional · ${HINDI_PACK.downloadMb} MB download`}
+          </Text>
+        </View>
+        {ready ? (
+          <Pressable onPress={onRemove} hitSlop={8}>
+            <Text style={styles.removeText}>Remove</Text>
+          </Pressable>
+        ) : downloading ? (
+          <Text style={styles.bgSub}>{progress}%</Text>
+        ) : (
+          <Pressable
+            onPress={onDownload}
+            style={({ pressed }) => [styles.getBtn, pressed && { opacity: 0.9 }]}
+          >
+            <Ionicons name="cloud-download" size={15} color={colors.textInverse} />
+            <Text style={styles.getText}>Get</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {downloading ? (
+        <View style={styles.langBarTrack}>
+          <View style={[styles.langBarFill, { width: `${Math.max(progress, 4)}%` }]} />
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -341,6 +449,29 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
   },
   phraseText: { flex: 1, ...typography.bodyMedium, color: colors.textPrimary },
+  langRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  langDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
+  langName: { ...typography.bodyMedium, fontFamily: 'Poppins_600SemiBold', color: colors.textPrimary },
+  langOnPill: {
+    backgroundColor: colors.sage,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+  },
+  langOnText: { fontFamily: 'Poppins_600SemiBold', fontSize: 12, color: colors.textInverse },
+  removeText: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: colors.coralDeep },
+  getBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.peachDeep,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  getText: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: colors.textInverse },
+  langBarTrack: { height: 7, borderRadius: 4, backgroundColor: colors.cream, overflow: 'hidden', marginTop: spacing.md },
+  langBarFill: { height: '100%', borderRadius: 4, backgroundColor: colors.peachDeep },
   bgHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   bgTitle: { ...typography.bodyMedium, fontFamily: 'Poppins_600SemiBold', color: colors.textPrimary },
   bgSub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, lineHeight: 17, marginTop: 2 },

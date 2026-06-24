@@ -11,12 +11,67 @@ import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
 import com.facebook.react.bridge.ReadableArray
+import java.io.File
 
 /** JS bridge for the background Voice SOS foreground service. */
 class VoiceGuardModule(private val ctx: ReactApplicationContext) :
   ReactContextBaseJavaModule(ctx) {
 
+  companion object {
+    // Optional Hindi language pack (not bundled — fetched on demand so the
+    // base APK stays small). Source: Vosk's official small Hindi model.
+    private const val HINDI_URL =
+      "https://alphacephei.com/vosk/models/vosk-model-small-hi-0.22.zip"
+    private const val HINDI_DIR = "vosk-model-hi"
+  }
+
+  // 0..100 while a language pack downloads; -1 on failure. Polled from JS so we
+  // don't depend on the event emitter (which differs across RN architectures).
+  @Volatile private var dlProgress = 0
+
   override fun getName() = "VoiceGuard"
+
+  // ── optional Hindi language pack ──────────────────────────
+  @ReactMethod
+  fun isHindiModelReady(promise: Promise) {
+    promise.resolve(File(File(ctx.filesDir, HINDI_DIR), "conf").exists())
+  }
+
+  @ReactMethod
+  fun getModelDownloadProgress(promise: Promise) {
+    promise.resolve(dlProgress.toDouble())
+  }
+
+  @ReactMethod
+  fun downloadHindiModel(promise: Promise) {
+    if (File(File(ctx.filesDir, HINDI_DIR), "conf").exists()) {
+      dlProgress = 100
+      promise.resolve(true)
+      return
+    }
+    dlProgress = 0
+    Thread {
+      try {
+        VoiceModelDownloader.download(ctx, HINDI_URL, HINDI_DIR) { p -> dlProgress = p }
+        dlProgress = 100
+        promise.resolve(true)
+      } catch (e: Exception) {
+        dlProgress = -1
+        promise.reject("download_failed", e)
+      }
+    }.start()
+  }
+
+  @ReactMethod
+  fun deleteHindiModel(promise: Promise) {
+    try {
+      File(ctx.filesDir, HINDI_DIR).deleteRecursively()
+      dlProgress = 0
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("delete_failed", e)
+    }
+  }
 
   @ReactMethod
   fun startGuard(phrases: ReadableArray, durationMs: Double, promise: Promise) {

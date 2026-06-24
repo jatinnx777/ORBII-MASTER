@@ -135,7 +135,7 @@ shadows.hero  = { offset: (0,8),  opacity: 0.10, radius: 22, elevation: 6 }
 
 ### 5.3 SOS pipeline
 - **Manual** — hold the Home shield (long-press for instant) → `CountdownScreen` (5 s cancel window) → `ActiveSOSScreen`.
-- **Voice** — foreground only (`expo-speech-recognition`). Keywords: "help", "bachao", "madad". `subscribeKeyword` in `App.tsx` routes any trigger to `SOSCountdown`.
+- **Voice** — fully offline, on-device. Bundled Vosk models (English + Hindi, in `android/app/src/main/assets/vosk-model-en|hi`) run inside the native `VoiceGuardService` foreground service. No speech API, no network, nothing downloaded. Built-in keywords: "help", "save me", "bachao"/"बचाओ", "madad"/"मदद" + the user's custom phrases. In-app toggle and always-on background protection are the same engine; a trigger fires the `orbii://voice-sos` deep link, quota-gated for free tier in `App.tsx`.
 - **Shake** — `expo-sensors` Accelerometer; 3 hard shakes (1.8 g spikes) within 1.5 s → countdown. Default ON. Toggle in Settings → Emergency triggers. Currently foreground-only.
 - **Hardware (volume triple-press)** — **CUT.** AccessibilityService removed alongside the helper system.
 

@@ -9,17 +9,27 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   ViewToken,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { OrbiBee } from '@/components/common';
+import { appAlert, OrbiBee } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
 import { trackEvent } from '@/services/analytics';
+import {
+  downloadHindiPack,
+  getVoiceLang,
+  HINDI_PACK,
+  hindiPackSupported,
+  isHindiReady,
+  removeHindiPack,
+  setVoiceLang,
+} from '@/services/voice-language';
 
 const { width } = Dimensions.get('window');
 
@@ -139,6 +149,7 @@ export function OnboardingScreen() {
   const listRef = useRef<FlatList<Slide>>(null);
   const dispatch = useAppDispatch();
   const [index, setIndex] = useState(0);
+  const [phase, setPhase] = useState<'intro' | 'language'>('intro');
   const scrollX = useRef(new Animated.Value(0)).current;
 
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
@@ -151,10 +162,15 @@ export function OnboardingScreen() {
     trackEvent('onboarding_completed', skipped ? { skipped: true } : undefined);
     dispatch(onboardingCompleted());
   };
+  // The intro slides flow INTO the Voice SOS language setup as a final step.
   const next = () => {
     if (index < SLIDES.length - 1) listRef.current?.scrollToIndex({ index: index + 1, animated: true });
-    else finish();
+    else setPhase('language');
   };
+
+  if (phase === 'language') {
+    return <VoiceLanguageSetup onDone={() => finish()} />;
+  }
   const back = () => {
     if (index > 0) listRef.current?.scrollToIndex({ index: index - 1, animated: true });
   };
@@ -200,6 +216,229 @@ export function OnboardingScreen() {
     </View>
   );
 }
+
+// Final onboarding step — pick the languages ORBII listens for. English is
+// always on (bundled in the app); Hindi is an optional pack downloaded here.
+function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
+  const insets = useSafeAreaInsets();
+  const supported = hindiPackSupported();
+  const [hindiOn, setHindiOn] = useState(false);
+  const [ready, setReady] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const [r, pref] = await Promise.all([isHindiReady(), getVoiceLang()]);
+      setReady(r);
+      setHindiOn(r || pref.hindi);
+    })();
+  }, []);
+
+  const toggleHindi = (v: boolean) => {
+    if (!supported) {
+      appAlert('Not available', 'Hindi voice detection runs on the installed Android app.');
+      return;
+    }
+    setHindiOn(v);
+  };
+
+  const startDownload = async () => {
+    setDownloading(true);
+    setProgress(0);
+    const ok = await downloadHindiPack(setProgress);
+    setDownloading(false);
+    if (ok) {
+      setReady(true);
+    } else {
+      appAlert(
+        'Download failed',
+        'Could not download the Hindi pack. Check your connection and try again — you can also add it later in Settings.',
+      );
+    }
+  };
+
+  const handleContinue = async () => {
+    // Toggled off after a previous install → free the storage.
+    if (!hindiOn && ready) {
+      await removeHindiPack();
+    } else {
+      await setVoiceLang({ hindi: hindiOn && ready });
+    }
+    onDone();
+  };
+
+  return (
+    <View style={[lstyles.root, { paddingTop: insets.top + spacing.lg }]}>
+      <ScrollView contentContainerStyle={lstyles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={lstyles.iconWrap}>
+          <Ionicons name="mic" size={26} color={C.green} />
+        </View>
+        <Text style={lstyles.h1}>Which language should{'\n'}ORBII listen for?</Text>
+        <Text style={lstyles.sub}>
+          ORBII listens on your device for your safe words. Nothing is ever recorded or sent anywhere.
+        </Text>
+
+        {/* English — always on, bundled in the app */}
+        <View style={[lstyles.langCard, lstyles.langCardOn]}>
+          <View style={lstyles.langHead}>
+            <Text style={lstyles.langTitle}>English</Text>
+            <View style={lstyles.onPill}>
+              <Ionicons name="checkmark" size={11} color="#fff" />
+              <Text style={lstyles.onPillText}>On</Text>
+            </View>
+          </View>
+          <Text style={lstyles.exLabel}>EXAMPLES</Text>
+          <View style={lstyles.chips}>
+            {['Help me', 'Save me', 'Emergency'].map((w) => (
+              <LangChip key={w} text={w} />
+            ))}
+          </View>
+        </View>
+
+        {/* Hindi — optional, downloaded on demand */}
+        <View style={lstyles.langCard}>
+          <View style={lstyles.langHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={lstyles.langTitle}>Also detect Hindi</Text>
+              <Text style={lstyles.langHint}>Optional language pack</Text>
+            </View>
+            <Switch
+              value={hindiOn}
+              onValueChange={toggleHindi}
+              trackColor={{ false: C.dotOff, true: C.greenSoft }}
+              thumbColor={hindiOn ? C.green : '#FFFFFF'}
+            />
+          </View>
+
+          {hindiOn ? (
+            <>
+              <Text style={lstyles.exLabel}>EXAMPLES</Text>
+              <View style={lstyles.chips}>
+                {['Bachao', 'बचाओ', 'Madad', 'मदद'].map((w) => (
+                  <LangChip key={w} text={w} />
+                ))}
+              </View>
+
+              {ready ? (
+                <View style={lstyles.readyRow}>
+                  <Ionicons name="checkmark-circle" size={16} color={C.green} />
+                  <Text style={lstyles.readyText}>Hindi pack installed</Text>
+                </View>
+              ) : downloading ? (
+                <View style={lstyles.dlBox}>
+                  <View style={lstyles.barTrack}>
+                    <View style={[lstyles.barFill, { width: `${Math.max(progress, 4)}%` }]} />
+                  </View>
+                  <Text style={lstyles.dlText}>Downloading… {progress}%</Text>
+                </View>
+              ) : (
+                <>
+                  <Text style={lstyles.packInfo}>
+                    Hindi voice detection requires an additional language pack ·{' '}
+                    {HINDI_PACK.downloadMb} MB download · {HINDI_PACK.storageMb} MB storage
+                  </Text>
+                  <Pressable onPress={startDownload} style={({ pressed }) => [lstyles.dlBtn, pressed && { opacity: 0.9 }]}>
+                    <Ionicons name="cloud-download" size={16} color="#fff" />
+                    <Text style={lstyles.dlBtnText}>Download Hindi pack</Text>
+                  </Pressable>
+                </>
+              )}
+            </>
+          ) : null}
+        </View>
+
+        <Text style={lstyles.note}>You can change this anytime in Settings → Voice SOS.</Text>
+      </ScrollView>
+
+      <View style={[lstyles.bottom, { paddingBottom: insets.bottom + spacing.md }]}>
+        <Pressable
+          onPress={handleContinue}
+          disabled={downloading}
+          style={({ pressed }) => [lstyles.cta, downloading && { opacity: 0.5 }, pressed && { transform: [{ scale: 0.98 }] }]}
+        >
+          <Text style={lstyles.ctaText}>{downloading ? 'Downloading…' : 'Continue'}</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function LangChip({ text }: { text: string }) {
+  return (
+    <View style={lstyles.chip}>
+      <Text style={lstyles.chipText}>{text}</Text>
+    </View>
+  );
+}
+
+const lstyles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: C.bg, paddingHorizontal: spacing.lg },
+  scroll: { paddingBottom: spacing.xl, gap: spacing.md },
+  iconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: C.greenSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  h1: { fontFamily: fontFamilies.poppinsBold, fontSize: 26, lineHeight: 32, color: C.ink, letterSpacing: -0.5 },
+  sub: { fontFamily: fontFamilies.interRegular, fontSize: 14, lineHeight: 20, color: C.sub, marginBottom: spacing.sm },
+  langCard: {
+    backgroundColor: C.card,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    borderWidth: 1.5,
+    borderColor: '#EFE7D2',
+  },
+  langCardOn: { borderColor: C.green },
+  langHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  langTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 17, color: C.ink },
+  langHint: { fontFamily: fontFamilies.interRegular, fontSize: 12.5, color: C.sub, marginTop: 1 },
+  onPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: C.green,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  onPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, color: '#fff' },
+  exLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, letterSpacing: 0.8, color: C.sub, marginTop: spacing.md },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: spacing.sm },
+  chip: { backgroundColor: C.greenSoft, paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill },
+  chipText: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: C.green },
+  packInfo: { fontFamily: fontFamilies.interRegular, fontSize: 12.5, lineHeight: 18, color: C.sub, marginTop: spacing.md },
+  dlBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: C.green,
+    borderRadius: radius.lg,
+    paddingVertical: 13,
+    marginTop: spacing.md,
+  },
+  dlBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: '#fff' },
+  dlBox: { marginTop: spacing.md, gap: spacing.sm },
+  barTrack: { height: 8, borderRadius: 4, backgroundColor: C.greenSoft, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: 4, backgroundColor: C.green },
+  dlText: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: C.sub },
+  readyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.md },
+  readyText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: C.green },
+  note: { fontFamily: fontFamilies.interRegular, fontSize: 12, color: C.sub, textAlign: 'center', marginTop: spacing.sm },
+  bottom: { paddingTop: spacing.sm },
+  cta: {
+    backgroundColor: C.green,
+    borderRadius: radius.pill,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  ctaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: '#fff' },
+});
 
 function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scrollX: Animated.Value }) {
   const inputRange = [(index - 1) * width, index * width, (index + 1) * width];

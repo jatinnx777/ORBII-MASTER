@@ -52,8 +52,12 @@ class VoiceGuardService : Service() {
     private const val CH_ONGOING = "orbii-protection"
     private const val CH_ALERT = "orbii-voice-alert"
     private const val SAMPLE_RATE = 16000
-    // Bundled model folders (assets/<name> → filesDir/<name>).
-    private val MODEL_DIRS = listOf("vosk-model-en", "vosk-model-hi")
+    // English ships INSIDE the apk (assets/vosk-model-en, copied to filesDir
+    // once). Hindi is an optional on-demand download that lands directly in
+    // filesDir/vosk-model-hi — loaded only when present, so English-only users
+    // never allocate a second recognizer.
+    private const val MODEL_EN = "vosk-model-en"
+    private const val MODEL_HI = "vosk-model-hi"
     // RMS threshold below which we treat the frame as silence (skip ASR).
     private const val VAD_RMS = 550.0
 
@@ -107,18 +111,28 @@ class VoiceGuardService : Service() {
 
   // ── recognition loop ──────────────────────────────────────
   private fun listenLoop() {
-    // Load every bundled model (English + Hindi). Each gets its own recognizer
-    // and we feed the same audio to all of them, so a phrase in either
-    // language triggers. If one model fails to load we carry on with the rest.
+    // Build the model set: English always (bundled), Hindi only if the user
+    // downloaded the optional pack. Each model gets its own recognizer and we
+    // feed the same audio to all of them, so a phrase in either language
+    // triggers. English-only users load a single recognizer = less RAM/CPU.
+    val modelDirs = ArrayList<File>()
+    try {
+      modelDirs.add(ensureBundledModel(MODEL_EN))
+    } catch (e: Exception) {
+      Log.e(TAG, "english model unpack failed", e)
+    }
+    val hiDir = File(filesDir, MODEL_HI)
+    if (File(hiDir, "conf").exists()) modelDirs.add(hiDir)
+
     val models = ArrayList<Model>()
     val recognizers = ArrayList<Recognizer>()
-    for (name in MODEL_DIRS) {
+    for (dir in modelDirs) {
       try {
-        val m = Model(ensureModel(name).absolutePath)
+        val m = Model(dir.absolutePath)
         models.add(m)
         recognizers.add(Recognizer(m, SAMPLE_RATE.toFloat()))
       } catch (e: Exception) {
-        Log.e(TAG, "model load failed: $name", e)
+        Log.e(TAG, "model load failed: ${dir.name}", e)
       }
     }
     if (recognizers.isEmpty()) {
@@ -237,7 +251,7 @@ class VoiceGuardService : Service() {
   }
 
   // ── model management (copy bundled model from assets, once) ─
-  private fun ensureModel(name: String): File {
+  private fun ensureBundledModel(name: String): File {
     val dir = File(filesDir, name)
     // Vosk model folders contain a "conf" subdir when fully unpacked.
     if (File(dir, "conf").exists()) return dir
