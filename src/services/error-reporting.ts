@@ -74,10 +74,55 @@ export function reportError(err: unknown, context: ErrorContext): void {
   void sendToBackend(normalised, context);
 }
 
-async function sendToBackend(_err: Error, _context: ErrorContext): Promise<void> {
-  // No-op until a remote sink is wired. Kept async so the swap is
-  // transparent: replacing the body to call Crashlytics doesn't change
-  // any callsite.
+// Remote sink: best-effort insert into Supabase `client_errors` so the founder
+// can see real beta crashes in the dashboard — no Sentry account / native
+// module / DSN needed. Never throws (an error in the error pipeline must not
+// crash the app), and is silent in dev so we don't spam the table.
+async function sendToBackend(err: Error, context: ErrorContext): Promise<void> {
+  if (__DEV__) return;
+  try {
+    // Lazy require so this low-level util never creates a boot-time import
+    // cycle with the Supabase client.
+    const { supabase } = require('./supabase') as typeof import('./supabase');
+    const { Platform } = require('react-native') as typeof import('react-native');
+    let userId: string | null = null;
+    try {
+      const { data } = await supabase.auth.getSession();
+      userId = data.session?.user?.id ?? null;
+    } catch {
+      // unauthenticated / session unavailable — still log the error
+    }
+    await supabase.from('client_errors').insert({
+      user_id: userId,
+      category: context.category,
+      message: context.message ?? err.message,
+      stack: err.stack ?? null,
+      data: { ...context.tags, ...context.data, name: err.name },
+      breadcrumbs: breadcrumbs.slice(-20),
+      platform: Platform.OS,
+    });
+  } catch {
+    // swallow — the error pipeline must never throw
+  }
+}
+
+// Capture otherwise-uncaught JS errors so real crashes land in client_errors
+// (with the breadcrumb trail) instead of vanishing. Call once at app boot.
+export function installGlobalErrorHandler(): void {
+  const g = globalThis as unknown as {
+    __orbiiErrHandler?: boolean;
+    ErrorUtils?: {
+      getGlobalHandler?: () => ((e: unknown, fatal?: boolean) => void) | undefined;
+      setGlobalHandler?: (h: (e: unknown, fatal?: boolean) => void) => void;
+    };
+  };
+  if (g.__orbiiErrHandler || !g.ErrorUtils?.setGlobalHandler) return;
+  g.__orbiiErrHandler = true;
+  const prev = g.ErrorUtils.getGlobalHandler?.();
+  g.ErrorUtils.setGlobalHandler((e: unknown, fatal?: boolean) => {
+    reportError(e, { category: 'uncaught', tags: { fatal: String(!!fatal) } });
+    prev?.(e, fatal);
+  });
 }
 
 // Wraps an async fn so any throw is captured + re-thrown. Use this on

@@ -25,6 +25,7 @@ import {
 
 import { store, useAppSelector } from '@/redux/store';
 import { hydrateStore } from '@/redux/persist';
+import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -255,6 +256,9 @@ export default function App() {
   });
 
   useEffect(() => {
+    // Capture uncaught crashes into client_errors (with breadcrumbs) so beta
+    // failures are visible instead of vanishing. Install before anything else.
+    installGlobalErrorHandler();
     // Boot order: i18n first (so any error toast during hydrate is
     // already localised), then store, then warm up realtime.
     Promise.all([initI18n(), hydrateStore()])
