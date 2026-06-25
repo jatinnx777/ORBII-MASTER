@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "566227569395",
+    "project_id": "orbii00",
+    "storage_bucket": "orbii00.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:566227569395:android:73944ca42f4691fc060586",
+        "android_client_info": {
+          "package_name": "com.orbii.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCETNveQZCq5VnJEax7mfmgi37CTJnnjnI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
