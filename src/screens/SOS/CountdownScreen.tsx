@@ -21,11 +21,12 @@ import {
   sosDispatchStarted,
   sosDispatchSucceeded,
 } from '@/redux/slices/sosSlice';
-import { getFastLocation, reverseGeocode } from '@/services/location';
+import { getSOSLocationFix, reverseGeocode } from '@/services/location';
 import { createSOS } from '@/services/sos';
 import { broadcastSOSViaWhatsApp } from '@/services/whatsapp-sos';
 import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
+import type { SOSLocation } from '@/types';
 
 const COUNTDOWN_SECONDS = 5;
 
@@ -145,14 +146,19 @@ export function CountdownScreen() {
     setTriggering(true);
     dispatch(sosDispatchStarted());
     try {
-      // Critical path: get a location fix in <500ms (cached or balanced) and
-      // fire the broadcast IMMEDIATELY. Reverse geocoding the address used
-      // to be ~1-2s of blocking work on the worst possible code path; we
-      // now do it in the background and never wait for it.
-      const point = await getFastLocation();
+      // Critical path: get a best-effort location fix WITHOUT ever failing the
+      // SOS. getSOSLocationFix degrades to last-known / null and never throws
+      // or hangs, so an SOS still fires with no GPS — the circle + contacts are
+      // pushed regardless; only nearby strangers (who need coordinates) are
+      // skipped when location is unavailable. Reverse geocoding stays off the
+      // critical path.
+      const { point } = await getSOSLocationFix();
+      const location: SOSLocation = point
+        ? { ...point, address: null }
+        : { latitude: 0, longitude: 0, address: null };
       const record = await createSOS(
         profile,
-        { ...point, address: null },
+        location,
         isTest ? 'test' : 'real',
       );
       trackEvent('sos_triggered', {
@@ -169,7 +175,7 @@ export function CountdownScreen() {
       // Push + realtime channel still fire on the critical path; WhatsApp
       // is the high-deliverability secondary that catches contacts who
       // mute notifications or aren't running ORBII.
-      if (!isTest) {
+      if (!isTest && point) {
         broadcastSOSViaWhatsApp({
           user: profile,
           location: { ...point, address: null },
@@ -180,7 +186,7 @@ export function CountdownScreen() {
       }
       // Fire-and-forget address fill so the incident detail later shows a
       // human-readable location. Doesn't block the dispatch path.
-      if (!isTest) {
+      if (!isTest && point) {
         reverseGeocode(point)
           .then((address) => {
             if (address) {

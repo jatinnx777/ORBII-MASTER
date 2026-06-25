@@ -11,6 +11,7 @@ const { VoiceGuard } = NativeModules as {
     isIgnoringBatteryOptimization?(): Promise<boolean>;
     canUseFullScreenIntent?(): Promise<boolean>;
     requestFullScreenIntentPermission?(): Promise<boolean>;
+    setBootRestore?(enabled: boolean): Promise<boolean>;
   };
 };
 
@@ -63,6 +64,8 @@ export async function startBackgroundVoice(
     const durationMs = durationHours > 0 ? durationHours * 3600_000 : 0;
     await VoiceGuard.startGuard(phrases, durationMs);
     void ensureFullScreenIntentAccess();
+    // Survive a reboot — BootReceiver re-arms the service if this is set.
+    void VoiceGuard.setBootRestore?.(true);
     return true;
   } catch {
     return false;
@@ -71,6 +74,8 @@ export async function startBackgroundVoice(
 
 export async function stopBackgroundVoice(): Promise<void> {
   if (!VoiceGuard) return;
+  // Don't resurrect it after a reboot once the user has turned it off.
+  void VoiceGuard.setBootRestore?.(false);
   try {
     await VoiceGuard.stopGuard();
   } catch {

@@ -132,6 +132,57 @@ export async function getFastLocation(): Promise<GeoPoint> {
   };
 }
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    p.catch(() => null),
+    new Promise<null>((res) => setTimeout(() => res(null), ms)),
+  ]);
+}
+
+// SOS-grade location read that NEVER throws and NEVER hangs. An SOS must fire
+// even with no GPS fix, so we degrade through: recent precise cache → a
+// time-boxed live read (Balanced, which also works indoors via wifi/cell) →
+// ANY last-known fix however stale → null. The caller fires the SOS regardless;
+// with `point: null` the victim's circle + contacts are still pushed/alerted,
+// only nearby strangers (who need coordinates) are skipped.
+export async function getSOSLocationFix(): Promise<{
+  point: GeoPoint | null;
+  precise: boolean;
+}> {
+  // 1. Recent, reasonably precise cached fix — instant.
+  try {
+    const cached = await Location.getLastKnownPositionAsync({
+      maxAge: 30_000,
+      requiredAccuracy: 100,
+    });
+    if (cached) {
+      return { point: toPoint(cached), precise: (cached.coords.accuracy ?? 9999) <= 100 };
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2. Time-boxed live read so the SOS never stalls waiting on GPS.
+  const live = await withTimeout(
+    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }),
+    4000,
+  );
+  if (live) {
+    return { point: toPoint(live), precise: (live.coords.accuracy ?? 9999) <= 100 };
+  }
+
+  // 3. Any last-known fix, however old — better than nothing for the map.
+  try {
+    const any = await Location.getLastKnownPositionAsync();
+    if (any) return { point: toPoint(any), precise: false };
+  } catch {
+    // fall through
+  }
+
+  // 4. Genuinely nothing. Fire the SOS anyway.
+  return { point: null, precise: false };
+}
+
 export async function reverseGeocode(point: GeoPoint): Promise<string | null> {
   try {
     const results = await Location.reverseGeocodeAsync(point);

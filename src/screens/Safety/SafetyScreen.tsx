@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { IconBadge, Mascot, ScreenContainer, useBrandSheet } from '@/components/common';
 import type { BadgeTint } from '@/components/common';
@@ -26,6 +26,12 @@ import {
 } from '@/services/voice-detection';
 import { useEntitlement } from '@/services/entitlements';
 import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
+import {
+  loadBgVoiceState,
+  startBackgroundVoice,
+} from '@/services/background-voice';
+import { loadPhrases } from '@/services/voice-phrases';
+import { getVoiceMetrics } from '@/services/voice-metrics';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -41,6 +47,7 @@ export function SafetyScreen() {
           <Text style={styles.title}>Safety</Text>
           <Text style={styles.subtitle}>Everything that keeps you protected, in one place.</Text>
         </View>
+        <ProtectionStatusCard />
         <SafetyReadinessCard />
         <WatchOverMe />
         <SectionHeader title="Personal Safety" />
@@ -48,6 +55,101 @@ export function SafetyScreen() {
         <Text style={styles.disclaimer}>{SAFETY_DISCLAIMER}</Text>
       </ScrollView>
     </ScreenContainer>
+  );
+}
+
+// Honest, real-time "are you actually protected right now?" indicator. Reads
+// whether background protection is armed AND the native engine is actually
+// running, so the user is never falsely reassured (e.g. after an OEM kill or a
+// reboot where the service couldn't auto-restart).
+function ProtectionStatusCard() {
+  const navigation = useNavigation<Nav>();
+  const [bg, setBg] = useState<{ enabled: boolean; hours: number }>({ enabled: false, hours: 12 });
+  const [running, setRunning] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const s = await loadBgVoiceState();
+    setBg(s);
+    const m = await getVoiceMetrics();
+    setRunning(!!m?.running);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+      const id = setInterval(refresh, 3000);
+      return () => clearInterval(id);
+    }, [refresh]),
+  );
+
+  const state: 'active' | 'paused' | 'off' =
+    bg.enabled && running ? 'active' : bg.enabled ? 'paused' : 'off';
+
+  const onPress = async () => {
+    if (state === 'off') {
+      navigation.navigate('VoicePhrases');
+      return;
+    }
+    if (state === 'paused' && !busy) {
+      setBusy(true);
+      try {
+        const phrases = await loadPhrases();
+        await startBackgroundVoice(phrases, bg.hours);
+        await refresh();
+      } finally {
+        setBusy(false);
+      }
+    }
+  };
+
+  const cfg = {
+    active: {
+      bg: colors.sageSoft,
+      fg: colors.sageDeep,
+      dot: colors.sage,
+      icon: 'shield-checkmark' as const,
+      title: 'Protection active',
+      body: 'ORBII is listening for your safe phrase.',
+    },
+    paused: {
+      bg: colors.coralSoft,
+      fg: colors.coralDeep,
+      dot: colors.coral,
+      icon: 'alert-circle' as const,
+      title: 'Protection paused',
+      body: busy ? 'Resuming…' : 'Tap to resume background protection.',
+    },
+    off: {
+      bg: colors.surfaceAlt,
+      fg: colors.textSecondary,
+      dot: colors.textMuted,
+      icon: 'shield-outline' as const,
+      title: 'Background protection off',
+      body: 'Tap to set up always-on Voice SOS.',
+    },
+  }[state];
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.statusCard, { backgroundColor: cfg.bg }]}
+      accessibilityRole="button"
+    >
+      <View style={styles.statusIcon}>
+        <Ionicons name={cfg.icon} size={22} color={cfg.fg} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={styles.statusTitleRow}>
+          <View style={[styles.statusDot, { backgroundColor: cfg.dot }]} />
+          <Text style={[styles.statusTitle, { color: cfg.fg }]}>{cfg.title}</Text>
+        </View>
+        <Text style={styles.statusBody}>{cfg.body}</Text>
+      </View>
+      {state !== 'active' ? (
+        <Ionicons name="chevron-forward" size={18} color={cfg.fg} />
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -321,6 +423,42 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: 'uppercase',
     marginTop: spacing.sm,
+  },
+  /* protection status indicator */
+  statusCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+  },
+  statusIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  statusTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15.5,
+  },
+  statusBody: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    marginTop: 1,
   },
   /* protection strength / safety readiness entry */
   readinessCard: {

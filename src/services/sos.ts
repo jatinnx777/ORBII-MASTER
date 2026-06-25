@@ -100,6 +100,23 @@ export async function createSOS(
   // DB failure must not delay the broadcast.
   void persistSOS(record, user);
 
+  // Server-side push fan-out so the victim's circle + emergency contacts are
+  // alerted even with their app closed (the realtime broadcast above only
+  // reaches apps that are currently open). Fire-and-forget; depends on the
+  // notify-sos edge function + FCM being configured. Slight delay so the DB
+  // upsert above has landed before the function reads the row.
+  setTimeout(() => {
+    supabase.functions
+      .invoke('notify-sos', { body: { sosId: record.id } })
+      .catch((err) =>
+        reportError(err, {
+          category: 'sos.push',
+          message: 'notify-sos invoke failed',
+          tags: { sosId: record.id },
+        }),
+      );
+  }, 600);
+
   return record;
 }
 

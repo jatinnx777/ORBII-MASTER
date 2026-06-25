@@ -338,16 +338,18 @@ export async function listNearbyAlerts(
   excludeUserId?: string | null,
 ): Promise<CommunityAlert[]> {
   try {
-    const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    const { data, error } = await supabase
-      .from('sos_events')
-      .select('id, user_id, lat, lng, address, created_at')
-      .eq('status', 'active')
-      .gte('created_at', since)
-      .limit(50);
+    // Radius-bounded server-side RPC. Replaces a direct `select * where
+    // status='active'` that let any user pull EVERY active victim's live
+    // coordinates. The RPC filters to a radius around the caller, excludes
+    // the caller, and only returns the last 15 minutes — see sql/21.
+    const { data, error } = await supabase.rpc('sos_events_nearby', {
+      p_lat: point.latitude,
+      p_lng: point.longitude,
+      p_radius_km: radiusKm,
+    });
     if (error) throw error;
     if (!data || data.length === 0) return [];
-    return (data as RawAlertRow[])
+    return (data as NearbyAlertRow[])
       .filter((row) => !excludeUserId || row.user_id !== excludeUserId)
       .map((row) => {
         const loc: SOSLocation = {
@@ -355,7 +357,7 @@ export async function listNearbyAlerts(
           longitude: row.lng,
           address: row.address,
         };
-        const distance = haversineMeters(point, loc);
+        const distance = row.distance_m ?? haversineMeters(point, loc);
         return {
           id: row.id,
           victim: {
@@ -371,7 +373,6 @@ export async function listNearbyAlerts(
           respondersCount: 0,
         };
       })
-      .filter((a) => a.distanceMeters <= radiusKm * 1000)
       .sort((a, b) => a.distanceMeters - b.distanceMeters);
   } catch (err) {
     console.warn('[community] listNearbyAlerts failed', err);
@@ -408,3 +409,7 @@ type RawAlertRow = {
   address: string | null;
   created_at: string;
 };
+
+// Row shape returned by the sos_events_nearby RPC (adds server-computed
+// distance_m).
+type NearbyAlertRow = RawAlertRow & { distance_m: number | null };

@@ -104,6 +104,21 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  // Remember whether to re-arm background voice after a reboot. Read by
+  // BootReceiver on BOOT_COMPLETED. Set true when background protection is
+  // armed, false when the user turns it off (so foreground-only listening
+  // never survives a reboot).
+  @ReactMethod
+  fun setBootRestore(enabled: Boolean, promise: Promise) {
+    try {
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("bootRestore", enabled).apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
   @ReactMethod
   fun isIgnoringBatteryOptimization(promise: Promise) {
     try {

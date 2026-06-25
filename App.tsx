@@ -44,6 +44,7 @@ import {
 import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { premiumStatusResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumActive } from '@/services/razorpay';
+import { registerPushToken } from '@/services/push';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { loadPhrases } from '@/services/voice-phrases';
@@ -126,6 +127,14 @@ function RootNavigator() {
     resolvePremiumActive()
       .then((active) => store.dispatch(premiumStatusResolved(active)))
       .catch(() => undefined);
+  }, [status]);
+
+  // Register this device's push token so an SOS can reach the user's circle +
+  // contacts when their app is closed (server-side fan-out via notify-sos).
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const uid = store.getState().user.profile?.uid;
+    if (uid) void registerPushToken(uid);
   }, [status]);
 
   // Deep-link join handler. Listens for orbii://join/<token> AND
@@ -284,6 +293,13 @@ export default function App() {
           // @ts-expect-error - SOSCountdown is in the AppStack only.
           navigationRef.navigate('SOSCountdown');
         }
+        return;
+      }
+      // Server push (notify-sos) — a circle member / contact tapped the SOS
+      // notification. Open the nearby-alerts list so they can respond.
+      if (data.kind === 'sos_push' && navigationRef.isReady()) {
+        // @ts-expect-error - CommunityAlerts is in the AppStack only.
+        navigationRef.navigate('CommunityAlerts');
         return;
       }
       if (data.kind === 'community_alert' && navigationRef.isReady()) {
