@@ -5,12 +5,21 @@ import type {
   SOSRecord,
 } from '@/types';
 
+// What actually went out for the active SOS, so the UI can show an HONEST
+// "alerted X by SMS, Y by app" instead of an optimistic "sent". Fields are
+// filled in as each channel reports back (merged, not replaced).
+export type SOSDelivery = {
+  smsSent?: number; // emergency contacts texted
+  pushSent?: number; // circle/contacts reached by push (from notify-sos)
+};
+
 type SOSState = {
   currentLocation: GeoPoint | null;
   locationPermission: LocationPermissionStatus;
   locationError: string | null;
   helpersNearby: number;
   activeSOS: SOSRecord | null;
+  delivery: SOSDelivery | null;
   dispatching: boolean;
   dispatchError: string | null;
 };
@@ -21,6 +30,7 @@ const initialState: SOSState = {
   locationError: null,
   helpersNearby: 0,
   activeSOS: null,
+  delivery: null,
   dispatching: false,
   dispatchError: null,
 };
@@ -49,10 +59,14 @@ const sosSlice = createSlice({
     sosDispatchStarted(state) {
       state.dispatching = true;
       state.dispatchError = null;
+      state.delivery = null;
     },
     sosDispatchSucceeded(state, action: PayloadAction<SOSRecord>) {
       state.dispatching = false;
       state.activeSOS = action.payload;
+    },
+    sosDeliveryUpdated(state, action: PayloadAction<SOSDelivery>) {
+      state.delivery = { ...(state.delivery ?? {}), ...action.payload };
     },
     sosDispatchFailed(state, action: PayloadAction<string>) {
       state.dispatching = false;
@@ -89,6 +103,7 @@ const sosSlice = createSlice({
     },
     sosCleared(state) {
       state.activeSOS = null;
+      state.delivery = null;
       state.dispatchError = null;
     },
   },
@@ -102,6 +117,7 @@ export const {
   sosDispatchStarted,
   sosDispatchSucceeded,
   sosDispatchFailed,
+  sosDeliveryUpdated,
   sosResolved,
   sosCancelled,
   sosCleared,

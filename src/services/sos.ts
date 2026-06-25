@@ -3,6 +3,8 @@ import { supabase } from './supabase';
 import { broadcastAlert, type AlertBroadcast } from './community';
 import { checkRateLimit, rateLimitMessage } from './rate-limit';
 import { addBreadcrumb, reportError } from './error-reporting';
+import { store } from '@/redux/store';
+import { sosDeliveryUpdated } from '@/redux/slices/sosSlice';
 
 // Thrown when the rate limiter blocks an SOS fire. Callers can detect
 // this via `instanceof` and show the readable `.message` to the user.
@@ -108,6 +110,12 @@ export async function createSOS(
   setTimeout(() => {
     supabase.functions
       .invoke('notify-sos', { body: { sosId: record.id } })
+      .then(({ data }) => {
+        const sent = (data as { sent?: number } | null)?.sent;
+        if (typeof sent === 'number') {
+          store.dispatch(sosDeliveryUpdated({ pushSent: sent }));
+        }
+      })
       .catch((err) =>
         reportError(err, {
           category: 'sos.push',

@@ -33,3 +33,8 @@ ios/
 
 # Kotlin compiler daemon session artifacts
 android/.kotlin/
+
+# Firebase ADMIN service-account keys — NEVER commit (full project access)
+*firebase-adminsdk*.json
+*-service-account*.json
+serviceAccountKey.json

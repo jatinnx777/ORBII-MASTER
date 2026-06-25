@@ -23,7 +23,9 @@ import {
 } from '@/redux/slices/sosSlice';
 import { getSOSLocationFix, reverseGeocode } from '@/services/location';
 import { createSOS } from '@/services/sos';
-import { broadcastSOSViaWhatsApp } from '@/services/whatsapp-sos';
+import { broadcastSOSViaWhatsApp, buildSOSMessage } from '@/services/whatsapp-sos';
+import { sendEmergencySMS } from '@/services/sms';
+import { sosDeliveryUpdated } from '@/redux/slices/sosSlice';
 import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
 import type { SOSLocation } from '@/types';
@@ -175,6 +177,16 @@ export function CountdownScreen() {
       // Push + realtime channel still fire on the critical path; WhatsApp
       // is the high-deliverability secondary that catches contacts who
       // mute notifications or aren't running ORBII.
+      if (!isTest) {
+        // Direct-SMS fallback: text every emergency contact the location link,
+        // no tap required, works with no data + reaches non-ORBII contacts.
+        // Only sends if SEND_SMS was already granted (we never prompt mid-
+        // emergency). Reports how many for the honest delivery summary.
+        const message = buildSOSMessage({ user: profile, location });
+        sendEmergencySMS(profile.emergencyContacts, message)
+          .then((smsSent) => dispatch(sosDeliveryUpdated({ smsSent })))
+          .catch(() => dispatch(sosDeliveryUpdated({ smsSent: 0 })));
+      }
       if (!isTest && point) {
         broadcastSOSViaWhatsApp({
           user: profile,

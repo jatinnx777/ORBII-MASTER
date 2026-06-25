@@ -41,6 +41,7 @@ import {
   sosCancelled,
   sosCleared,
   sosResolved,
+  type SOSDelivery,
 } from '@/redux/slices/sosSlice';
 import { historyRecordAdded } from '@/redux/slices/historySlice';
 import { trackEvent } from '@/services/analytics';
@@ -78,6 +79,7 @@ export function ActiveSOSScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const activeSOS = useAppSelector((s) => s.sos.activeSOS);
+  const delivery = useAppSelector((s) => s.sos.delivery);
 
   const [responders, setResponders] = useState<Record<string, LiveResponder>>({});
   const [resolved, setResolved] = useState(false);
@@ -565,6 +567,8 @@ export function ActiveSOSScreen() {
           <Text style={styles.statusBannerText}>{statusBannerText}</Text>
         </View>
 
+        {!resolved ? <DeliverySummary delivery={delivery} /> : null}
+
         <Pressable
           onPress={dial112}
           style={({ pressed }) => [
@@ -860,6 +864,64 @@ const art = StyleSheet.create({
   scooterEmoji: {
     fontSize: 30,
     zIndex: 4,
+  },
+});
+
+// Honest "who did we actually reach" line, instead of an optimistic "sent".
+function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
+  const sms = delivery?.smsSent;
+  const push = delivery?.pushSent;
+  const total = (sms ?? 0) + (push ?? 0);
+  const bothKnown = sms !== undefined && push !== undefined;
+
+  if (total === 0 && !bothKnown) {
+    return (
+      <View style={dstyles.card}>
+        <ActivityIndicator size="small" color={colors.textInverse} />
+        <Text style={dstyles.text}>Alerting your contacts…</Text>
+      </View>
+    );
+  }
+  if (total === 0) {
+    return (
+      <View style={[dstyles.card, dstyles.warn]}>
+        <Ionicons name="warning" size={16} color={colors.textInverse} />
+        <Text style={dstyles.text}>
+          Couldn't confirm anyone was reached. Call 112 or your contacts directly.
+        </Text>
+      </View>
+    );
+  }
+  const parts: string[] = [];
+  if (sms) parts.push(`Texted ${sms} contact${sms === 1 ? '' : 's'}`);
+  if (push) parts.push(`Notified ${push} on ORBII`);
+  return (
+    <View style={[dstyles.card, dstyles.ok]}>
+      <Ionicons name="checkmark-circle" size={16} color={colors.textInverse} />
+      <Text style={dstyles.text}>{parts.join(' · ')}</Text>
+    </View>
+  );
+}
+
+const dstyles = StyleSheet.create({
+  card: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    marginBottom: spacing.sm,
+  },
+  ok: { backgroundColor: 'rgba(46,125,50,0.35)' },
+  warn: { backgroundColor: 'rgba(216,27,27,0.4)' },
+  text: {
+    flex: 1,
+    ...typography.caption,
+    color: colors.textInverse,
+    fontSize: 12.5,
+    lineHeight: 17,
   },
 });
 

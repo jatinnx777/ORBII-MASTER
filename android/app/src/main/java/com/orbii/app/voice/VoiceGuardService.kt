@@ -70,28 +70,28 @@ class VoiceGuardService : Service() {
     private const val TARGET_RMS = 3000.0
     private const val MAX_GAIN = 6.0 // ~ +15.5 dB
 
-    // Emergency phrases the recognizer is LOCKED to (grammar-constrained), so
-    // the decoder only has to tell a few words apart — far more reliable on
-    // muffled / distant audio. English runs on the bundled model; Devanagari
-    // runs on the optional Hindi pack (it emits Devanagari, not romanised).
+    // Emergency phrases, matched whole-word in maybeTrigger. Bare "help" is
+    // deliberately NOT here — it's too common in normal conversation. Instead
+    // "help help" (said twice, which people do naturally when panicking) is the
+    // trigger, alongside the other deliberate plea phrases. English runs on the
+    // bundled model; Devanagari runs on the optional Hindi pack.
     private val EN_PHRASES = listOf(
-      "help", "help me", "save me", "emergency", "i need help",
+      "help help", "help me", "save me", "emergency", "i need help",
     )
     private val HI_PHRASES_DEVA = listOf(
-      "बचाओ", "बचाओ मुझे", "मदद", "मदद करो", "बचाइये",
+      "बचाओ बचाओ", "बचाओ मुझे", "मदद करो", "मुझे बचाओ", "बचाइये",
     )
     // Romanised Hindi is kept ONLY for substring matching of free-form output
     // (e.g. a custom-phrase fallback recognizer) — the Hindi model itself emits
     // Devanagari.
     private val HI_PHRASES_ROMAN = listOf(
-      "bachao", "bachao mujhe", "madad", "madad karo", "bachaiye",
+      "bachao bachao", "bachao mujhe", "madad karo", "mujhe bachao", "bachaiye",
     )
     private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
   }
 
   @Volatile private var running = false
   private var phrases: List<String> = emptyList()
-  private var customPhrases: List<String> = emptyList()
   @Volatile private var smoothedGain = 1.0
   private var wakeLock: PowerManager.WakeLock? = null
   private val main = Handler(Looper.getMainLooper())
@@ -106,7 +106,6 @@ class VoiceGuardService : Service() {
     if (raw != null) prefs.edit().putString("phrases", raw).apply()
     val source = raw ?: prefs.getString("phrases", "") ?: ""
     val custom = source.split("\n").map { it.trim().lowercase() }.filter { it.length >= 3 }
-    customPhrases = custom
     phrases = (custom + BUILT_IN).distinct()
     val durationMs = if (intent != null && intent.hasExtra(EXTRA_DURATION_MS)) {
       val d = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
@@ -139,23 +138,23 @@ class VoiceGuardService : Service() {
     val recognizers = ArrayList<Recognizer>()
     VoiceMetrics.grammarMode = false
 
-    // English (bundled) — grammar-locked to the English emergency phrases plus
-    // any custom phrases the user added (Vosk ignores words it doesn't know).
+    // English (bundled). Free-form recognition + STRICT whole-word matching
+    // (see maybeTrigger) so only the real trigger words fire.
     try {
       val enModel = Model(ensureBundledModel(MODEL_EN).absolutePath)
       models.add(enModel)
-      recognizers.add(makeRecognizer(enModel, EN_PHRASES + customPhrases))
+      recognizers.add(makeRecognizer(enModel))
     } catch (e: Exception) {
       Log.e(TAG, "english model load failed", e)
     }
 
-    // Hindi (optional pack) — grammar-locked to the Devanagari phrases.
+    // Hindi (optional pack).
     val hiDir = File(filesDir, MODEL_HI)
     if (File(hiDir, "conf").exists()) {
       try {
         val hiModel = Model(hiDir.absolutePath)
         models.add(hiModel)
-        recognizers.add(makeRecognizer(hiModel, HI_PHRASES_DEVA))
+        recognizers.add(makeRecognizer(hiModel))
       } catch (e: Exception) {
         Log.e(TAG, "hindi model load failed", e)
       }
@@ -232,29 +231,13 @@ class VoiceGuardService : Service() {
     }
   }
 
-  // Build a grammar-constrained recognizer; fall back to free-form if this
-  // Vosk build / model can't take a grammar (so detection never breaks).
-  private fun makeRecognizer(model: Model, phraseList: List<String>): Recognizer {
-    return try {
-      val r = Recognizer(model, SAMPLE_RATE.toFloat(), grammarFor(phraseList))
-      r.setWords(true)
-      VoiceMetrics.grammarMode = true
-      r
-    } catch (e: Exception) {
-      Log.w(TAG, "grammar mode unavailable — using free-form recognizer", e)
-      Recognizer(model, SAMPLE_RATE.toFloat()).apply { setWords(true) }
-    }
-  }
-
-  // JSON word-list grammar for Vosk. "[unk]" lets the decoder map anything
-  // that ISN'T a trigger phrase to "unknown" instead of forcing a match —
-  // that's what keeps false positives down.
-  private fun grammarFor(phraseList: List<String>): String {
-    val items = phraseList
-      .map { it.trim().lowercase().replace("\"", "") }
-      .filter { it.isNotEmpty() }
-      .distinct() + "[unk]"
-    return items.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
+  // Free-form recognizer. We deliberately do NOT use Vosk grammar mode: a
+  // grammar forces EVERY utterance onto the nearest trigger word, so random
+  // speech ("hello", "yellow") got decoded as "help" and fired. Free-form
+  // transcription + strict whole-word matching (maybeTrigger) means only the
+  // actual trigger words fire.
+  private fun makeRecognizer(model: Model): Recognizer {
+    return Recognizer(model, SAMPLE_RATE.toFloat()).apply { setWords(true) }
   }
 
   private fun rms(buf: ShortArray, n: Int): Double {
@@ -296,8 +279,11 @@ class VoiceGuardService : Service() {
   @Volatile private var lastFire = 0L
   private fun maybeTrigger(text: String?, speechStart: Long) {
     if (text.isNullOrBlank()) return
-    val t = text.lowercase()
-    val hit = phrases.firstOrNull { t.contains(it) } ?: return
+    // STRICT whole-word / whole-phrase match. Pad with spaces so " help "
+    // matches the word "help" but NOT "hello" / "helping" / "yellow". This is
+    // what stops ordinary speech from firing an SOS.
+    val t = " " + text.lowercase().trim().replace(Regex("\\s+"), " ") + " "
+    val hit = phrases.firstOrNull { t.contains(" $it ") } ?: return
     val now = System.currentTimeMillis()
     if (now - lastFire < 6000) return // debounce
     lastFire = now

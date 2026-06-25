@@ -17,6 +17,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
 import com.orbii.app.voice.VoiceGuardPackage
+import com.orbii.app.sms.SmsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -27,6 +28,8 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Background Voice SOS (on-device Vosk + foreground service).
               add(VoiceGuardPackage())
+              // Direct SMS fallback for the SOS dispatch.
+              add(SmsPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

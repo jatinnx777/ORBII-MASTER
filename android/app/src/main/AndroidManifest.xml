@@ -16,6 +16,10 @@
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
   <!-- Re-arm background Voice SOS after a device reboot (opt-in feature). -->
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+  <!-- SOS fallback: text emergency contacts directly (works with no data, and
+       reaches contacts who don't use ORBII). Requires a Play SMS-permission
+       declaration (emergency/safety use case). -->
+  <uses-permission android:name="android.permission.SEND_SMS"/>
   <!--
     Force-strip sensitive permissions that dependencies (expo-image-picker,
     etc.) merge in but ORBII never uses. We only pick photos from the
