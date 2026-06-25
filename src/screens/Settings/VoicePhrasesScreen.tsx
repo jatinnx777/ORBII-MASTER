@@ -152,7 +152,13 @@ export function VoicePhrasesScreen() {
           >
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.title}>Voice SOS</Text>
+          <Pressable
+            onLongPress={() => navigation.navigate('VoiceDebug' as never)}
+            delayLongPress={700}
+            accessibilityRole="header"
+          >
+            <Text style={styles.title}>Voice SOS</Text>
+          </Pressable>
         </View>
 
         <ScrollView

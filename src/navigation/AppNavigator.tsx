@@ -30,6 +30,7 @@ import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
 import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
 import { SafetyPinScreen } from '@/screens/Settings/SafetyPinScreen';
 import { VoicePhrasesScreen } from '@/screens/Settings/VoicePhrasesScreen';
+import { VoiceDebugScreen } from '@/screens/Debug/VoiceDebugScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -223,6 +224,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="VoicePhrases"
         component={VoicePhrasesScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="VoiceDebug"
+        component={VoiceDebugScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

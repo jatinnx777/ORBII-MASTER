@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
@@ -166,6 +167,34 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     } catch (e: Exception) {
       promise.resolve(false)
     }
+  }
+
+  // ── live recognition metrics (debug / tuning screen) ──────
+  @ReactMethod
+  fun getVoiceMetrics(promise: Promise) {
+    val m = Arguments.createMap()
+    m.putBoolean("running", VoiceMetrics.running)
+    m.putBoolean("grammarMode", VoiceMetrics.grammarMode)
+    m.putDouble("rms", VoiceMetrics.rms)
+    m.putBoolean("vadActive", VoiceMetrics.vadActive)
+    m.putDouble("vadThreshold", VoiceMetrics.vadThreshold)
+    m.putDouble("gain", VoiceMetrics.gain)
+    m.putString("lastText", VoiceMetrics.lastText)
+    m.putDouble("lastConfidence", VoiceMetrics.lastConfidence)
+    m.putString("lastTriggerPhrase", VoiceMetrics.lastTriggerPhrase)
+    m.putDouble("lastTriggerAtMs", VoiceMetrics.lastTriggerAtMs.toDouble())
+    m.putDouble("lastLatencyMs", VoiceMetrics.lastLatencyMs.toDouble())
+    m.putInt("triggerCount", VoiceMetrics.triggerCount)
+    val avg = if (VoiceMetrics.triggerCount > 0)
+      VoiceMetrics.totalLatencyMs.toDouble() / VoiceMetrics.triggerCount else 0.0
+    m.putDouble("avgLatencyMs", avg)
+    promise.resolve(m)
+  }
+
+  @ReactMethod
+  fun resetVoiceMetrics(promise: Promise) {
+    VoiceMetrics.reset()
+    promise.resolve(true)
   }
 
   // NativeEventEmitter compatibility no-ops.

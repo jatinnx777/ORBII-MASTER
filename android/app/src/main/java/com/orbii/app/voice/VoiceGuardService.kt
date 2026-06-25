@@ -64,19 +64,35 @@ class VoiceGuardService : Service() {
     // silence (which reads ~0–80) while letting soft speech through.
     private const val VAD_RMS = 200.0
 
-    // Always-on panic words, matched on top of the user's custom phrases.
-    // English is matched against the en model's Latin output; Hindi is matched
-    // against the hi model's Devanagari output.
-    private val BUILT_IN = listOf(
-      // English
-      "help", "help me", "save me", "bachao", "madad",
-      // Hindi (Devanagari — what the Hindi model actually emits)
-      "बचाओ", "मदद", "मदद करो", "बचाओ बचाओ", "मुझे बचाओ", "कोई बचाओ",
+    // Smart auto-gain: lift quiet/muffled speech (pocket, purse) toward a
+    // target loudness before the recognizer sees it, with a hard ceiling so we
+    // never blow up background noise or clip badly.
+    private const val TARGET_RMS = 3000.0
+    private const val MAX_GAIN = 6.0 // ~ +15.5 dB
+
+    // Emergency phrases the recognizer is LOCKED to (grammar-constrained), so
+    // the decoder only has to tell a few words apart — far more reliable on
+    // muffled / distant audio. English runs on the bundled model; Devanagari
+    // runs on the optional Hindi pack (it emits Devanagari, not romanised).
+    private val EN_PHRASES = listOf(
+      "help", "help me", "save me", "emergency", "i need help",
     )
+    private val HI_PHRASES_DEVA = listOf(
+      "बचाओ", "बचाओ मुझे", "मदद", "मदद करो", "बचाइये",
+    )
+    // Romanised Hindi is kept ONLY for substring matching of free-form output
+    // (e.g. a custom-phrase fallback recognizer) — the Hindi model itself emits
+    // Devanagari.
+    private val HI_PHRASES_ROMAN = listOf(
+      "bachao", "bachao mujhe", "madad", "madad karo", "bachaiye",
+    )
+    private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
   }
 
   @Volatile private var running = false
   private var phrases: List<String> = emptyList()
+  private var customPhrases: List<String> = emptyList()
+  @Volatile private var smoothedGain = 1.0
   private var wakeLock: PowerManager.WakeLock? = null
   private val main = Handler(Looper.getMainLooper())
 
@@ -90,6 +106,7 @@ class VoiceGuardService : Service() {
     if (raw != null) prefs.edit().putString("phrases", raw).apply()
     val source = raw ?: prefs.getString("phrases", "") ?: ""
     val custom = source.split("\n").map { it.trim().lowercase() }.filter { it.length >= 3 }
+    customPhrases = custom
     phrases = (custom + BUILT_IN).distinct()
     val durationMs = if (intent != null && intent.hasExtra(EXTRA_DURATION_MS)) {
       val d = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
@@ -118,26 +135,32 @@ class VoiceGuardService : Service() {
     // downloaded the optional pack. Each model gets its own recognizer and we
     // feed the same audio to all of them, so a phrase in either language
     // triggers. English-only users load a single recognizer = less RAM/CPU.
-    val modelDirs = ArrayList<File>()
-    try {
-      modelDirs.add(ensureBundledModel(MODEL_EN))
-    } catch (e: Exception) {
-      Log.e(TAG, "english model unpack failed", e)
-    }
-    val hiDir = File(filesDir, MODEL_HI)
-    if (File(hiDir, "conf").exists()) modelDirs.add(hiDir)
-
     val models = ArrayList<Model>()
     val recognizers = ArrayList<Recognizer>()
-    for (dir in modelDirs) {
+    VoiceMetrics.grammarMode = false
+
+    // English (bundled) — grammar-locked to the English emergency phrases plus
+    // any custom phrases the user added (Vosk ignores words it doesn't know).
+    try {
+      val enModel = Model(ensureBundledModel(MODEL_EN).absolutePath)
+      models.add(enModel)
+      recognizers.add(makeRecognizer(enModel, EN_PHRASES + customPhrases))
+    } catch (e: Exception) {
+      Log.e(TAG, "english model load failed", e)
+    }
+
+    // Hindi (optional pack) — grammar-locked to the Devanagari phrases.
+    val hiDir = File(filesDir, MODEL_HI)
+    if (File(hiDir, "conf").exists()) {
       try {
-        val m = Model(dir.absolutePath)
-        models.add(m)
-        recognizers.add(Recognizer(m, SAMPLE_RATE.toFloat()))
+        val hiModel = Model(hiDir.absolutePath)
+        models.add(hiModel)
+        recognizers.add(makeRecognizer(hiModel, HI_PHRASES_DEVA))
       } catch (e: Exception) {
-        Log.e(TAG, "model load failed: ${dir.name}", e)
+        Log.e(TAG, "hindi model load failed", e)
       }
     }
+
     if (recognizers.isEmpty()) {
       notifyProtectionError()
       stopSelf()
@@ -167,28 +190,71 @@ class VoiceGuardService : Service() {
     }
 
     val buffer = ShortArray(bufSize / 2)
+    VoiceMetrics.running = true
+    VoiceMetrics.vadThreshold = VAD_RMS
+    var speechStart = 0L
     try {
       record.startRecording()
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
-        if (rms(buffer, n) < VAD_RMS) continue // VAD: skip silence
+        val level = rms(buffer, n)
+        VoiceMetrics.rms = level
+        val active = level >= VAD_RMS
+        VoiceMetrics.vadActive = active
+        if (!active) {
+          speechStart = 0L
+          continue // VAD: skip silence (no ASR, no gain → battery stays low)
+        }
+        if (speechStart == 0L) speechStart = System.currentTimeMillis()
+        applyGain(buffer, n, level)
         for (rec in recognizers) {
           if (rec.acceptWaveForm(buffer, n)) {
-            handleText(JSONObject(rec.result).optString("text"))
+            val json = JSONObject(rec.result)
+            updateConfidence(json)
+            maybeTrigger(json.optString("text"), speechStart)
           } else {
-            handleText(JSONObject(rec.partialResult).optString("partial"))
+            val partial = JSONObject(rec.partialResult).optString("partial")
+            if (partial.isNotBlank()) VoiceMetrics.lastText = partial
+            maybeTrigger(partial, speechStart)
           }
         }
       }
     } catch (e: Exception) {
       Log.e(TAG, "listen loop error", e)
     } finally {
+      VoiceMetrics.running = false
+      VoiceMetrics.vadActive = false
       try { record.stop() } catch (_: Exception) {}
       record.release()
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
+  }
+
+  // Build a grammar-constrained recognizer; fall back to free-form if this
+  // Vosk build / model can't take a grammar (so detection never breaks).
+  private fun makeRecognizer(model: Model, phraseList: List<String>): Recognizer {
+    return try {
+      val r = Recognizer(model, SAMPLE_RATE.toFloat(), grammarFor(phraseList))
+      r.setWords(true)
+      VoiceMetrics.grammarMode = true
+      r
+    } catch (e: Exception) {
+      Log.w(TAG, "grammar mode unavailable — using free-form recognizer", e)
+      Recognizer(model, SAMPLE_RATE.toFloat()).apply { setWords(true) }
+    }
+  }
+
+  // JSON word-list grammar for Vosk. "[unk]" lets the decoder map anything
+  // that ISN'T a trigger phrase to "unknown" instead of forcing a match —
+  // that's what keeps false positives down.
+  private fun grammarFor(phraseList: List<String>): String {
+    val items = phraseList
+      .map { it.trim().lowercase().replace("\"", "") }
+      .filter { it.isNotEmpty() }
+      .distinct() + "[unk]"
+    return items.joinToString(prefix = "[", postfix = "]") { "\"$it\"" }
   }
 
   private fun rms(buf: ShortArray, n: Int): Double {
@@ -197,14 +263,52 @@ class VoiceGuardService : Service() {
     return Math.sqrt(sum / n)
   }
 
+  // Smart auto-gain. Lift this frame toward TARGET_RMS (capped at MAX_GAIN),
+  // smoothing the gain across frames so it doesn't "pump", and hard-clamping
+  // samples so amplification can't clip into distortion. Only runs on frames
+  // that already passed the VAD gate, so silence/noise isn't boosted.
+  private fun applyGain(buf: ShortArray, n: Int, level: Double) {
+    if (level < 1.0) return
+    val desired = (TARGET_RMS / level).coerceIn(1.0, MAX_GAIN)
+    smoothedGain += (desired - smoothedGain) * 0.25
+    VoiceMetrics.gain = smoothedGain
+    if (smoothedGain <= 1.02) return
+    for (i in 0 until n) {
+      val v = (buf[i] * smoothedGain).toInt()
+      buf[i] = when {
+        v > Short.MAX_VALUE -> Short.MAX_VALUE
+        v < Short.MIN_VALUE -> Short.MIN_VALUE
+        else -> v.toShort()
+      }
+    }
+  }
+
+  private fun updateConfidence(json: JSONObject) {
+    val text = json.optString("text")
+    if (text.isNotBlank()) VoiceMetrics.lastText = text
+    val arr = json.optJSONArray("result") ?: return
+    if (arr.length() == 0) return
+    var sum = 0.0
+    for (i in 0 until arr.length()) sum += arr.getJSONObject(i).optDouble("conf", 0.0)
+    VoiceMetrics.lastConfidence = sum / arr.length()
+  }
+
   @Volatile private var lastFire = 0L
-  private fun handleText(text: String?) {
+  private fun maybeTrigger(text: String?, speechStart: Long) {
     if (text.isNullOrBlank()) return
     val t = text.lowercase()
-    if (phrases.none { t.contains(it) }) return
+    val hit = phrases.firstOrNull { t.contains(it) } ?: return
     val now = System.currentTimeMillis()
     if (now - lastFire < 6000) return // debounce
     lastFire = now
+    VoiceMetrics.lastTriggerPhrase = hit
+    VoiceMetrics.lastTriggerAtMs = now
+    VoiceMetrics.triggerCount += 1
+    if (speechStart > 0L) {
+      val latency = now - speechStart
+      VoiceMetrics.lastLatencyMs = latency
+      VoiceMetrics.totalLatencyMs += latency
+    }
     fireSos()
   }
 
@@ -336,7 +440,41 @@ class VoiceGuardService : Service() {
 
   override fun onDestroy() {
     running = false
+    VoiceMetrics.running = false
+    VoiceMetrics.vadActive = false
     try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
     super.onDestroy()
+  }
+}
+
+/**
+ * Live recognition metrics, shared with the JS debug screen (read via
+ * VoiceGuardModule.getVoiceMetrics). Plain volatile fields — written from the
+ * audio thread, read from the bridge thread; we only need eventual-consistency
+ * for a diagnostics view, so no locking.
+ */
+object VoiceMetrics {
+  @Volatile var running = false
+  @Volatile var grammarMode = false
+  @Volatile var rms = 0.0
+  @Volatile var vadActive = false
+  @Volatile var vadThreshold = 200.0
+  @Volatile var gain = 1.0
+  @Volatile var lastText = ""
+  @Volatile var lastConfidence = 0.0
+  @Volatile var lastTriggerPhrase = ""
+  @Volatile var lastTriggerAtMs = 0L
+  @Volatile var lastLatencyMs = 0L
+  @Volatile var triggerCount = 0
+  @Volatile var totalLatencyMs = 0L
+
+  fun reset() {
+    triggerCount = 0
+    totalLatencyMs = 0L
+    lastLatencyMs = 0L
+    lastTriggerPhrase = ""
+    lastTriggerAtMs = 0L
+    lastConfidence = 0.0
+    lastText = ""
   }
 }
