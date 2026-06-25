@@ -1,6 +1,5 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { appAlert } from '@/components/common';
-import { ensureSmsPermission } from '@/services/sms';
 import {
   FlatList,
   Pressable,
@@ -32,12 +31,6 @@ export function EmergencyContactsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const contacts = profile?.emergencyContacts ?? [];
   const isPremium = profile?.isPremium ?? false;
-
-  // Ask for SMS permission up-front (when there's a contact to text), so an
-  // SOS can text them automatically without a permission popup mid-emergency.
-  useEffect(() => {
-    if (contacts.length > 0) void ensureSmsPermission();
-  }, [contacts.length]);
 
   const max = isPremium ? 20 : 5;
   const atLimit = contacts.length >= max;

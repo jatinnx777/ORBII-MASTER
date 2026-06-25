@@ -6,10 +6,9 @@ import type {
 } from '@/types';
 
 // What actually went out for the active SOS, so the UI can show an HONEST
-// "alerted X by SMS, Y by app" instead of an optimistic "sent". Fields are
-// filled in as each channel reports back (merged, not replaced).
+// status instead of an optimistic "sent". Filled in when notify-sos reports
+// back how many people were reached by push.
 export type SOSDelivery = {
-  smsSent?: number; // emergency contacts texted
   pushSent?: number; // circle/contacts reached by push (from notify-sos)
 };
 

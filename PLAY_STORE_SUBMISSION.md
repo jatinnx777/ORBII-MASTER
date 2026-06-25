@@ -11,23 +11,23 @@ first — it changes what track you should launch on.
 |---|---|---|
 | **Internal testing** (≤100 invited testers) | ✅ **Yes, now** | Minimal review. Perfect for your first campus pilot. |
 | **Closed testing** (invite/email-list, e.g. one campus) | ✅ **Yes** (once policy is live + Data Safety filled) | Light review. **This is the right way to do "one campus at a time."** |
-| **Open testing** (anyone can join — "mass area") | ⚠️ **Not yet** | Full production-level review. Two real rejection risks below. |
+| **Open testing** (anyone can join — "mass area") | 🟡 **Feasible** (rejection risks fixed) | Full production-level review; the one remaining scrutiny item is the mic foreground service. |
 
-**Your campus-by-campus strategy = closed testing per campus.** That's low-risk
-on Play. **Do NOT jump to open testing yet** — fix the two items below first.
+**Your campus-by-campus strategy = closed testing per campus.** That's the
+lowest-risk path on Play and the recommended way to start.
 
-### The two things that can get OPEN testing / production rejected
-1. **`SEND_SMS` (auto-send).** Google's SMS policy only allows `SEND_SMS` for
-   default SMS handlers or a few exceptions; "emergency SOS" is a **gray area
-   and is frequently rejected** for non-default-handler apps. For open testing
-   / production, the safe path is to **switch the SMS fallback to the SMS
-   *composer* (one tap to send)**, which needs **no** special permission. Tell
-   me and I'll make that the Play build. (For internal/closed testing with your
-   own testers, auto-SMS is fine.)
-2. **Always-listening microphone foreground service.** High scrutiny. You'll
-   need the prominent in-app disclosure (below), an accurate Data Safety form,
-   and possibly a short demo video on request. Justifiable for a safety app, but
-   expect questions.
+### ✅ Update: the two rejection risks are now FIXED in the app
+1. **`SEND_SMS` — REMOVED.** ✅ Auto-send is gone. SMS now uses the system
+   **composer** ("Text my contacts" button on the SOS screen → one tap to send),
+   which needs **no** special permission. No SMS policy review, no rejection
+   risk. (Verify: the APK manifest no longer contains `SEND_SMS`.)
+2. **Prominent disclosure — ADDED.** ✅ A one-time "How ORBII uses your data"
+   screen now appears on first launch, before any permission request.
+
+**Remaining scrutiny (not a hard blocker):** the **always-listening microphone
+foreground service**. Declare it accurately (section 3), keep the disclosure,
+and be ready to provide a short demo video if Google asks. Justifiable for a
+safety app.
 
 ---
 
@@ -95,16 +95,8 @@ must match reality, and reality is on-device only.)
 
 ## 4. Permissions declaration (Sensitive app permissions)
 
-**`SEND_SMS`** (only if you keep auto-send for the Play build):
-> ORBII is a personal-safety SOS app. When the user fires an SOS, ORBII sends
-> the user's pre-set emergency contacts an SMS containing the user's live
-> location, so help can reach them even with no internet connection or when the
-> contact does not use the app. SMS is sent only as part of a user-initiated
-> emergency and is core to the app's safety function. There is no in-app
-> alternative that reaches non-app contacts offline.
-
-> ⚠️ If this is rejected, ask me to switch to the SMS composer (one-tap), which
-> removes the `SEND_SMS` permission entirely.
+**`SEND_SMS`** — ✅ **Not applicable.** The app no longer uses it (SMS goes
+through the system composer). Nothing to declare.
 
 **`RECORD_AUDIO` + microphone foreground service:**
 > Used only for opt-in, on-device voice-activated SOS. Audio is never recorded
@@ -113,10 +105,8 @@ must match reality, and reality is on-device only.)
 ---
 
 ## 5. Store listing notes
-- **Prominent disclosure (required):** before requesting microphone/location,
-  the app must show a plain-language notice of what's collected and why. (Your
-  in-app permission prompts cover part of this; tell me and I'll add a one-time
-  disclosure screen on first launch to be fully safe.)
+- **Prominent disclosure:** ✅ done — a one-time "How ORBII uses your data"
+  screen now shows on first launch before any permission is requested.
 - **Short description idea:** "One-tap SOS that alerts your circle and people
   nearby — works offline."
 - Include the **safety disclaimer** (PRIVACY_POLICY §10) in the listing /
@@ -125,8 +115,8 @@ must match reality, and reality is on-device only.)
 ---
 
 ## Recommended launch path
-1. **Internal testing** now → your first ~20–30 campus testers. (auto-SMS OK)
-2. **Closed testing** per campus → invite by email list. (auto-SMS OK among your
-   testers; policy must be live)
-3. Before **open testing / production**: switch SMS to the composer (or win the
-   SEND_SMS declaration), add the disclosure screen, and submit for full review.
+1. **Internal testing** now → your first ~20–30 campus testers.
+2. **Closed testing** per campus → invite by email list (policy must be live).
+3. **Open testing / production** → now feasible (SEND_SMS removed + disclosure
+   added). Submit for full review; just declare the mic foreground service
+   accurately and be ready with a demo video if asked.

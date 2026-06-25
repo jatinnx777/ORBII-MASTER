@@ -29,7 +29,13 @@ import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
-import { AppDialogHost, appAlert, BrandSheetProvider, OfflineBanner } from '@/components/common';
+import {
+  AppDialogHost,
+  appAlert,
+  BrandSheetProvider,
+  OfflineBanner,
+  PermissionDisclosureModal,
+} from '@/components/common';
 import { trackEvent } from '@/services/analytics';
 import {
   hidePinnedSOSShortcut,
@@ -239,7 +245,16 @@ function RootNavigator() {
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
-  return status === 'authenticated' ? <AppNavigator /> : <AuthNavigator />;
+  if (status === 'authenticated') {
+    return (
+      <>
+        <AppNavigator />
+        {/* Play "prominent disclosure" — shown once before any permission ask. */}
+        <PermissionDisclosureModal />
+      </>
+    );
+  }
+  return <AuthNavigator />;
 }
 
 export default function App() {

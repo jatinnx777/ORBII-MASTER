@@ -23,6 +23,8 @@ import {
   type MLRoute,
 } from '@/components/common';
 import { broadcastExpandRadius, broadcastResolved } from '@/services/community';
+import { openSMSComposer } from '@/services/sms';
+import { buildSOSMessage } from '@/services/whatsapp-sos';
 import { fetchRoute, formatEta } from '@/services/osrm';
 import { upsertSOSRecord } from '@/services/sos-history';
 import {
@@ -80,6 +82,22 @@ export function ActiveSOSScreen() {
   const dispatch = useAppDispatch();
   const activeSOS = useAppSelector((s) => s.sos.activeSOS);
   const delivery = useAppSelector((s) => s.sos.delivery);
+  const profile = useAppSelector((s) => s.user.profile);
+  const contactCount = profile?.emergencyContacts?.length ?? 0;
+
+  // One-tap SMS to all emergency contacts (system composer, no permission).
+  const textContacts = useCallback(() => {
+    if (!activeSOS || !profile) return;
+    const message = buildSOSMessage({
+      user: profile,
+      location: {
+        latitude: activeSOS.location.latitude,
+        longitude: activeSOS.location.longitude,
+        address: activeSOS.location.address,
+      },
+    });
+    void openSMSComposer(profile.emergencyContacts, message);
+  }, [activeSOS, profile]);
 
   const [responders, setResponders] = useState<Record<string, LiveResponder>>({});
   const [resolved, setResolved] = useState(false);
@@ -582,6 +600,23 @@ export function ActiveSOSScreen() {
           <Text style={styles.call112Text}>Call 112 (Emergency)</Text>
         </Pressable>
 
+        {!resolved && contactCount > 0 ? (
+          <Pressable
+            onPress={textContacts}
+            style={({ pressed }) => [
+              dstyles.textBtn,
+              pressed && { opacity: 0.9 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Text my emergency contacts"
+          >
+            <Ionicons name="chatbubble-ellipses" size={17} color={colors.textInverse} />
+            <Text style={dstyles.textBtnLabel}>
+              Text my contacts ({contactCount})
+            </Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.mapCard}>
           <MLMapView
             style={styles.map}
@@ -869,36 +904,32 @@ const art = StyleSheet.create({
 
 // Honest "who did we actually reach" line, instead of an optimistic "sent".
 function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
-  const sms = delivery?.smsSent;
   const push = delivery?.pushSent;
-  const total = (sms ?? 0) + (push ?? 0);
-  const bothKnown = sms !== undefined && push !== undefined;
 
-  if (total === 0 && !bothKnown) {
+  if (push === undefined) {
     return (
       <View style={dstyles.card}>
         <ActivityIndicator size="small" color={colors.textInverse} />
-        <Text style={dstyles.text}>Alerting your contacts…</Text>
+        <Text style={dstyles.text}>Alerting your circle…</Text>
       </View>
     );
   }
-  if (total === 0) {
+  if (push === 0) {
     return (
       <View style={[dstyles.card, dstyles.warn]}>
         <Ionicons name="warning" size={16} color={colors.textInverse} />
         <Text style={dstyles.text}>
-          Couldn't confirm anyone was reached. Call 112 or your contacts directly.
+          No one on ORBII reached yet — text or call your contacts directly to be sure.
         </Text>
       </View>
     );
   }
-  const parts: string[] = [];
-  if (sms) parts.push(`Texted ${sms} contact${sms === 1 ? '' : 's'}`);
-  if (push) parts.push(`Notified ${push} on ORBII`);
   return (
     <View style={[dstyles.card, dstyles.ok]}>
       <Ionicons name="checkmark-circle" size={16} color={colors.textInverse} />
-      <Text style={dstyles.text}>{parts.join(' · ')}</Text>
+      <Text style={dstyles.text}>
+        Notified {push} {push === 1 ? 'person' : 'people'} on ORBII
+      </Text>
     </View>
   );
 }
@@ -916,6 +947,21 @@ const dstyles = StyleSheet.create({
   },
   ok: { backgroundColor: 'rgba(46,125,50,0.35)' },
   warn: { backgroundColor: 'rgba(216,27,27,0.4)' },
+  textBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: radius.lg,
+    paddingVertical: 13,
+    marginBottom: spacing.sm,
+  },
+  textBtnLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15,
+    color: colors.textInverse,
+  },
   text: {
     flex: 1,
     ...typography.caption,

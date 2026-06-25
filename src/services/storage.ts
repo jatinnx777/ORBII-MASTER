@@ -17,6 +17,7 @@ const KEYS = {
   bgVoice: 'orbii:bg-voice',
   voiceLang: 'orbii:voice-lang',
   fsiAsked: 'orbii:fsi-asked',
+  disclosureAck: 'orbii:disclosure-ack',
 } as const;
 
 export const storageKeys = KEYS;
