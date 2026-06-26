@@ -10,6 +10,7 @@ import {
   type MapRef,
 } from '@maplibre/maplibre-react-native';
 import type { GeoPoint } from '@/types';
+import { ORBII_MAP_STYLE } from './mapStyle';
 
 // Avatar marker — a circle member shown on the map with their photo (or
 // initial), Life360 style. Rendered as a MarkerView overlay so we can use a
@@ -27,12 +28,9 @@ export type AvatarMarker = {
 // layer (cheap; no per-marker view overhead). The route line is a separate
 // LineLayer fed by the OSRM-returned GeoJSON.
 
-// OpenFreeMap "liberty" — community-funded vector basemap, MIT-licensed
-// data, NO API key, NO rate limits. The "liberty" style is the warm,
-// colourful Google-Maps-like theme (green parks, blue water, soft cream
-// roads + labels) that matches ORBII's reference design far better than
-// the minimal grey "positron". Vector tiles → smooth zoom, crisp labels.
-const STYLE_URL = 'https://tiles.openfreemap.org/styles/liberty';
+// Custom ORBII green-and-cream theme, built on OpenFreeMap's free vector tiles
+// (no API key, no rate limits). See mapStyle.ts. If it ever renders blank,
+// swap `ORBII_MAP_STYLE` below for `FALLBACK_STYLE_URL`.
 
 export type MLMarker = {
   id: string;
@@ -200,7 +198,10 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
     <MLMap
       ref={mapRef}
       style={[styles.fill, style]}
-      mapStyle={STYLE_URL}
+      // Cast: the runtime object is a valid MapLibre style, but the lib's
+      // StyleSpecification type uses strict literal unions our plain object
+      // doesn't satisfy structurally.
+      mapStyle={ORBII_MAP_STYLE as never}
       logo={false}
       attribution={false}
       compass={false}
@@ -236,8 +237,8 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
             id="route-line"
             type="line"
             paint={{
-              'line-color': '#FF0000',
-              'line-width': 4,
+              'line-color': '#2E9E5B',
+              'line-width': 4.5,
             }}
             layout={{ 'line-cap': 'round', 'line-join': 'round' }}
           />
