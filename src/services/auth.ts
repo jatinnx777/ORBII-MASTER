@@ -46,8 +46,10 @@ const DEV_AUTH_MODE = false;
 //   • No real Supabase session is created, so server-side calls
 //     (friends search, messages, sos broadcast) will fail until you
 //     either flip this off OR configure Supabase Phone Auth properly.
-// FLIP TO false before production launch.
-const TEST_OTP_BYPASS = true;
+// DISABLED for launch — ORBII uses Google sign-in only. The phone/OTP flow is
+// retired (no real SMS gateway wired), and the Welcome screen no longer routes
+// to it. Keeping the constant (false) so the phone screens still compile.
+const TEST_OTP_BYPASS = false;
 const TEST_OTP_CODE = '123456';
 
 WebBrowser.maybeCompleteAuthSession();

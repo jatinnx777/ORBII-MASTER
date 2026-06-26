@@ -51,18 +51,15 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     }
   };
 
-  const handleSignUp = () => {
-    if (!policyOk) {
-      setPolicyOpen(true);
-      return;
-    }
-    navigation.navigate('PhoneSignIn');
-  };
+  // Google handles both sign-in and sign-up (a new Google user gets an
+  // account), so "Sign Up" just runs the same Google flow. The phone/OTP path
+  // is retired for launch.
+  const handleSignUp = handleGoogle;
 
   const comingSoon = (method: string) =>
     appAlert(
       `${method} sign-in coming soon`,
-      'For now, please continue with Google or sign up with your phone.',
+      'For now, please continue with Google.',
     );
 
   return (
@@ -111,9 +108,14 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
             <View style={styles.dividerLine} />
           </View>
 
-          <Pressable style={styles.signupRow} onPress={handleSignUp} hitSlop={8}>
-            <Text style={styles.signupText}>Don’t have an account? </Text>
-            <Text style={styles.signupLink}>Sign Up</Text>
+          <Pressable
+            style={styles.signupRow}
+            onPress={handleSignUp}
+            hitSlop={8}
+            disabled={isSigningIn}
+          >
+            <Text style={styles.signupText}>New to ORBII? </Text>
+            <Text style={styles.signupLink}>Sign up with Google</Text>
           </Pressable>
 
           <Pressable
