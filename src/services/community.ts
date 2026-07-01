@@ -30,6 +30,10 @@ export type AlertBroadcast = {
   // Priority responders: uids of the victim's friends. Receivers whose uid
   // appears here always see the alert (skipping the 2 km radius gate).
   friendUids?: string[];
+  // Premium gate: when true (victim is on the free tier) the alert must reach
+  // ONLY the victim's circle (friendUids). Receivers who aren't in the circle
+  // drop it instead of treating it as a nearby community alert.
+  circleOnly?: boolean;
 };
 
 let broadcastChannel: ReturnType<typeof supabase.channel> | null = null;

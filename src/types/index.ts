@@ -15,11 +15,19 @@ export type Friend = {
   photoUri?: string | null;
 };
 
+// ORBII is a single app with role-based access (like Instagram user/creator or
+// LinkedIn user/recruiter). The role gates navigation + permissions; a normal
+// user never sees responder UI. Stored on the profile, source of truth is the
+// `profiles.role` column (changed by admin approval).
+export type UserRole = 'user' | 'responder' | 'admin';
+
 export type UserProfile = {
   uid: string;
   email: string;
   phone: string | null;
   name: string | null;
+  // Defaults to 'user'. Becomes 'responder' after an approved application.
+  role?: UserRole;
   // Public handle the user picks during profile setup. Other users add
   // each other to their safety circle by typing this username.
   username: string | null;

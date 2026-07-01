@@ -78,6 +78,11 @@ export async function createSOS(
     .map((f) => f.uid)
     .filter((uid): uid is string => !!uid);
 
+  // Premium gate: helper/responder dispatch (reaching nearby strangers) is a
+  // Premium feature. Free users' SOS is shared ONLY with their family/circle
+  // in real time — never broadcast to the wider community pool.
+  const circleOnly = !user.isPremium;
+
   const broadcast: AlertBroadcast = {
     id: record.id,
     victim: {
@@ -89,6 +94,7 @@ export async function createSOS(
     location,
     createdAt: record.timestamp,
     friendUids,
+    circleOnly,
   };
   broadcastAlert(broadcast).catch((err) =>
     reportError(err, {
@@ -144,6 +150,10 @@ async function persistSOS(
         kind: record.kind ?? 'real',
         user_name: user.name,
         user_photo: user.photoUri,
+        // Free tier → circle-only. Keeps the row out of the nearby-strangers
+        // RPC (sos_events_nearby filters circle_only), so a free user's live
+        // location is never served to people outside their circle.
+        circle_only: !user.isPremium,
       },
       { onConflict: 'id' },
     );

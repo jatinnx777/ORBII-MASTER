@@ -21,6 +21,7 @@ import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { useIsResponder } from '@/services/roles';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -30,6 +31,7 @@ export function ProfileScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const history = useAppSelector((s) => s.history.records);
+  const isResponder = useIsResponder();
 
   if (!profile) return null;
 
@@ -113,6 +115,44 @@ export function ProfileScreen() {
             onPress={() => navigation.navigate('History')}
           />
         </Card>
+
+        {isResponder ? (
+          <>
+            <SectionHeader title="Responder" />
+            <Card style={styles.rowsCard}>
+              <Row
+                icon="flash"
+                label="Missions dashboard"
+                value="Go online & respond to emergencies"
+                onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
+              />
+              <Divider />
+              <Row
+                icon="ribbon"
+                label="Recognition & Guardian level"
+                onPress={() => navigation.navigate('ResponderRecognition')}
+              />
+              <Divider />
+              <Row
+                icon="shield-checkmark"
+                label="Verification"
+                onPress={() => navigation.navigate('ResponderVerification')}
+              />
+            </Card>
+          </>
+        ) : (
+          <>
+            <SectionHeader title="Help others" />
+            <Card style={styles.rowsCard}>
+              <Row
+                icon="shield-checkmark"
+                label="Become an ORBII Responder"
+                value="Verified people who reach emergencies fast"
+                onPress={() => navigation.navigate('ResponderApplication')}
+              />
+            </Card>
+          </>
+        )}
 
         <SectionHeader title="Account" />
         <Card style={styles.rowsCard}>

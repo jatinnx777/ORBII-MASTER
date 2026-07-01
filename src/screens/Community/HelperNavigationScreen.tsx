@@ -19,6 +19,7 @@ import { publishLiveLocation, type LiveLocationHandle } from '@/services/live-lo
 import { fetchRoute } from '@/services/osrm';
 import { haversineMeters, formatDistance } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
+import { recordHelperResponse } from '@/services/helper-profile';
 import type { AppStackParamList } from '@/navigation/types';
 import type { GeoPoint } from '@/types';
 
@@ -114,6 +115,8 @@ export function HelperNavigationScreen() {
     trackEvent('helper_arrived', { name });
     if (me) liveRef.current?.announceArrived(me);
     setAnnounced(true);
+    // Count this as a completed response for the responder's recognition.
+    void recordHelperResponse();
   };
 
   return (

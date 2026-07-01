@@ -52,9 +52,11 @@ import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { premiumStatusResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumActive } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
+import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { loadPhrases } from '@/services/voice-phrases';
+import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
 import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
 import {
@@ -144,6 +146,13 @@ function RootNavigator() {
     if (uid) void registerPushToken(uid);
   }, [status]);
 
+  // Pull the authoritative role (user / responder / admin) so the Missions tab
+  // appears the moment an admin approves a responder application.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    void refreshUserRole();
+  }, [status]);
+
   // Deep-link join handler. Listens for orbii://join/<token> AND
   // https://orbii.app/join/<token> opens, calls acceptInviteByToken,
   // and routes to the Circle detail on success. We only honour links
@@ -160,10 +169,33 @@ function RootNavigator() {
       // live ActiveSOS map. VoiceGuardService launches us over the lock screen
       // so this works without unlocking.
       if (url.startsWith('orbii://voice-sos')) {
-        if (navigationRef.isReady()) {
-          // @ts-expect-error - SOSCountdown is in the AppStack only.
-          navigationRef.navigate('SOSCountdown');
+        if (!navigationRef.isReady()) return;
+        // Premium gate: hands-free Voice SOS is metered on the free tier
+        // (2/month); Premium is unlimited. This NEVER blocks a real emergency
+        // — the manual SOS button stays free and unlimited — it only gates the
+        // voice convenience and nudges the upgrade.
+        const isPremium = store.getState().user.profile?.isPremium ?? false;
+        const quota = await voiceSOSStatus(isPremium);
+        if (!quota.allowed) {
+          appAlert(
+            'Voice SOS limit reached',
+            `You've used your ${quota.limit} free Voice SOS this month. You can still send an SOS anytime with the button — or upgrade for unlimited hands-free Voice SOS.`,
+            [
+              { text: 'Not now', style: 'cancel' },
+              {
+                text: 'Upgrade',
+                onPress: () => {
+                  // @ts-expect-error - PremiumUpgrade is in the AppStack only.
+                  navigationRef.navigate('PremiumUpgrade');
+                },
+              },
+            ],
+          );
+          return;
         }
+        void recordVoiceSOS();
+        // @ts-expect-error - SOSCountdown is in the AppStack only.
+        navigationRef.navigate('SOSCountdown');
         return;
       }
       const token = extractJoinToken(url);
@@ -422,6 +454,10 @@ export default function App() {
         !!me &&
         Array.isArray(broadcastPayload.friendUids) &&
         broadcastPayload.friendUids.includes(me);
+      // Premium gate: a free user's SOS (circleOnly) reaches ONLY their
+      // circle. If we're not in their circle, drop it — strangers never get
+      // a free user's alert. Premium victims reach the full nearby pool.
+      if (broadcastPayload.circleOnly && !isFriend) return;
       if (within2km || isFriend) {
         seen.add(alert.id);
         store.dispatch(alertReceived(alert));

@@ -18,6 +18,8 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 export type TabParamList = {
   Home: undefined;
   Safety: undefined;
+  // Responder-only tab (rendered only when role is responder/admin).
+  Missions: undefined;
   Membership: undefined;
   Profile: undefined;
 };
@@ -66,6 +68,10 @@ export type AppStackParamList = {
   SafetyPin: undefined;
   VoicePhrases: undefined;
   VoiceDebug: undefined;
+  // Responder onboarding (the Missions dashboard itself is a role-gated tab).
+  ResponderApplication: undefined;
+  ResponderVerification: undefined;
+  ResponderRecognition: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =
