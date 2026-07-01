@@ -20,7 +20,7 @@ import { APP_VERSION } from '@/services/app-info';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
-import { signOutFromGoogle } from '@/services/auth';
+import { signOutFromGoogle, deleteAccount } from '@/services/auth';
 import { useIsResponder } from '@/services/roles';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -53,6 +53,28 @@ export function ProfileScreen() {
     });
   };
 
+  const handleDeleteAccount = () => {
+    sheet.confirm({
+      title: 'Delete your account?',
+      body: 'This permanently erases your ORBII account, profile, contacts, SOS history and any helper data. This cannot be undone.',
+      destructive: true,
+      confirmLabel: 'Delete forever',
+      icon: 'trash',
+      onConfirm: async () => {
+        const res = await deleteAccount();
+        if (!res.ok) {
+          sheet.notify({
+            title: 'Could not delete account',
+            body: res.error ?? 'Please try again.',
+            tone: 'destructive',
+          });
+          return;
+        }
+        dispatch(signedOut());
+      },
+    });
+  };
+
   return (
     <ScreenContainer padded={false} scroll={false}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -75,7 +97,14 @@ export function ProfileScreen() {
             ) : null}
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{profile.name ?? 'ORBII user'}</Text>
+            <View style={styles.nameRow}>
+              <Text style={styles.name}>{profile.name ?? 'ORBII user'}</Text>
+              {isResponder ? (
+                <Text style={styles.crown} accessibilityLabel="Verified helper">
+                  {'\u{1F451}'}
+                </Text>
+              ) : null}
+            </View>
             <Text style={styles.phone}>{profile.email || profile.phone || ''}</Text>
             <View style={styles.heroStats}>
               <StatPill label="SOS sent" value={String(sosCount)} />
@@ -128,6 +157,13 @@ export function ProfileScreen() {
               />
               <Divider />
               <Row
+                icon="wallet"
+                label="Earnings & payouts"
+                value="See your balance and cash out"
+                onPress={() => navigation.navigate('ResponderEarnings')}
+              />
+              <Divider />
+              <Row
                 icon="ribbon"
                 label="Recognition & Guardian level"
                 onPress={() => navigation.navigate('ResponderRecognition')}
@@ -173,6 +209,14 @@ export function ProfileScreen() {
             label="Sign out"
             destructive
             onPress={handleSignOut}
+          />
+          <Divider />
+          <Row
+            icon="trash"
+            label="Delete account"
+            value="Permanently erase your account and data"
+            destructive
+            onPress={handleDeleteAccount}
           />
         </Card>
 
@@ -277,10 +321,19 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: colors.surface,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   name: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 20,
     color: colors.textPrimary,
+  },
+  crown: {
+    fontSize: 16,
+    marginTop: -2,
   },
   phone: {
     ...typography.caption,

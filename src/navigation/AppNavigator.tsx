@@ -34,6 +34,7 @@ import { VoiceDebugScreen } from '@/screens/Debug/VoiceDebugScreen';
 import { ResponderApplicationScreen } from '@/responder/ResponderApplicationScreen';
 import { ResponderVerificationScreen } from '@/responder/ResponderVerificationScreen';
 import { ResponderRecognitionScreen } from '@/responder/ResponderRecognitionScreen';
+import { ResponderEarningsScreen } from '@/responder/ResponderEarningsScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -248,6 +249,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="ResponderRecognition"
         component={ResponderRecognitionScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="ResponderEarnings"
+        component={ResponderEarningsScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
     </Stack.Navigator>

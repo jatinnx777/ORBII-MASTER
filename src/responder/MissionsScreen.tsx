@@ -26,6 +26,11 @@ import {
   startHelperMode,
   stopHelperMode,
 } from '@/services/helper-mode';
+import {
+  loadHelperStats,
+  formatRupees,
+  type HelperStats,
+} from '@/services/helper-economy';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -44,6 +49,7 @@ export function MissionsScreen() {
   const navigation = useNavigation<Nav>();
   const profile = useAppSelector((s) => s.user.profile);
   const [hp, setHp] = useState<HelperProfile | null>(null);
+  const [stats, setStats] = useState<HelperStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(isHelperModeRunning());
   const [busy, setBusy] = useState(false);
@@ -53,9 +59,13 @@ export function MissionsScreen() {
       let alive = true;
       (async () => {
         if (!profile?.uid) return;
-        const p = await loadHelperProfile(profile.uid);
+        const [p, s] = await Promise.all([
+          loadHelperProfile(profile.uid),
+          loadHelperStats(),
+        ]);
         if (alive) {
           setHp(p);
+          setStats(s);
           setLoading(false);
         }
       })();
@@ -183,10 +193,33 @@ export function MissionsScreen() {
                 </View>
               </View>
 
+              {/* earnings + cash out */}
+              <Pressable
+                style={styles.earnCard}
+                onPress={() => navigation.navigate('ResponderEarnings')}
+              >
+                <View style={styles.earnHeadRow}>
+                  <Text style={styles.earnLabel}>WALLET BALANCE</Text>
+                  <Ionicons name="wallet" size={18} color={colors.sageDeep} />
+                </View>
+                <Text style={styles.earnBalance}>
+                  {formatRupees(stats?.balancePaise ?? 0)}
+                </Text>
+                <View style={styles.earnMetaRow}>
+                  <Text style={styles.earnMeta}>
+                    {formatRupees(stats?.earnedPaise ?? 0)} earned in total
+                  </Text>
+                  <View style={styles.cashOutBtn}>
+                    <Text style={styles.cashOutText}>Cash out</Text>
+                    <Ionicons name="arrow-forward" size={14} color={colors.surface} />
+                  </View>
+                </View>
+              </Pressable>
+
               <View style={styles.statsCard}>
                 <Text style={styles.sectionLabel}>YOUR IMPACT</Text>
                 <View style={styles.statsRow}>
-                  <Stat value={hp?.lifetimeResponses ?? 0} label="People assisted" />
+                  <Stat value={stats?.helped ?? hp?.lifetimeResponses ?? 0} label="People assisted" />
                   <View style={styles.statDivider} />
                   <Stat value={0} label="Missions today" />
                 </View>
@@ -203,7 +236,7 @@ export function MissionsScreen() {
 
               <Text style={styles.footnote}>
                 Always reach safely, call police (112), and never put yourself at
-                unnecessary risk. ORBII recognises responders by impact, not money.
+                unnecessary risk.
               </Text>
             </>
           )}
@@ -298,6 +331,28 @@ const styles = StyleSheet.create({
   levelText: { fontFamily: fontFamilies.poppinsBold, fontSize: 13 },
   trustNum: { fontFamily: fontFamilies.poppinsBold, fontSize: 26, color: colors.sageDeep },
   miniLabel: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
+  earnCard: {
+    backgroundColor: colors.sageSoft,
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
+    gap: 6,
+    ...shadows.card,
+  },
+  earnHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  earnLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 0.8, color: colors.sageDeep },
+  earnBalance: { fontFamily: fontFamilies.poppinsBold, fontSize: 34, color: colors.textPrimary, letterSpacing: -0.5 },
+  earnMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  earnMeta: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary },
+  cashOutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.sageDeep,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+  },
+  cashOutText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.surface },
   statsCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, ...shadows.card },
   sectionLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 0.8, color: colors.textMuted, marginBottom: spacing.sm },
   statsRow: { flexDirection: 'row', alignItems: 'center' },

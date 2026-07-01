@@ -391,6 +391,24 @@ export async function signOutFromGoogle(): Promise<void> {
   }
 }
 
+// Permanently delete the signed-in user's account + ALL their data (Play Store
+// requirement). Wipes every table server-side via delete_my_account (sql/28),
+// then signs out locally. Returns ok/error so the UI can report failure.
+export async function deleteAccount(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { error } = await supabase.rpc('delete_my_account');
+    if (error) return { ok: false, error: error.message };
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // session may already be invalid after the auth user is removed
+    }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : 'Delete failed' };
+  }
+}
+
 export async function updateProfile(
   current: UserProfile,
   updates: { name: string; photoUri: string | null; username?: string | null },
