@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { appAlert } from '@/components/common';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTranslation } from 'react-i18next';
+import * as Haptics from 'expo-haptics';
 import { Mascot, PrivacyPolicyModal } from '@/components/common';
-import { colors, radius, shadows, spacing, typography } from '@/theme';
+import { colors, radius, shadows, spacing, typography, fontFamilies } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   signInFailed,
@@ -17,12 +17,13 @@ import { policyAccepted } from '@/redux/slices/appSlice';
 import { signInWithGoogle, DEV_AUTH } from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
 
-// "Welcome Back" — first impression, matching the reference: wave mascot on
-// a soft cloud, three stacked sign-in methods, a Sign Up link. Real auth is
-// Google (working) + Phone (the Sign Up path). Apple/Email are honest
+const { width } = Dimensions.get('window');
+
+// Fable "Let's look out for you" — the commitment moment. Orbi celebrates you
+// arriving; a sign-in card rises from the bottom; one warm trust cue sits under
+// the Google button. Google is the real auth; Apple/Email are honest
 // "coming soon" until configured.
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
-  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.user.status);
   const policyAcceptedAt = useAppSelector((s) => s.app.policyAcceptedAt);
@@ -30,6 +31,17 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   const policyOk = policyAcceptedAt !== null;
 
   const [policyOpen, setPolicyOpen] = useState(false);
+
+  // Card rises + Orbi pops in on mount.
+  const cardY = useRef(new Animated.Value(60)).current;
+  const pop = useRef(new Animated.Value(0.85)).current;
+  useEffect(() => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    Animated.parallel([
+      Animated.spring(cardY, { toValue: 0, friction: 9, tension: 60, useNativeDriver: true }),
+      Animated.spring(pop, { toValue: 1, friction: 5, tension: 80, useNativeDriver: true }),
+    ]).start();
+  }, [cardY, pop]);
 
   const handleGoogle = async () => {
     if (!policyOk) {
@@ -51,86 +63,57 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     }
   };
 
-  // Google handles both sign-in and sign-up (a new Google user gets an
-  // account), so "Sign Up" just runs the same Google flow. The phone/OTP path
-  // is retired for launch.
-  const handleSignUp = handleGoogle;
-
   const comingSoon = (method: string) =>
-    appAlert(
-      `${method} sign-in coming soon`,
-      'For now, please continue with Google.',
-    );
+    appAlert(`${method} sign-in coming soon`, 'For now, please continue with Google.');
 
   return (
     <View style={styles.root}>
+      <View pointerEvents="none" style={styles.glow} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* mascot on a cloud */}
-          <View style={styles.hero}>
-            <Mascot pose="wave" size={172} />
-            <View style={styles.cloud} />
-            <View style={styles.speechBubble}>
-              <Text style={styles.speechText}>Good to{'\n'}see you again.</Text>
-            </View>
-          </View>
+        <View style={styles.top}>
+          <Animated.View style={{ transform: [{ scale: pop }] }}>
+            <Mascot pose="celebrate" size={172} />
+          </Animated.View>
+        </View>
 
-          <Text style={styles.title}>{t('welcome.welcomeBack', 'Welcome Back')}</Text>
+        <Animated.View style={[styles.card, { transform: [{ translateY: cardY }] }]}>
+          <Text style={styles.title}>Let’s look out for you.</Text>
           <Text style={styles.sub}>
-            {t('welcome.guardianReady', 'Your guardian is ready whenever you need it.')}
+            Sign in so your circle can find you when it matters. Takes 10 seconds.
           </Text>
 
-          <View style={styles.ctaStack}>
-            <AuthButton
-              icon={<Text style={[styles.gMark, { color: '#4285F4' }]}>G</Text>}
-              label={isSigningIn ? '…' : 'Continue with Google'}
-              onPress={handleGoogle}
-              disabled={isSigningIn}
-            />
-            <AuthButton
-              icon={<Ionicons name="logo-apple" size={20} color={colors.textPrimary} />}
-              label="Continue with Apple"
-              onPress={() => comingSoon('Apple')}
-            />
-            <AuthButton
-              icon={<Ionicons name="mail-outline" size={20} color={colors.textPrimary} />}
-              label="Continue with Email"
-              onPress={() => comingSoon('Email')}
-            />
-          </View>
-
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
           <Pressable
-            style={styles.signupRow}
-            onPress={handleSignUp}
-            hitSlop={8}
+            onPress={handleGoogle}
             disabled={isSigningIn}
+            style={({ pressed }) => [styles.googleBtn, pressed && styles.pressed, isSigningIn && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Continue with Google"
           >
-            <Text style={styles.signupText}>New to ORBII? </Text>
-            <Text style={styles.signupLink}>Sign up with Google</Text>
+            <Text style={[styles.gMark, { color: '#4285F4' }]}>G</Text>
+            <Text style={styles.googleLabel}>
+              {isSigningIn ? 'Signing you in…' : 'Continue with Google'}
+            </Text>
           </Pressable>
 
-          <Pressable
-            style={styles.privacyRow}
-            onPress={() => setPolicyOpen(true)}
-            hitSlop={8}
-          >
-            <Ionicons name="shield-checkmark" size={13} color={colors.sage} />
-            <Text style={styles.privacyText}>Your safety data belongs to you.</Text>
+          <View style={styles.secondaryRow}>
+            <SmallBtn icon="logo-apple" label="Apple" onPress={() => comingSoon('Apple')} />
+            <SmallBtn icon="mail-outline" label="Email" onPress={() => comingSoon('Email')} />
+          </View>
+
+          <View style={styles.trustRow}>
+            <Ionicons name="lock-closed" size={13} color={colors.sageDeep} />
+            <Text style={styles.trustText}>
+              Your location stays private until <Text style={styles.trustStrong}>you</Text> trigger an
+              SOS. We never sell your data.
+            </Text>
+          </View>
+
+          <Pressable onPress={() => setPolicyOpen(true)} hitSlop={8} style={styles.termsRow}>
+            <Text style={styles.terms}>Privacy Policy & Terms</Text>
           </Pressable>
 
-          {DEV_AUTH.enabled ? (
-            <Text style={styles.devHint}>Sign-in is off in this build.</Text>
-          ) : null}
-        </ScrollView>
+          {DEV_AUTH.enabled ? <Text style={styles.devHint}>Sign-in is off in this build.</Text> : null}
+        </Animated.View>
       </SafeAreaView>
 
       <PrivacyPolicyModal
@@ -145,150 +128,126 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   );
 }
 
-function AuthButton({
+function SmallBtn({
   icon,
   label,
   onPress,
-  disabled,
 }: {
-  icon: React.ReactNode;
+  icon: React.ComponentProps<typeof Ionicons>['name'];
   label: string;
   onPress: () => void;
-  disabled?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [
-        styles.authBtn,
-        pressed && styles.authBtnPressed,
-        disabled && { opacity: 0.6 },
-      ]}
+      style={({ pressed }) => [styles.smallBtn, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <View style={styles.authIcon}>{icon}</View>
-      <Text style={styles.authLabel}>{label}</Text>
+      <Ionicons name={icon} size={18} color={colors.textPrimary} />
+      <Text style={styles.smallLabel}>{label}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
+  glow: {
+    position: 'absolute',
+    top: -width * 0.2,
+    alignSelf: 'center',
+    width: width * 1.1,
+    height: width * 1.1,
+    borderRadius: (width * 1.1) / 2,
+    backgroundColor: '#F3C7A6',
+    opacity: 0.4,
+  },
   safe: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-    alignItems: 'center',
-  },
-  hero: {
-    width: '100%',
-    height: 230,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-  },
-  cloud: {
-    position: 'absolute',
-    bottom: 18,
-    width: 150,
-    height: 46,
-    borderRadius: 30,
-    backgroundColor: colors.surfaceAlt,
-    ...shadows.icon,
-    zIndex: -1,
-  },
-  speechBubble: {
-    position: 'absolute',
-    top: 24,
-    right: 24,
+  top: { flex: 1, alignItems: 'center', justifyContent: 'flex-end', paddingBottom: spacing.lg },
+  card: {
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    ...shadows.icon,
-  },
-  speechText: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.textSecondary,
+    borderTopLeftRadius: 34,
+    borderTopRightRadius: 34,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.md,
+    ...shadows.card,
   },
   title: {
     ...typography.displaySmall,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginTop: spacing.sm,
   },
   sub: {
     ...typography.body,
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.sm,
-    maxWidth: 300,
+    marginBottom: spacing.xl,
+    paddingHorizontal: spacing.sm,
   },
-  ctaStack: {
-    alignSelf: 'stretch',
-    gap: spacing.md,
-    marginTop: spacing.xl,
-  },
-  authBtn: {
+  googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 58,
-    paddingHorizontal: spacing.lg,
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 56,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    backgroundColor: colors.cream,
+    borderWidth: 1.5,
+    borderColor: colors.border,
   },
-  authBtnPressed: { transform: [{ scale: 0.98 }], opacity: 0.95 },
-  authIcon: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: spacing.md,
-  },
-  authLabel: {
+  pressed: { transform: [{ scale: 0.98 }], opacity: 0.95 },
+  gMark: { fontFamily: 'Poppins_700Bold', fontSize: 18 },
+  googleLabel: {
     ...typography.button,
     fontFamily: 'Poppins_600SemiBold',
     color: colors.textPrimary,
   },
-  gMark: {
-    fontFamily: 'Poppins_700Bold',
-    fontSize: 18,
-  },
-  divider: {
+  secondaryRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
+  smallBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    alignSelf: 'stretch',
-    marginTop: spacing.xl,
+    justifyContent: 'center',
+    gap: 6,
+    height: 48,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { ...typography.label, color: colors.textMuted },
-  signupRow: {
+  smallLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  trustRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 7,
     marginTop: spacing.lg,
+    paddingHorizontal: spacing.xs,
   },
-  signupText: { ...typography.body, color: colors.textSecondary },
-  signupLink: {
-    ...typography.body,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.peachDeep,
+  trustText: {
+    flex: 1,
+    ...typography.caption,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
   },
-  privacyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.xl,
+  trustStrong: { fontFamily: fontFamilies.poppinsSemiBold, color: colors.textPrimary },
+  termsRow: { alignSelf: 'center', marginTop: spacing.md },
+  terms: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textMuted,
+    textDecorationLine: 'underline',
   },
-  privacyText: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
   devHint: {
     ...typography.caption,
     color: colors.textMuted,
-    marginTop: spacing.md,
+    marginTop: spacing.sm,
     textAlign: 'center',
   },
 });
