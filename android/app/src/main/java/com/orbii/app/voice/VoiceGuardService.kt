@@ -88,6 +88,15 @@ class VoiceGuardService : Service() {
       "bachao bachao", "bachao mujhe", "madad karo", "mujhe bachao", "bachaiye",
     )
     private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
+
+    // Cross-utterance repeat detection. A panicked "help ... help" has a pause
+    // between the shouts, so the recognizer finalises each one as its OWN
+    // result ("help", then "help") and the two-word phrase " help help " never
+    // appears inside a single text — the phrase list alone can NEVER catch it.
+    // Hearing the same bare distress word in two separate final results within
+    // this window (or twice inside one final, e.g. "help please help") fires.
+    private val REPEAT_KEYWORDS = listOf("help", "बचाओ", "bachao", "madad")
+    private const val REPEAT_WINDOW_MS = 7000L
   }
 
   @Volatile private var running = false
@@ -211,7 +220,9 @@ class VoiceGuardService : Service() {
           if (rec.acceptWaveForm(buffer, n)) {
             val json = JSONObject(rec.result)
             updateConfidence(json)
-            maybeTrigger(json.optString("text"), speechStart)
+            val finalText = json.optString("text")
+            maybeTrigger(finalText, speechStart)
+            checkRepeatKeyword(finalText, speechStart)
           } else {
             val partial = JSONObject(rec.partialResult).optString("partial")
             if (partial.isNotBlank()) VoiceMetrics.lastText = partial
@@ -277,6 +288,8 @@ class VoiceGuardService : Service() {
   }
 
   @Volatile private var lastFire = 0L
+  private val lastKeywordAt = HashMap<String, Long>()
+
   private fun maybeTrigger(text: String?, speechStart: Long) {
     if (text.isNullOrBlank()) return
     // STRICT whole-word / whole-phrase match. Pad with spaces so " help "
@@ -284,6 +297,30 @@ class VoiceGuardService : Service() {
     // what stops ordinary speech from firing an SOS.
     val t = " " + text.lowercase().trim().replace(Regex("\\s+"), " ") + " "
     val hit = phrases.firstOrNull { t.contains(" $it ") } ?: return
+    triggerNow(hit, speechStart)
+  }
+
+  // Repeat detection across separate utterances. Called ONLY on FINAL results
+  // so one shout can't count itself twice through its own growing partials
+  // (the recognizer resets after each final, so consecutive finals are always
+  // distinct audio).
+  private fun checkRepeatKeyword(text: String?, speechStart: Long) {
+    if (text.isNullOrBlank()) return
+    val words = text.lowercase().trim().split(Regex("\\s+"))
+    val now = System.currentTimeMillis()
+    for (k in REPEAT_KEYWORDS) {
+      val count = words.count { it == k }
+      if (count == 0) continue
+      val prev = lastKeywordAt[k] ?: 0L
+      lastKeywordAt[k] = now
+      if (count >= 2 || now - prev <= REPEAT_WINDOW_MS) {
+        triggerNow("$k $k", speechStart)
+        return
+      }
+    }
+  }
+
+  private fun triggerNow(hit: String, speechStart: Long) {
     val now = System.currentTimeMillis()
     if (now - lastFire < 6000) return // debounce
     lastFire = now
