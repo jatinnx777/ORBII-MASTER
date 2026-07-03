@@ -56,7 +56,7 @@ import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { loadPhrases } from '@/services/voice-phrases';
-import { voiceSOSStatus, recordVoiceSOS } from '@/services/voice-limits';
+import { voiceSOSStatus } from '@/services/voice-limits';
 import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
 import {
@@ -193,9 +193,10 @@ function RootNavigator() {
           );
           return;
         }
-        void recordVoiceSOS();
+        // Quota is recorded by CountdownScreen only when the SOS actually
+        // fires, so a cancelled countdown doesn't burn a free activation.
         // @ts-expect-error - SOSCountdown is in the AppStack only.
-        navigationRef.navigate('SOSCountdown');
+        navigationRef.navigate('SOSCountdown', { voice: true });
         return;
       }
       const token = extractJoinToken(url);

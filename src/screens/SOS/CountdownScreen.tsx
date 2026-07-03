@@ -23,6 +23,7 @@ import {
 } from '@/redux/slices/sosSlice';
 import { getSOSLocationFix, reverseGeocode } from '@/services/location';
 import { createSOS } from '@/services/sos';
+import { recordVoiceSOS } from '@/services/voice-limits';
 import { broadcastSOSViaWhatsApp } from '@/services/whatsapp-sos';
 import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
@@ -43,6 +44,9 @@ export function CountdownScreen() {
   // Practice mode: the SOS is recorded in local history but no DB write,
   // no broadcast, no real helpers notified.
   const isTest = route.params?.test === true;
+  // Voice-triggered: count against the monthly voice quota only when the SOS
+  // actually fires (a cancelled countdown costs nothing).
+  const isVoice = route.params?.voice === true;
 
   // Deadline-based countdown. We compute remaining time off Date.now() each
   // tick rather than decrementing a counter — that way an incoming phone
@@ -167,6 +171,7 @@ export function CountdownScreen() {
         kind: isTest ? 'test' : 'real',
       });
       dispatch(sosDispatchSucceeded(record));
+      if (isVoice && !isTest) void recordVoiceSOS();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
         () => undefined,
       );

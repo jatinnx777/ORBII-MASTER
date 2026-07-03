@@ -652,7 +652,7 @@ function Hero({
         </Animated.View>
       ) : (
         <Animated.View style={{ transform: [{ translateY: floatY }] }}>
-          <OrbiBee size={186} />
+          <OrbiBee size={186} grounded />
         </Animated.View>
       )}
 

@@ -26,7 +26,7 @@ export type TabParamList = {
 
 export type AppStackParamList = {
   Tabs: { screen?: keyof TabParamList } | undefined;
-  SOSCountdown: { instant?: boolean; test?: boolean } | undefined;
+  SOSCountdown: { instant?: boolean; test?: boolean; voice?: boolean } | undefined;
   ActiveSOS: undefined;
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
