@@ -16,8 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
-import { appAlert, OrbiBee, Mascot } from '@/components/common';
+import { appAlert, OrbiBee } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
@@ -32,7 +31,7 @@ import {
   setVoiceLang,
 } from '@/services/voice-language';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 
 // Warm cream + forest-green palette matching the reference designs.
 const C = {
@@ -51,49 +50,99 @@ const C = {
 };
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
-type SlideKind = 'intro' | 'voice' | 'people';
+type Feature = { icon: IconName; tone: 'green' | 'yellow' | 'coral'; title: string; body: string };
 
 type Slide = {
   id: string;
-  kind: SlideKind;
-  pose: 'wave' | 'shield' | 'headset';
-  glow: string; // ambient glow colour behind Orbi for this screen
-  headline: string;
-  subcopy: string;
+  line1: string;
+  line2: string;
+  subtitle: string;
+  heroIcon: IconName;
+  // Drop the Orbi artwork for each screen here to match the designs exactly.
+  // Until then the animated icon hero is shown.
+  heroImage?: ImageSourcePropType;
+  orbit: IconName[];
+  layout: 'row' | 'list';
+  cardHeading?: string;
+  features: Feature[];
+  footer?: { title: string; body: string };
 };
 
-// Fable concept — "a friend meets you at the door": one idea per screen, Orbi
-// persists above the pager and morphs pose, and the ambient glow shifts
-// temperature as you swipe (peach → coral → sage). No feature-lists.
+// Orbi artwork per screen. Once you drop the PNGs in assets/onboarding/,
+// uncomment these and they'll render in place of the icon hero.
+const ORBI: Record<string, ImageSourcePropType | undefined> = {
+  companion: undefined, // require('../../../assets/onboarding/orbi-1.png'),
+  voice: undefined, // require('../../../assets/onboarding/orbi-2.png'),
+  realtime: undefined, // require('../../../assets/onboarding/orbi-3.png'),
+  emergency: undefined, // require('../../../assets/onboarding/orbi-4.png'),
+};
+
 const SLIDES: Slide[] = [
   {
-    id: 'intro',
-    kind: 'intro',
-    pose: 'wave',
-    glow: '#F3C7A6',
-    headline: "Hi, I'm Orbi.",
-    subcopy:
-      "Think of me as the friend who's always one word away — on the bus, on a late walk, anywhere.",
+    id: 'companion',
+    line1: 'Your safety.',
+    line2: 'Always with you.',
+    subtitle: 'ORBII is your AI companion that helps you feel safe, stay connected and get help when you need it most.',
+    heroIcon: 'shield-checkmark',
+    orbit: ['shield-checkmark', 'notifications', 'location', 'people'],
+    layout: 'row',
+    features: [
+      { icon: 'shield-checkmark', tone: 'green', title: 'Be Protected', body: 'Smart protection when you need it.' },
+      { icon: 'location', tone: 'green', title: 'Stay Connected', body: 'Share live location with trusted people.' },
+      { icon: 'flash', tone: 'green', title: 'Get Help Fast', body: 'Instant alerts to your circle in emergencies.' },
+    ],
   },
   {
     id: 'voice',
-    kind: 'voice',
-    pose: 'shield',
-    glow: '#F4A98C',
-    headline: 'One phrase. That’s all it takes.',
-    subcopy:
-      'Say your secret phrase and ORBII alerts your people instantly — even if your phone is locked, even with no internet.',
+    line1: 'AI that listens.',
+    line2: 'Protection that acts.',
+    subtitle: 'ORBII is always listening for you, so help reaches you faster in any situation.',
+    heroIcon: 'mic',
+    orbit: ['mic', 'notifications', 'location', 'people'],
+    layout: 'list',
+    features: [
+      { icon: 'mic', tone: 'green', title: 'Voice Trigger', body: 'Say your safe word and ORBII activates help instantly.' },
+      { icon: 'notifications', tone: 'yellow', title: 'Smart Alerts', body: 'Instantly notify your trusted circle with your location.' },
+      { icon: 'people', tone: 'green', title: 'Live Protection', body: 'Share live location and stay connected with people who matter.' },
+    ],
   },
   {
-    id: 'people',
-    kind: 'people',
-    pose: 'headset',
-    glow: '#BFE0C4',
-    headline: 'Your people, in your pocket.',
-    subcopy:
-      'Your family circle sees your live location the moment you need them — and verified responders nearby can reach you fast.',
+    id: 'realtime',
+    line1: 'Real-time protection.',
+    line2: 'Every step of the way.',
+    subtitle: 'ORBII stays by your side with live location, safe walk and instant updates.',
+    heroIcon: 'navigate',
+    orbit: ['location', 'walk', 'shield-checkmark', 'notifications'],
+    layout: 'list',
+    features: [
+      { icon: 'location', tone: 'green', title: 'Live Location Sharing', body: 'Share your real-time location with trusted people you choose.' },
+      { icon: 'walk', tone: 'yellow', title: 'Safe Walk', body: 'Start a Safe Walk and ORBII will monitor your journey.' },
+      { icon: 'notifications', tone: 'green', title: 'Instant Updates', body: 'Get notified instantly if something looks off or you need help.' },
+    ],
+  },
+  {
+    id: 'emergency',
+    line1: 'Help when',
+    line2: 'you need it most.',
+    subtitle: 'In an emergency, ORBII alerts your trusted contacts and shares your location instantly. Help is just one tap away.',
+    heroIcon: 'alert-circle',
+    orbit: ['notifications', 'location', 'shield-checkmark', 'people'],
+    layout: 'list',
+    cardHeading: 'In an emergency, ORBII will:',
+    features: [
+      { icon: 'notifications', tone: 'coral', title: 'Send SOS Alerts', body: 'Instantly alert your trusted contacts with your live location.' },
+      { icon: 'location', tone: 'yellow', title: 'Share Live Location', body: 'Share your real-time location so they can reach you quickly.' },
+      { icon: 'shield-checkmark', tone: 'green', title: 'Get Help Fast', body: 'Your trusted circle can respond and help you faster.' },
+    ],
+    footer: { title: 'Your safety, our priority.', body: 'ORBII is here to protect you, always.' },
   },
 ];
+
+const TONE: Record<Feature['tone'], { bg: string; fg: string }> = {
+  green: { bg: C.greenSoft, fg: C.greenMid },
+  yellow: { bg: C.yellowSoft, fg: C.yellow },
+  coral: { bg: C.coralSoft, fg: C.coral },
+};
 
 export function OnboardingScreen() {
   const insets = useSafeAreaInsets();
@@ -102,14 +151,6 @@ export function OnboardingScreen() {
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<'intro' | 'language'>('intro');
   const scrollX = useRef(new Animated.Value(0)).current;
-  const pop = useRef(new Animated.Value(1)).current;
-
-  // Squash-and-stretch pop + light haptic whenever Orbi changes pose (per slide).
-  useEffect(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-    pop.setValue(0.9);
-    Animated.spring(pop, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
-  }, [index, pop]);
 
   const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
     if (viewableItems.length > 0 && typeof viewableItems[0].index === 'number') {
@@ -134,38 +175,8 @@ export function OnboardingScreen() {
     if (index > 0) listRef.current?.scrollToIndex({ index: index - 1, animated: true });
   };
 
-  // Ambient glow colour interpolates across screens (peach → coral → sage).
-  const glowColor = scrollX.interpolate({
-    inputRange: SLIDES.map((_, i) => i * width),
-    outputRange: SLIDES.map((s) => s.glow),
-  });
-  // Coral "listening" rings only fade in around the Voice screen.
-  const ringsOpacity = scrollX.interpolate({
-    inputRange: [0, width * 0.5, width, width * 1.5, width * 2],
-    outputRange: [0, 0, 1, 0, 0],
-    extrapolate: 'clamp',
-  });
-  const isLast = index === SLIDES.length - 1;
-
   return (
     <View style={[styles.root, { paddingTop: insets.top + spacing.xs }]}>
-      {/* Persistent ambient glow behind Orbi */}
-      <View pointerEvents="none" style={[styles.glowWrap, { top: height * 0.05 }]}>
-        <Animated.View style={[styles.glowCircle, { backgroundColor: glowColor }]} />
-      </View>
-
-      {/* Persistent Orbi — floats above the pager and morphs pose per screen */}
-      <Animated.View
-        pointerEvents="none"
-        style={[styles.orbiLayer, { top: height * 0.1, transform: [{ scale: pop }] }]}
-      >
-        <Animated.View style={[styles.rings, { opacity: ringsOpacity }]}>
-          <PulseRing delay={0} />
-          <PulseRing delay={900} />
-        </Animated.View>
-        <Mascot pose={SLIDES[index].pose} size={184} />
-      </Animated.View>
-
       <View style={styles.topBar}>
         {index > 0 ? (
           <Pressable onPress={back} hitSlop={10} style={styles.circleBtn}>
@@ -198,15 +209,8 @@ export function OnboardingScreen() {
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
         <Dots count={SLIDES.length} scrollX={scrollX} />
-        <Pressable
-          onPress={next}
-          style={({ pressed }) => [isLast ? styles.ctaPill : styles.fab, pressed && { transform: [{ scale: 0.96 }] }]}
-        >
-          {isLast ? (
-            <Text style={styles.ctaText}>Get started</Text>
-          ) : (
-            <Ionicons name="arrow-forward" size={26} color="#FFFFFF" />
-          )}
+        <Pressable onPress={next} style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}>
+          <Ionicons name="arrow-forward" size={26} color="#FFFFFF" />
         </Pressable>
       </View>
     </View>
@@ -438,67 +442,120 @@ const lstyles = StyleSheet.create({
 
 function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scrollX: Animated.Value }) {
   const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-  // Text drifts at full speed while Orbi + glow persist behind (parallax depth).
-  const translateX = scrollX.interpolate({ inputRange, outputRange: [width * 0.14, 0, -width * 0.14], extrapolate: 'clamp' });
-  const opacity = scrollX.interpolate({ inputRange, outputRange: [0, 1, 0], extrapolate: 'clamp' });
+  // Card-deck swipe: the whole slide shrinks + fades + drifts as it leaves,
+  // and the incoming one settles forward — so paging feels like swiping cards.
+  const scale = scrollX.interpolate({ inputRange, outputRange: [0.9, 1, 0.9], extrapolate: 'clamp' });
+  const opacity = scrollX.interpolate({ inputRange, outputRange: [0.35, 1, 0.35], extrapolate: 'clamp' });
+  const translateX = scrollX.interpolate({ inputRange, outputRange: [width * 0.16, 0, -width * 0.16], extrapolate: 'clamp' });
 
   return (
-    <View style={styles.slideRoot}>
-      <View style={styles.orbiSpacer} />
-      <Animated.View style={[styles.slideBody, { opacity, transform: [{ translateX }] }]}>
-        {slide.kind === 'voice' ? (
-          <View style={styles.bubble}>
-            <Ionicons name="mic" size={14} color={C.coral} />
-            <Text style={styles.bubbleText}>“Orbi, help me”</Text>
+    <Animated.View style={{ width, opacity, transform: [{ perspective: 1000 }, { scale }, { translateX }] }}>
+      <ScrollView contentContainerStyle={styles.slide} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>
+          {slide.line1}
+          {'\n'}
+          <Text style={{ color: C.green }}>{slide.line2}</Text>
+        </Text>
+        <Text style={styles.subtitle}>{slide.subtitle}</Text>
+
+        <Hero orbit={slide.orbit} image={ORBI[slide.id]} />
+
+        {slide.layout === 'row' ? (
+          <View style={styles.rowCard}>
+            {slide.features.map((f, i) => (
+              <View key={f.title} style={[styles.rowCell, i < slide.features.length - 1 && styles.rowDivider]}>
+                <View style={[styles.badge, { backgroundColor: TONE[f.tone].bg }]}>
+                  <Ionicons name={f.icon} size={22} color={TONE[f.tone].fg} />
+                </View>
+                <Text style={styles.rowTitle}>{f.title}</Text>
+                <Text style={styles.rowBody}>{f.body}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.listCard}>
+            {slide.cardHeading ? <Text style={styles.cardHeading}>{slide.cardHeading}</Text> : null}
+            {slide.features.map((f, i) => (
+              <View key={f.title} style={[styles.listRow, i < slide.features.length - 1 && styles.listDivider]}>
+                <View style={[styles.badge, { backgroundColor: TONE[f.tone].bg }]}>
+                  <Ionicons name={f.icon} size={22} color={TONE[f.tone].fg} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.listTitle}>{f.title}</Text>
+                  <Text style={styles.listBody}>{f.body}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={C.greenMid} />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {slide.footer ? (
+          <View style={styles.footerCard}>
+            <View style={[styles.badge, { backgroundColor: C.greenSoft, width: 40, height: 40, borderRadius: 20 }]}>
+              <Ionicons name="shield-checkmark" size={20} color={C.greenMid} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.footerTitle}>{slide.footer.title}</Text>
+              <Text style={styles.footerBody}>{slide.footer.body}</Text>
+            </View>
           </View>
         ) : null}
-
-        {slide.kind === 'people' ? (
-          <View style={styles.chipsRow}>
-            <AvatarChip icon="heart" label="Maa" bg={C.yellowSoft} fg={C.yellow} />
-            <AvatarChip icon="people" label="Circle" bg={C.greenSoft} fg={C.greenMid} />
-            <AvatarChip icon="shield-checkmark" label="Verified" bg={C.greenSoft} fg={C.green} />
-          </View>
-        ) : null}
-
-        <Text style={styles.headline}>{slide.headline}</Text>
-        <Text style={styles.subcopy}>{slide.subcopy}</Text>
-
-        {slide.kind === 'voice' ? (
-          <View style={styles.offlinePill}>
-            <Ionicons name="cloud-offline" size={13} color={C.green} />
-            <Text style={styles.offlineText}>Works offline · Works on lock screen</Text>
-          </View>
-        ) : null}
-      </Animated.View>
-    </View>
+      </ScrollView>
+    </Animated.View>
   );
 }
 
-function AvatarChip({ icon, label, bg, fg }: { icon: IconName; label: string; bg: string; fg: string }) {
-  return (
-    <View style={styles.chipWrap}>
-      <View style={[styles.chip, { backgroundColor: bg }]}>
-        <Ionicons name={icon} size={20} color={fg} />
-      </View>
-      <Text style={styles.chipLabel}>{label}</Text>
-    </View>
-  );
-}
-
-// Expanding "listening" ring around Orbi on the Voice screen.
-function PulseRing({ delay }: { delay: number }) {
-  const a = useRef(new Animated.Value(0)).current;
+function Hero({ orbit, image }: { orbit: IconName[]; image?: ImageSourcePropType }) {
+  const glow = useRef(new Animated.Value(0)).current;
+  const float = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.timing(a, { toValue: 1, duration: 2000, delay, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [a, delay]);
-  const scale = a.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1.7] });
-  const opacity = a.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
-  return <Animated.View style={[styles.ring, { transform: [{ scale }], opacity }]} />;
+    const loop = (v: Animated.Value, d: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(v, { toValue: 1, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: d, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ]),
+      );
+    const a = loop(glow, 2000);
+    const b = loop(float, 2600);
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [glow, float]);
+
+  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.42] });
+  const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.25] });
+  const pos = [
+    { top: 4, right: 28 },
+    { top: 70, left: 8 },
+    { bottom: 16, right: 12 },
+    { bottom: 30, left: 30 },
+  ];
+
+  return (
+    <View style={styles.heroWrap}>
+      <Animated.View style={[styles.heroGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+      {image ? (
+        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+          <Image source={image} style={styles.heroImage} resizeMode="contain" />
+        </Animated.View>
+      ) : (
+        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+          <OrbiBee size={190} />
+        </Animated.View>
+      )}
+      {orbit.slice(0, 4).map((o, i) => (
+        <View key={i} style={[styles.orbitBadge, pos[i]]}>
+          <Ionicons name={o} size={18} color={C.greenMid} />
+        </View>
+      ))}
+    </View>
+  );
 }
 
 function Dots({ count, scrollX }: { count: number; scrollX: Animated.Value }) {
@@ -672,101 +729,4 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 8,
   },
-  ctaPill: {
-    paddingHorizontal: 26,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: C.green,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: C.green,
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
-  },
-  ctaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: '#FFFFFF' },
-
-  // ── Fable onboarding: persistent glow + Orbi + one-idea slides ──
-  glowWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 0 },
-  glowCircle: {
-    width: width * 0.92,
-    height: width * 0.92,
-    borderRadius: (width * 0.92) / 2,
-    opacity: 0.5,
-  },
-  orbiLayer: { position: 'absolute', left: 0, right: 0, alignItems: 'center', zIndex: 3 },
-  rings: { position: 'absolute', top: -8, alignSelf: 'center', width: 200, height: 200 },
-  ring: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    borderWidth: 2,
-    borderColor: C.coral,
-  },
-  slideRoot: { width, flex: 1, paddingHorizontal: spacing.lg },
-  orbiSpacer: { height: height * 0.4 },
-  slideBody: { flex: 1, alignItems: 'center' },
-  headline: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 30,
-    lineHeight: 38,
-    color: C.ink,
-    textAlign: 'center',
-    letterSpacing: -0.6,
-    marginTop: spacing.md,
-  },
-  subcopy: {
-    fontFamily: fontFamilies.poppinsRegular,
-    fontSize: 15.5,
-    lineHeight: 23,
-    color: C.sub,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    paddingHorizontal: spacing.sm,
-  },
-  bubble: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  bubbleText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: C.ink },
-  offlinePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: C.greenSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    marginTop: spacing.md,
-  },
-  offlineText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: C.green },
-  chipsRow: { flexDirection: 'row', gap: spacing.md, marginBottom: spacing.md },
-  chipWrap: { alignItems: 'center', gap: 5 },
-  chip: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 3,
-  },
-  chipLabel: { fontFamily: fontFamilies.poppinsRegular, fontSize: 12, color: C.sub },
 });

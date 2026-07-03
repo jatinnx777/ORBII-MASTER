@@ -26,6 +26,7 @@ import {
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
 import type { AppStackParamList } from '@/navigation/types';
@@ -38,6 +39,7 @@ export function SettingsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
+  const isResponder = useIsResponder();
 
   const sheet = useBrandSheet();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
@@ -179,24 +181,21 @@ export function SettingsScreen() {
             onPress={() => navigation.navigate('Circles')}
           />
           <Divider />
-          <Row
-            icon="shield-checkmark-outline"
-            label="Become a verified helper"
-            value="Get verified to help people nearby in an emergency"
-            right={
-              <View style={styles.soonPill}>
-                <Text style={styles.soonText}>Soon</Text>
-              </View>
-            }
-            onPress={() =>
-              sheet.notify({
-                title: 'Verification coming soon',
-                body: "We're building a safe, verified helper network. You'll be able to apply here shortly.",
-                tone: 'neutral',
-                icon: 'shield-checkmark',
-              })
-            }
-          />
+          {isResponder ? (
+            <Row
+              icon="ribbon"
+              label="Verified helper"
+              value="You're an ORBII responder. Open your Missions dashboard."
+              onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
+            />
+          ) : (
+            <Row
+              icon="shield-checkmark-outline"
+              label="Register as a verified helper"
+              value="Upload your Aadhaar, PAN and a selfie to get verified and help people nearby"
+              onPress={() => navigation.navigate('ResponderApplication')}
+            />
+          )}
         </Card>
 
         <SectionHeader title="Preferences" />
