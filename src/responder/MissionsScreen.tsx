@@ -16,7 +16,6 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import {
   guardianLevel,
-  isFullyVerified,
   loadHelperProfile,
   type GuardianLevel,
   type HelperProfile,
@@ -76,7 +75,11 @@ export function MissionsScreen() {
     }, [profile?.uid]),
   );
 
-  const verified = hp ? isFullyVerified(hp) : false;
+  // "Can go online" = admin has approved this responder (verification_status =
+  // 'verified'). We deliberately do NOT require isFullyVerified() here — that
+  // also needs training_done, which admin approval doesn't set, so it would
+  // trap approved helpers on the verification screen forever.
+  const verified = hp?.verificationStatus === 'verified';
   const level = hp ? guardianLevel(hp) : 'Bronze';
   const tint = LEVEL_TINT[level];
 
