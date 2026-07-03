@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { appAlert, OrbiBee } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
@@ -66,6 +67,12 @@ type Slide = {
   cardHeading?: string;
   features: Feature[];
   footer?: { title: string; body: string };
+  // Speech bubble next to Orbi (per the reference designs).
+  bubble?: string;
+  // Extra hero prop: the red SOS button on the emergency screen.
+  sosProp?: boolean;
+  // ORBII wordmark lockup above the title (first screen only).
+  showLogo?: boolean;
 };
 
 // Orbi artwork per screen. Once you drop the PNGs in assets/onboarding/,
@@ -86,6 +93,7 @@ const SLIDES: Slide[] = [
     heroIcon: 'shield-checkmark',
     orbit: ['shield-checkmark', 'notifications', 'location', 'people'],
     layout: 'row',
+    showLogo: true,
     features: [
       { icon: 'shield-checkmark', tone: 'green', title: 'Be Protected', body: 'Smart protection when you need it.' },
       { icon: 'location', tone: 'green', title: 'Stay Connected', body: 'Share live location with trusted people.' },
@@ -100,10 +108,11 @@ const SLIDES: Slide[] = [
     heroIcon: 'mic',
     orbit: ['mic', 'notifications', 'location', 'people'],
     layout: 'list',
+    bubble: "I've got\nyour back!",
     features: [
-      { icon: 'mic', tone: 'green', title: 'Voice Trigger', body: 'Say your safe word and ORBII activates help instantly.' },
+      { icon: 'mic', tone: 'green', title: 'Voice Trigger', body: 'Say your safe word and ORBII will activate help instantly.' },
       { icon: 'notifications', tone: 'yellow', title: 'Smart Alerts', body: 'Instantly notify your trusted circle with your location.' },
-      { icon: 'people', tone: 'green', title: 'Live Protection', body: 'Share live location and stay connected with people who matter.' },
+      { icon: 'people', tone: 'green', title: 'Live Protection', body: 'Share live location and stay connected with the people who matter.' },
     ],
   },
   {
@@ -114,6 +123,7 @@ const SLIDES: Slide[] = [
     heroIcon: 'navigate',
     orbit: ['location', 'walk', 'shield-checkmark', 'notifications'],
     layout: 'list',
+    bubble: "I'm right\nhere with you!",
     features: [
       { icon: 'location', tone: 'green', title: 'Live Location Sharing', body: 'Share your real-time location with trusted people you choose.' },
       { icon: 'walk', tone: 'yellow', title: 'Safe Walk', body: 'Start a Safe Walk and ORBII will monitor your journey.' },
@@ -128,6 +138,8 @@ const SLIDES: Slide[] = [
     heroIcon: 'alert-circle',
     orbit: ['notifications', 'location', 'shield-checkmark', 'people'],
     layout: 'list',
+    bubble: "I'll alert your\ntrusted circle\nright away!",
+    sosProp: true,
     cardHeading: 'In an emergency, ORBII will:',
     features: [
       { icon: 'notifications', tone: 'coral', title: 'Send SOS Alerts', body: 'Instantly alert your trusted contacts with your live location.' },
@@ -158,6 +170,11 @@ export function OnboardingScreen() {
     }
   }).current;
 
+  // Soft haptic tick as each page settles (premium iOS feel).
+  useEffect(() => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+  }, [index]);
+
   const finish = (skipped = false) => {
     trackEvent('onboarding_completed', skipped ? { skipped: true } : undefined);
     dispatch(onboardingCompleted());
@@ -185,6 +202,11 @@ export function OnboardingScreen() {
         ) : (
           <View style={styles.circleBtn} />
         )}
+        <View style={styles.segments}>
+          {SLIDES.map((s, i) => (
+            <View key={s.id} style={[styles.segment, i === index && styles.segmentActive]} />
+          ))}
+        </View>
         <Pressable onPress={() => finish(true)} hitSlop={10} style={styles.skipPill}>
           <Text style={styles.skipText}>Skip</Text>
           <Ionicons name="chevron-forward" size={14} color={C.green} />
@@ -208,10 +230,21 @@ export function OnboardingScreen() {
       />
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.sm }]}>
-        <Dots count={SLIDES.length} scrollX={scrollX} />
-        <Pressable onPress={next} style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}>
-          <Ionicons name="arrow-forward" size={26} color="#FFFFFF" />
-        </Pressable>
+        <View style={styles.dotsPill}>
+          <Dots count={SLIDES.length} scrollX={scrollX} />
+        </View>
+        <View style={styles.fabWrap}>
+          <View style={styles.fabGlow} />
+          <Pressable
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+              next();
+            }}
+            style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.94 }] }]}
+          >
+            <Ionicons name="arrow-forward" size={26} color="#FFFFFF" />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -451,6 +484,18 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
   return (
     <Animated.View style={{ width, opacity, transform: [{ perspective: 1000 }, { scale }, { translateX }] }}>
       <ScrollView contentContainerStyle={styles.slide} showsVerticalScrollIndicator={false}>
+        {slide.showLogo ? (
+          <View style={styles.logoLockup}>
+            <Text style={styles.logoWord}>
+              ORB<Text style={{ color: C.yellow }}>II</Text>
+            </Text>
+            <View style={styles.logoTagRow}>
+              <View style={styles.logoTagLine} />
+              <Text style={styles.logoTag}>YOUR AI SAFETY COMPANION</Text>
+              <View style={styles.logoTagLine} />
+            </View>
+          </View>
+        ) : null}
         <Text style={styles.title}>
           {slide.line1}
           {'\n'}
@@ -458,7 +503,13 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
         </Text>
         <Text style={styles.subtitle}>{slide.subtitle}</Text>
 
-        <Hero orbit={slide.orbit} image={ORBI[slide.id]} />
+        <Hero
+          slideId={slide.id}
+          orbit={slide.orbit}
+          image={ORBI[slide.id]}
+          bubble={slide.bubble}
+          sosProp={slide.sosProp}
+        />
 
         {slide.layout === 'row' ? (
           <View style={styles.rowCard}>
@@ -484,7 +535,9 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
                   <Text style={styles.listTitle}>{f.title}</Text>
                   <Text style={styles.listBody}>{f.body}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={C.greenMid} />
+                <View style={styles.chevCircle}>
+                  <Ionicons name="chevron-forward" size={15} color={C.green} />
+                </View>
               </View>
             ))}
           </View>
@@ -499,6 +552,7 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
               <Text style={styles.footerTitle}>{slide.footer.title}</Text>
               <Text style={styles.footerBody}>{slide.footer.body}</Text>
             </View>
+            <Ionicons name="lock-closed" size={22} color="rgba(46,125,50,0.25)" />
           </View>
         ) : null}
       </ScrollView>
@@ -506,9 +560,22 @@ function SlideView({ slide, index, scrollX }: { slide: Slide; index: number; scr
   );
 }
 
-function Hero({ orbit, image }: { orbit: IconName[]; image?: ImageSourcePropType }) {
+function Hero({
+  slideId,
+  orbit,
+  image,
+  bubble,
+  sosProp,
+}: {
+  slideId: string;
+  orbit: IconName[];
+  image?: ImageSourcePropType;
+  bubble?: string;
+  sosProp?: boolean;
+}) {
   const glow = useRef(new Animated.Value(0)).current;
   const float = useRef(new Animated.Value(0)).current;
+  const bob = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     const loop = (v: Animated.Value, d: number) =>
       Animated.loop(
@@ -519,41 +586,119 @@ function Hero({ orbit, image }: { orbit: IconName[]; image?: ImageSourcePropType
       );
     const a = loop(glow, 2000);
     const b = loop(float, 2600);
+    const c = loop(bob, 3200);
     a.start();
     b.start();
+    c.start();
     return () => {
       a.stop();
       b.stop();
+      c.stop();
     };
-  }, [glow, float]);
+  }, [glow, float, bob]);
 
   const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const bobY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
   const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.42] });
   const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.25] });
+  const sosPulse = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
+  // Slides 1-2 show the floating feature badges; 3 has the phone card and 4
+  // has the SOS button, matching the reference designs.
+  const showBadges = slideId === 'companion' || slideId === 'voice';
+  const showPhone = slideId === 'realtime';
   const pos = [
-    { top: 4, right: 28 },
-    { top: 70, left: 8 },
-    { bottom: 16, right: 12 },
-    { bottom: 30, left: 30 },
+    { top: 6, right: 34 },
+    { top: 64, left: 16 },
+    { bottom: 26, right: 22 },
+    { bottom: 40, left: 38 },
   ];
 
   return (
     <View style={styles.heroWrap}>
+      {/* soft scenery: clouds, skyline, hills and trees behind Orbi */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <View style={[styles.cloud, { top: 8, left: 14, width: 64 }]} />
+        <View style={[styles.cloud, { top: 26, right: 20, width: 46 }]} />
+        <View style={[styles.skyline, { left: 6, bottom: 78, width: 26, height: 54 }]} />
+        <View style={[styles.skyline, { left: 36, bottom: 78, width: 18, height: 78 }]} />
+        <View style={[styles.skyline, { right: 10, bottom: 78, width: 24, height: 64 }]} />
+        <View style={[styles.skyline, { right: 40, bottom: 78, width: 16, height: 88 }]} />
+        <View style={[styles.hill, { left: -60, bottom: -46, width: 240, height: 130 }]} />
+        <View style={[styles.hill, { right: -60, bottom: -52, width: 260, height: 140 }]} />
+        <Tree left={26} bottom={44} size={34} />
+        <Tree left={64} bottom={34} size={24} />
+        <Tree right={30} bottom={40} size={36} />
+        <Tree right={70} bottom={30} size={22} />
+      </View>
+
       <Animated.View style={[styles.heroGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+
+      {showPhone ? (
+        <View style={styles.phoneCard}>
+          <Ionicons name="location" size={18} color={C.greenMid} style={{ alignSelf: 'flex-end', marginRight: 14 }} />
+          <View style={[styles.routeSeg, { transform: [{ rotate: '24deg' }], alignSelf: 'flex-end', marginRight: 22 }]} />
+          <View style={[styles.routeSeg, { transform: [{ rotate: '-30deg' }], alignSelf: 'center' }]} />
+          <View style={[styles.routeSeg, { transform: [{ rotate: '18deg' }], alignSelf: 'flex-start', marginLeft: 16 }]} />
+          <View style={styles.safePill}>
+            <Ionicons name="shield-checkmark" size={9} color={C.green} />
+            <Text style={styles.safePillText}>You're Safe</Text>
+          </View>
+        </View>
+      ) : null}
+
       {image ? (
         <Animated.View style={{ transform: [{ translateY: floatY }] }}>
           <Image source={image} style={styles.heroImage} resizeMode="contain" />
         </Animated.View>
       ) : (
         <Animated.View style={{ transform: [{ translateY: floatY }] }}>
-          <OrbiBee size={190} />
+          <OrbiBee size={186} />
         </Animated.View>
       )}
-      {orbit.slice(0, 4).map((o, i) => (
-        <View key={i} style={[styles.orbitBadge, pos[i]]}>
-          <Ionicons name={o} size={18} color={C.greenMid} />
-        </View>
-      ))}
+
+      {sosProp ? (
+        <Animated.View style={[styles.sosWrap, { transform: [{ scale: sosPulse }] }]}>
+          <View style={styles.sosRing} />
+          <View style={styles.sosBtn}>
+            <Text style={styles.sosText}>SOS</Text>
+          </View>
+        </Animated.View>
+      ) : null}
+
+      {bubble ? (
+        <Animated.View
+          style={[
+            styles.speech,
+            sosProp ? { top: 2, right: 8 } : { top: 8, left: 8 },
+            { transform: [{ translateY: bobY }] },
+          ]}
+        >
+          <Text style={styles.speechText}>{bubble}</Text>
+          <Ionicons name="heart" size={12} color={C.yellow} style={{ marginTop: 3 }} />
+          <View style={[styles.speechTail, sosProp ? { left: 18 } : { right: 18 }]} />
+        </Animated.View>
+      ) : null}
+
+      {showBadges
+        ? orbit.slice(0, 4).map((o, i) => (
+            <Animated.View
+              key={i}
+              style={[styles.orbitBadge, pos[i], i % 2 === 0 ? { transform: [{ translateY: bobY }] } : null]}
+            >
+              <Ionicons name={o} size={18} color={C.greenMid} />
+            </Animated.View>
+          ))
+        : null}
+    </View>
+  );
+}
+
+// A simple storybook tree: rounded crown + tiny trunk, used in the scenery.
+function Tree({ left, right, bottom, size }: { left?: number; right?: number; bottom: number; size: number }) {
+  return (
+    <View style={{ position: 'absolute', left, right, bottom, alignItems: 'center' }}>
+      <View style={{ width: size, height: size * 1.15, borderRadius: size * 0.5, backgroundColor: '#5DA46A', opacity: 0.55 }} />
+      <View style={{ width: Math.max(3, size * 0.12), height: size * 0.28, backgroundColor: '#8A6B3F', borderRadius: 2, marginTop: -2, opacity: 0.5 }} />
     </View>
   );
 }
@@ -608,6 +753,52 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   skipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: C.green },
+  segments: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  segment: { width: 30, height: 6, borderRadius: 3, backgroundColor: C.dotOff },
+  segmentActive: { backgroundColor: C.yellow },
+  logoLockup: { alignItems: 'center', marginBottom: spacing.md },
+  logoWord: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 34,
+    letterSpacing: 1,
+    color: C.ink,
+  },
+  logoTagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 },
+  logoTagLine: { width: 26, height: 2, borderRadius: 1, backgroundColor: C.yellow },
+  logoTag: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 10,
+    letterSpacing: 2,
+    color: C.ink,
+  },
+  chevCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: C.greenSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotsPill: {
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: radius.pill,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
+  fabWrap: { alignItems: 'center', justifyContent: 'center' },
+  fabGlow: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: C.greenMid,
+    opacity: 0.22,
+  },
   slide: { alignItems: 'center', paddingHorizontal: spacing.lg, paddingBottom: spacing.xl },
   title: {
     fontFamily: fontFamilies.poppinsBold,
@@ -627,9 +818,105 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     paddingHorizontal: spacing.sm,
   },
-  heroWrap: { width: 230, height: 230, alignItems: 'center', justifyContent: 'center', marginVertical: spacing.md },
-  heroImage: { width: 210, height: 210 },
+  heroWrap: {
+    width: '100%',
+    height: 264,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginVertical: spacing.sm,
+  },
+  heroImage: { width: 220, height: 220 },
   heroGlow: { position: 'absolute', width: 170, height: 170, borderRadius: 85, backgroundColor: C.yellow },
+  // scenery
+  cloud: { position: 'absolute', height: 18, borderRadius: 12, backgroundColor: '#F3EAD0', opacity: 0.9 },
+  skyline: { position: 'absolute', borderTopLeftRadius: 6, borderTopRightRadius: 6, backgroundColor: '#EBDDB8', opacity: 0.45 },
+  hill: { position: 'absolute', borderRadius: 999, backgroundColor: '#E2F0D8', opacity: 0.9 },
+  // slide 3 phone card
+  phoneCard: {
+    position: 'absolute',
+    right: 12,
+    top: 26,
+    width: 104,
+    height: 168,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderWidth: 1,
+    borderColor: '#EFE8D4',
+    paddingVertical: 14,
+    justifyContent: 'space-between',
+    transform: [{ rotate: '5deg' }],
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 3,
+  },
+  routeSeg: { width: 34, height: 3, borderRadius: 2, backgroundColor: C.greenMid, opacity: 0.75 },
+  safePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'center',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 10,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  safePillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 8.5, color: C.ink },
+  // slide 4 SOS button
+  sosWrap: { position: 'absolute', left: 22, top: '38%', alignItems: 'center', justifyContent: 'center' },
+  sosRing: {
+    position: 'absolute',
+    width: 86,
+    height: 86,
+    borderRadius: 43,
+    backgroundColor: C.coral,
+    opacity: 0.18,
+  },
+  sosBtn: {
+    width: 62,
+    height: 62,
+    borderRadius: 31,
+    backgroundColor: '#E23B2E',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: '#F8C0B4',
+    shadowColor: '#E23B2E',
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  sosText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: '#FFFFFF', letterSpacing: 0.5 },
+  // speech bubble
+  speech: {
+    position: 'absolute',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    maxWidth: 150,
+    shadowColor: '#000',
+    shadowOpacity: 0.09,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  speechText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, lineHeight: 18, color: C.ink },
+  speechTail: {
+    position: 'absolute',
+    bottom: -5,
+    width: 12,
+    height: 12,
+    backgroundColor: '#FFFFFF',
+    transform: [{ rotate: '45deg' }],
+  },
   heroCore: {
     width: 140,
     height: 140,
