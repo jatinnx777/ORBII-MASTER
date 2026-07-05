@@ -18,7 +18,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import { appAlert, OrbiBee } from '@/components/common';
+import { appAlert } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { onboardingCompleted, accentSet } from '@/redux/slices/appSlice';

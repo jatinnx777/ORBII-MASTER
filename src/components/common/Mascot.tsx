@@ -6,7 +6,10 @@ import {
   StyleProp,
   StyleSheet,
 } from 'react-native';
-import { OrbiBee } from './OrbiBee';
+
+// The real illustrated Orbi (cropped from the brand icon artwork: bee on its
+// peach circle with the coral heart, soft feathered edges).
+const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
 
 export type MascotPose =
   | 'neutral'
@@ -16,29 +19,28 @@ export type MascotPose =
   | 'headset'
   | 'celebrate';
 
-// The old mascot PNGs were removed, so the guardian now renders the code-drawn
-// Orbi bee everywhere. Pass `source` (a require'd image) to override with real
-// artwork later.
+// One artwork for now, so `pose` is accepted (call sites keep their intent)
+// but ignored. When per-pose PNGs exist, map pose → source here and every
+// screen gets its pose automatically.
 type Props = {
   pose?: MascotPose;
-  /** Override with real Orbi artwork (a require'd PNG). */
+  /** Override with different Orbi artwork (a require'd PNG). */
   source?: ImageSourcePropType;
   size?: number;
   style?: StyleProp<ImageStyle>;
 };
 
-/** ORBII's guardian mascot — Orbi. */
+/** ORBII's guardian mascot, Orbi. Always the real illustration. */
 export function Mascot({ source, size = 160, style }: Props) {
-  if (source) {
-    return (
-      <Image
-        source={source}
-        style={[{ width: size, height: size }, styles.img, style as StyleProp<ImageStyle>]}
-        resizeMode="contain"
-      />
-    );
-  }
-  return <OrbiBee size={size} />;
+  return (
+    <Image
+      source={source ?? ORBI_HERO}
+      // The artwork is wider than tall (735x587), so scale by width and keep
+      // the aspect so it never squashes.
+      style={[{ width: size, height: Math.round(size * 0.8) }, styles.img, style as StyleProp<ImageStyle>]}
+      resizeMode="contain"
+    />
+  );
 }
 
 const styles = StyleSheet.create({
