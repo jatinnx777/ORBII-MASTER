@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { appAlert } from '@/components/common';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Mascot, PrivacyPolicyModal } from '@/components/common';
+import { PrivacyPolicyModal } from '@/components/common';
+
+// The real illustrated Orbi (from the brand artwork).
+const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
 import { colors, radius, shadows, spacing, typography, fontFamilies } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -95,8 +98,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
               <Text style={styles.speechText}>{bubbleText}</Text>
             </View>
             <Animated.View style={{ transform: [{ translateY: floatY }], alignItems: 'center' }}>
-              <Mascot pose="wave" size={164} />
-              <View style={styles.cloud} />
+              <Image source={ORBI_HERO} style={styles.heroImage} resizeMode="contain" />
             </Animated.View>
           </View>
 
@@ -223,19 +225,7 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: colors.textSecondary,
   },
-  cloud: {
-    width: 158,
-    height: 44,
-    borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    marginTop: -26,
-    zIndex: -1,
-    shadowColor: '#C9A24B',
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
-  },
+  heroImage: { width: 240, height: 192 },
   title: {
     ...typography.displaySmall,
     fontSize: 30,

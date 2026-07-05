@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -12,7 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { Mascot } from '@/components/common';
+// The real illustrated Orbi (from the brand artwork).
+const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded } from '@/redux/slices/userSlice';
@@ -123,7 +125,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
                 <View style={styles.bubble}>
                   <Text style={styles.bubbleText}>The more trusted people{'\n'}around you, the safer you are.</Text>
                 </View>
-                <Mascot pose="wave" size={132} />
+                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
               </View>
               <Text style={styles.title}>Build Your Safety Circle</Text>
               <Text style={styles.sub}>Add the people you'd want ORBII to reach in an emergency.</Text>
@@ -207,7 +209,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
           {step === 'phrase' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
               <View style={styles.heroWrap}>
-                <Mascot pose="headset" size={132} />
+                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
               </View>
               <Text style={styles.title}>Choose Your Secret Phrase</Text>
               <Text style={styles.sub}>ORBII listens only for your emergency phrase.</Text>
@@ -268,7 +270,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
                 <View style={styles.bubble}>
                   <Text style={styles.bubbleText}>I'm always here{'\n'}when you need me.</Text>
                 </View>
-                <Mascot pose="celebrate" size={148} />
+                <Image source={ORBI_HERO} style={styles.heroImgBig} resizeMode="contain" />
               </View>
               <Text style={styles.title}>You're Protected</Text>
               <Text style={styles.sub}>ORBII is now ready to watch over you.</Text>
@@ -335,6 +337,8 @@ const styles = StyleSheet.create({
   },
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, alignItems: 'stretch' },
   heroWrap: { alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.sm },
+  heroImg: { width: 190, height: 152 },
+  heroImgBig: { width: 225, height: 180 },
   bubble: {
     backgroundColor: colors.surface,
     borderRadius: 18,
