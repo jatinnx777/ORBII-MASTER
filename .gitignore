@@ -38,3 +38,7 @@ android/.kotlin/
 *firebase-adminsdk*.json
 *-service-account*.json
 serviceAccountKey.json
+
+# Nested standalone repos (own git histories, never commit into ORBII-MASTER)
+/website/
+/showcase/
