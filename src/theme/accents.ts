@@ -2,7 +2,7 @@
 // gradient pairs applied to a few expressive surfaces (readiness meter, status
 // pill, settings preview), so the user personalises ORBII without ever
 // breaking the warm cream base or the safety-critical reds/greens.
-export type AccentId = 'peach' | 'lavender' | 'sage' | 'gold';
+export type AccentId = 'peach' | 'rose' | 'sage' | 'gold';
 
 export type Accent = {
   id: AccentId;
@@ -11,9 +11,10 @@ export type Accent = {
   deep: string; // gradient end / text + bar colour
 };
 
+// Warm, natural tones only: no neons and no purples, per the brand rules.
 export const ACCENTS: Record<AccentId, Accent> = {
   peach: { id: 'peach', label: 'Peach', soft: '#F6CBA5', deep: '#C97B4A' },
-  lavender: { id: 'lavender', label: 'Lavender', soft: '#D9CBF2', deep: '#7C5FB0' },
+  rose: { id: 'rose', label: 'Rose', soft: '#F4C7CE', deep: '#B85C6E' },
   sage: { id: 'sage', label: 'Sage', soft: '#BFE0C4', deep: '#3F7A50' },
   gold: { id: 'gold', label: 'Gold', soft: '#F2D98A', deep: '#B98A2F' },
 };
