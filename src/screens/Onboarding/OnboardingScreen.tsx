@@ -78,13 +78,15 @@ type Slide = {
   showLogo?: boolean;
 };
 
-// Orbi artwork per screen. Once you drop the PNGs in assets/onboarding/,
-// uncomment these and they'll render in place of the icon hero.
+// The real illustrated Orbi (cropped from the brand icon artwork): bee on its
+// peach circle with the coral heart, soft-feathered edges so it melts into
+// the cream background. Per-slide overrides can still be dropped in later.
+const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
 const ORBI: Record<string, ImageSourcePropType | undefined> = {
-  companion: undefined, // require('../../../assets/onboarding/orbi-1.png'),
-  voice: undefined, // require('../../../assets/onboarding/orbi-2.png'),
-  realtime: undefined, // require('../../../assets/onboarding/orbi-3.png'),
-  emergency: undefined, // require('../../../assets/onboarding/orbi-4.png'),
+  companion: ORBI_HERO,
+  voice: ORBI_HERO,
+  realtime: ORBI_HERO,
+  emergency: ORBI_HERO,
 };
 
 const SLIDES: Slide[] = [
@@ -688,62 +690,13 @@ function Hero({
 
   const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
   const bobY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
-  const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.18, 0.42] });
-  const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.25] });
   const sosPulse = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
-  // Slides 1-2 show the floating feature badges; 3 has the phone card and 4
-  // has the SOS button, matching the reference designs.
-  const showBadges = slideId === 'companion' || slideId === 'voice';
-  const showPhone = slideId === 'realtime';
-  const pos = [
-    { top: 6, right: 34 },
-    { top: 64, left: 16 },
-    { bottom: 26, right: 22 },
-    { bottom: 40, left: 38 },
-  ];
 
   return (
     <View style={styles.heroWrap}>
-      {/* soft scenery: clouds, skyline, hills and trees behind Orbi */}
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        <View style={[styles.cloud, { top: 8, left: 14, width: 64 }]} />
-        <View style={[styles.cloud, { top: 26, right: 20, width: 46 }]} />
-        <View style={[styles.skyline, { left: 6, bottom: 78, width: 26, height: 54 }]} />
-        <View style={[styles.skyline, { left: 36, bottom: 78, width: 18, height: 78 }]} />
-        <View style={[styles.skyline, { right: 10, bottom: 78, width: 24, height: 64 }]} />
-        <View style={[styles.skyline, { right: 40, bottom: 78, width: 16, height: 88 }]} />
-        <View style={[styles.hill, { left: -60, bottom: -46, width: 240, height: 130 }]} />
-        <View style={[styles.hill, { right: -60, bottom: -52, width: 260, height: 140 }]} />
-        <Tree left={26} bottom={44} size={34} />
-        <Tree left={64} bottom={34} size={24} />
-        <Tree right={30} bottom={40} size={36} />
-        <Tree right={70} bottom={30} size={22} />
-      </View>
-
-      <Animated.View style={[styles.heroGlow, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-
-      {showPhone ? (
-        <View style={styles.phoneCard}>
-          <Ionicons name="location" size={18} color={C.greenMid} style={{ alignSelf: 'flex-end', marginRight: 14 }} />
-          <View style={[styles.routeSeg, { transform: [{ rotate: '24deg' }], alignSelf: 'flex-end', marginRight: 22 }]} />
-          <View style={[styles.routeSeg, { transform: [{ rotate: '-30deg' }], alignSelf: 'center' }]} />
-          <View style={[styles.routeSeg, { transform: [{ rotate: '18deg' }], alignSelf: 'flex-start', marginLeft: 16 }]} />
-          <View style={styles.safePill}>
-            <Ionicons name="shield-checkmark" size={9} color={C.green} />
-            <Text style={styles.safePillText}>You're Safe</Text>
-          </View>
-        </View>
-      ) : null}
-
-      {image ? (
-        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
-          <Image source={image} style={styles.heroImage} resizeMode="contain" />
-        </Animated.View>
-      ) : (
-        <Animated.View style={{ transform: [{ translateY: floatY }] }}>
-          <OrbiBee size={186} grounded />
-        </Animated.View>
-      )}
+      <Animated.View style={{ transform: [{ translateY: floatY }] }}>
+        <Image source={image ?? ORBI_HERO} style={styles.heroImage} resizeMode="contain" />
+      </Animated.View>
 
       {sosProp ? (
         <Animated.View style={[styles.sosWrap, { transform: [{ scale: sosPulse }] }]}>
@@ -767,27 +720,6 @@ function Hero({
           <View style={[styles.speechTail, sosProp ? { left: 18 } : { right: 18 }]} />
         </Animated.View>
       ) : null}
-
-      {showBadges
-        ? orbit.slice(0, 4).map((o, i) => (
-            <Animated.View
-              key={i}
-              style={[styles.orbitBadge, pos[i], i % 2 === 0 ? { transform: [{ translateY: bobY }] } : null]}
-            >
-              <Ionicons name={o} size={18} color={C.greenMid} />
-            </Animated.View>
-          ))
-        : null}
-    </View>
-  );
-}
-
-// A simple storybook tree: rounded crown + tiny trunk, used in the scenery.
-function Tree({ left, right, bottom, size }: { left?: number; right?: number; bottom: number; size: number }) {
-  return (
-    <View style={{ position: 'absolute', left, right, bottom, alignItems: 'center' }}>
-      <View style={{ width: size, height: size * 1.15, borderRadius: size * 0.5, backgroundColor: '#5DA46A', opacity: 0.55 }} />
-      <View style={{ width: Math.max(3, size * 0.12), height: size * 0.28, backgroundColor: '#8A6B3F', borderRadius: 2, marginTop: -2, opacity: 0.5 }} />
     </View>
   );
 }
@@ -914,7 +846,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginVertical: spacing.sm,
   },
-  heroImage: { width: 220, height: 220 },
+  heroImage: { width: 270, height: 216 },
   heroGlow: { position: 'absolute', width: 170, height: 170, borderRadius: 85, backgroundColor: C.yellow },
   // scenery
   cloud: { position: 'absolute', height: 18, borderRadius: 12, backgroundColor: '#F3EAD0', opacity: 0.9 },
