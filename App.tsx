@@ -29,6 +29,8 @@ import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
+import { GuidedSetupScreen } from '@/screens/Setup/GuidedSetupScreen';
+import { getItem, setItem, storageKeys } from '@/services/storage';
 import {
   AppDialogHost,
   appAlert,
@@ -80,6 +82,13 @@ function RootNavigator() {
   const status = useAppSelector((s) => s.user.status);
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
+
+  // First-run guided setup (circle → secret phrase → protected). Shown once
+  // after sign-in; null = still loading the flag from storage.
+  const [setupDone, setSetupDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    getItem<boolean>(storageKeys.guidedSetup).then((v) => setSetupDone(!!v));
+  }, []);
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
   const helperMode = useAppSelector((s) => s.app.helperMode);
 
@@ -279,6 +288,17 @@ function RootNavigator() {
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
   if (status === 'authenticated') {
+    if (setupDone === null) return null;
+    if (!setupDone) {
+      return (
+        <GuidedSetupScreen
+          onDone={() => {
+            void setItem(storageKeys.guidedSetup, true);
+            setSetupDone(true);
+          }}
+        />
+      );
+    }
     return (
       <>
         <AppNavigator />

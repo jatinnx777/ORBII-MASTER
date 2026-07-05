@@ -25,7 +25,9 @@ type EventName =
   | 'helper_alert_accepted'
   | 'helper_alert_declined'
   | 'helper_alert_ignored'
-  | 'sos_dialed_112';
+  | 'sos_dialed_112'
+  | 'setup_protection_activated'
+  | 'setup_completed';
 
 export function trackEvent(name: EventName, params: Record<string, unknown> = {}) {
   if (__DEV__) {
