@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { appAlert } from '@/components/common';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Input, ScreenContainer } from '@/components/common';
@@ -81,9 +81,46 @@ export function ContactFormScreen() {
     navigation.goBack();
   };
 
+  // Smart defaults: one tap fills the person most people add, so the task
+  // becomes "scan and adjust" instead of "type from scratch".
+  const quickAdd = (label: string, rel: string) => {
+    setName(label);
+    setRelation(rel);
+  };
+
   return (
     <ScreenContainer>
       <View style={styles.form}>
+        {!editing ? (
+          <View style={styles.quickRow}>
+            {(
+              [
+                ['Maa', 'Mother'],
+                ['Papa', 'Father'],
+                ['Sister', 'Sister'],
+                ['Brother', 'Brother'],
+                ['Friend', 'Friend'],
+              ] as const
+            ).map(([label, rel]) => (
+              <Pressable
+                key={label}
+                onPress={() => quickAdd(label, rel)}
+                style={({ pressed }) => [
+                  styles.quickChip,
+                  name === label && styles.quickChipOn,
+                  pressed && { opacity: 0.85 },
+                ]}
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[styles.quickChipText, name === label && styles.quickChipTextOn]}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         <Input
           label="Name"
           value={name}
@@ -125,6 +162,30 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.md,
   },
+  quickRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  quickChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+  },
+  quickChipOn: {
+    backgroundColor: colors.peachSoft,
+    borderColor: colors.peach,
+  },
+  quickChipText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13.5,
+    color: colors.textSecondary,
+  },
+  quickChipTextOn: { color: colors.peachDeep },
   footer: {
     marginTop: spacing.xl,
   },

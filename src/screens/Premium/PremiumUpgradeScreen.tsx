@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Mascot } from '@/components/common';
@@ -47,7 +48,43 @@ type Plan = {
   features: string[];
 };
 
+// Order matters: Family (₹299) leads as the anchor, so Plus (₹99) reads as the
+// sensible middle rather than "the expensive one". Free sits last.
 const PLANS: Plan[] = [
+  {
+    id: 'family',
+    name: 'ORBII Family',
+    price: 299,
+    tagline: 'One plan that protects your whole family.',
+    badge: 'BEST PROTECTION',
+    valueNote: 'Protect up to 4 people',
+    features: [
+      'Everything in ORBII Plus, for 4 family members',
+      'Verified responders for every member',
+      'Unlimited hands-free Voice SOS for all',
+      'Shared family circle with live tracking',
+      'Priority helper matching + live ETA',
+    ],
+  },
+  {
+    id: 'solo',
+    name: 'ORBII Plus',
+    price: 99,
+    tagline: 'Verified responders, unlimited voice & full protection.',
+    highlight: true,
+    badge: 'MOST POPULAR',
+    valueNote: 'Less than one late-night cab home',
+    features: [
+      'Verified responders dispatched to you nearby',
+      'Unlimited hands-free Voice SOS',
+      'Always-on background voice monitoring',
+      'Family Circles + real-time tracking during SOS',
+      'Priority helper matching + live ETA',
+      'Advanced Protection Strength',
+      'Dead Man’s Switch & Trusted Places',
+      'WhatsApp emergency automation',
+    ],
+  },
   {
     id: 'free',
     name: 'ORBII Free',
@@ -61,24 +98,6 @@ const PLANS: Plan[] = [
       'Safe Journey mode',
       'SOS history (last 7 days)',
       '2 hands-free Voice SOS per month',
-    ],
-  },
-  {
-    id: 'solo',
-    name: 'ORBII Plus',
-    price: 99,
-    tagline: 'Verified responders, unlimited voice & full protection.',
-    highlight: true,
-    badge: 'MOST POPULAR',
-    features: [
-      'Verified responders dispatched to you nearby',
-      'Unlimited hands-free Voice SOS',
-      'Always-on background voice monitoring',
-      'Family Circles + real-time tracking during SOS',
-      'Priority helper matching + live ETA',
-      'Advanced Protection Strength',
-      'Dead Man’s Switch & Trusted Places',
-      'WhatsApp emergency automation',
     ],
   },
 ];
@@ -134,7 +153,7 @@ export function PremiumUpgradeScreen() {
         dispatch(premiumUpgraded());
         trackEvent('premium_purchased', { plan: planId });
         appAlert(
-          '🎉 Welcome to ORBII ' + (planId === 'family' ? 'Family' : 'Plus'),
+          'Welcome to ORBII ' + (planId === 'family' ? 'Family' : 'Plus'),
           'Your premium protection is now active. Stay safe out there.',
         );
       } else if (result.cancelled) {
@@ -159,8 +178,8 @@ export function PremiumUpgradeScreen() {
       setCouponApplied(true);
       trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
       appAlert(
-        '🎉 Premium unlocked!',
-        'Your ORBII coupon is applied. Every Premium feature is now free for you.',
+        'Your gift is unlocked!',
+        'Welcome, early member. Every Premium feature is now free for you.',
       );
       return;
     }
@@ -237,9 +256,15 @@ export function PremiumUpgradeScreen() {
             />
           ))}
 
-          {/* coupon */}
+          {/* gift code (reciprocity: framed as a gift, not a discount) */}
           <View style={styles.couponCard}>
-            <Text style={styles.couponLabel}>Have a coupon code?</Text>
+            <View style={styles.giftRow}>
+              <Ionicons name="gift" size={16} color={colors.peachDeep} />
+              <Text style={styles.couponLabel}>Have a gift code?</Text>
+            </View>
+            <Text style={styles.giftHint}>
+              Early members get full Premium as our gift.
+            </Text>
             <View style={styles.couponRow}>
               <TextInput
                 value={coupon}
@@ -597,11 +622,22 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     ...shadows.card,
   },
+  giftRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginBottom: 2,
+  },
+  giftHint: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
   couponLabel: {
     ...typography.bodyMedium,
     fontFamily: 'Poppins_600SemiBold',
     color: colors.textPrimary,
-    marginBottom: spacing.sm,
   },
   couponRow: {
     flexDirection: 'row',

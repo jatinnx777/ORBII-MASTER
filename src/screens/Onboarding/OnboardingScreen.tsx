@@ -11,6 +11,7 @@ import {
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
   ViewToken,
 } from 'react-native';
@@ -31,6 +32,7 @@ import {
   removeHindiPack,
   setVoiceLang,
 } from '@/services/voice-language';
+import { addPhrase } from '@/services/voice-phrases';
 
 const { width } = Dimensions.get('window');
 
@@ -259,6 +261,7 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
   const [ready, setReady] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [phrase, setPhrase] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -297,6 +300,12 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
       await removeHindiPack();
     } else {
       await setVoiceLang({ hindi: hindiOn && ready });
+    }
+    // IKEA effect + real security: a self-chosen secret phrase makes the
+    // protection hers, and is safer than the public defaults.
+    const p = phrase.trim();
+    if (p.length >= 3) {
+      await addPhrase(p).catch(() => undefined);
     }
     onDone();
   };
@@ -381,6 +390,29 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
           ) : null}
         </View>
 
+        {/* Optional secret phrase: hers alone, on top of the built-in words */}
+        <View style={lstyles.langCard}>
+          <View style={lstyles.langHead}>
+            <View style={{ flex: 1 }}>
+              <Text style={lstyles.langTitle}>Your secret phrase</Text>
+              <Text style={lstyles.langHint}>
+                Optional. A phrase only you would say, so no one can guess it.
+              </Text>
+            </View>
+            <Ionicons name="key" size={18} color={C.yellow} />
+          </View>
+          <TextInput
+            value={phrase}
+            onChangeText={setPhrase}
+            placeholder='e.g. "call the stars"'
+            placeholderTextColor={C.sub}
+            autoCapitalize="none"
+            autoCorrect={false}
+            maxLength={40}
+            style={lstyles.phraseInput}
+          />
+        </View>
+
         <Text style={lstyles.note}>You can change this anytime in Settings → Voice SOS.</Text>
       </ScrollView>
 
@@ -408,6 +440,18 @@ function LangChip({ text }: { text: string }) {
 const lstyles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, paddingHorizontal: spacing.lg },
   scroll: { paddingBottom: spacing.xl, gap: spacing.md },
+  phraseInput: {
+    marginTop: spacing.sm,
+    backgroundColor: C.bg,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: C.dotOff,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 12,
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 14.5,
+    color: C.ink,
+  },
   iconWrap: {
     width: 52,
     height: 52,

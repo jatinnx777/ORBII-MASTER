@@ -23,6 +23,7 @@ import { requestNotificationPermission } from '@/services/notifications';
 import { setItem, storageKeys } from '@/services/storage';
 import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
+import { accentOf } from '@/theme/accents';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -46,6 +47,7 @@ type ChecklistItem = {
 export function SafetyReadinessScreen() {
   const navigation = useNavigation<Nav>();
   const { signals, doneCount, total, pct, reload } = useReadiness();
+  const accent = accentOf(useAppSelector((s) => s.app.accent));
 
   const [simOpen, setSimOpen] = useState(false);
   const [busy, setBusy] = useState<ItemId | null>(null);
@@ -97,14 +99,18 @@ export function SafetyReadinessScreen() {
     }
   };
 
+  // Loss-framed when the most critical gap (no contacts) is open: state what
+  // is missing, factually, instead of vague encouragement.
   const headline =
     pct >= READINESS_CAP
-      ? "You're fully protected 🎉"
-      : pct >= 60
-        ? "Almost there — you're well protected."
-        : pct >= 30
-          ? 'Nice start. Let’s lock in your safety.'
-          : 'Let’s get you set up in a minute.';
+      ? "You're fully protected."
+      : !signals.contact
+        ? 'Your SOS has no one to reach yet. Add a contact.'
+        : pct >= 60
+          ? "Almost there. You're well protected."
+          : pct >= 30
+            ? 'Nice start. Let’s lock in your safety.'
+            : 'Let’s get you set up in a minute.';
 
   return (
     <ScreenContainer padded={false} edges={['top', 'left', 'right']}>
@@ -119,8 +125,8 @@ export function SafetyReadinessScreen() {
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* big % + progress */}
-          <View style={styles.heroCard}>
-            <Text style={styles.pct}>{pct}%</Text>
+          <View style={[styles.heroCard, { backgroundColor: accent.soft + '55' }]}>
+            <Text style={[styles.pct, { color: accent.deep }]}>{pct}%</Text>
             <Text style={styles.headline}>{headline}</Text>
             <View style={styles.barTrack}>
               <Animated.View
@@ -128,7 +134,7 @@ export function SafetyReadinessScreen() {
                   styles.barFill,
                   {
                     width: progress.interpolate({ inputRange: [0, 1], outputRange: ['4%', '100%'] }),
-                    backgroundColor: pct >= READINESS_CAP ? colors.sage : colors.peachDeep,
+                    backgroundColor: pct >= READINESS_CAP ? colors.sage : accent.deep,
                   },
                 ]}
               />

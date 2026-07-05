@@ -39,6 +39,9 @@ type AppState = {
   // Privacy policy + terms acceptance (timestamp ms when accepted, null = not
   // accepted). Required before signup. Play Store compliance.
   policyAcceptedAt: number | null;
+  // User-chosen accent (see theme/accents.ts). Personalisation on a few
+  // expressive surfaces; cream base + safety colours stay fixed.
+  accent: string;
 };
 
 const initialState: AppState = {
@@ -51,6 +54,7 @@ const initialState: AppState = {
   hydrated: false,
   safeJourney: null,
   policyAcceptedAt: null,
+  accent: 'peach',
 };
 
 const appSlice = createSlice({
@@ -80,6 +84,9 @@ const appSlice = createSlice({
     },
     helperModeSet(state, action: PayloadAction<boolean>) {
       state.helperMode = action.payload;
+    },
+    accentSet(state, action: PayloadAction<string>) {
+      state.accent = action.payload;
     },
     safeJourneyStarted(
       state,
@@ -115,6 +122,7 @@ export const {
   pushEnabledSet,
   shakeSOSToggled,
   helperModeSet,
+  accentSet,
   safeJourneyStarted,
   safeJourneyEnded,
   policyAccepted,

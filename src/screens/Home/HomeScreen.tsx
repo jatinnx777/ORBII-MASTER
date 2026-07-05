@@ -506,11 +506,13 @@ export function HomeScreen() {
     () => [
       { key: 'voice', label: 'Voice SOS', weight: 20, ok: voiceOn },
       { key: 'background', label: 'Background protection', weight: 20, ok: bgVoiceOn },
-      { key: 'battery', label: 'Battery optimization off', weight: 15, ok: batteryExempt },
-      { key: 'notifications', label: 'Notifications enabled', weight: 15, ok: notifOk },
+      // Contacts outweigh battery/notification comfort: with zero contacts an
+      // SOS reaches nobody at all, so it's the single most critical gap.
+      { key: 'contacts', label: 'Emergency contacts', weight: 15, ok: hasContacts },
+      { key: 'battery', label: 'Battery optimization off', weight: 10, ok: batteryExempt },
+      { key: 'notifications', label: 'Notifications enabled', weight: 10, ok: notifOk },
       { key: 'microphone', label: 'Microphone access', weight: 10, ok: micOk },
       { key: 'location', label: 'Location access', weight: 10, ok: locationOk },
-      { key: 'contacts', label: 'Emergency contacts', weight: 5, ok: hasContacts },
       { key: 'autostart', label: 'Autostart allowed', weight: 5, ok: batteryExempt },
     ],
     [voiceOn, bgVoiceOn, batteryExempt, notifOk, micOk, locationOk, hasContacts],
@@ -608,15 +610,20 @@ export function HomeScreen() {
                 Hi {firstName}
               </Text>
               <Text style={styles.greetingSub}>
-                {locationOk
-                  ? "You're all set. Help is one tap away."
-                  : 'Enable location so we can dispatch help.'}
+                {!locationOk
+                  ? 'Enable location so we can dispatch help.'
+                  : !hasContacts
+                    ? 'No emergency contacts yet. An SOS right now reaches no one.'
+                    : "You're all set. Help is one tap away."}
               </Text>
             </View>
             <View
               style={[
                 styles.statusDot,
-                { backgroundColor: locationOk ? colors.sage : colors.peachDeep },
+                {
+                  backgroundColor:
+                    locationOk && hasContacts ? colors.sage : colors.peachDeep,
+                },
               ]}
             />
           </View>
@@ -634,6 +641,19 @@ export function HomeScreen() {
           >
             <Ionicons name="location" size={18} color={colors.coralDeep} />
             <Text style={styles.permissionText}>Enable location for emergencies</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.coralDeep} />
+          </Pressable>
+        ) : !hasContacts ? (
+          // Loss-framed: the cost of skipping this is stated, not implied.
+          <Pressable
+            onPress={() => navigation.navigate('EmergencyContacts')}
+            style={styles.permissionBanner}
+            accessibilityRole="button"
+          >
+            <Ionicons name="people" size={18} color={colors.coralDeep} />
+            <Text style={styles.permissionText}>
+              Add trusted contacts, alerts go nowhere without them
+            </Text>
             <Ionicons name="chevron-forward" size={16} color={colors.coralDeep} />
           </Pressable>
         ) : null}
