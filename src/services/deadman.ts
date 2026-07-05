@@ -46,7 +46,7 @@ export async function armDeadman(args: ArmTimerArgs): Promise<void> {
     reminderId = await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Deadman Timer ending soon',
-        body: 'Tap to confirm safe, extend, or cancel — otherwise your circle will be alerted.',
+        body: 'Tap to confirm safe, extend, or cancel. Otherwise your circle will be alerted.',
         data: { kind: 'deadman_reminder' },
       },
       trigger: { type: 'timeInterval', seconds: reminderSeconds, repeats: false } as never,

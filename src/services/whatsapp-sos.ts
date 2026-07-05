@@ -43,10 +43,10 @@ export function buildSOSMessage(args: {
   const mapsLink = `https://maps.google.com/?q=${location.latitude},${location.longitude}`;
   const address = location.address ? ` Address: ${location.address}.` : '';
   return (
-    `🚨 ORBII SOS — ${name} needs help right now.` +
+    `🚨 ORBII SOS: ${name} needs help right now.` +
     `\n\nLive location: ${mapsLink}.${address}` +
     `\n\nPlease call them or come to this location immediately.` +
-    `\n\n— Sent automatically from the ORBII safety app.`
+    `\n\nSent automatically from the ORBII safety app.`
   );
 }
 

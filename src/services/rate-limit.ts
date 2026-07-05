@@ -88,13 +88,13 @@ export function rateLimitMessage(result: RateLimitResult): string {
   if (result.ok) return '';
   const seconds = Math.max(1, Math.ceil(result.retryAfterMs / 1000));
   if (result.reason === 'cooldown') {
-    return `Slow down — try again in ${seconds}s.`;
+    return `Slow down. Try again in ${seconds}s.`;
   }
   if (seconds > 60) {
     const minutes = Math.ceil(seconds / 60);
     return `You've hit the hourly limit. Try again in about ${minutes} min.`;
   }
-  return `Limit reached — try again in ${seconds}s.`;
+  return `Limit reached. Try again in ${seconds}s.`;
 }
 
 // Test/debug only — wipe in-memory state.

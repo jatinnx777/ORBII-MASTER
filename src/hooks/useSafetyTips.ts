@@ -92,7 +92,7 @@ export function useSafetyTips(): SafetyTip[] {
           nearbyAlertsCount === 1
             ? 'Someone nearby needs help'
             : `${nearbyAlertsCount} alerts nearby`,
-        body: 'Tap to see who and how close — your help saves the most time.',
+        body: 'Tap to see who and how close. Your help saves the most time.',
         cta: 'See alerts',
         target: 'community_alerts',
       });

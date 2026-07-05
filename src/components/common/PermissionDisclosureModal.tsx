@@ -27,7 +27,7 @@ const ROWS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: 'mic',
     title: 'Microphone (optional)',
-    body: 'Only for hands-free Voice SOS, if you turn it on. Listening happens on your device — your audio is never uploaded or shared.',
+    body: 'Only for hands-free Voice SOS, if you turn it on. Listening happens on your device. Your audio is never uploaded or shared.',
   },
   {
     icon: 'notifications',

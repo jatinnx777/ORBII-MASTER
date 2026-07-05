@@ -122,10 +122,10 @@ export function VoiceDebugScreen() {
           {/* recognition */}
           <View style={styles.card}>
             <Text style={styles.cardHead}>Recognition</Text>
-            <Row label="Heard" value={m?.lastText ? `"${m.lastText}"` : '—'} />
-            <Row label="Confidence" value={m?.lastConfidence ? m.lastConfidence.toFixed(2) : '—'} />
-            <Row label="Last trigger" value={m?.lastTriggerPhrase || '—'} highlight={!!m?.lastTriggerPhrase} />
-            <Row label="Last latency" value={m?.lastLatencyMs ? `${m.lastLatencyMs} ms` : '—'} />
+            <Row label="Heard" value={m?.lastText ? `"${m.lastText}"` : '-'} />
+            <Row label="Confidence" value={m?.lastConfidence ? m.lastConfidence.toFixed(2) : '-'} />
+            <Row label="Last trigger" value={m?.lastTriggerPhrase || '-'} highlight={!!m?.lastTriggerPhrase} />
+            <Row label="Last latency" value={m?.lastLatencyMs ? `${m.lastLatencyMs} ms` : '-'} />
           </View>
 
           {/* session counters */}

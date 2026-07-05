@@ -75,7 +75,7 @@ export function CirclesScreen() {
         feature: 'Family Circles',
         body:
           'Creating a Family Circle is part of ORBII Plus (₹99/month). The ' +
-          'circle owner needs Plus — members you invite join for free.',
+          'circle owner needs Plus. Members you invite join for free.',
         onUpgrade: () => navigation.navigate('PremiumUpgrade'),
       });
       return;

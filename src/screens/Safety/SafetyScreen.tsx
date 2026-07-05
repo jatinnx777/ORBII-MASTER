@@ -182,7 +182,7 @@ function SafetyReadinessCard() {
           <Text style={styles.readinessBody}>
             {ready
               ? "You're fully set up and protected."
-              : `${doneCount} of ${total} steps done — finish to protect yourself fully.`}
+              : `${doneCount} of ${total} steps done. Finish to protect yourself fully.`}
           </Text>
         </View>
         <Text style={[styles.readinessPct, { color: barColor }]}>{pct}%</Text>

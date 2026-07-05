@@ -11,7 +11,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Mascot } from '@/components/common';
@@ -424,7 +423,7 @@ function WaitlistModal({
           <View style={styles.sheetHandle} />
           <Mascot pose="headset" size={84} />
           <Text style={styles.sheetTitle}>
-            {plan ? `${plan.name} — ${formatPrice(plan.price)}/mo` : ''}
+            {plan ? `${plan.name} · ${formatPrice(plan.price)}/mo` : ''}
           </Text>
           <Text style={styles.sheetBody}>
             Payments aren't live yet. Drop your email and we'll let you know the

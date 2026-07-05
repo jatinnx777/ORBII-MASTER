@@ -48,7 +48,7 @@ function wrap(err: unknown): Error {
     const obj = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
     const parts = [obj.message, obj.details, obj.hint]
       .filter((p): p is string => typeof p === 'string' && p.length > 0);
-    const message = parts.length > 0 ? parts.join(' — ') : 'Backend request failed.';
+    const message = parts.length > 0 ? parts.join(' · ') : 'Backend request failed.';
     const code = typeof obj.code === 'string' ? obj.code : undefined;
     if (isMissingTableError(message, code)) return new CirclesNotInstalledError();
     return new Error(message);
@@ -248,7 +248,7 @@ export async function createCircle(input: {
   const user = sessionData.session?.user ?? null;
   if (!user) {
     throw new Error(
-      'You need a real ORBII account to create circles. Sign in with Google from the Welcome screen — phone OTP demo profiles can\'t create circles yet.',
+      'You need a real ORBII account to create circles. Sign in with Google from the Welcome screen. Phone OTP demo profiles can\'t create circles yet.',
     );
   }
   const trimmed = input.name.trim();

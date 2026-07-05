@@ -128,7 +128,7 @@ export function SettingsScreen() {
             value={
               push
                 ? 'Push for SOS, helpers, and circle activity'
-                : 'Off — you won\'t be notified'
+                : 'Off. You won\'t be notified'
             }
             right={
               <Switch
@@ -146,7 +146,7 @@ export function SettingsScreen() {
             value={
               alertVibration
                 ? 'Buzz when help is needed within 2 km'
-                : 'Off — no buzz on incoming alerts'
+                : 'Off. No buzz on incoming alerts'
             }
             right={
               <Switch

@@ -14,7 +14,7 @@ import type { AppStackParamList } from '@/navigation/types';
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 const DOES = [
-  { icon: 'walk', text: 'Reach people in danger nearby — safely.' },
+  { icon: 'walk', text: 'Reach people in danger nearby, safely.' },
   { icon: 'call', text: 'Call the police and become a visible presence.' },
   { icon: 'heart', text: 'Assist the victim until police or family arrive.' },
 ];
