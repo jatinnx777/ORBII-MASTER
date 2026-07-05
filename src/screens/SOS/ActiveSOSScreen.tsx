@@ -701,6 +701,8 @@ export function ActiveSOSScreen() {
       <ResolvedModal
         visible={resolved}
         helperName={resolvedBy?.name ?? ''}
+        respondersCount={responderList.length}
+        contactsNotified={contactCount}
         onSubmit={handleResolved}
       />
 

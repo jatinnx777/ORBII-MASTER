@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, StarRating } from '@/components/common';
+import { Button, Mascot, StarRating } from '@/components/common';
 import {
   colors,
   fontFamilies,
@@ -13,47 +13,84 @@ import {
 type ResolvedModalProps = {
   visible: boolean;
   helperName: string;
+  // Peak-end summary numbers. Only REAL counts are ever shown: rows render
+  // solely when the count is > 0, so a lonely SOS never fakes reassurance.
+  respondersCount?: number;
+  contactsNotified?: number;
   onSubmit: (rating: number) => void;
 };
 
-// Bottom-sheet style matches the waitlist sheets in Plans + Driving so every
-// in-app modal feels like the same surface. Subtle gradient on the icon
-// halo so the success moment feels celebratory but not over the top.
+// The peak-end moment. People remember an experience by its peak and its
+// ending, so the ending of an SOS is designed, not just dismissed: Orbi
+// celebrates her being safe and shows who was actually coming for her.
+// This is where fear turns into gratitude, and gratitude into retention.
 export function ResolvedModal({
   visible,
   helperName,
+  respondersCount = 0,
+  contactsNotified = 0,
   onSubmit,
 }: ResolvedModalProps) {
   const [rating, setRating] = useState(5);
+  const hasHelper = helperName.length > 0;
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <Pressable style={styles.backdrop} onPress={() => undefined}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <View style={styles.iconWrap}>
-            <Ionicons name="checkmark-circle" size={56} color={colors.success} />
-          </View>
+          <Mascot pose="celebrate" size={110} />
 
-          <Text style={styles.title}>Help has arrived</Text>
+          <Text style={styles.title}>You're safe.</Text>
           <Text style={styles.body}>
-            {helperName ? `${helperName} is with you.` : 'You are safe now.'}
-            {' '}Take a moment to rate them.
+            {hasHelper
+              ? `${helperName} reached you. I stayed with you the whole time.`
+              : 'I stayed with you the whole time.'}
           </Text>
 
-          <View style={styles.stars}>
-            <StarRating
-              value={rating}
-              size={36}
-              interactive
-              onChange={setRating}
-            />
-          </View>
+          {contactsNotified > 0 || respondersCount > 0 ? (
+            <View style={styles.summaryCard}>
+              {contactsNotified > 0 ? (
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryIcon}>
+                    <Ionicons name="people" size={16} color={colors.sageDeep} />
+                  </View>
+                  <Text style={styles.summaryText}>
+                    {contactsNotified === 1
+                      ? '1 trusted contact was alerted with your live location'
+                      : `${contactsNotified} trusted contacts were alerted with your live location`}
+                  </Text>
+                </View>
+              ) : null}
+              {respondersCount > 0 ? (
+                <View style={styles.summaryRow}>
+                  <View style={styles.summaryIcon}>
+                    <Ionicons name="walk" size={16} color={colors.sageDeep} />
+                  </View>
+                  <Text style={styles.summaryText}>
+                    {respondersCount === 1
+                      ? '1 helper was coming for you'
+                      : `${respondersCount} helpers were coming for you`}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
-          <Button
-            label={`Submit ${rating}-star rating`}
-            onPress={() => onSubmit(rating)}
-          />
+          {hasHelper ? (
+            <>
+              <Text style={styles.rateHint}>Take a moment to rate {helperName}.</Text>
+              <View style={styles.stars}>
+                <StarRating value={rating} size={36} interactive onChange={setRating} />
+              </View>
+              <Button
+                label={`Submit ${rating}-star rating`}
+                onPress={() => onSubmit(rating)}
+              />
+            </>
+          ) : (
+            <Button label="Done" onPress={() => onSubmit(rating)} />
+          )}
         </View>
       </Pressable>
     </Modal>
@@ -84,17 +121,9 @@ const styles = StyleSheet.create({
     marginTop: 4,
     marginBottom: spacing.sm,
   },
-  iconWrap: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
+    fontSize: 24,
     color: colors.textPrimary,
     textAlign: 'center',
   },
@@ -104,7 +133,38 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 14,
   },
+  summaryCard: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.sageSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  summaryIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  summaryText: {
+    flex: 1,
+    ...typography.bodyMedium,
+    fontSize: 13.5,
+    color: colors.textPrimary,
+  },
+  rateHint: {
+    ...typography.caption,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
   stars: {
-    marginVertical: spacing.sm,
+    marginVertical: spacing.xs,
   },
 });
