@@ -428,6 +428,16 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const initial = (profile?.name ?? '').trim().charAt(0).toUpperCase();
   const firstName = (profile?.name ?? '').trim().split(/\s+/)[0] || 'there';
+
+  // Time-aware companion voice: the greeting knows the hour, and at night the
+  // all-clear line becomes a walking-home check-in instead of a status readout.
+  const hour = new Date().getHours();
+  const greetingWord =
+    hour < 5 ? 'Hi' : hour < 12 ? 'Good morning,' : hour < 17 ? 'Good afternoon,' : hour < 21 ? 'Good evening,' : 'Hi';
+  const isNight = hour >= 21 || hour < 5;
+  const allClearLine = isNight
+    ? "Heading somewhere? I'm listening."
+    : "You're all set. Help is one tap away.";
   const voiceListening = voiceStatus === 'listening' || voiceStatus === 'starting';
   const unreadCount = useNotificationsBadge();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
@@ -607,14 +617,14 @@ export function HomeScreen() {
           <View style={styles.greetingRow}>
             <View style={{ flex: 1 }}>
               <Text style={styles.greetingHi} numberOfLines={1}>
-                Hi {firstName}
+                {greetingWord} {firstName}
               </Text>
               <Text style={styles.greetingSub}>
                 {!locationOk
                   ? 'Enable location so we can dispatch help.'
                   : !hasContacts
                     ? 'No emergency contacts yet. An SOS right now reaches no one.'
-                    : "You're all set. Help is one tap away."}
+                    : allClearLine}
               </Text>
             </View>
             <View

@@ -22,18 +22,22 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
   const ring = useRef(new Animated.Value(0)).current;
   const press = useRef(new Animated.Value(1)).current;
 
+  // Calm-technology breathing, not alarm flashing: a slow ~4s inhale/exhale
+  // on the halo and a barely-visible rise on the core. Signals "alive and
+  // watching" without raising the user's pulse.
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(ring, {
           toValue: 1,
-          duration: 1400,
-          easing: Easing.out(Easing.ease),
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
         Animated.timing(ring, {
           toValue: 0,
-          duration: 0,
+          duration: 2000,
+          easing: Easing.inOut(Easing.ease),
           useNativeDriver: true,
         }),
       ]),
@@ -42,8 +46,9 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
     return () => loop.stop();
   }, [ring]);
 
-  const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
-  const ringOpacity = ring.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+  const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.22] });
+  const ringOpacity = ring.interpolate({ inputRange: [0, 1], outputRange: [0.12, 0.3] });
+  const breathScale = ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.03] });
 
   const handlePressIn = () =>
     Animated.spring(press, { toValue: 0.94, useNativeDriver: true, speed: 40 }).start();
@@ -86,7 +91,9 @@ export function SOSButton({ onPress, onLongPress, disabled }: SOSButtonProps) {
             { opacity: ringOpacity, transform: [{ scale: ringScale }] },
           ]}
         />
-        <Animated.View style={[styles.hold, { transform: [{ scale: press }] }]}>
+        <Animated.View
+          style={[styles.hold, { transform: [{ scale: Animated.multiply(press, breathScale) }] }]}
+        >
           <Text style={styles.holdText}>SOS</Text>
         </Animated.View>
       </Pressable>
