@@ -158,6 +158,8 @@ android {
     }
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
+        // TFLite models must stay uncompressed so they can be memory-mapped.
+        noCompress 'tflite'
     }
 }
 
@@ -184,6 +186,9 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
+
+    // On-device distress-sound detection (YAMNet) for the VoiceGuard service.
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
