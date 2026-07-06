@@ -148,7 +148,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         >
           <Animated.View style={[styles.logoCard, { transform: [{ scale: breathe }] }]}>
             <Image
-              source={require('../../../assets/icon.png')}
+              source={require('../../../assets/icon-small.png')}
               style={styles.logoImg}
               resizeMode="contain"
             />

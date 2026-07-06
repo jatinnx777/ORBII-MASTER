@@ -4,7 +4,9 @@ import android.content.Context
 import android.util.Log
 import org.tensorflow.lite.Interpreter
 import java.io.BufferedReader
+import java.io.File
 import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.InputStreamReader
 import java.nio.MappedByteBuffer
 import java.nio.channels.FileChannel
@@ -87,13 +89,18 @@ class ScreamDetector(
     }
   }
 
+  // The model ships COMPRESSED in the APK (smaller download) and is unpacked
+  // to private storage once, then memory-mapped from there, same pattern as
+  // the bundled speech models.
   private fun mapAsset(context: Context): MappedByteBuffer {
-    context.assets.openFd(MODEL_ASSET).use { fd ->
-      FileInputStream(fd.fileDescriptor).use { input ->
-        return input.channel.map(
-          FileChannel.MapMode.READ_ONLY, fd.startOffset, fd.declaredLength,
-        )
+    val f = File(context.filesDir, MODEL_ASSET)
+    if (!f.exists() || f.length() < 1_000_000L) {
+      context.assets.open(MODEL_ASSET).use { input ->
+        FileOutputStream(f).use { out -> input.copyTo(out, 1 shl 16) }
       }
+    }
+    FileInputStream(f).use { input ->
+      return input.channel.map(FileChannel.MapMode.READ_ONLY, 0, f.length())
     }
   }
 

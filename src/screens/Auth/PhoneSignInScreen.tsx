@@ -100,7 +100,7 @@ export function PhoneSignInScreen({ navigation }: AuthScreenProps<'PhoneSignIn'>
           >
             <View style={styles.logoCard}>
               <Image
-                source={require('../../../assets/icon.png')}
+                source={require('../../../assets/icon-small.png')}
                 style={styles.logoImg}
                 resizeMode="contain"
               />
