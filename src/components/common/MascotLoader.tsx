@@ -5,10 +5,10 @@ import { Mascot } from './Mascot';
 import type { MascotPose } from './Mascot';
 
 const MESSAGES = [
-  'Preparing your guardian…',
-  'Checking your safety circle…',
-  'Getting things ready…',
-  'Loading protection…',
+  'Getting ready to watch over you…',
+  'Waking up your circle…',
+  'Almost there, stay with me…',
+  'Turning on your protection…',
 ];
 
 type Props = {
