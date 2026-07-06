@@ -12,6 +12,7 @@ const KEYS = {
   safetyModes: 'orbii:safety-modes',
   locale: 'orbii:locale',
   activeCircleId: 'orbii:circles:active',
+  inviteSeen: 'orbii:circles:invite-seen',
   voiceUsage: 'orbii:voice-usage',
   voicePhrases: 'orbii:voice-phrases',
   bgVoice: 'orbii:bg-voice',

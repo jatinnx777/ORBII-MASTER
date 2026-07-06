@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
+import { Animated, AppState, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -136,6 +136,24 @@ function RootNavigator() {
     } else if (status === 'idle') {
       store.dispatch(circlesReset());
     }
+  }, [status]);
+
+  // Keep circle invites fresh so an Instagram-style "X invited you" alert
+  // arrives without opening the Circles tab: re-check when the app returns to
+  // the foreground and on a gentle 60s poll while it's open. refreshCircles
+  // fires the device push for any invite it hasn't announced yet.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const poll = setInterval(() => {
+      if (AppState.currentState === 'active') void refreshCircles();
+    }, 60_000);
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') void refreshCircles();
+    });
+    return () => {
+      clearInterval(poll);
+      sub.remove();
+    };
   }, [status]);
 
   // Reconcile ORBII Plus on every sign-in / launch: active if a paid
@@ -391,6 +409,13 @@ export default function App() {
           // @ts-expect-error - CommunityAlerts is in the AppStack only.
           navigationRef.navigate('CommunityAlerts');
         }
+        return;
+      }
+      // Circle invite — open the Notifications screen where the invite card
+      // (accept / decline) lives.
+      if (data.kind === 'circle_invite' && navigationRef.isReady()) {
+        // @ts-expect-error - Notifications is in the AppStack only.
+        navigationRef.navigate('Notifications');
         return;
       }
       if (data.kind === 'voice_trigger' && navigationRef.isReady()) {

@@ -10,12 +10,49 @@ import {
   membersLoaded,
 } from '@/redux/slices/circlesSlice';
 import {
+  CircleInvite,
   CirclesNotInstalledError,
   listCircles,
   listCircleMembers,
   listIncomingInvites,
+  resolveInviterNames,
 } from './circles';
+import { fireLocalNotification } from './notifications';
 import { getItem, setItem, storageKeys } from './storage';
+
+// Instagram-style invite alerts. Every time we refresh invites we diff against
+// the ids we've already announced; any brand-new pending invite fires a device
+// push + drops into the in-app notifications feed. `seen` is pinned to the
+// currently-pending ids, so an invite is announced exactly once, and a fresh
+// re-invite (new row id) will alert again.
+async function announceNewInvites(invites: CircleInvite[]): Promise<void> {
+  try {
+    const currentIds = invites.map((i) => i.id);
+    const seen = (await getItem<string[]>(storageKeys.inviteSeen)) ?? [];
+    const seenSet = new Set(seen);
+    const fresh = invites.filter((i) => !seenSet.has(i.id));
+
+    // Persist first so a crash mid-notify can't double-announce on next run.
+    await setItem(storageKeys.inviteSeen, currentIds);
+
+    if (fresh.length === 0) return;
+
+    const names = await resolveInviterNames(fresh.map((i) => i.inviterId)).catch(
+      () => new Map<string, string>(),
+    );
+    for (const invite of fresh) {
+      const who = names.get(invite.inviterId) ?? 'Someone';
+      await fireLocalNotification(
+        'New circle invite',
+        `${who} invited you to their ORBII circle. Tap to accept.`,
+        { kind: 'circle_invite', inviteId: invite.id, token: invite.token },
+        'system',
+      );
+    }
+  } catch {
+    // Notifications are a nicety; never let them break the circles refresh.
+  }
+}
 
 // Circles bootstrap. Runs after auth so we never hit Supabase with no
 // session. Order of operations:
@@ -41,6 +78,7 @@ export async function refreshCircles(): Promise<void> {
     ]);
     store.dispatch(circlesLoaded(circles));
     store.dispatch(incomingInvitesLoaded(invites));
+    void announceNewInvites(invites);
     const active = store.getState().circles.activeCircleId;
     if (active) {
       const members = await listCircleMembers(active).catch(() => []);

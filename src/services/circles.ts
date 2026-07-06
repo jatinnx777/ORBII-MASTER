@@ -411,6 +411,27 @@ export async function listIncomingInvites(): Promise<CircleInvite[]> {
   return (data ?? []).map((r) => rowToInvite(r as InviteRow));
 }
 
+// Best-effort display names for a set of inviter ids, for invite
+// notifications. Non-members can't read the circle row (RLS), but
+// users_public is world-readable, so we can at least name the inviter.
+export async function resolveInviterNames(
+  inviterIds: string[],
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const ids = Array.from(new Set(inviterIds)).filter(Boolean);
+  if (ids.length === 0) return map;
+  const { data } = await supabase
+    .from('users_public')
+    .select('id, username, name')
+    .in('id', ids);
+  (data ?? []).forEach((p: { id: string; username: string | null; name: string | null }) => {
+    const label =
+      (p.name && p.name.trim()) || (p.username ? `@${p.username}` : 'Someone');
+    map.set(p.id, label);
+  });
+  return map;
+}
+
 export async function acceptInvite(invite: CircleInvite): Promise<void> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Sign in first.');
