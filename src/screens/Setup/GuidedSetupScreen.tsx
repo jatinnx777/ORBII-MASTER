@@ -21,6 +21,7 @@ import { contactAdded } from '@/redux/slices/userSlice';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { addPhrase, PHRASE_EXAMPLES } from '@/services/voice-phrases';
 import { startListening } from '@/services/voice-detection';
+import { requestBatteryExemption } from '@/services/background-voice';
 import { getCurrentPermission } from '@/services/location';
 import { trackEvent } from '@/services/analytics';
 
@@ -100,6 +101,10 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
       if (p.length >= 3) await addPhrase(p).catch(() => undefined);
       const res = await startListening();
       setVoiceOn(res.ok);
+      // OEM killer fix: ask the system to keep ORBII alive in the background.
+      // On Xiaomi/Oppo/Vivo the voice service is killed otherwise, silently
+      // breaking protection. Baking this into setup makes it hard to skip.
+      if (res.ok) await requestBatteryExemption().catch(() => undefined);
       trackEvent('setup_protection_activated', { ok: res.ok, customPhrase: p.length >= 3 });
     } finally {
       setActivating(false);
