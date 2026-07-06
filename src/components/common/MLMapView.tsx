@@ -1,5 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
-import { Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import {
   Camera,
   GeoJSONSource,
@@ -64,14 +64,13 @@ export type MLMapViewHandle = {
   flyTo: (point: GeoPoint, zoom?: number) => void;
 };
 
-// Pin palette — aligned to the warm design tokens. User is a calm blue
-// dot (as in the reference), helpers are lavender (verified = deeper
-// lavender), destination is the soft coral.
+// Pin palette. User is the universal "me" blue; helpers are ORBII sage
+// (verified = deeper sage); destination is the emergency coral. No purples.
 const COLOURS = {
-  user: '#4A90E2',
-  helper: '#8E7CC0',
-  'helper-verified': '#6F5DA6',
-  destination: '#E07A5F',
+  user: '#3B82F6',
+  helper: '#7BC47F',
+  'helper-verified': '#5BA85F',
+  destination: '#FF6B57',
 } as const;
 
 function toCoords(p: GeoPoint): [number, number] {
@@ -143,7 +142,10 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
   const cameraRef = useRef<CameraRef>(null);
   const mapRef = useRef<MapRef>(null);
 
-  const markerFC = useMemo(() => markersToFeatureCollection(markers), [markers]);
+  // Pull the user out so it renders as a live pulsing dot, not a flat circle.
+  const userMarker = useMemo(() => markers.find((m) => m.kind === 'user'), [markers]);
+  const otherMarkers = useMemo(() => markers.filter((m) => m.kind !== 'user'), [markers]);
+  const markerFC = useMemo(() => markersToFeatureCollection(otherMarkers), [otherMarkers]);
   const routeFC = useMemo(() => routeToFeature(route), [route]);
 
   // Auto-fit when fitAll is on and we have at least one marker.
@@ -245,7 +247,7 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
         </GeoJSONSource>
       ) : null}
 
-      {markers.length > 0 ? (
+      {otherMarkers.length > 0 ? (
         <GeoJSONSource id="markers-src" data={markerFC}>
           <Layer
             id="markers-halo"
@@ -305,6 +307,12 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
         </GeoJSONSource>
       ) : null}
 
+      {userMarker ? (
+        <Marker lngLat={toCoords(userMarker.coordinate)} anchor="center">
+          <UserDot />
+        </Marker>
+      ) : null}
+
       {avatarMarkers.map((m) => (
         <Marker key={m.id} lngLat={toCoords(m.coordinate)} anchor="bottom">
           <View style={styles.avatarPin}>
@@ -327,9 +335,56 @@ export const MLMapView = forwardRef<MLMapViewHandle, Props>(function MLMapView(
   );
 });
 
+// Live "you are here" dot: a breathing halo + solid core with a white ring
+// and a soft shadow. This is the single strongest "premium map" cue.
+function UserDot() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(pulse, {
+        toValue: 1,
+        duration: 2200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 2.6] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] });
+  return (
+    <View style={styles.userWrap}>
+      <Animated.View style={[styles.userPulse, { transform: [{ scale }], opacity }]} />
+      <View style={styles.userCore} />
+    </View>
+  );
+}
+
 const AVATAR = 40;
 const styles = StyleSheet.create({
   fill: { flex: 1 },
+  userWrap: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  userPulse: {
+    position: 'absolute',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3B82F6',
+  },
+  userCore: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#3B82F6',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    shadowColor: '#1E3A8A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
   avatarPin: { alignItems: 'center' },
   avatarRing: {
     width: AVATAR,
@@ -348,7 +403,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
     borderRadius: AVATAR / 2,
-    backgroundColor: '#8E7CC0',
+    backgroundColor: '#7BC47F',
     alignItems: 'center',
     justifyContent: 'center',
   },

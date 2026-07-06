@@ -143,5 +143,27 @@ export const ORBII_MAP_STYLE = {
         'text-halo-width': 1.3,
       },
     },
+    // Street names along roads at close zoom — makes the map read as a real
+    // navigation surface, not just a colour field. Subtle, follows the road.
+    {
+      id: 'road-label',
+      type: 'symbol',
+      source: 'openmaptiles',
+      'source-layer': 'transportation_name',
+      minzoom: 13,
+      filter: ['in', 'class', 'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'minor'],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['Noto Sans Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 13, 10, 18, 13],
+        'symbol-placement': 'line',
+        'text-letter-spacing': 0.02,
+      },
+      paint: {
+        'text-color': '#8A8071',
+        'text-halo-color': '#FFFFFF',
+        'text-halo-width': 1.4,
+      },
+    },
   ],
 };
