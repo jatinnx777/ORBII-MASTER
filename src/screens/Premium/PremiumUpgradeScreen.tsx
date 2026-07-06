@@ -294,8 +294,8 @@ export function PremiumUpgradeScreen() {
           </View>
 
           <Text style={styles.footnote}>
-            Prices in INR per month, taxes included. Secure payments by Razorpay
-            (test mode) — use any Razorpay test card to try checkout.
+            Prices in INR per month, taxes included. Secure payments by Razorpay.
+            Cancel anytime. Your protection never depends on paying.
           </Text>
         </ScrollView>
       </SafeAreaView>
@@ -493,41 +493,45 @@ const styles = StyleSheet.create({
     color: colors.goldDeep,
   },
   planCard: {
-    backgroundColor: colors.cream,
+    backgroundColor: colors.surface,
     borderRadius: radius.xxl,
     padding: spacing.lg,
     marginBottom: spacing.md,
-    // Neumorphic raised surface on the warm canvas.
-    ...shadows.neu,
-    borderTopWidth: 1.5,
-    borderLeftWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.85)',
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: '#B8895A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 3,
   },
   planCardHighlight: {
-    backgroundColor: colors.surface,
     borderWidth: 2,
-    borderColor: colors.peach,
+    borderColor: colors.peachDeep,
+    shadowColor: colors.peachDeep,
+    shadowOpacity: 0.22,
+    shadowRadius: 24,
   },
   popularPill: {
     position: 'absolute',
-    top: -10,
+    top: -11,
     right: spacing.lg,
-    backgroundColor: colors.peach,
+    backgroundColor: colors.peachDeep,
     paddingHorizontal: spacing.md,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: radius.pill,
   },
   popularPillMuted: {
-    backgroundColor: colors.lavenderSoft,
+    backgroundColor: colors.sageSoft,
   },
   popularPillText: {
     fontFamily: 'Poppins_700Bold',
     fontSize: 10,
-    color: colors.textPrimary,
+    color: colors.textInverse,
     letterSpacing: 0.6,
   },
   popularPillTextMuted: {
-    color: colors.lavenderDeep,
+    color: colors.sageDeep,
   },
   valueNote: {
     flexDirection: 'row',
