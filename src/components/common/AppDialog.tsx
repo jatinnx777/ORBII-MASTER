@@ -209,14 +209,16 @@ const styles = StyleSheet.create({
   },
   btnInline: { flex: 1 },
   btnStacked: { width: '100%' },
-  btnDefault: { backgroundColor: colors.coral },
+  // Default = warm peach (calm). Red is reserved for genuinely destructive
+  // actions, so ordinary "OK" popups never read as an emergency.
+  btnDefault: { backgroundColor: colors.peach },
   btnDestructive: { backgroundColor: colors.coral },
-  btnCancel: { backgroundColor: colors.cream },
+  btnCancel: { backgroundColor: colors.creamDeep },
   btnText: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 15,
   },
-  btnTextDefault: { color: colors.textInverse },
+  btnTextDefault: { color: colors.textPrimary },
   btnTextDestructive: { color: colors.textInverse },
-  btnTextCancel: { color: colors.textPrimary },
+  btnTextCancel: { color: colors.textSecondary },
 });

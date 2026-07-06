@@ -47,24 +47,9 @@ type Plan = {
   features: string[];
 };
 
-// Order matters: Family (₹299) leads as the anchor, so Plus (₹99) reads as the
-// sensible middle rather than "the expensive one". Free sits last.
+// Life360-style: lead with the main paid tier (Plus ₹99), highlighted as the
+// recommended plan, then Family, then Free at the bottom.
 const PLANS: Plan[] = [
-  {
-    id: 'family',
-    name: 'ORBII Family',
-    price: 299,
-    tagline: 'One plan that protects your whole family.',
-    badge: 'BEST PROTECTION',
-    valueNote: 'Protect up to 4 people',
-    features: [
-      'Everything in ORBII Plus, for 4 family members',
-      'Verified responders for every member',
-      'Unlimited hands-free Voice SOS for all',
-      'Shared family circle with live tracking',
-      'Priority helper matching + live ETA',
-    ],
-  },
   {
     id: 'solo',
     name: 'ORBII Plus',
@@ -82,6 +67,21 @@ const PLANS: Plan[] = [
       'Advanced Protection Strength',
       'Dead Man’s Switch & Trusted Places',
       'WhatsApp emergency automation',
+    ],
+  },
+  {
+    id: 'family',
+    name: 'ORBII Family',
+    price: 299,
+    tagline: 'One plan that protects your whole family.',
+    badge: 'BEST VALUE',
+    valueNote: 'Protect up to 4 people',
+    features: [
+      'Everything in ORBII Plus, for 4 family members',
+      'Verified responders for every member',
+      'Unlimited hands-free Voice SOS for all',
+      'Shared family circle with live tracking',
+      'Priority helper matching + live ETA',
     ],
   },
   {
