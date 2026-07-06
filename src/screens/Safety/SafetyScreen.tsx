@@ -237,6 +237,13 @@ function WatchOverMe() {
     onPress: () => void;
   }[] = [
     {
+      icon: 'headset',
+      tint: 'sage',
+      title: 'Walk with me',
+      body: 'Orbi talks to you on the way and checks in. Go silent and ORBII steps in.',
+      onPress: () => navigation.navigate('WalkWithMe'),
+    },
+    {
       icon: 'walk',
       tint: 'sage',
       title: 'Journey',

@@ -42,3 +42,7 @@ serviceAccountKey.json
 # Nested standalone repos (own git histories, never commit into ORBII-MASTER)
 /website/
 /showcase/
+
+# Build artifacts too large for GitHub (kept on disk, served via orbii.in)
+/ORBII-latest.apk
+/ORBII-playstore.aab

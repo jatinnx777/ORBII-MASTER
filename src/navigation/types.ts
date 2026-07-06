@@ -73,6 +73,7 @@ export type AppStackParamList = {
   ResponderVerification: undefined;
   ResponderRecognition: undefined;
   ResponderEarnings: undefined;
+  WalkWithMe: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

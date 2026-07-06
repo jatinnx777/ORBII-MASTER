@@ -35,6 +35,7 @@ import { ResponderApplicationScreen } from '@/responder/ResponderApplicationScre
 import { ResponderVerificationScreen } from '@/responder/ResponderVerificationScreen';
 import { ResponderRecognitionScreen } from '@/responder/ResponderRecognitionScreen';
 import { ResponderEarningsScreen } from '@/responder/ResponderEarningsScreen';
+import { WalkWithMeScreen } from '@/screens/Safety/WalkWithMeScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -255,6 +256,11 @@ export function AppNavigator() {
         name="ResponderEarnings"
         component={ResponderEarningsScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="WalkWithMe"
+        component={WalkWithMeScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>
   );
