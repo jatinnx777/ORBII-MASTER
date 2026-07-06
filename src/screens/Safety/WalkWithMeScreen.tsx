@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Mascot } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
@@ -66,6 +67,7 @@ export function WalkWithMeScreen() {
 
   const escalate = useCallback(() => {
     clearTimers();
+    deactivateKeepAwake('walk-with-me').catch(() => undefined);
     walkingRef.current = false;
     setWalking(false);
     setAwaiting(false);
@@ -97,6 +99,10 @@ export function WalkWithMeScreen() {
     walkingRef.current = true;
     setWalking(true);
     setCheckIns(0);
+    // Keep the screen on so the check-in timers + voice keep running through
+    // the walk (JS timers pause when the screen sleeps). True screen-off
+    // background needs a native service; this covers the walk itself.
+    activateKeepAwakeAsync('walk-with-me').catch(() => undefined);
     const hour = new Date().getHours();
     const nightBit = hour >= 21 || hour < 5 ? " It's late, so I'll check in as we go." : " I'll check in as we go.";
     speak(`Okay ${firstName}, I'm walking with you.${nightBit}`);
@@ -114,6 +120,7 @@ export function WalkWithMeScreen() {
 
   const endWalk = () => {
     clearTimers();
+    deactivateKeepAwake('walk-with-me').catch(() => undefined);
     walkingRef.current = false;
     setWalking(false);
     setAwaiting(false);
@@ -124,6 +131,7 @@ export function WalkWithMeScreen() {
   useEffect(
     () => () => {
       clearTimers();
+      deactivateKeepAwake('walk-with-me').catch(() => undefined);
       try {
         Speech.stop();
       } catch {
