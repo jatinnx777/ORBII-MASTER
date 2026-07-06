@@ -30,6 +30,45 @@ const RAZORPAY_TEST_KEY_ID = 'rzp_test_T2BbYJlNzptaBL';
 // when the create-order edge function isn't deployed.
 const PLAN_AMOUNT: Record<PlanId, number> = { solo: 9900, family: 29900 };
 
+export type TipResult = { ok: true; paymentId: string } | { ok: false; cancelled?: boolean; error?: string };
+
+// A voluntary thank-you tip to a responder after they've helped. Uses the same
+// Razorpay TEST checkout. The tip is credited to the helper's ORBII wallet
+// server-side (record-tip); until that edge function is deployed the payment
+// still succeeds in test mode so the flow is fully demoable.
+export async function tipHelper(
+  amountRupees: number,
+  helperName: string,
+  sosId?: string,
+): Promise<TipResult> {
+  const amount = Math.round(amountRupees * 100);
+  if (amount < 100) return { ok: false, error: 'Minimum tip is ₹1' };
+  try {
+    const profile = (await supabase.auth.getUser()).data.user;
+    const payment = await RazorpayCheckout.open({
+      key: RAZORPAY_TEST_KEY_ID,
+      amount,
+      currency: 'INR',
+      name: 'ORBII',
+      description: `Thank ${helperName || 'your helper'}`,
+      theme: { color: '#7BC47F' },
+      prefill: { email: profile?.email ?? '', contact: profile?.phone ?? '' },
+    });
+    void supabase.functions
+      .invoke('record-tip', {
+        body: { sosId, amountPaise: amount, paymentId: payment.razorpay_payment_id },
+      })
+      .catch(() => undefined);
+    return { ok: true, paymentId: payment.razorpay_payment_id };
+  } catch (e: unknown) {
+    const err = e as { code?: number; description?: string };
+    if (err?.code === 0 || /cancel/i.test(err?.description ?? '')) {
+      return { ok: false, cancelled: true };
+    }
+    return { ok: false, error: err?.description ?? 'Tip failed' };
+  }
+}
+
 export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
   // 1. Try a server-side order (secure path). If the create-order edge
   //    function isn't deployed, fall back to a direct test-mode checkout.

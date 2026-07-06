@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Button, Mascot, StarRating } from '@/components/common';
+import * as Haptics from 'expo-haptics';
+import { appAlert, Button, Mascot, StarRating } from '@/components/common';
+import { tipHelper } from '@/services/razorpay';
 import {
   colors,
   fontFamilies,
@@ -17,8 +19,11 @@ type ResolvedModalProps = {
   // solely when the count is > 0, so a lonely SOS never fakes reassurance.
   respondersCount?: number;
   contactsNotified?: number;
+  sosId?: string;
   onSubmit: (rating: number) => void;
 };
+
+const TIP_OPTIONS = [20, 50, 100];
 
 // The peak-end moment. People remember an experience by its peak and its
 // ending, so the ending of an SOS is designed, not just dismissed: Orbi
@@ -29,10 +34,26 @@ export function ResolvedModal({
   helperName,
   respondersCount = 0,
   contactsNotified = 0,
+  sosId,
   onSubmit,
 }: ResolvedModalProps) {
   const [rating, setRating] = useState(5);
+  const [tipping, setTipping] = useState<number | null>(null);
+  const [tipped, setTipped] = useState(false);
   const hasHelper = helperName.length > 0;
+
+  const sendTip = async (amount: number) => {
+    if (tipping) return;
+    setTipping(amount);
+    const res = await tipHelper(amount, helperName, sosId);
+    setTipping(null);
+    if (res.ok) {
+      setTipped(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    } else if (!res.cancelled) {
+      appAlert('Tip failed', res.error ?? 'Please try again.');
+    }
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -83,6 +104,36 @@ export function ResolvedModal({
               <View style={styles.stars}>
                 <StarRating value={rating} size={36} interactive onChange={setRating} />
               </View>
+
+              {tipped ? (
+                <View style={styles.tipDone}>
+                  <Ionicons name="heart" size={15} color={colors.coralDeep} />
+                  <Text style={styles.tipDoneText}>Tip sent. Thank you for being kind.</Text>
+                </View>
+              ) : (
+                <View style={styles.tipBlock}>
+                  <Text style={styles.tipTitle}>Say thanks to {helperName}?</Text>
+                  <View style={styles.tipRow}>
+                    {TIP_OPTIONS.map((amt) => (
+                      <Pressable
+                        key={amt}
+                        onPress={() => sendTip(amt)}
+                        disabled={tipping !== null}
+                        style={({ pressed }) => [
+                          styles.tipChip,
+                          tipping === amt && styles.tipChipActive,
+                          pressed && { opacity: 0.9 },
+                        ]}
+                      >
+                        <Text style={styles.tipChipText}>
+                          {tipping === amt ? '…' : `₹${amt}`}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               <Button
                 label={`Submit ${rating}-star rating`}
                 onPress={() => onSubmit(rating)}
@@ -167,4 +218,28 @@ const styles = StyleSheet.create({
   stars: {
     marginVertical: spacing.xs,
   },
+  tipBlock: { alignSelf: 'stretch', alignItems: 'center', gap: spacing.sm, marginVertical: spacing.xs },
+  tipTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  tipRow: { flexDirection: 'row', gap: spacing.sm },
+  tipChip: {
+    minWidth: 66,
+    alignItems: 'center',
+    backgroundColor: colors.sageSoft,
+    borderRadius: radius.pill,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+  },
+  tipChipActive: { backgroundColor: colors.sage },
+  tipChipText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.sageDeep },
+  tipDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.coralSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    marginVertical: spacing.xs,
+  },
+  tipDoneText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.coralDeep },
 });

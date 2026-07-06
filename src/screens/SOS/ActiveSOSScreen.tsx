@@ -703,6 +703,7 @@ export function ActiveSOSScreen() {
         helperName={resolvedBy?.name ?? ''}
         respondersCount={responderList.length}
         contactsNotified={contactCount}
+        sosId={activeSOS?.id}
         onSubmit={handleResolved}
       />
 
