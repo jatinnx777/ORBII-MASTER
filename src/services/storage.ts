@@ -19,6 +19,7 @@ const KEYS = {
   fsiAsked: 'orbii:fsi-asked',
   disclosureAck: 'orbii:disclosure-ack',
   guidedSetup: 'orbii:guided-setup-done',
+  sosQueue: 'orbii:sos-queue',
 } as const;
 
 export const storageKeys = KEYS;

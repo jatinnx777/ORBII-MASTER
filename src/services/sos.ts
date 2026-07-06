@@ -2,6 +2,7 @@ import type { SOSKind, SOSLocation, SOSRecord, UserProfile } from '@/types';
 import { supabase } from './supabase';
 import { broadcastAlert, type AlertBroadcast } from './community';
 import { checkRateLimit, rateLimitMessage } from './rate-limit';
+import { enqueueSOS } from './sos-queue';
 import { addBreadcrumb, reportError } from './error-reporting';
 import { store } from '@/redux/store';
 import { sosDeliveryUpdated } from '@/redux/slices/sosSlice';
@@ -107,6 +108,14 @@ export async function createSOS(
   // Fire-and-forget DB write. We never await it on the critical path —
   // DB failure must not delay the broadcast.
   void persistSOS(record, user);
+
+  // Offline safety net: if there's no connectivity, the broadcast + push can't
+  // reach anyone. Queue this SOS so it's replayed (persist + push) the moment
+  // the network returns, so the circle still gets alerted. Only on the offline
+  // path, so an online SOS is never double-sent.
+  if (!store.getState().app.isOnline) {
+    void enqueueSOS(record, user);
+  }
 
   // Server-side push fan-out so the victim's circle + emergency contacts are
   // alerted even with their app closed (the realtime broadcast above only

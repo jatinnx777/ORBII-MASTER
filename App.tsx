@@ -54,6 +54,7 @@ import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { premiumStatusResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumActive } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
+import { initSOSQueue } from '@/services/sos-queue';
 import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
@@ -160,6 +161,13 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void refreshUserRole();
+  }, [status]);
+
+  // Deliver any SOS that fired while offline, now and whenever the network
+  // comes back.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    return initSOSQueue();
   }, [status]);
 
   // Deep-link join handler. Listens for orbii://join/<token> AND
