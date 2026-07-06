@@ -280,8 +280,18 @@ create trigger circles_touch_updated_at
 -- ---------------------------------------------------------------------------
 -- 8. REALTIME
 -- ---------------------------------------------------------------------------
--- Make circle_events + shared_trips stream over realtime so the UI updates
--- without polling.
-alter publication supabase_realtime add table circle_events;
-alter publication supabase_realtime add table shared_trips;
-alter publication supabase_realtime add table circle_members;
+-- Make circle_events + shared_trips + circle_members stream over realtime so
+-- the UI updates without polling. Guarded so a re-run doesn't fail with
+-- "already member of publication" (which would roll back the whole script).
+do $$
+declare t text;
+begin
+  foreach t in array array['circle_events','shared_trips','circle_members'] loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table %I', t);
+    end if;
+  end loop;
+end $$;
