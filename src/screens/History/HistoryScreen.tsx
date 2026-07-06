@@ -50,9 +50,9 @@ export function HistoryScreen() {
           <Text style={styles.title}>SOS history</Text>
         </View>
         <EmptyState
-          icon="time-outline"
-          title="No SOS alerts yet"
-          body="When you send or resolve an alert, it'll show up here with the helpers who responded."
+          icon="shield-checkmark"
+          title="All quiet, and that's good."
+          body="Every alert you send will live here, with everyone who came for you. I hope this page stays empty for a long time."
         />
       </ScreenContainer>
     );

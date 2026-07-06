@@ -64,10 +64,10 @@ export function EmergencyContactsScreen() {
 
       {contacts.length === 0 ? (
         <EmptyState
-          icon="people-outline"
-          title="No contacts added yet"
-          body="Emergency contacts get an SMS the moment you press SOS. They see your name, your live location, and a tracking link. Add up to 5 trusted people."
-          actionLabel="Add first contact"
+          icon="heart"
+          title="Who should I call?"
+          body="These are the people I'll reach the instant you need help, with your live location and a link to find you. Add up to 5 you trust most."
+          actionLabel="Add your first person"
           onAction={() => navigation.navigate('ContactForm', {})}
         />
       ) : (
