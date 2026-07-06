@@ -90,16 +90,25 @@ class VoiceGuardService : Service() {
     private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
 
     // Cross-utterance repeat detection. A panicked "help ... help" has a pause
-    // between the shouts, so the recognizer finalises each one as its OWN
-    // result ("help", then "help") and the two-word phrase " help help " never
-    // appears inside a single text — the phrase list alone can NEVER catch it.
-    // Hearing the same bare distress word in two separate final results within
-    // this window (or twice inside one final, e.g. "help please help") fires.
-    private val REPEAT_KEYWORDS = listOf("help", "बचाओ", "bachao", "madad")
-    private const val REPEAT_WINDOW_MS = 7000L
+    // between the shouts, so the two-word phrase " help help " may never appear
+    // inside a single text — the phrase list alone can NEVER catch it. Hearing
+    // a distress word twice (across two utterances within the window, or twice
+    // anywhere in one text, e.g. "help please help") fires.
+    //
+    // Each group also carries NEAR-MISS forms: a shouted "help" is frequently
+    // transcribed as "hell"/"held" by the small model, and Hindi "bachao" as
+    // "bacho". A single near-miss does nothing; the same distress sound twice
+    // in seconds is what fires, so ordinary speech stays safe.
+    private val REPEAT_GROUPS = listOf(
+      listOf("help", "hell", "held"),
+      listOf("बचाओ", "bachao", "bacho"),
+      listOf("मदद", "madad", "madat"),
+    )
+    private const val REPEAT_WINDOW_MS = 8000L
   }
 
   @Volatile private var running = false
+  private var screamDetector: ScreamDetector? = null
   private var phrases: List<String> = emptyList()
   @Volatile private var smoothedGain = 1.0
   private var wakeLock: PowerManager.WakeLock? = null
@@ -175,6 +184,18 @@ class VoiceGuardService : Service() {
       return
     }
 
+    // Distress-sound layer (screaming / crying / glass) on the same stream.
+    // Best-effort: if the model can't load, voice phrases still protect.
+    screamDetector = try {
+      ScreamDetector(this) { label, score ->
+        VoiceMetrics.lastText = "[$label ${String.format("%.2f", score)}]"
+        triggerNow(label, 0L)
+      }
+    } catch (e: Exception) {
+      Log.e(TAG, "scream detector unavailable", e)
+      null
+    }
+
     val minBuf = AudioRecord.getMinBufferSize(
       SAMPLE_RATE,
       AudioFormat.CHANNEL_IN_MONO,
@@ -211,6 +232,23 @@ class VoiceGuardService : Service() {
         val active = level >= VAD_RMS
         VoiceMetrics.vadActive = active
         if (!active) {
+          // Speech just ended. The VAD gate means the recognizers never get
+          // fed silence, so Vosk's endpointer can't finalise on its own —
+          // WITHOUT this flush, final results (and cross-utterance repeat
+          // detection with them) almost never happen. Flush explicitly.
+          if (speechStart != 0L) {
+            for (rec in recognizers) {
+              try {
+                val json = JSONObject(rec.finalResult)
+                updateConfidence(json)
+                val finalText = json.optString("text")
+                maybeTrigger(finalText, speechStart)
+                checkRepeatKeyword(finalText, speechStart, isFinal = true)
+              } catch (e: Exception) {
+                Log.w(TAG, "final flush failed", e)
+              }
+            }
+          }
           speechStart = 0L
           continue // VAD: skip silence (no ASR, no gain → battery stays low)
         }
@@ -222,13 +260,15 @@ class VoiceGuardService : Service() {
             updateConfidence(json)
             val finalText = json.optString("text")
             maybeTrigger(finalText, speechStart)
-            checkRepeatKeyword(finalText, speechStart)
+            checkRepeatKeyword(finalText, speechStart, isFinal = true)
           } else {
             val partial = JSONObject(rec.partialResult).optString("partial")
             if (partial.isNotBlank()) VoiceMetrics.lastText = partial
             maybeTrigger(partial, speechStart)
+            checkRepeatKeyword(partial, speechStart, isFinal = false)
           }
         }
+        screamDetector?.feed(buffer, n)
       }
     } catch (e: Exception) {
       Log.e(TAG, "listen loop error", e)
@@ -237,6 +277,8 @@ class VoiceGuardService : Service() {
       VoiceMetrics.vadActive = false
       try { record.stop() } catch (_: Exception) {}
       record.release()
+      screamDetector?.close()
+      screamDetector = null
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
@@ -300,22 +342,31 @@ class VoiceGuardService : Service() {
     triggerNow(hit, speechStart)
   }
 
-  // Repeat detection across separate utterances. Called ONLY on FINAL results
-  // so one shout can't count itself twice through its own growing partials
-  // (the recognizer resets after each final, so consecutive finals are always
-  // distinct audio).
-  private fun checkRepeatKeyword(text: String?, speechStart: Long) {
+  // Repeat detection. Two paths:
+  //  • ≥2 group hits ANYWHERE in one text ("help please help", "help hell") →
+  //    fire. Safe to run on partials too: two occurrences means two shouts.
+  //  • Cross-utterance: a single hit is timestamped ONLY on finals (partials
+  //    repeat while an utterance grows, so they'd count one shout many times);
+  //    a hit in two separate finals within the window → fire.
+  private fun checkRepeatKeyword(text: String?, speechStart: Long, isFinal: Boolean) {
     if (text.isNullOrBlank()) return
     val words = text.lowercase().trim().split(Regex("\\s+"))
     val now = System.currentTimeMillis()
-    for (k in REPEAT_KEYWORDS) {
-      val count = words.count { it == k }
+    for ((gi, group) in REPEAT_GROUPS.withIndex()) {
+      val count = words.count { it in group }
       if (count == 0) continue
-      val prev = lastKeywordAt[k] ?: 0L
-      lastKeywordAt[k] = now
-      if (count >= 2 || now - prev <= REPEAT_WINDOW_MS) {
-        triggerNow("$k $k", speechStart)
+      if (count >= 2) {
+        triggerNow("${group[0]} ${group[0]}", speechStart)
         return
+      }
+      if (isFinal) {
+        val key = "g$gi"
+        val prev = lastKeywordAt[key] ?: 0L
+        lastKeywordAt[key] = now
+        if (now - prev <= REPEAT_WINDOW_MS) {
+          triggerNow("${group[0]} ${group[0]}", speechStart)
+          return
+        }
       }
     }
   }
@@ -490,6 +541,7 @@ object VoiceMetrics {
   @Volatile var lastLatencyMs = 0L
   @Volatile var triggerCount = 0
   @Volatile var totalLatencyMs = 0L
+  @Volatile var screamScore = 0.0
 
   fun reset() {
     triggerCount = 0
