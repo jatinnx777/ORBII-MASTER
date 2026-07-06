@@ -35,9 +35,8 @@ export function Mascot({ source, size = 160, style }: Props) {
   return (
     <Image
       source={source ?? ORBI_HERO}
-      // The artwork is wider than tall (735x587), so scale by width and keep
-      // the aspect so it never squashes.
-      style={[{ width: size, height: Math.round(size * 0.8) }, styles.img, style as StyleProp<ImageStyle>]}
+      // Square artwork (the Orbi face). resizeMode contain keeps it crisp.
+      style={[{ width: size, height: size }, styles.img, style as StyleProp<ImageStyle>]}
       resizeMode="contain"
     />
   );

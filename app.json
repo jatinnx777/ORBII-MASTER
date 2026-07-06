@@ -10,8 +10,8 @@
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#F4ECE3"
+      "resizeMode": "contain",
+      "backgroundColor": "#9BBD11"
     },
     "ios": {
       "supportsTablet": false,
@@ -28,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FDF9F1"
+        "backgroundColor": "#9BBD11"
       },
       "package": "com.orbii.app",
       "permissions": [
