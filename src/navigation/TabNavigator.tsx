@@ -11,6 +11,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { SafetyScreen } from '@/screens/Safety/SafetyScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
@@ -22,10 +23,10 @@ import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// Card-swap transition between tabs. `current.progress` runs -1 (off-screen
-// right) → 0 (focused) → 1 (off-screen left). We slide + scale + fade each
-// scene so switching tabs feels like one card sliding away as the next slides
-// in, instead of a hard cut.
+// Calm cross-dissolve between tabs. The old version flew each screen sideways
+// and shrank it to 0.93, which read as cheap and janky. A gentle fade with a
+// whisper of scale (0.98 → 1) feels like the content settling into place,
+// which is what "premium" motion actually is: less movement, softer easing.
 const forCardSwap = ({
   current,
 }: {
@@ -38,15 +39,9 @@ const forCardSwap = ({
     }),
     transform: [
       {
-        translateX: current.progress.interpolate({
-          inputRange: [-1, 0, 1],
-          outputRange: [70, 0, -70],
-        }),
-      },
-      {
         scale: current.progress.interpolate({
           inputRange: [-1, 0, 1],
-          outputRange: [0.93, 1, 0.93],
+          outputRange: [0.985, 1, 0.985],
         }),
       },
     ],
@@ -55,7 +50,7 @@ const forCardSwap = ({
 
 const CARD_SWAP_SPEC = {
   animation: 'timing' as const,
-  config: { duration: 240, easing: Easing.out(Easing.cubic) },
+  config: { duration: 190, easing: Easing.out(Easing.quad) },
 };
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
@@ -122,6 +117,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
               canPreventDefault: true,
             });
             if (!focused && !event.defaultPrevented) {
+              Haptics.selectionAsync().catch(() => undefined);
               navigation.navigate(route.name as never);
             }
           };
