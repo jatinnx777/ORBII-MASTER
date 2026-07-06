@@ -177,14 +177,11 @@ function TabItem({
     }).start();
   }, [focused, progress]);
 
-  const pillScale = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.85, 1],
-  });
-  const pillOpacity = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
+  // Clean active state: warm tint + a gentle lift on the icon and a small
+  // dot beneath the label. No background pill; the bar stays quiet.
+  const iconLift = progress.interpolate({ inputRange: [0, 1], outputRange: [0, -2] });
+  const dotOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
+  const dotScale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
 
   const animatePress = (toValue: number) =>
     Animated.spring(press, {
@@ -198,7 +195,7 @@ function TabItem({
     <Pressable
       onPress={onPress}
       onLongPress={onLongPress}
-      onPressIn={() => animatePress(0.9)}
+      onPressIn={() => animatePress(0.92)}
       onPressOut={() => animatePress(1)}
       accessibilityRole="button"
       accessibilityState={focused ? { selected: true } : {}}
@@ -206,28 +203,29 @@ function TabItem({
       style={styles.itemPressable}
     >
       <Animated.View style={[styles.itemInner, { transform: [{ scale: press }] }]}>
-        {/* soft tinted pill behind the active item */}
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            styles.activePill,
-            { opacity: pillOpacity, transform: [{ scale: pillScale }] },
-          ]}
-        />
-        <Ionicons
-          name={icon}
-          size={focused ? 23 : 22}
-          color={focused ? colors.sageDeep : colors.textMuted}
-        />
+        <Animated.View style={{ transform: [{ translateY: iconLift }] }}>
+          <Ionicons
+            name={icon}
+            size={22}
+            color={focused ? colors.peachDeep : colors.textMuted}
+          />
+        </Animated.View>
         <Text
           style={[
             styles.itemLabel,
-            { color: focused ? colors.sageDeep : colors.textMuted },
+            {
+              color: focused ? colors.peachDeep : colors.textMuted,
+              fontFamily: focused ? fontFamilies.poppinsBold : fontFamilies.poppinsSemiBold,
+            },
           ]}
           numberOfLines={1}
         >
           {label}
         </Text>
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.activeDot, { opacity: dotOpacity, transform: [{ scale: dotScale }] }]}
+        />
       </Animated.View>
     </Pressable>
   );
@@ -246,16 +244,16 @@ const styles = StyleSheet.create({
     alignItems: 'stretch',
     backgroundColor: colors.surface,
     paddingHorizontal: 8,
-    paddingTop: 11,
-    paddingBottom: 11,
-    borderRadius: 30,
+    paddingTop: 9,
+    paddingBottom: 8,
+    borderRadius: 28,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
+    borderColor: 'rgba(255,255,255,0.8)',
     shadowColor: '#2D2D2D',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 24,
-    elevation: 10,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.07,
+    shadowRadius: 22,
+    elevation: 8,
   },
   itemPressable: {
     flex: 1,
@@ -267,18 +265,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    paddingVertical: 6,
+    paddingVertical: 5,
   },
-  // Soft tinted pill behind the active tab — fills the item cell so the
-  // active state reads as a calm highlight rather than a stray dot.
-  activePill: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 6,
-    right: 6,
-    borderRadius: 18,
-    backgroundColor: colors.sageSoft,
+  activeDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.peachDeep,
+    marginTop: 1,
   },
   itemLabel: {
     fontFamily: fontFamilies.poppinsSemiBold,
