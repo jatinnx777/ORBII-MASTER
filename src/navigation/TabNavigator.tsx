@@ -23,36 +23,6 @@ import type { TabParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// Calm cross-dissolve between tabs. The old version flew each screen sideways
-// and shrank it to 0.93, which read as cheap and janky. A gentle fade with a
-// whisper of scale (0.98 → 1) feels like the content settling into place,
-// which is what "premium" motion actually is: less movement, softer easing.
-const forCardSwap = ({
-  current,
-}: {
-  current: { progress: Animated.AnimatedInterpolation<number> };
-}) => ({
-  sceneStyle: {
-    opacity: current.progress.interpolate({
-      inputRange: [-1, 0, 1],
-      outputRange: [0, 1, 0],
-    }),
-    transform: [
-      {
-        scale: current.progress.interpolate({
-          inputRange: [-1, 0, 1],
-          outputRange: [0.985, 1, 0.985],
-        }),
-      },
-    ],
-  },
-});
-
-const CARD_SWAP_SPEC = {
-  animation: 'timing' as const,
-  config: { duration: 190, easing: Easing.out(Easing.quad) },
-};
-
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const ICONS: Record<
@@ -78,10 +48,12 @@ export function TabNavigator() {
       tabBar={(props) => <FloatingTabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // Card-swap slide between tabs (custom interpolator + spec).
-        animation: 'shift',
-        transitionSpec: CARD_SWAP_SPEC,
-        sceneStyleInterpolator: forCardSwap,
+        // Built-in fade: interruption-safe, so rapid tab switching never
+        // leaves a blank frame (the old custom cross-fade dipped to opacity 0
+        // and could strand a screen blank mid-animation).
+        animation: 'fade',
+        // Keep all tabs mounted so switching back is instant, never a blank.
+        lazy: false,
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />

@@ -24,10 +24,11 @@ export function MascotLoader({ message, pose = 'neutral', size = 96 }: Props) {
   const [i, setI] = useState(0);
 
   useEffect(() => {
+    // Gentle, slow breathing (not a bounce). Calm, not busy.
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -36,11 +37,11 @@ export function MascotLoader({ message, pose = 'neutral', size = 96 }: Props) {
 
   useEffect(() => {
     if (message) return;
-    const id = setInterval(() => setI((p) => (p + 1) % MESSAGES.length), 1600);
+    const id = setInterval(() => setI((p) => (p + 1) % MESSAGES.length), 2600);
     return () => clearInterval(id);
   }, [message]);
 
-  const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -10] });
+  const translateY = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
 
   return (
     <View style={styles.wrap}>

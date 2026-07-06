@@ -32,8 +32,8 @@ export function EmptyState({
     Animated.spring(enter, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }).start();
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(bob, { toValue: 1, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bob, { toValue: 0, duration: 1800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bob, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
       ]),
     );
     loop.start();
@@ -42,7 +42,7 @@ export function EmptyState({
 
   const translateY = Animated.add(
     enter.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }),
-    bob.interpolate({ inputRange: [0, 1], outputRange: [0, -7] }),
+    bob.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }),
   );
 
   return (
