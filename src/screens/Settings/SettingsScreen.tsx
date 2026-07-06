@@ -97,6 +97,7 @@ export function SettingsScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="person-circle"
+            tint="peach"
             label="Edit profile"
             value={profile?.username ? `@${profile.username}` : 'Set up your handle'}
             onPress={() => navigation.navigate('EditProfile')}
@@ -104,6 +105,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="people"
+            tint="coral"
             label="Emergency contacts"
             value={`${contactsCount} ${contactsCount === 1 ? 'contact' : 'contacts'}`}
             onPress={() => navigation.navigate('EmergencyContacts')}
@@ -114,6 +116,7 @@ export function SettingsScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="mic-outline"
+            tint="coral"
             label="Voice SOS phrases"
             value="Set your own secret phrases to trigger an SOS"
             onPress={() => navigation.navigate('VoicePhrases')}
@@ -124,6 +127,7 @@ export function SettingsScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="notifications"
+            tint="sage"
             label="Smart notifications"
             value={
               push
@@ -142,6 +146,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="phone-portrait"
+            tint="sage"
             label="Vibrate on nearby alerts"
             value={
               alertVibration
@@ -162,6 +167,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="location"
+            tint="sage"
             label="Location sharing"
             value="Always while app is open · only your circle sees you"
             onPress={() => Linking.openSettings().catch(() => undefined)}
@@ -172,6 +178,7 @@ export function SettingsScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="notifications-outline"
+            tint="gold"
             label="Notifications"
             value="Alerts, circle requests, and updates"
             onPress={() => navigation.navigate('Notifications')}
@@ -179,6 +186,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="people-circle"
+            tint="peach"
             label="Manage circles"
             value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
             onPress={() => navigation.navigate('Circles')}
@@ -187,14 +195,16 @@ export function SettingsScreen() {
           {isResponder ? (
             <Row
               icon="ribbon"
-              label="Verified helper"
+              tint="sage"
+            label="Verified helper"
               value="You're an ORBII responder. Open your Missions dashboard."
               onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
             />
           ) : (
             <Row
               icon="shield-checkmark-outline"
-              label="Register as a verified helper"
+              tint="sage"
+            label="Register as a verified helper"
               value="Upload your Aadhaar, PAN and a selfie to get verified and help people nearby"
               onPress={() => navigation.navigate('ResponderApplication')}
             />
@@ -235,6 +245,7 @@ export function SettingsScreen() {
           <Divider />
           <Row
             icon="language"
+            tint="gold"
             label="Language"
             value="English, Hindi, Punjabi, Tamil, Bengali"
             onPress={() => navigation.navigate('LanguageSelectorApp')}
@@ -245,6 +256,7 @@ export function SettingsScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="information-circle"
+            tint="neutral"
             label="About ORBII"
             value="What we do, who we are"
             onPress={() => navigation.navigate('About')}

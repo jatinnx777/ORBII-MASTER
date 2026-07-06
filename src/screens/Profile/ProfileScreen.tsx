@@ -121,6 +121,7 @@ export function ProfileScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="people"
+            tint="coral"
             label="Emergency contacts"
             value={
               profile.emergencyContacts.length === 0
@@ -132,6 +133,7 @@ export function ProfileScreen() {
           <Divider />
           <Row
             icon="ribbon"
+            tint="gold"
             label="ORBII plans"
             value="See what's in Free, Premium and Premium Plus"
             onPress={() => navigation.navigate('PremiumUpgrade')}
@@ -139,6 +141,7 @@ export function ProfileScreen() {
           <Divider />
           <Row
             icon="time"
+            tint="peach"
             label="SOS history"
             value={`${sosCount} incident${sosCount === 1 ? '' : 's'}`}
             onPress={() => navigation.navigate('History')}
@@ -151,27 +154,31 @@ export function ProfileScreen() {
             <Card style={styles.rowsCard}>
               <Row
                 icon="flash"
-                label="Missions dashboard"
+                tint="gold"
+            label="Missions dashboard"
                 value="Go online & respond to emergencies"
                 onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
               />
               <Divider />
               <Row
                 icon="wallet"
-                label="Earnings & payouts"
+                tint="sage"
+            label="Earnings & payouts"
                 value="See your balance and cash out"
                 onPress={() => navigation.navigate('ResponderEarnings')}
               />
               <Divider />
               <Row
                 icon="ribbon"
-                label="Recognition & Guardian level"
+                tint="gold"
+            label="Recognition & Guardian level"
                 onPress={() => navigation.navigate('ResponderRecognition')}
               />
               <Divider />
               <Row
                 icon="shield-checkmark"
-                label="Verification"
+                tint="sage"
+            label="Verification"
                 onPress={() => navigation.navigate('ResponderVerification')}
               />
             </Card>
@@ -182,7 +189,8 @@ export function ProfileScreen() {
             <Card style={styles.rowsCard}>
               <Row
                 icon="shield-checkmark"
-                label="Become an ORBII Responder"
+                tint="sage"
+            label="Become an ORBII Responder"
                 value="Verified people who reach emergencies fast"
                 onPress={() => navigation.navigate('ResponderApplication')}
               />
@@ -194,12 +202,14 @@ export function ProfileScreen() {
         <Card style={styles.rowsCard}>
           <Row
             icon="person-circle"
+            tint="peach"
             label="Edit profile"
             onPress={() => navigation.navigate('EditProfile')}
           />
           <Divider />
           <Row
             icon="settings"
+            tint="neutral"
             label="Settings"
             onPress={() => navigation.navigate('Settings')}
           />
