@@ -1,7 +1,19 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
+  Animated,
+  Dimensions,
+  Easing,
   Image,
   Linking,
+  PanResponder,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -11,13 +23,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { IconBadge, MLMapView, type MLMarker, type MLRoute } from '@/components/common';
-import { colors, radius, shadows, spacing, typography } from '@/theme';
+import {
+  MLMapView,
+  type MLMapViewHandle,
+  type AvatarMarker,
+  type MLMarker,
+  type MLRoute,
+} from '@/components/common';
+import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
-import { watchLocation, type LocationWatcher } from '@/services/location';
-import { publishLiveLocation, type LiveLocationHandle } from '@/services/live-location';
-import { fetchRoute } from '@/services/osrm';
-import { haversineMeters, formatDistance } from '@/utils/geo';
+import { startTracking, type TrackingSnapshot, type TrackingHandle, type AccuracyLevel } from '@/services/tracking';
+import { interpolate, haversineMeters, formatDistance } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
 import { recordHelperResponse } from '@/services/helper-profile';
 import type { AppStackParamList } from '@/navigation/types';
@@ -26,200 +42,451 @@ import type { GeoPoint } from '@/types';
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 type R = RouteProp<AppStackParamList, 'HelperNavigation'>;
 
-function formatMins(durationSeconds: number): string {
-  if (durationSeconds < 60) return 'Arriving';
-  return `${Math.round(durationSeconds / 60)} min`;
+const { height: SCREEN_H } = Dimensions.get('window');
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
 }
+
+// Uber-style glide: smoothly eases a displayed point toward each new GPS
+// target instead of letting the marker teleport. Confined to the memoized map
+// so the rest of the screen isn't re-rendering at 30fps.
+function useGlidePoint(target: GeoPoint | null, ms = 1200): GeoPoint | null {
+  const [, force] = useState(0);
+  const display = useRef<GeoPoint | null>(target);
+  const from = useRef<GeoPoint | null>(target);
+  const to = useRef<GeoPoint | null>(target);
+  const start = useRef(0);
+  const raf = useRef<number | null>(null);
+  const lastPaint = useRef(0);
+
+  useEffect(() => {
+    if (!target) return;
+    if (!display.current) {
+      display.current = target;
+      from.current = target;
+      to.current = target;
+      force((n) => n + 1);
+      return;
+    }
+    from.current = display.current;
+    to.current = target;
+    start.current = Date.now();
+    const tick = () => {
+      const t = Math.min(1, (Date.now() - start.current) / ms);
+      display.current = interpolate(from.current!, to.current!, easeOutCubic(t));
+      const now = Date.now();
+      if (now - lastPaint.current >= 28 || t >= 1) {
+        lastPaint.current = now;
+        force((n) => n + 1);
+      }
+      if (t < 1) raf.current = requestAnimationFrame(tick);
+    };
+    if (raf.current) cancelAnimationFrame(raf.current);
+    raf.current = requestAnimationFrame(tick);
+    return () => {
+      if (raf.current) cancelAnimationFrame(raf.current);
+    };
+  }, [target?.latitude, target?.longitude, ms]);
+
+  return display.current;
+}
+
+// The live map, isolated + memoized. Cameras follow both users; markers glide.
+const LiveMap = memo(function LiveMap({
+  helperTarget,
+  victimTarget,
+  route,
+  victimName,
+  victimPhoto,
+}: {
+  helperTarget: GeoPoint | null;
+  victimTarget: GeoPoint;
+  route: MLRoute | null;
+  victimName: string;
+  victimPhoto: string | null;
+}) {
+  const mapRef = useRef<MLMapViewHandle>(null);
+  const glidedHelper = useGlidePoint(helperTarget, 1200);
+  const glidedVictim = useGlidePoint(victimTarget, 1200);
+  const lastFit = useRef(0);
+
+  // Keep both visible with a smooth camera, throttled so it never jitters.
+  useEffect(() => {
+    if (!helperTarget) return;
+    const now = Date.now();
+    if (now - lastFit.current < 2500) return;
+    lastFit.current = now;
+    mapRef.current?.fitTo([helperTarget, victimTarget], 110);
+  }, [helperTarget?.latitude, helperTarget?.longitude, victimTarget.latitude, victimTarget.longitude]);
+
+  const markers: MLMarker[] = useMemo(
+    () => (glidedHelper ? [{ id: 'me', coordinate: glidedHelper, kind: 'user' as const }] : []),
+    [glidedHelper?.latitude, glidedHelper?.longitude],
+  );
+  const avatars: AvatarMarker[] = useMemo(
+    () => [
+      {
+        id: 'victim',
+        coordinate: glidedVictim ?? victimTarget,
+        name: victimName,
+        photoUri: victimPhoto,
+      },
+    ],
+    [glidedVictim?.latitude, glidedVictim?.longitude, victimName, victimPhoto],
+  );
+
+  return (
+    <MLMapView
+      ref={mapRef}
+      style={StyleSheet.absoluteFill}
+      markers={markers}
+      avatarMarkers={avatars}
+      route={route}
+      center={helperTarget ?? victimTarget}
+      zoom={15}
+      interactive
+    />
+  );
+});
+
+const ACC_META: Record<AccuracyLevel, { label: string; color: string }> = {
+  high: { label: 'High accuracy', color: colors.sageDeep },
+  medium: { label: 'Medium accuracy', color: colors.goldDeep },
+  approx: { label: 'Approximate', color: colors.coralDeep },
+  unknown: { label: 'Locating…', color: colors.textMuted },
+};
+
+type TimelineEvent = { key: string; label: string; at: number; icon: keyof typeof Ionicons.glyphMap };
 
 export function HelperNavigationScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
   const { sosId, name, phone, lat, lng, photoUri } = route.params;
-  const victim: GeoPoint = { latitude: lat, longitude: lng };
+  const victim: GeoPoint = useMemo(() => ({ latitude: lat, longitude: lng }), [lat, lng]);
 
   const profile = useAppSelector((s) => s.user.profile);
-  const startLoc = useAppSelector((s) => s.sos.currentLocation);
-  const [me, setMe] = useState<GeoPoint | null>(startLoc);
-  const [line, setLine] = useState<MLRoute | null>(null);
-  const [durationSec, setDurationSec] = useState<number | null>(null);
-  const [roadMeters, setRoadMeters] = useState<number | null>(null);
+  const [snap, setSnap] = useState<TrackingSnapshot | null>(null);
+  const [sharing, setSharing] = useState(true);
   const [announced, setAnnounced] = useState(false);
+  const trackRef = useRef<TrackingHandle | null>(null);
 
-  const lastRouteFrom = useRef<GeoPoint | null>(null);
-  const liveRef = useRef<LiveLocationHandle | null>(null);
-
-  // Broadcast the helper's live position to the victim's SOS channel so they
-  // see the helper approaching (and so "I've reached" can be confirmed).
+  // ── Tracking engine ──
   useEffect(() => {
     if (!profile) return;
-    liveRef.current = publishLiveLocation(sosId, {
-      id: profile.uid,
-      name: profile.name ?? 'A helper',
-      photoUri: profile.photoUri ?? null,
-      phone: profile.phone ?? null,
-    });
-    return () => liveRef.current?.unsubscribe();
-  }, [sosId, profile?.uid]);
-
-  // Live-track the helper's position + publish each update.
-  useEffect(() => {
-    let watcher: LocationWatcher | null = null;
-    watchLocation(
-      (point) => {
-        setMe(point);
-        liveRef.current?.publish(point);
+    const handle = startTracking({
+      sosId,
+      responder: {
+        id: profile.uid,
+        name: profile.name ?? 'A helper',
+        photoUri: profile.photoUri ?? null,
+        phone: profile.phone ?? null,
       },
-      { distanceIntervalMeters: 8, timeIntervalMs: 4000 },
-    ).then((w) => {
-      watcher = w;
+      victim,
+      onSnapshot: setSnap,
     });
-    return () => watcher?.remove();
-  }, []);
+    trackRef.current = handle;
+    return () => handle.stop();
+  }, [sosId, profile?.uid, victim]);
 
-  // Recompute the route whenever the helper has moved enough.
+  // ── Timeline (events animate in as they happen) ──
+  const [events, setEvents] = useState<TimelineEvent[]>([]);
+  const nearbyFired = useRef(false);
   useEffect(() => {
-    if (!me) return;
-    const moved =
-      !lastRouteFrom.current || haversineMeters(lastRouteFrom.current, me) > 25;
-    if (!moved && line) return;
-    lastRouteFrom.current = me;
-    let cancelled = false;
-    fetchRoute(me, victim).then((res) => {
-      if (cancelled || !res) return;
-      setLine({ geometry: res.geometry });
-      setDurationSec(res.durationSeconds);
-      setRoadMeters(res.distanceMeters);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [me]);
+    setEvents([
+      { key: 'sos', label: 'SOS triggered', at: Date.now() - 60000, icon: 'alert-circle' },
+      { key: 'accept', label: 'You accepted the request', at: Date.now(), icon: 'shield-checkmark' },
+    ]);
+  }, []);
+  const straightMeters = snap?.straightMeters ?? null;
+  useEffect(() => {
+    if (!nearbyFired.current && straightMeters != null && straightMeters < 150) {
+      nearbyFired.current = true;
+      setEvents((e) => [...e, { key: 'near', label: 'You are nearby', at: Date.now(), icon: 'walk' }]);
+    }
+  }, [straightMeters]);
 
-  const straightMeters = me ? haversineMeters(me, victim) : null;
-  const distanceLabel = formatDistance(roadMeters ?? straightMeters ?? 0);
-  const etaLabel = durationSec != null ? formatMins(durationSec) : '…';
-  // Only let the helper confirm arrival once they're genuinely close (50 m).
+  const acc = ACC_META[snap?.accuracy ?? 'unknown'];
+  const etaMin = snap?.etaSeconds != null ? Math.max(1, Math.round(snap.etaSeconds / 60)) : null;
+  const etaText = snap?.etaSeconds != null && snap.etaSeconds < 60 ? 'Arriving now' : etaMin != null ? `Arriving in ${etaMin} min` : 'Finding the fastest route…';
+  const distText = formatDistance(snap?.roadMeters ?? straightMeters ?? 0);
   const within50 = (straightMeters ?? 9999) < 50;
+  const routeLine: MLRoute | null = snap?.route ?? null;
 
-  const markers: MLMarker[] = [
-    { id: 'victim', coordinate: victim, kind: 'destination' },
-    ...(me ? [{ id: 'me', coordinate: me, kind: 'user' as const }] : []),
-  ];
-
-  const handleCall = () => {
-    if (phone) Linking.openURL(`tel:${phone}`).catch(() => undefined);
+  const call = () => phone && Linking.openURL(`tel:${phone}`).catch(() => undefined);
+  const message = () => phone && Linking.openURL(`sms:${phone}`).catch(() => undefined);
+  const navigateExt = () => {
+    const url = Platform.select({
+      ios: `http://maps.apple.com/?daddr=${lat},${lng}`,
+      default: `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+    });
+    if (url) Linking.openURL(url).catch(() => undefined);
   };
-
+  const toggleShare = () => {
+    const next = !sharing;
+    setSharing(next);
+    trackRef.current?.setShare(next);
+  };
   const handleArrived = () => {
     if (!within50 || announced) return;
     trackEvent('helper_arrived', { name });
-    if (me) liveRef.current?.announceArrived(me);
+    trackRef.current?.markArrived();
     setAnnounced(true);
-    // Count this as a completed response for the responder's recognition.
+    setEvents((e) => [...e, { key: 'arrived', label: 'You arrived', at: Date.now(), icon: 'checkmark-done-circle' }]);
     void recordHelperResponse();
   };
 
   return (
     <View style={styles.root}>
-      <MLMapView
-        markers={markers}
-        route={line}
-        fitAll
-        fitPadding={90}
-        interactive
-        style={StyleSheet.absoluteFill}
+      <LiveMap
+        helperTarget={snap?.helper ?? null}
+        victimTarget={snap?.victim ?? victim}
+        route={routeLine}
+        victimName={name}
+        victimPhoto={photoUri ?? null}
       />
 
-      {/* top bar */}
+      {/* ── Top: ETA + status ── */}
       <SafeAreaView edges={['top']} style={styles.topSafe} pointerEvents="box-none">
-        <View style={styles.topBar}>
+        <View style={styles.topRow}>
           <Pressable style={styles.roundBtn} onPress={() => navigation.popToTop()} hitSlop={10}>
             <Ionicons name="close" size={20} color={colors.textPrimary} />
           </Pressable>
-          <View style={styles.etaPill}>
-            <Ionicons name="navigate" size={14} color={colors.sageDeep} />
-            <Text style={styles.etaPillText}>
-              {etaLabel} · {distanceLabel}
+          <View style={[styles.accChip, { borderColor: acc.color }]}>
+            <View style={[styles.accDot, { backgroundColor: acc.color }]} />
+            <Text style={[styles.accText, { color: acc.color }]}>
+              {acc.label}{snap?.accuracyM != null ? ` · ${Math.round(snap.accuracyM)} m` : ''}
             </Text>
           </View>
           <View style={styles.roundBtn} />
         </View>
-      </SafeAreaView>
 
-      {/* bottom card */}
-      <SafeAreaView edges={['bottom']} style={styles.bottomSafe} pointerEvents="box-none">
-        <View style={styles.card}>
-          <View style={styles.victimRow}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={styles.avatar} />
-            ) : (
-              <IconBadge icon="person" tint="coral" size={48} />
-            )}
-            <View style={{ flex: 1, marginLeft: spacing.md }}>
-              <Text style={styles.toLabel}>On your way to help</Text>
-              <Text style={styles.victimName}>{name}</Text>
-            </View>
-            <Pressable style={styles.callBtn} onPress={handleCall} accessibilityRole="button">
-              <Ionicons name="call" size={20} color={colors.textInverse} />
-            </Pressable>
+        <View style={styles.etaCard}>
+          <Text style={styles.etaBig}>{etaText}</Text>
+          <View style={styles.etaMetaRow}>
+            <View style={styles.pulseDotSm} />
+            <Text style={styles.etaMeta}>Emergency in progress</Text>
+            <View style={styles.metaSep} />
+            <Text style={styles.etaMeta}>{snap?.victimMoving ? 'Victim is moving' : 'Victim is stationary'}</Text>
           </View>
-
-          <View style={styles.metricsRow}>
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{etaLabel}</Text>
-              <Text style={styles.metricLabel}>ETA</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metric}>
-              <Text style={styles.metricValue}>{distanceLabel}</Text>
-              <Text style={styles.metricLabel}>Distance</Text>
-            </View>
-            <View style={styles.metricDivider} />
-            <View style={styles.metric}>
-              <View style={[styles.liveDot, within50 && { backgroundColor: colors.sage }]} />
-              <Text style={styles.metricLabel}>{within50 ? 'Close' : 'Live'}</Text>
-            </View>
-          </View>
-
-          <Pressable
-            onPress={handleArrived}
-            disabled={!within50 || announced}
-            style={({ pressed }) => [
-              styles.arriveBtn,
-              within50 && !announced && styles.arriveBtnReady,
-              !within50 && { opacity: 0.55 },
-              pressed && { opacity: 0.9 },
-            ]}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={announced ? 'time' : 'checkmark-circle'}
-              size={18}
-              color={within50 && !announced ? colors.textInverse : colors.textPrimary}
-            />
-            <Text
-              style={[
-                styles.arriveText,
-                within50 && !announced && { color: colors.textInverse },
-              ]}
-            >
-              {announced
-                ? 'Waiting for them to confirm…'
-                : within50
-                  ? "I've reached"
-                  : 'Get within 50m to confirm'}
-            </Text>
-          </Pressable>
         </View>
       </SafeAreaView>
+
+      {/* ── Bottom sheet ── */}
+      <TrackingSheet
+        name={name}
+        photoUri={photoUri ?? null}
+        etaText={etaMin != null ? `${etaMin} min` : '—'}
+        distText={distText}
+        moving={snap?.victimMoving ?? false}
+        sharing={sharing}
+        within50={within50}
+        announced={announced}
+        events={events}
+        onCall={call}
+        onMessage={message}
+        onNavigate={navigateExt}
+        onShare={toggleShare}
+        onArrived={handleArrived}
+      />
     </View>
+  );
+}
+
+// ── Draggable bottom sheet (two snap points, gesture-driven) ──
+const PEEK = 268;
+const EXPANDED = Math.min(SCREEN_H * 0.82, 640);
+
+function TrackingSheet(props: {
+  name: string;
+  photoUri: string | null;
+  etaText: string;
+  distText: string;
+  moving: boolean;
+  sharing: boolean;
+  within50: boolean;
+  announced: boolean;
+  events: TimelineEvent[];
+  onCall: () => void;
+  onMessage: () => void;
+  onNavigate: () => void;
+  onShare: () => void;
+  onArrived: () => void;
+}) {
+  const collapsedY = EXPANDED - PEEK;
+  const translateY = useRef(new Animated.Value(collapsedY)).current;
+  const offset = useRef(collapsedY);
+
+  const snapTo = useCallback(
+    (to: number) => {
+      offset.current = to;
+      Animated.spring(translateY, {
+        toValue: to,
+        useNativeDriver: true,
+        friction: 9,
+        tension: 70,
+      }).start();
+    },
+    [translateY],
+  );
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 6,
+      onPanResponderMove: (_e, g) => {
+        const next = Math.max(0, Math.min(collapsedY, offset.current + g.dy));
+        translateY.setValue(next);
+      },
+      onPanResponderRelease: (_e, g) => {
+        const projected = offset.current + g.dy + g.vy * 90;
+        snapTo(projected < collapsedY / 2 ? 0 : collapsedY);
+      },
+    }),
+  ).current;
+
+  return (
+    <Animated.View style={[styles.sheet, { height: EXPANDED, transform: [{ translateY }] }]}>
+      <View {...pan.panHandlers} style={styles.grabZone}>
+        <View style={styles.grabber} />
+      </View>
+
+      {/* Victim row */}
+      <View style={styles.victimRow}>
+        {props.photoUri ? (
+          <Image source={{ uri: props.photoUri }} style={styles.avatar} />
+        ) : (
+          <View style={styles.avatarFallback}>
+            <Text style={styles.avatarInitial}>{(props.name || '?').charAt(0).toUpperCase()}</Text>
+          </View>
+        )}
+        <View style={{ flex: 1, marginLeft: spacing.md }}>
+          <Text style={styles.toLabel}>You're helping</Text>
+          <Text style={styles.victimName} numberOfLines={1}>{props.name}</Text>
+        </View>
+        <Pressable style={styles.callRound} onPress={props.onCall}>
+          <Ionicons name="call" size={20} color={colors.textInverse} />
+        </Pressable>
+      </View>
+
+      {/* Metrics */}
+      <View style={styles.metrics}>
+        <Metric value={props.etaText} label="ETA" />
+        <View style={styles.metricDiv} />
+        <Metric value={props.distText} label="Distance" />
+        <View style={styles.metricDiv} />
+        <Metric value={props.moving ? 'Moving' : 'Still'} label="Victim" tint={props.moving ? colors.sageDeep : colors.textSecondary} />
+      </View>
+
+      {/* Action buttons */}
+      <View style={styles.actionsRow}>
+        <Action icon="navigate" label="Navigate" onPress={props.onNavigate} />
+        <Action icon="chatbubble-ellipses" label="Message" onPress={props.onMessage} />
+        <Action
+          icon={props.sharing ? 'location' : 'location-outline'}
+          label={props.sharing ? 'Sharing' : 'Share'}
+          onPress={props.onShare}
+          active={props.sharing}
+        />
+      </View>
+
+      {/* Mark arrived */}
+      <Pressable
+        onPress={props.onArrived}
+        disabled={!props.within50 || props.announced}
+        style={[
+          styles.arriveBtn,
+          props.within50 && !props.announced && styles.arriveReady,
+          !props.within50 && { opacity: 0.55 },
+        ]}
+      >
+        <Ionicons
+          name={props.announced ? 'time' : 'checkmark-circle'}
+          size={18}
+          color={props.within50 && !props.announced ? colors.textInverse : colors.textPrimary}
+        />
+        <Text style={[styles.arriveText, props.within50 && !props.announced && { color: colors.textInverse }]}>
+          {props.announced ? 'Waiting for them to confirm…' : props.within50 ? "I've reached" : 'Get within 50 m to confirm arrival'}
+        </Text>
+      </Pressable>
+
+      {/* Timeline */}
+      <Text style={styles.sectionLabel}>LIVE TIMELINE</Text>
+      <View style={styles.timeline}>
+        {props.events.map((e, i) => (
+          <TimelineRow key={e.key} event={e} last={i === props.events.length - 1} />
+        ))}
+      </View>
+    </Animated.View>
+  );
+}
+
+function Metric({ value, label, tint }: { value: string; label: string; tint?: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={[styles.metricValue, tint && { color: tint }]}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
+    </View>
+  );
+}
+
+function Action({
+  icon,
+  label,
+  onPress,
+  active,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  active?: boolean;
+}) {
+  return (
+    <Pressable style={styles.action} onPress={onPress}>
+      <View style={[styles.actionIco, active && { backgroundColor: colors.sage }]}>
+        <Ionicons name={icon} size={20} color={active ? colors.textInverse : colors.sageDeep} />
+      </View>
+      <Text style={styles.actionLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function TimelineRow({ event, last }: { event: TimelineEvent; last: boolean }) {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 380,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [anim]);
+  return (
+    <Animated.View
+      style={[
+        styles.tlRow,
+        { opacity: anim, transform: [{ translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-14, 0] }) }] },
+      ]}
+    >
+      <View style={styles.tlLeft}>
+        <View style={styles.tlDot}>
+          <Ionicons name={event.icon} size={13} color={colors.textInverse} />
+        </View>
+        {!last ? <View style={styles.tlBar} /> : null}
+      </View>
+      <View style={styles.tlBody}>
+        <Text style={styles.tlLabel}>{event.label}</Text>
+        <Text style={styles.tlTime}>
+          {new Date(event.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </Text>
+      </View>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
   topSafe: { position: 'absolute', top: 0, left: 0, right: 0 },
-  topBar: {
+  topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -235,50 +502,101 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.icon,
   },
-  etaPill: {
+  accChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: 7,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingVertical: 8,
     borderRadius: radius.pill,
+    borderWidth: 1.5,
     ...shadows.icon,
   },
-  etaPillText: { ...typography.label, color: colors.textPrimary },
-  bottomSafe: { position: 'absolute', bottom: 0, left: 0, right: 0 },
-  card: {
-    margin: spacing.md,
+  accDot: { width: 8, height: 8, borderRadius: 4 },
+  accText: { fontFamily: fontFamilies.poppinsBold, fontSize: 12 },
+  etaCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.xxl,
-    padding: spacing.lg,
-    gap: spacing.md,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    ...shadows.card,
+  },
+  etaBig: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
+    color: colors.textPrimary,
+    letterSpacing: -0.4,
+  },
+  etaMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  pulseDotSm: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral },
+  etaMeta: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textSecondary },
+  metaSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: colors.textMuted },
+
+  sheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: spacing.lg,
     ...shadows.sheet,
   },
-  victimRow: { flexDirection: 'row', alignItems: 'center' },
-  avatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: colors.coralSoft },
-  toLabel: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
-  victimName: { ...typography.h3, color: colors.textPrimary },
-  callBtn: {
+  grabZone: { alignItems: 'center', paddingVertical: 12 },
+  grabber: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.creamDeep },
+
+  victimRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: colors.creamDeep },
+  avatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.sageSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.sageDeep },
+  toLabel: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textSecondary },
+  victimName: { fontFamily: fontFamilies.poppinsBold, fontSize: 19, color: colors.textPrimary },
+  callRound: {
     width: 48,
     height: 48,
     borderRadius: 24,
     backgroundColor: colors.sage,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.hero,
   },
-  metricsRow: {
+
+  metrics: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.cream,
-    borderRadius: radius.lg,
+    borderRadius: radius.xl,
     paddingVertical: spacing.md,
+    marginTop: spacing.md,
   },
   metric: { flex: 1, alignItems: 'center', gap: 2 },
-  metricDivider: { width: 1, height: 28, backgroundColor: colors.divider },
-  metricValue: { fontFamily: 'Poppins_700Bold', fontSize: 16, color: colors.textPrimary },
-  metricLabel: { ...typography.caption, fontSize: 11, color: colors.textMuted },
-  liveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.coral },
+  metricDiv: { width: 1, height: 30, backgroundColor: colors.divider },
+  metricValue: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textPrimary },
+  metricLabel: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.textMuted },
+
+  actionsRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
+  action: { flex: 1, alignItems: 'center', gap: 7 },
+  actionIco: {
+    width: 54,
+    height: 54,
+    borderRadius: 20,
+    backgroundColor: colors.sageSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textPrimary },
+
   arriveBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -286,8 +604,33 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     backgroundColor: colors.cream,
     borderRadius: radius.pill,
-    paddingVertical: 15,
+    paddingVertical: 16,
+    marginTop: spacing.md,
   },
-  arriveBtnReady: { backgroundColor: colors.sage },
-  arriveText: { fontFamily: 'Poppins_600SemiBold', fontSize: 15, color: colors.textPrimary },
+  arriveReady: { backgroundColor: colors.sage, ...shadows.hero },
+  arriveText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+
+  sectionLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    letterSpacing: 0.8,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
+  timeline: { paddingBottom: spacing.xl },
+  tlRow: { flexDirection: 'row', gap: spacing.md },
+  tlLeft: { alignItems: 'center', width: 26 },
+  tlDot: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.sage,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tlBar: { width: 2, flex: 1, backgroundColor: colors.sageSoft, marginVertical: 2 },
+  tlBody: { flex: 1, paddingBottom: spacing.md },
+  tlLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  tlTime: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textMuted, marginTop: 1 },
 });

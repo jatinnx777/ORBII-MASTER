@@ -233,3 +233,42 @@ export async function watchLocation(
   );
   return { remove: () => sub.remove() };
 }
+
+// A richer live fix used by the responder's live-tracking screen. On Android
+// expo-location is backed by Google Play Services' Fused Location Provider, so
+// this already fuses GPS + WiFi + cell + motion and returns the best available
+// position; the accuracy radius, heading and speed come straight off that fix.
+export type RichFix = {
+  point: GeoPoint;
+  /** 68% confidence radius in metres (smaller = better). */
+  accuracyM: number | null;
+  /** Compass heading in degrees, or null when stationary/unknown. */
+  headingDeg: number | null;
+  /** Ground speed in m/s, or null. */
+  speedMps: number | null;
+  at: number;
+};
+
+export async function watchPositionRich(
+  onUpdate: (fix: RichFix) => void,
+  opts: { distanceIntervalMeters?: number; timeIntervalMs?: number } = {},
+): Promise<LocationWatcher> {
+  const sub = await Location.watchPositionAsync(
+    {
+      accuracy: Location.Accuracy.BestForNavigation,
+      distanceInterval: opts.distanceIntervalMeters ?? 3,
+      timeInterval: opts.timeIntervalMs ?? 1500,
+    },
+    (position) => {
+      const c = position.coords;
+      onUpdate({
+        point: { latitude: c.latitude, longitude: c.longitude },
+        accuracyM: c.accuracy ?? null,
+        headingDeg: c.heading != null && c.heading >= 0 ? c.heading : null,
+        speedMps: c.speed != null && c.speed >= 0 ? c.speed : null,
+        at: position.timestamp ?? Date.now(),
+      });
+    },
+  );
+  return { remove: () => sub.remove() };
+}

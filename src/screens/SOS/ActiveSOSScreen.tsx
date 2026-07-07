@@ -48,7 +48,8 @@ import {
 import { historyRecordAdded } from '@/redux/slices/historySlice';
 import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
-import { subscribeLiveLocation } from '@/services/live-location';
+import { subscribeLiveLocation, publishVictimLocation } from '@/services/live-location';
+import { watchLocation, type LocationWatcher } from '@/services/location';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
@@ -207,6 +208,29 @@ export function ActiveSOSScreen() {
     }, 5000);
     return () => clearInterval(id);
   }, []);
+
+  // Publish the victim's own live position so a responding helper's tracking
+  // screen follows them if they keep moving, instead of a stale drop pin.
+  // Stops the moment the SOS is resolved.
+  useEffect(() => {
+    if (!activeSOS?.id || resolved) return;
+    const handle = publishVictimLocation(activeSOS.id);
+    if (userLocation) handle.publish(userLocation);
+    let watcher: LocationWatcher | null = null;
+    watchLocation((point) => handle.publish(point), {
+      distanceIntervalMeters: 6,
+      timeIntervalMs: 2000,
+    })
+      .then((w) => {
+        watcher = w;
+      })
+      .catch(() => undefined);
+    return () => {
+      watcher?.remove();
+      handle.unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSOS?.id, resolved]);
 
   useEffect(() => {
     if (resolved || !userLocation) return;

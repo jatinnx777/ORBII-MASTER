@@ -50,6 +50,57 @@ export function offsetPoint(
   };
 }
 
+// Compass bearing a→b in degrees (0 = North, clockwise). Drives the heading
+// arrow on the live marker.
+export function bearingDeg(a: GeoPoint, b: GeoPoint): number {
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+  return (Math.atan2(y, x) * (180 / Math.PI) + 360) % 360;
+}
+
+// Map-matching without a paid API: project a raw GPS point onto the nearest
+// segment of the current route polyline. If the fix is within a sane corridor
+// the marker rides the road instead of drifting into buildings/fields. Uses a
+// local equirectangular projection (accurate over the few-metre scale of GPS
+// drift). `coords` is the route geometry as [lng, lat] pairs.
+export function snapToRoute(
+  point: GeoPoint,
+  coords: [number, number][],
+): { point: GeoPoint; distanceM: number } | null {
+  if (!coords || coords.length < 2) return null;
+  const mPerDegLat = 111_320;
+  const mPerDegLng = 111_320 * Math.cos(toRad(point.latitude));
+  const px = point.longitude * mPerDegLng;
+  const py = point.latitude * mPerDegLat;
+  let best: GeoPoint | null = null;
+  let bestD2 = Infinity;
+  for (let i = 0; i < coords.length - 1; i++) {
+    const ax = coords[i][0] * mPerDegLng;
+    const ay = coords[i][1] * mPerDegLat;
+    const bx = coords[i + 1][0] * mPerDegLng;
+    const by = coords[i + 1][1] * mPerDegLat;
+    const dx = bx - ax;
+    const dy = by - ay;
+    const len2 = dx * dx + dy * dy || 1;
+    let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    const cx = ax + t * dx;
+    const cy = ay + t * dy;
+    const d2 = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = { longitude: cx / mPerDegLng, latitude: cy / mPerDegLat };
+    }
+  }
+  if (!best) return null;
+  return { point: best, distanceM: Math.sqrt(bestD2) };
+}
+
 export function etaSeconds(distanceMeters: number, avgSpeedKmh = 20): number {
   if (distanceMeters <= 0) return 0;
   const metersPerSecond = (avgSpeedKmh * 1000) / 3600;

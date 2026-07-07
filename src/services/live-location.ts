@@ -74,6 +74,78 @@ export function publishLiveLocation(
   };
 }
 
+// ── Victim → helper stream ────────────────────────────────────────────────
+// A separate topic so the two directions never share a channel (Supabase
+// realtime allows one channel per topic per client). The victim's device
+// publishes its live position here during an active SOS; the responder's
+// tracking screen subscribes so a MOVING victim is followed, not a stale pin.
+function victimChannelName(sosId: string): string {
+  return `sos-victim:${sosId}`;
+}
+
+export type VictimLocationPayload = { point: GeoPoint; at: number };
+
+export type VictimPublishHandle = {
+  publish: (point: GeoPoint) => void;
+  unsubscribe: () => void;
+};
+
+export function publishVictimLocation(sosId: string): VictimPublishHandle {
+  const channel = supabase.channel(victimChannelName(sosId), {
+    config: { broadcast: { ack: false, self: false } },
+  });
+  let subscribed = false;
+  channel.subscribe((status) => {
+    subscribed = status === 'SUBSCRIBED';
+  });
+  return {
+    publish: (point: GeoPoint) => {
+      if (!subscribed) return;
+      try {
+        channel.send({
+          type: 'broadcast',
+          event: 'vpos',
+          payload: { point, at: Date.now() } satisfies VictimLocationPayload,
+        });
+      } catch (err) {
+        console.warn('[live-location] victim publish failed', err);
+      }
+    },
+    unsubscribe: () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
+export function subscribeVictimLocation(
+  sosId: string,
+  onUpdate: (payload: VictimLocationPayload) => void,
+): { unsubscribe: () => void } {
+  const channel = supabase
+    .channel(victimChannelName(sosId), {
+      config: { broadcast: { ack: false, self: false } },
+    })
+    .on('broadcast', { event: 'vpos' }, (msg) => {
+      const payload = msg.payload as VictimLocationPayload | undefined;
+      if (!payload?.point) return;
+      onUpdate(payload);
+    })
+    .subscribe();
+  return {
+    unsubscribe: () => {
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // ignore
+      }
+    },
+  };
+}
+
 export function subscribeLiveLocation(
   sosId: string,
   onUpdate: (payload: LiveLocationPayload) => void,
