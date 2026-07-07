@@ -10,6 +10,8 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -81,6 +83,33 @@ export function CountdownScreen() {
     ]).start();
   }, [seconds, pulse]);
   const lastBuzzedSecondRef = useRef<number>(COUNTDOWN_SECONDS);
+
+  // Sonar: two rings expand + fade out from behind the number disc so the
+  // wait feels like a live signal going out, not a frozen screen.
+  const sonarA = useRef(new Animated.Value(0)).current;
+  const sonarB = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const wave = (v: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ]),
+      );
+    const a = wave(sonarA, 0);
+    const b = wave(sonarB, 900);
+    a.start();
+    b.start();
+    return () => {
+      a.stop();
+      b.stop();
+    };
+  }, [sonarA, sonarB]);
+  const sonarStyle = (v: Animated.Value) => ({
+    transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
+    opacity: v.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.5, 0] }),
+  });
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
@@ -221,6 +250,12 @@ export function CountdownScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="light" />
+      <LinearGradient
+        colors={isTest ? ['#5B6472', '#2E3440'] : ['#FF5A5A', '#E01E1E', '#A50D0D']}
+        start={{ x: 0.15, y: 0 }}
+        end={{ x: 0.85, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <View style={styles.content}>
         {isTest ? (
           <View style={styles.testBadge}>
@@ -230,11 +265,25 @@ export function CountdownScreen() {
         <Text style={styles.heading}>
           {isTest ? 'Practice SOS in' : 'Sending SOS in'}
         </Text>
-        <Animated.Text
-          style={[styles.number, { transform: [{ scale: pulse }] }]}
-        >
-          {triggering ? '…' : Math.max(seconds, 0)}
-        </Animated.Text>
+
+        {/* Number disc with sonar rings pulsing out behind it. */}
+        <View style={styles.discWrap}>
+          {!triggering ? (
+            <>
+              <Animated.View style={[styles.sonar, sonarStyle(sonarA)]} />
+              <Animated.View style={[styles.sonar, sonarStyle(sonarB)]} />
+            </>
+          ) : null}
+          <View style={styles.discOuter}>
+            <Animated.View style={[styles.disc, { transform: [{ scale: pulse }] }]}>
+              <Text style={styles.number}>
+                {triggering ? '…' : Math.max(seconds, 0)}
+              </Text>
+              {!triggering ? <Text style={styles.discUnit}>seconds</Text> : null}
+            </Animated.View>
+          </View>
+        </View>
+
         {!isInstant && !triggering ? (
           <View style={styles.progressTrack}>
             <Animated.View
@@ -270,6 +319,7 @@ export function CountdownScreen() {
           triggering && styles.cancelDisabled,
         ]}
       >
+        <Ionicons name="close" size={22} color={colors.textInverse} style={{ marginRight: 8 }} />
         <Text style={styles.cancelText}>CANCEL SOS</Text>
       </Pressable>
     </View>
@@ -293,15 +343,57 @@ const styles = StyleSheet.create({
   heading: {
     ...typography.h3,
     color: colors.textInverse,
-    opacity: 0.9,
+    opacity: 0.92,
     textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  discWrap: {
+    width: 260,
+    height: 260,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sonar: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.65)',
+  },
+  discOuter: {
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.28)',
+  },
+  disc: {
+    width: 186,
+    height: 186,
+    borderRadius: 93,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   number: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 160,
-    lineHeight: 180,
+    fontSize: 110,
+    lineHeight: 120,
     color: colors.textInverse,
     textAlign: 'center',
+  },
+  discUnit: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    color: colors.textInverse,
+    opacity: 0.8,
+    marginTop: -6,
   },
   caption: {
     ...typography.body,
@@ -324,22 +416,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   cancel: {
+    flexDirection: 'row',
     alignSelf: 'stretch',
     minHeight: touchTarget.comfortable + 6,
-    borderRadius: 18,
-    backgroundColor: '#D81B1B', // full, solid red cancel button
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 4,
   },
   cancelPressed: {
-    backgroundColor: '#B00000',
+    backgroundColor: 'rgba(255,255,255,0.30)',
     transform: [{ scale: 0.98 }],
   },
   cancelDisabled: {
