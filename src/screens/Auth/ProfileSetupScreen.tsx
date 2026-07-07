@@ -72,6 +72,10 @@ export function ProfileSetupScreen() {
   const phoneValid = isValidIndianPhone(phoneDigits);
   const contactPhoneDigits = contactPhone.replace(/\D/g, '').slice(0, 10);
   const contactPhoneValid = isValidIndianPhone(contactPhoneDigits);
+  // A guardian must be someone else. Blocking self-as-contact stops the most
+  // common setup mistake: entering your own number, so an SOS pings nobody.
+  const contactSameAsOwn =
+    contactPhoneValid && phoneValid && contactPhoneDigits === phoneDigits;
 
   const currentIndex = STEPS.indexOf(step);
   const progress = (currentIndex + 1) / STEPS.length;
@@ -82,11 +86,14 @@ export function ProfileSetupScreen() {
     if (step === 'phone') return phoneValid;
     if (step === 'contact') {
       return (
-        isValidName(contactName) && contactPhoneValid && !!contactRelation.trim()
+        isValidName(contactName) &&
+        contactPhoneValid &&
+        !contactSameAsOwn &&
+        !!contactRelation.trim()
       );
     }
     return false;
-  }, [step, name, usernameValid, phoneValid, contactName, contactPhoneValid, contactRelation]);
+  }, [step, name, usernameValid, phoneValid, contactName, contactPhoneValid, contactSameAsOwn, contactRelation]);
 
   const goNext = async () => {
     setError(null);
@@ -239,6 +246,11 @@ export function ProfileSetupScreen() {
               name={contactName}
               phone={contactPhone}
               relation={contactRelation}
+              phoneError={
+                contactSameAsOwn
+                  ? "This is your own number. Your guardian has to be someone else who can reach you."
+                  : null
+              }
               error={error}
               onName={(v) => {
                 setContactName(v);
@@ -466,6 +478,7 @@ function ContactStep({
   phone,
   relation,
   error,
+  phoneError,
   onName,
   onPhone,
   onRelation,
@@ -474,6 +487,7 @@ function ContactStep({
   phone: string;
   relation: string;
   error: string | null;
+  phoneError: string | null;
   onName: (v: string) => void;
   onPhone: (v: string) => void;
   onRelation: (v: string) => void;
@@ -504,6 +518,7 @@ function ContactStep({
         onChangeText={onPhone}
         placeholder="98765 43210"
         leftAdornment={<Text style={styles.countryCode}>+91</Text>}
+        error={phoneError ?? undefined}
         containerStyle={styles.input}
       />
       <Text style={styles.relationLabel}>Relation</Text>

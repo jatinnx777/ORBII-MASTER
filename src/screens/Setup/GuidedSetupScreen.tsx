@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { appAlert } from '@/components/common';
 // The real illustrated Orbi (from the brand artwork).
 const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -78,6 +79,16 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
   const saveContact = () => {
     const digits = cPhone.replace(/\D/g, '');
     if (!cName.trim() || digits.length < 10) return;
+    // A guardian can't be you. Block your own number so an SOS never pings
+    // a dead end.
+    const ownDigits = (profile?.phone ?? '').replace(/\D/g, '').slice(-10);
+    if (ownDigits && digits.slice(-10) === ownDigits) {
+      appAlert(
+        'That is your own number',
+        'Your guardian has to be someone else who can reach you.',
+      );
+      return;
+    }
     const contact = {
       id: `c_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
       name: cName.trim(),

@@ -52,6 +52,15 @@ export function ContactFormScreen() {
       appAlert('Check the form', 'Name, relation and 10-digit phone required.');
       return;
     }
+    // A contact can't be you: an SOS to your own number reaches no one.
+    const ownDigits = (profile?.phone ?? '').replace(/\D/g, '').slice(-10);
+    if (ownDigits && phone.replace(/\D/g, '').slice(-10) === ownDigits) {
+      appAlert(
+        'That is your own number',
+        'An emergency contact has to be someone else who can reach you. Add a parent, friend or partner instead.',
+      );
+      return;
+    }
     const e164 = toE164India(phone);
     const contact = editing
       ? {
