@@ -49,7 +49,13 @@
       ],
       "expo-asset",
       "expo-web-browser",
-      "expo-audio"
+      "expo-audio",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "ORBII can privately match your contacts on your device (numbers never leave your phone) to help block reward fraud. This is optional."
+        }
+      ]
     ],
     "extra": {
       "eas": {

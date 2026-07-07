@@ -9,6 +9,8 @@ const KEYS = {
   premiumWaitlist: 'orbii:premium:waitlist',
   premiumCoupon: 'orbii:premium:coupon-at',
   premiumTier: 'orbii:premium:tier',
+  contactMatch: 'orbii:contact-match-enabled',
+  contactMatchAt: 'orbii:contact-match-at',
   safetyTest: 'orbii:safety-test-done',
   safetyModes: 'orbii:safety-modes',
   locale: 'orbii:locale',

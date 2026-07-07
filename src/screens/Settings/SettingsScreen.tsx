@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { ContactMatchService } from '@/services/rewards';
 import {
   Linking,
   Pressable,
@@ -61,6 +62,33 @@ export function SettingsScreen() {
       }
     }
     dispatch(pushEnabledSet(next));
+  };
+
+  const [contactMatch, setContactMatch] = useState(false);
+  useEffect(() => {
+    ContactMatchService.isEnabled().then(setContactMatch);
+  }, []);
+  const handleContactMatch = async (next: boolean) => {
+    if (next) {
+      const n = await ContactMatchService.setEnabled(true);
+      if (n < 0) {
+        sheet.notify({
+          title: 'Contact access needed',
+          body: 'Allow contacts to turn on private fraud protection. Your numbers are hashed on your phone and never uploaded.',
+          tone: 'warning',
+        });
+        return;
+      }
+      setContactMatch(true);
+      sheet.notify({
+        title: 'Private fraud protection on',
+        body: `${n} contacts matched privately. Raw numbers never leave your phone.`,
+        tone: 'success',
+      });
+    } else {
+      await ContactMatchService.setEnabled(false);
+      setContactMatch(false);
+    }
   };
 
   const handleSignOut = () => {
@@ -171,6 +199,25 @@ export function SettingsScreen() {
             label="Location sharing"
             value="Always while app is open · only your circle sees you"
             onPress={() => Linking.openSettings().catch(() => undefined)}
+          />
+          <Divider />
+          <Row
+            icon="lock-closed"
+            tint="sage"
+            label="Private contact matching"
+            value={
+              contactMatch
+                ? 'On · contacts hashed on your phone, never uploaded'
+                : 'Off · helps block reward fraud (optional)'
+            }
+            right={
+              <Switch
+                value={contactMatch}
+                onValueChange={handleContactMatch}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={contactMatch ? colors.brandDeep : colors.background}
+              />
+            }
           />
         </Card>
 

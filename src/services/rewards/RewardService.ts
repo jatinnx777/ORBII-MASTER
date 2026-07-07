@@ -77,6 +77,35 @@ export const RewardService = {
     }
   },
 
+  // Victim-facing rating, keyed by SOS + helper (the victim doesn't know the
+  // rescue-event id). Pass stars=null to only record a decline.
+  async rateBySos(
+    sosId: string,
+    helperId: string,
+    stars: number | null,
+    confirmed: boolean,
+  ): Promise<void> {
+    try {
+      await supabase.rpc('rescue_rate_by_sos', {
+        p_sos: sosId,
+        p_helper: helperId,
+        p_stars: stars,
+        p_confirmed: confirmed,
+      });
+    } catch {
+      // best-effort
+    }
+  },
+
+  // Upload the victim's address book as on-device hashes (raw digits never sent).
+  async storeContactHashesPrehashed(hashes: string[]): Promise<void> {
+    try {
+      await supabase.rpc('store_contact_hashes_prehashed', { hashes });
+    } catch {
+      // best-effort
+    }
+  },
+
   /** Upload the victim's contacts as salted hashes (raw digits never stored). */
   async storeContactHashes(phones: string[]): Promise<void> {
     if (phones.length === 0) return;

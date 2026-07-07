@@ -15,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
 import {
+  appAlert,
   Mascot,
   MLMapView,
   useBrandSheet,
@@ -50,6 +51,7 @@ import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
 import { subscribeLiveLocation, publishVictimLocation } from '@/services/live-location';
 import { watchLocation, type LocationWatcher } from '@/services/location';
+import { RewardService } from '@/services/rewards';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
@@ -156,10 +158,24 @@ export function ActiveSOSScreen() {
         onConfirm: () => {
           setResolvedBy(r);
           setResolved(true);
+          const sid = activeSOS?.id;
+          if (sid) {
+            // Rate the helper — feeds the reward's rating bonus + confirms
+            // arrival (a real victim confirmation, not a self-declared one).
+            appAlert(
+              'How was your rescue?',
+              `Rate ${r.name ?? 'your helper'}. This helps ORBII reward the people who truly show up.`,
+              [
+                { text: 'Great', onPress: () => void RewardService.rateBySos(sid, r.id, 5, true) },
+                { text: 'Good', onPress: () => void RewardService.rateBySos(sid, r.id, 4, true) },
+                { text: 'Okay', onPress: () => void RewardService.rateBySos(sid, r.id, 3, true) },
+              ],
+            );
+          }
         },
       });
     },
-    [sheet],
+    [sheet, activeSOS?.id],
   );
 
   useEffect(() => {

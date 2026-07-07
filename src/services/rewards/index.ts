@@ -12,3 +12,4 @@ export { TrustScoreService } from './TrustScoreService';
 export { PaymentQueueService, type QueueSummary } from './PaymentQueueService';
 export { createGeofence, type Geofence } from './GeofenceArrivalService';
 export { createRouteVerifier, type RouteVerifier } from './RouteVerificationService';
+export { ContactMatchService } from './ContactMatchService';

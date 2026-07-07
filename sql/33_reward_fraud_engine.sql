@@ -65,6 +65,17 @@ begin
 end;
 $$;
 
+-- Deterministic, NON-peppered hash with a fixed domain salt. This is the scheme
+-- the APP uses to hash the victim's address book ON-DEVICE (via expo-crypto) so
+-- raw numbers never leave the phone. The salt is not secret (it ships in the
+-- app); it only provides domain separation. Must byte-match the client:
+--   sha256("orbii-contact-match-v1:" + last10digits)
+create or replace function hash_phone_plain(p text)
+returns text language sql immutable as $$
+  select case when length(normalize_phone(p)) < 10 then null
+    else encode(digest('orbii-contact-match-v1:' || normalize_phone(p), 'sha256'), 'hex') end;
+$$;
+
 -- Victim's hashed contacts. The app sends RAW numbers to store_contact_hashes;
 -- they are hashed here and only the hash is persisted — raw digits are never
 -- written to a table.
@@ -91,6 +102,28 @@ begin
   foreach ph in array phones loop
     h := hash_phone(ph);
     if h is not null then
+      insert into victim_contact_hashes (user_id, phone_hash)
+        values (uid, h) on conflict do nothing;
+      c := c + 1;
+    end if;
+  end loop;
+  return c;
+end;
+$$;
+
+-- Preferred path: the app hashes the address book ON-DEVICE and uploads only
+-- the hashes (hash_phone_plain scheme). Raw numbers never touch the network.
+-- Replaces the caller's previous set so a re-sync stays accurate.
+create or replace function store_contact_hashes_prehashed(hashes text[])
+returns int
+language plpgsql security definer set search_path = public
+as $$
+declare uid uuid := auth.uid(); h text; c int := 0;
+begin
+  if uid is null then return 0; end if;
+  delete from victim_contact_hashes where user_id = uid;
+  foreach h in array hashes loop
+    if h ~ '^[0-9a-f]{64}$' then
       insert into victim_contact_hashes (user_id, phone_hash)
         values (uid, h) on conflict do nothing;
       c := c + 1;
@@ -229,10 +262,12 @@ begin
     return query select false, 'emergency_contact'; return;
   end if;
 
-  -- (b) helper's number is anywhere in the victim's uploaded contacts
-  if v_hash is not null and exists (
+  -- (b) helper's number is anywhere in the victim's uploaded contacts.
+  -- The address book is hashed on-device with the plain scheme, so compare
+  -- with hash_phone_plain(helper_phone).
+  if exists (
     select 1 from victim_contact_hashes vch
-    where vch.user_id = v_victim and vch.phone_hash = v_hash
+    where vch.user_id = v_victim and vch.phone_hash = hash_phone_plain(v_hphone)
   ) then
     return query select false, 'mutual_contact'; return;
   end if;
@@ -469,6 +504,18 @@ begin
 end;
 $$;
 
+-- Victim-facing variant keyed by (sos, helper) — the victim's app knows the
+-- helper's id from the live channel but not the rescue_event id.
+create or replace function rescue_rate_by_sos(p_sos uuid, p_helper uuid, p_stars int, p_confirmed boolean)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  update rescue_events set
+    victim_rating = case when p_stars is null then victim_rating else greatest(1, least(5, p_stars)) end,
+    victim_confirmed = coalesce(p_confirmed, victim_confirmed)
+  where sos_id = p_sos and helper_id = p_helper and victim_id = auth.uid();
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- 9. WEEKLY PAYOUT BATCH (admin only — payments are never instant)
 -- ---------------------------------------------------------------------------
@@ -519,6 +566,8 @@ revoke all on function process_weekly_payouts() from public, anon, authenticated
 revoke all on function finalize_rescue_reward(uuid) from public, anon;   -- called only via rescue_depart
 revoke all on function hash_phone(text) from public, anon, authenticated;
 grant execute on function store_contact_hashes(text[]) to authenticated;
+grant execute on function store_contact_hashes_prehashed(text[]) to authenticated;
+grant execute on function rescue_rate_by_sos(uuid,uuid,int,boolean) to authenticated;
 grant execute on function rescue_accept(uuid,uuid,timestamptz,text,boolean) to authenticated;
 grant execute on function rescue_report_movement(uuid,int,boolean) to authenticated;
 grant execute on function rescue_geofence_arrival(uuid) to authenticated;
