@@ -10,13 +10,12 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StatusBar } from 'expo-status-bar';
-import { colors, fontFamilies, radius, spacing, touchTarget, typography } from '@/theme';
+import { colors, fontFamilies, radius, shadows, spacing, touchTarget, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   sosDispatchFailed,
@@ -83,33 +82,6 @@ export function CountdownScreen() {
     ]).start();
   }, [seconds, pulse]);
   const lastBuzzedSecondRef = useRef<number>(COUNTDOWN_SECONDS);
-
-  // Sonar: two rings expand + fade out from behind the number disc so the
-  // wait feels like a live signal going out, not a frozen screen.
-  const sonarA = useRef(new Animated.Value(0)).current;
-  const sonarB = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const wave = (v: Animated.Value, delay: number) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.ease), useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ]),
-      );
-    const a = wave(sonarA, 0);
-    const b = wave(sonarB, 900);
-    a.start();
-    b.start();
-    return () => {
-      a.stop();
-      b.stop();
-    };
-  }, [sonarA, sonarB]);
-  const sonarStyle = (v: Animated.Value) => ({
-    transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }],
-    opacity: v.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.5, 0] }),
-  });
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
@@ -247,211 +219,169 @@ export function CountdownScreen() {
     }
   };
 
-  return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-      <LinearGradient
-        colors={isTest ? ['#5B6472', '#2E3440'] : ['#FF5A5A', '#E01E1E', '#A50D0D']}
-        start={{ x: 0.15, y: 0 }}
-        end={{ x: 0.85, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.content}>
-        {isTest ? (
-          <View style={styles.testBadge}>
-            <Text style={styles.testBadgeText}>PRACTICE · NO ALERTS SENT</Text>
-          </View>
-        ) : null}
-        <Text style={styles.heading}>
-          {isTest ? 'Practice SOS in' : 'Sending SOS in'}
-        </Text>
+  const accent = isTest ? colors.textSecondary : colors.coral;
+  const accentDeep = isTest ? colors.textPrimary : colors.coralDeep;
 
-        {/* Number disc with sonar rings pulsing out behind it. */}
-        <View style={styles.discWrap}>
-          {!triggering ? (
-            <>
-              <Animated.View style={[styles.sonar, sonarStyle(sonarA)]} />
-              <Animated.View style={[styles.sonar, sonarStyle(sonarB)]} />
-            </>
-          ) : null}
-          <View style={styles.discOuter}>
-            <Animated.View style={[styles.disc, { transform: [{ scale: pulse }] }]}>
-              <Text style={styles.number}>
-                {triggering ? '…' : Math.max(seconds, 0)}
-              </Text>
-              {!triggering ? <Text style={styles.discUnit}>seconds</Text> : null}
-            </Animated.View>
+  return (
+    <View style={[styles.container, { backgroundColor: isTest ? colors.creamDeep : colors.coralSoft }]}>
+      <StatusBar style="dark" />
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <View style={styles.top}>
+          <View style={[styles.badge, { backgroundColor: isTest ? colors.surface : '#fff' }]}>
+            <View style={[styles.badgeDot, { backgroundColor: accent }]} />
+            <Text style={[styles.badgeText, { color: accentDeep }]}>
+              {isTest ? 'PRACTICE · NO ALERTS SENT' : 'EMERGENCY SOS'}
+            </Text>
           </View>
         </View>
 
-        {!isInstant && !triggering ? (
-          <View style={styles.progressTrack}>
-            <Animated.View
-              style={[
-                styles.progressFill,
-                {
-                  width: progress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: ['0%', '100%'],
-                  }),
-                },
-              ]}
-            />
-          </View>
-        ) : null}
-        <Text style={styles.caption}>
-          {triggering
-            ? isTest
-              ? 'Test SOS recorded. No real alerts dispatched.'
-              : 'Dispatching helpers and alerting police.'
-            : 'Tap cancel to stop an accidental alert.'}
-        </Text>
-      </View>
+        {/* Clean white card carries the countdown — calm, but serious. */}
+        <View style={styles.card}>
+          <Text style={styles.heading}>
+            {isTest ? 'Practice SOS in' : 'Sending your SOS in'}
+          </Text>
 
-      <Pressable
-        onPress={handleCancel}
-        disabled={triggering}
-        accessibilityRole="button"
-        accessibilityLabel="Cancel SOS"
-        style={({ pressed }) => [
-          styles.cancel,
-          pressed && styles.cancelPressed,
-          triggering && styles.cancelDisabled,
-        ]}
-      >
-        <Ionicons name="close" size={22} color={colors.textInverse} style={{ marginRight: 8 }} />
-        <Text style={styles.cancelText}>CANCEL SOS</Text>
-      </Pressable>
+          <Animated.Text
+            style={[styles.number, { color: accent, transform: [{ scale: pulse }] }]}
+          >
+            {triggering ? '…' : Math.max(seconds, 0)}
+          </Animated.Text>
+          {!triggering ? <Text style={styles.unit}>seconds</Text> : null}
+
+          {!isInstant && !triggering ? (
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[
+                  styles.progressFill,
+                  {
+                    backgroundColor: accent,
+                    width: progress.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['0%', '100%'],
+                    }),
+                  },
+                ]}
+              />
+            </View>
+          ) : null}
+
+          <Text style={styles.caption}>
+            {triggering
+              ? isTest
+                ? 'Test SOS recorded. No real alerts were sent.'
+                : 'Alerting your circle and nearby helpers now.'
+              : 'We’ll alert your circle and nearby helpers.'}
+          </Text>
+        </View>
+
+        <Pressable
+          onPress={handleCancel}
+          disabled={triggering}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel SOS"
+          style={({ pressed }) => [
+            styles.cancel,
+            pressed && styles.cancelPressed,
+            triggering && styles.cancelDisabled,
+          ]}
+        >
+          <Text style={styles.cancelText}>I’m safe, cancel</Text>
+        </Pressable>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  container: { flex: 1 },
+  safe: {
     flex: 1,
-    backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xxl,
     justifyContent: 'space-between',
-  },
-  content: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.lg,
+  },
+  top: { paddingTop: spacing.lg, alignItems: 'center' },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    borderRadius: radius.pill,
+    ...shadows.icon,
+  },
+  badgeDot: { width: 8, height: 8, borderRadius: 4 },
+  badgeText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11.5,
+    letterSpacing: 1.2,
+  },
+  card: {
+    alignSelf: 'stretch',
+    backgroundColor: colors.surface,
+    borderRadius: 36,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
+    ...shadows.card,
   },
   heading: {
-    ...typography.h3,
-    color: colors.textInverse,
-    opacity: 0.92,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    color: colors.textSecondary,
     textAlign: 'center',
-    letterSpacing: 0.3,
-  },
-  discWrap: {
-    width: 260,
-    height: 260,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sonar: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.65)',
-  },
-  discOuter: {
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.28)',
-  },
-  disc: {
-    width: 186,
-    height: 186,
-    borderRadius: 93,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   number: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 110,
-    lineHeight: 120,
-    color: colors.textInverse,
+    fontSize: 132,
+    lineHeight: 148,
     textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
-  discUnit: {
+  unit: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 13,
     letterSpacing: 3,
     textTransform: 'uppercase',
-    color: colors.textInverse,
-    opacity: 0.8,
-    marginTop: -6,
+    color: colors.textMuted,
+    marginTop: -8,
   },
+  progressTrack: {
+    height: 8,
+    alignSelf: 'stretch',
+    borderRadius: 4,
+    backgroundColor: colors.creamDeep,
+    marginTop: spacing.lg,
+    overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: 4 },
   caption: {
     ...typography.body,
-    color: colors.textInverse,
-    opacity: 0.85,
+    fontSize: 14,
+    color: colors.textSecondary,
     textAlign: 'center',
+    marginTop: spacing.md,
     maxWidth: 300,
   },
-  testBadge: {
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    paddingHorizontal: spacing.md,
-    paddingVertical: 6,
-    borderRadius: radius.sm,
-  },
-  testBadgeText: {
-    ...typography.caption,
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.textInverse,
-    letterSpacing: 1.5,
-    fontSize: 11,
-  },
   cancel: {
-    flexDirection: 'row',
     alignSelf: 'stretch',
     minHeight: touchTarget.comfortable + 6,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
+    ...shadows.card,
   },
   cancelPressed: {
-    backgroundColor: 'rgba(255,255,255,0.30)',
     transform: [{ scale: 0.98 }],
+    backgroundColor: colors.creamDeep,
   },
-  cancelDisabled: {
-    opacity: 0.5,
-  },
+  cancelDisabled: { opacity: 0.5 },
   cancelText: {
-    ...typography.button,
-    fontSize: 19,
-    color: colors.textInverse,
-    letterSpacing: 1.5,
-  },
-  progressTrack: {
-    height: 6,
-    width: '70%',
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginTop: spacing.md,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 3,
-    backgroundColor: colors.textInverse,
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 17,
+    color: colors.textPrimary,
   },
 });

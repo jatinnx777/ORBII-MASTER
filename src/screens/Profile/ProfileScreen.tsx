@@ -126,11 +126,6 @@ export function ProfileScreen() {
             icon="people"
             tint="coral"
             label="Emergency contacts"
-            value={
-              profile.emergencyContacts.length === 0
-                ? 'Add trusted people to notify in an emergency'
-                : `${profile.emergencyContacts.length} added`
-            }
             onPress={() => navigation.navigate('EmergencyContacts')}
           />
           <Divider />
@@ -138,7 +133,6 @@ export function ProfileScreen() {
             icon="ribbon"
             tint="gold"
             label="ORBII plans"
-            value="See what's in Free, Premium and Premium Plus"
             onPress={() => navigation.navigate('PremiumUpgrade')}
           />
           <Divider />
@@ -146,7 +140,6 @@ export function ProfileScreen() {
             icon="time"
             tint="peach"
             label="SOS history"
-            value={`${sosCount} incident${sosCount === 1 ? '' : 's'}`}
             onPress={() => navigation.navigate('History')}
           />
         </Card>
@@ -159,7 +152,6 @@ export function ProfileScreen() {
                 icon="flash"
                 tint="gold"
             label="Missions dashboard"
-                value="Go online & respond to emergencies"
                 onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
               />
               <Divider />
@@ -167,7 +159,6 @@ export function ProfileScreen() {
                 icon="wallet"
                 tint="sage"
             label="Earnings & payouts"
-                value="See your balance and cash out"
                 onPress={() => navigation.navigate('ResponderEarnings')}
               />
               <Divider />
@@ -194,7 +185,6 @@ export function ProfileScreen() {
                 icon="shield-checkmark"
                 tint="sage"
             label="Become an ORBII Responder"
-                value="Verified people who reach emergencies fast"
                 onPress={() => navigation.navigate('ResponderApplication')}
               />
             </Card>
@@ -227,7 +217,6 @@ export function ProfileScreen() {
           <Row
             icon="trash"
             label="Delete account"
-            value="Permanently erase your account and data"
             destructive
             onPress={handleDeleteAccount}
           />

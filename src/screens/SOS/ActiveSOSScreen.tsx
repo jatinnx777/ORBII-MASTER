@@ -642,7 +642,7 @@ export function ActiveSOSScreen() {
               accessibilityRole="button"
               accessibilityLabel="Call helper"
             >
-              <Ionicons name="call" size={18} color={colors.primary} />
+              <Ionicons name="call" size={20} color={colors.textInverse} />
             </Pressable>
           </View>
         ) : (
@@ -1056,17 +1056,19 @@ const styles = StyleSheet.create({
   },
   statusBanner: {
     backgroundColor: colors.brandSoft,
-    paddingVertical: 10,
-    borderRadius: radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
     alignItems: 'center',
+    alignSelf: 'center',
   },
   call112: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
+    paddingVertical: 16,
+    borderRadius: radius.pill,
     backgroundColor: colors.primary,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 6 },
@@ -1088,7 +1090,7 @@ const styles = StyleSheet.create({
   },
   mapCard: {
     height: 280,
-    borderRadius: radius.lg,
+    borderRadius: radius.xxl,
     overflow: 'hidden',
     backgroundColor: colors.brandSoft,
     ...shadows.card,
@@ -1100,9 +1102,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radius.lg,
-    padding: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
     ...shadows.card,
   },
   helperGreeting: {
@@ -1116,21 +1118,20 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
   callBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surface,
-    borderWidth: 1.5,
-    borderColor: colors.primary,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: colors.sage,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.hero,
   },
   searchingCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.background,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
     padding: spacing.lg,
     ...shadows.card,
   },
