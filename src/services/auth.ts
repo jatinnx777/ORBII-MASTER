@@ -6,7 +6,7 @@ import { listFriendsForUser } from './friend-requests';
 import { syncUsersPublic } from './users-public';
 import { syncProfile } from './profile-sync';
 import { uploadAvatar } from './avatars';
-import { listEmergencyContacts } from './emergency-contacts';
+import { loadEmergencyContacts } from './emergency-contacts';
 import { fetchSOSHistory } from './sos-history';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
 
@@ -160,7 +160,9 @@ async function bootstrapProfile(
 
   const [friends, emergencyContacts, history] = await Promise.all([
     listFriendsForUser(user.id),
-    listEmergencyContacts(user.id),
+    // Merges the server list with the durable local cache and repairs any
+    // contact that never uploaded, so a guardian number survives sign-out.
+    loadEmergencyContacts(user.id),
     fetchSOSHistory(user.id),
   ]);
 

@@ -21,6 +21,7 @@ import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle, deleteAccount } from '@/services/auth';
+import { clearCachedContacts } from '@/services/emergency-contacts';
 import { useIsResponder } from '@/services/roles';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -70,6 +71,8 @@ export function ProfileScreen() {
           });
           return;
         }
+        // A deleted account must leave no local trace of contacts.
+        await clearCachedContacts(profile.uid).catch(() => undefined);
         dispatch(signedOut());
       },
     });

@@ -5,6 +5,7 @@ import { appHydrated } from './slices/appSlice';
 import { profileHydrated } from './slices/userSlice';
 import { safetyModesHydrated } from './slices/safetyModesSlice';
 import { syncProfile } from '@/services/profile-sync';
+import { cacheContactsLocally } from '@/services/emergency-contacts';
 import type { GhostModeState, DeadmanTimerState } from './slices/safetyModesSlice';
 import {
   clearSession,
@@ -98,7 +99,16 @@ function subscribePersist() {
         // Best-effort server-side sync. Fails silently if the profiles
         // table isn't in Supabase yet.
         void syncProfile(next.user.profile);
+        // Durable, per-user safety cache of emergency contacts. Survives
+        // sign-out (unlike the session profile above) so contacts are never
+        // lost even if a server write failed — merged back in on next login.
+        void cacheContactsLocally(
+          next.user.profile.uid,
+          next.user.profile.emergencyContacts,
+        );
       } else {
+        // Sign-out clears the session profile, but NOT the per-user contacts
+        // cache — re-login restores it.
         removeItem(storageKeys.profile);
         clearSession();
       }
