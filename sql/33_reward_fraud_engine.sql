@@ -476,13 +476,34 @@ $$;
 -- via the existing admin_credit_earning. Run weekly after fraud review.
 create or replace function process_weekly_payouts()
 returns int language plpgsql security definer set search_path = public as $$
-declare r record; n int := 0;
+declare r record; n int := 0; cfg reward_config%rowtype; day_n int; week_n int; month_n int;
 begin
+  select * into cfg from reward_config where id;
+  -- Oldest first so the caps fill in chronological order as we mark rows paid.
   for r in
     select rr.* from rescue_rewards rr
     where rr.status = 'pending_review' and rr.amount_paise > 0
     order by rr.created_at asc
   loop
+    -- Re-check fraud at payout time; anything risky goes to manual review.
+    if r.fraud_score > cfg.fraud_threshold then
+      update rescue_rewards set status = 'manual_review', reason = 'fraud', decided_at = now() where id = r.id;
+      continue;
+    end if;
+    -- Enforce the paid caps against ALREADY-PAID rewards in the same
+    -- day/week/month as THIS reward (the batch pays retroactively).
+    select count(*) into day_n from rescue_rewards
+      where helper_id = r.helper_id and status = 'paid' and created_at::date = r.created_at::date;
+    select count(*) into week_n from rescue_rewards
+      where helper_id = r.helper_id and status = 'paid'
+        and date_trunc('week', created_at) = date_trunc('week', r.created_at);
+    select count(*) into month_n from rescue_rewards
+      where helper_id = r.helper_id and status = 'paid'
+        and date_trunc('month', created_at) = date_trunc('month', r.created_at);
+    if day_n >= cfg.daily_limit or week_n >= cfg.weekly_limit or month_n >= cfg.monthly_limit then
+      update rescue_rewards set status = 'manual_review', reason = 'over_limit', decided_at = now() where id = r.id;
+      continue;
+    end if;
     perform admin_credit_earning(r.helper_id, r.amount_paise, 'Rescue reward');
     update rescue_rewards set status = 'paid', decided_at = now() where id = r.id;
     n := n + 1;
