@@ -78,7 +78,11 @@ export function Button({
       >
         {loading ? (
           <ActivityIndicator
-            color={variant === 'danger' ? colors.textInverse : colors.textPrimary}
+            color={
+              variant === 'danger' || variant === 'primary'
+                ? colors.textInverse
+                : colors.textPrimary
+            }
           />
         ) : (
           <View style={styles.content}>
@@ -150,7 +154,7 @@ const styles = StyleSheet.create({
 });
 
 const textStyles: Record<Variant, TextStyle> = {
-  primary: { color: colors.textPrimary },
+  primary: { color: colors.textInverse },
   danger: { color: colors.textInverse },
   secondary: { color: colors.textPrimary },
   outline: { color: colors.textPrimary },

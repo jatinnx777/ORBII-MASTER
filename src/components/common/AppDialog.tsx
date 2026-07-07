@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 15,
   },
-  btnTextDefault: { color: colors.textPrimary },
+  btnTextDefault: { color: colors.textInverse },
   btnTextDestructive: { color: colors.textInverse },
   btnTextCancel: { color: colors.textSecondary },
 });

@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#9BBD11"
+      "backgroundColor": "#4BAD3F"
     },
     "ios": {
       "supportsTablet": false,
@@ -28,7 +28,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#9BBD11"
+        "backgroundColor": "#4BAD3F"
       },
       "package": "com.orbii.app",
       "permissions": [
