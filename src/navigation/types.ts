@@ -28,6 +28,22 @@ export type AppStackParamList = {
   Tabs: { screen?: keyof TabParamList } | undefined;
   SOSCountdown: { instant?: boolean; test?: boolean; voice?: boolean } | undefined;
   ActiveSOS: undefined;
+  // Victim-facing "help is coming" screen shown once a helper accepts. All
+  // params optional so it degrades gracefully if some data isn't in yet.
+  HelperResponse:
+    | {
+        name?: string;
+        phone?: string | null;
+        photoUri?: string | null;
+        vehicle?: string;
+        distanceM?: number;
+        etaMin?: number;
+        helperLat?: number;
+        helperLng?: number;
+        victimLat?: number;
+        victimLng?: number;
+      }
+    | undefined;
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
   SafetyReadiness: undefined;

@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { TabNavigator } from './TabNavigator';
 import { CountdownScreen } from '@/screens/SOS/CountdownScreen';
 import { ActiveSOSScreen } from '@/screens/SOS/ActiveSOSScreen';
+import { HelperResponseScreen } from '@/screens/SOS/HelperResponseScreen';
 import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
@@ -80,6 +81,11 @@ export function AppNavigator() {
           animation: 'slide_from_bottom',
           gestureEnabled: false,
         }}
+      />
+      <Stack.Screen
+        name="HelperResponse"
+        component={HelperResponseScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
       />
       <Stack.Screen
         name="IncidentDetail"

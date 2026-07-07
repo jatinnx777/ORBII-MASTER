@@ -664,6 +664,29 @@ export function ActiveSOSScreen() {
           </View>
         ) : null}
 
+        {primary ? (
+          <Pressable
+            onPress={() =>
+              navigation.navigate('HelperResponse', {
+                name: primary.name,
+                phone: primary.phone,
+                photoUri: primary.photoUri,
+                distanceM: primaryDistance ?? undefined,
+                helperLat: primary.point.latitude,
+                helperLng: primary.point.longitude,
+                victimLat: userLocation?.latitude,
+                victimLng: userLocation?.longitude,
+              })
+            }
+            style={({ pressed }) => [styles.trackBtn, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+            accessibilityLabel="View live helper tracking"
+          >
+            <Ionicons name="navigate" size={17} color={colors.textInverse} />
+            <Text style={styles.trackBtnLabel}>View live tracking</Text>
+          </Pressable>
+        ) : null}
+
         <View style={styles.tipCard}>
           <View style={styles.tipCardLeft}>
             <Text style={styles.tipTitle}>Thank your helper</Text>
@@ -1127,6 +1150,21 @@ const styles = StyleSheet.create({
     color: colors.brandDeep,
     fontSize: 13,
     fontFamily: fontFamilies.poppinsMedium,
+  },
+  trackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.sage,
+    borderRadius: radius.pill,
+    paddingVertical: spacing.md,
+    ...shadows.hero,
+  },
+  trackBtnLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 15,
+    color: colors.textInverse,
   },
   tipCard: {
     flexDirection: 'row',
