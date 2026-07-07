@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { supabase } from '@/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -53,26 +55,59 @@ export function MissionsScreen() {
   const [online, setOnline] = useState(isHelperModeRunning());
   const [busy, setBusy] = useState(false);
 
+  const refresh = useCallback(async () => {
+    if (!profile?.uid) return;
+    const [p, s] = await Promise.all([
+      loadHelperProfile(profile.uid),
+      loadHelperStats(),
+    ]);
+    setHp(p);
+    setStats(s);
+    setLoading(false);
+  }, [profile?.uid]);
+
+  // Live dashboard: it refreshes the moment the server changes the helper's
+  // row or wallet (Supabase realtime), when the app returns to the foreground,
+  // and on a slow safety poll — so trust, earnings, level and missions update
+  // without ever closing and reopening the app.
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      (async () => {
-        if (!profile?.uid) return;
-        const [p, s] = await Promise.all([
-          loadHelperProfile(profile.uid),
-          loadHelperStats(),
-        ]);
-        if (alive) {
-          setHp(p);
-          setStats(s);
-          setLoading(false);
-        }
-      })();
+      const run = () => {
+        if (alive) void refresh();
+      };
+      run();
       setOnline(isHelperModeRunning());
+
+      const uid = profile?.uid;
+      const channel = uid
+        ? supabase
+            .channel(`missions:${uid}`)
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'helper_profiles', filter: `user_id=eq.${uid}` },
+              run,
+            )
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'payout_requests', filter: `user_id=eq.${uid}` },
+              run,
+            )
+            .subscribe()
+        : null;
+
+      const poll = setInterval(run, 20000);
+      const appSub = AppState.addEventListener('change', (st) => {
+        if (st === 'active') run();
+      });
+
       return () => {
         alive = false;
+        clearInterval(poll);
+        appSub.remove();
+        if (channel) supabase.removeChannel(channel);
       };
-    }, [profile?.uid]),
+    }, [profile?.uid, refresh]),
   );
 
   // "Can go online" = admin has approved this responder (verification_status =
