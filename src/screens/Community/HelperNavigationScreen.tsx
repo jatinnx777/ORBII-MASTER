@@ -36,6 +36,14 @@ import { startTracking, type TrackingSnapshot, type TrackingHandle, type Accurac
 import { interpolate, haversineMeters, formatDistance } from '@/utils/geo';
 import { trackEvent } from '@/services/analytics';
 import { recordHelperResponse } from '@/services/helper-profile';
+import {
+  RewardService,
+  FraudDetectionService,
+  createGeofence,
+  createRouteVerifier,
+  type Geofence,
+  type RouteVerifier,
+} from '@/services/rewards';
 import type { AppStackParamList } from '@/navigation/types';
 import type { GeoPoint } from '@/types';
 
@@ -162,7 +170,7 @@ type TimelineEvent = { key: string; label: string; at: number; icon: keyof typeo
 export function HelperNavigationScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<R>();
-  const { sosId, name, phone, lat, lng, photoUri } = route.params;
+  const { sosId, name, phone, lat, lng, photoUri, victimId, sosCreatedMs } = route.params;
   const victim: GeoPoint = useMemo(() => ({ latitude: lat, longitude: lng }), [lat, lng]);
 
   const profile = useAppSelector((s) => s.user.profile);
@@ -170,6 +178,45 @@ export function HelperNavigationScreen() {
   const [sharing, setSharing] = useState(true);
   const [announced, setAnnounced] = useState(false);
   const trackRef = useRef<TrackingHandle | null>(null);
+
+  // ── Reward + fraud lifecycle (server-authoritative) ──
+  // Open a rescue event on the server, then let the geofence decide arrival and
+  // the route-verifier prove genuine travel. No manual tap ever pays anyone.
+  const rewardEventId = useRef<string | null>(null);
+  const geofence = useRef<Geofence | null>(null);
+  const verifier = useRef<RouteVerifier>(createRouteVerifier());
+  const lastMoveReport = useRef(0);
+  useEffect(() => {
+    if (!profile || !victimId) return;
+    let alive = true;
+    (async () => {
+      const deviceId = await FraudDetectionService.getDeviceId();
+      const eventId = await RewardService.accept({
+        sosId,
+        victimId,
+        sosCreatedIso: sosCreatedMs ? new Date(sosCreatedMs).toISOString() : null,
+        deviceId,
+        mockLocation: false,
+      });
+      if (!alive || !eventId) return;
+      rewardEventId.current = eventId;
+      geofence.current = createGeofence(victim, {
+        onArrived: () => {
+          void RewardService.geofenceArrival(eventId);
+          void FraudDetectionService.reportFlags(eventId, verifier.current.flags());
+        },
+        onDepart: () => {
+          void RewardService.depart(eventId);
+        },
+      });
+    })();
+    return () => {
+      alive = false;
+      // If the helper leaves the screen after arriving, finalise the reward.
+      const id = rewardEventId.current;
+      if (id && geofence.current?.hasArrived()) void RewardService.depart(id);
+    };
+  }, [sosId, victimId, sosCreatedMs, profile?.uid, victim]);
 
   // ── Tracking engine ──
   useEffect(() => {
@@ -188,6 +235,24 @@ export function HelperNavigationScreen() {
     trackRef.current = handle;
     return () => handle.stop();
   }, [sosId, profile?.uid, victim]);
+
+  // Feed every fix into the fraud/route engine: accumulate snapped road metres,
+  // run the geofence, and report movement to the server on a light throttle.
+  const helperLat = snap?.helper?.latitude;
+  const helperLng = snap?.helper?.longitude;
+  useEffect(() => {
+    const h = snap?.helper;
+    const id = rewardEventId.current;
+    if (!h || !id) return;
+    const now = Date.now();
+    verifier.current.add(h, now, snap?.route?.geometry.coordinates);
+    geofence.current?.update(h, now);
+    if (now - lastMoveReport.current > 15000) {
+      lastMoveReport.current = now;
+      void RewardService.reportMovement(id, verifier.current.roadMeters(), false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [helperLat, helperLng]);
 
   // ── Timeline (events animate in as they happen) ──
   const [events, setEvents] = useState<TimelineEvent[]>([]);

@@ -115,6 +115,8 @@ export function HelperAlertScreen() {
       lat: alert.location.latitude,
       lng: alert.location.longitude,
       photoUri: alert.victim.photoUri,
+      victimId: alert.victim.id,
+      sosCreatedMs: alert.createdAt,
     });
   };
 

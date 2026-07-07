@@ -65,6 +65,8 @@ export type AppStackParamList = {
     lat: number;
     lng: number;
     photoUri?: string | null;
+    victimId?: string;
+    sosCreatedMs?: number;
   };
   // Settings + Circles are now stack destinations (reached via the Home
   // gear / helpers row), not tabs — the tab bar is Home/Safety/Plans/Profile.
