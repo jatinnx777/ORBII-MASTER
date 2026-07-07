@@ -45,7 +45,6 @@ export function SafetyScreen() {
       >
         <View style={styles.header}>
           <Text style={styles.title}>Safety</Text>
-          <Text style={styles.subtitle}>Everything that keeps you protected, in one place.</Text>
         </View>
         <ProtectionStatusCard />
         <SafetyReadinessCard />
