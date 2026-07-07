@@ -37,6 +37,10 @@ export type UserProfile = {
   // profiles table exists we can resolve these to real user records.
   friends: Friend[];
   isPremium: boolean;
+  // Which paid tier the user is on. 'plus' = ₹99, 'family' = ₹299. Drives the
+  // Plans screen so we never re-sell a plan someone already owns and only
+  // offer a genuine upgrade (Plus → Family).
+  premiumTier?: 'plus' | 'family' | null;
   createdAt: number;
   // Cooldown timestamps. After picking a username or profile photo the
   // user can't change it again for 30 days. Stored on the device AND

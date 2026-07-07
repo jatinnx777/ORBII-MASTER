@@ -83,13 +83,23 @@ const userSlice = createSlice({
         (f) => f.username !== action.payload,
       );
     },
-    premiumUpgraded(state) {
-      if (state.profile) state.profile.isPremium = true;
+    premiumUpgraded(state, action: PayloadAction<'plus' | 'family' | undefined>) {
+      if (state.profile) {
+        state.profile.isPremium = true;
+        state.profile.premiumTier = action.payload ?? 'plus';
+      }
     },
     // Set premium from the server entitlement (true within the 1-month window,
     // false once it lapses). Keeps reinstalls active + expires stale ones.
     premiumStatusResolved(state, action: PayloadAction<boolean>) {
       if (state.profile) state.profile.isPremium = action.payload;
+    },
+    // Reconcile the active tier on launch / screen open. 'none' also clears
+    // premium so a lapsed month downgrades cleanly.
+    premiumTierResolved(state, action: PayloadAction<'none' | 'plus' | 'family'>) {
+      if (!state.profile) return;
+      state.profile.premiumTier = action.payload === 'none' ? null : action.payload;
+      state.profile.isPremium = action.payload !== 'none';
     },
     profileHydrated(state, action: PayloadAction<UserProfile>) {
       state.profile = action.payload;
@@ -120,6 +130,7 @@ export const {
   friendRemoved,
   premiumUpgraded,
   premiumStatusResolved,
+  premiumTierResolved,
   profileHydrated,
   signedOut,
   errorCleared,

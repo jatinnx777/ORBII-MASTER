@@ -16,12 +16,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Mascot } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { premiumUpgraded, premiumStatusResolved } from '@/redux/slices/userSlice';
+import { premiumUpgraded, premiumTierResolved } from '@/redux/slices/userSlice';
 import {
   purchasePlan,
-  resolvePremiumActive,
+  resolvePremiumTier,
   markCouponRedeemed,
   type PlanId as PaidPlanId,
+  type PremiumTier,
 } from '@/services/razorpay';
 import { trackEvent } from '@/services/analytics';
 import { getItem, setItem, storageKeys } from '@/services/storage';
@@ -35,6 +36,13 @@ const PROMO_CODE = 'ORBII';
 // plan captures a waitlist email (honest "coming soon").
 
 type PlanId = 'free' | 'solo' | 'family';
+
+// How a plan card presents relative to what the user already owns:
+//  buy      — not premium yet, show the price + purchase button
+//  current  — the exact plan they're on right now
+//  included — a lower tier that's already covered by their plan
+//  upgrade  — a higher tier, framed as an upgrade (no re-sell)
+type CardState = 'buy' | 'current' | 'included' | 'upgrade';
 
 type Plan = {
   id: PlanId;
@@ -126,19 +134,24 @@ export function PremiumUpgradeScreen() {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const isPremium = profile?.isPremium ?? false;
+  // The tier drives the whole screen: what shows as "current", what becomes an
+  // "upgrade", and what disappears entirely (a plan you already own).
+  const tier: PremiumTier = profile?.premiumTier ?? (isPremium ? 'plus' : 'none');
   const [waitlistOpen, setWaitlistOpen] = useState<PlanId | null>(null);
   const [email, setEmail] = useState(profile?.email ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [couponApplied, setCouponApplied] = useState(false);
   const [paying, setPaying] = useState<PaidPlanId | null>(null);
+  // Celebration shown after a successful purchase / coupon redemption.
+  const [thankYou, setThankYou] = useState<'plus' | 'family' | null>(null);
 
   useEffect(() => {
     trackEvent('premium_viewed');
-    // Sync premium from the server entitlement so it persists across
-    // re-login / reinstall (the source of truth is the entitlements table).
-    resolvePremiumActive().then((active) => {
-      dispatch(premiumStatusResolved(active));
+    // Sync the active tier from server + local records so premium persists
+    // across re-login / reinstall and a lapsed month downgrades cleanly.
+    resolvePremiumTier().then((resolved) => {
+      dispatch(premiumTierResolved(resolved));
     });
   }, [dispatch]);
 
@@ -149,12 +162,10 @@ export function PremiumUpgradeScreen() {
     try {
       const result = await purchasePlan(planId);
       if (result.ok) {
-        dispatch(premiumUpgraded());
+        const boughtTier = planId === 'family' ? 'family' : 'plus';
+        dispatch(premiumUpgraded(boughtTier));
         trackEvent('premium_purchased', { plan: planId });
-        appAlert(
-          'Welcome to ORBII ' + (planId === 'family' ? 'Family' : 'Plus'),
-          'Your premium protection is now active. Stay safe out there.',
-        );
+        setThankYou(boughtTier);
       } else if (result.cancelled) {
         // Silent — the user chose to cancel.
       } else {
@@ -172,18 +183,25 @@ export function PremiumUpgradeScreen() {
       return;
     }
     if (code === PROMO_CODE) {
-      dispatch(premiumUpgraded());
+      // The ORBII gift code unlocks ORBII Plus (₹99 tier) free for one month.
+      dispatch(premiumUpgraded('plus'));
       markCouponRedeemed();
       setCouponApplied(true);
       trackEvent('premium_purchased', { plan: 'coupon', coupon: code });
-      appAlert(
-        'Your gift is unlocked!',
-        'Welcome, early member. Every Premium feature is now free for you.',
-      );
+      setThankYou('plus');
       return;
     }
     setCouponApplied(false);
     appAlert('Invalid code', `"${code}" isn't a valid coupon. Try ORBII.`);
+  };
+
+  // What each plan card should render, given the tier the user already owns.
+  const RANK: Record<PlanId, number> = { free: 0, solo: 1, family: 2 };
+  const tierRank = tier === 'family' ? 2 : tier === 'plus' ? 1 : 0;
+  const cardStateFor = (planId: PlanId): CardState => {
+    if (RANK[planId] === tierRank) return 'current';
+    if (RANK[planId] < tierRank) return 'included';
+    return tierRank === 0 ? 'buy' : 'upgrade';
   };
 
   const submitWaitlist = async () => {
@@ -223,12 +241,18 @@ export function PremiumUpgradeScreen() {
           <View style={styles.hero}>
             <Mascot pose={isPremium ? 'celebrate' : 'shield'} size={120} />
             <Text style={styles.heroTitle}>
-              {isPremium ? 'Premium active' : 'Choose your plan'}
+              {tier === 'family'
+                ? 'ORBII Family active'
+                : tier === 'plus'
+                  ? 'ORBII Plus active'
+                  : 'Choose your plan'}
             </Text>
             <Text style={styles.heroBody}>
-              {isPremium
-                ? 'Every Premium feature is unlocked for you. Thank you for being an early ORBII member.'
-                : 'Start free. Upgrade anytime for unlimited Voice SOS and family protection.'}
+              {tier === 'family'
+                ? 'Your whole family is protected. Every Premium feature is unlocked.'
+                : tier === 'plus'
+                  ? 'You have full protection. Upgrade to Family anytime to cover up to 4 people.'
+                  : 'Start free. Upgrade anytime for unlimited Voice SOS and family protection.'}
             </Text>
           </View>
 
@@ -236,26 +260,33 @@ export function PremiumUpgradeScreen() {
             <View style={styles.premiumBanner}>
               <Ionicons name="sparkles" size={16} color={colors.goldDeep} />
               <Text style={styles.premiumBannerText}>
-                Premium unlocked with the ORBII coupon
+                {tier === 'family'
+                  ? "You're on ORBII Family"
+                  : "You're on ORBII Plus"}
               </Text>
             </View>
           ) : null}
 
-          {PLANS.map((plan, index) => (
-            <PlanCard
-              key={plan.id}
-              plan={plan}
-              index={index}
-              current={plan.id === 'free' && !isPremium}
-              loading={paying === plan.id}
-              onPress={() => {
-                if (plan.id === 'free') return;
-                handlePay(plan.id as PaidPlanId);
-              }}
-            />
-          ))}
+          {PLANS.map((plan, index) => {
+            const state = cardStateFor(plan.id);
+            return (
+              <PlanCard
+                key={plan.id}
+                plan={plan}
+                index={index}
+                state={state}
+                loading={paying === plan.id}
+                onPress={() => {
+                  if (plan.id === 'free' || state === 'current' || state === 'included') return;
+                  handlePay(plan.id as PaidPlanId);
+                }}
+              />
+            );
+          })}
 
-          {/* gift code (reciprocity: framed as a gift, not a discount) */}
+          {/* gift code — only while there's nothing to gift-unlock yet. Once
+              premium, we never ask the user to redeem or buy again. */}
+          {!isPremium ? (
           <View style={styles.couponCard}>
             <View style={styles.giftRow}>
               <Ionicons name="gift" size={16} color={colors.peachDeep} />
@@ -292,6 +323,7 @@ export function PremiumUpgradeScreen() {
               </Pressable>
             </View>
           </View>
+          ) : null}
 
           <Text style={styles.footnote}>
             Prices in INR per month, taxes included. Secure payments by Razorpay.
@@ -299,6 +331,8 @@ export function PremiumUpgradeScreen() {
           </Text>
         </ScrollView>
       </SafeAreaView>
+
+      <ThankYouModal tier={thankYou} onClose={() => setThankYou(null)} />
 
       <WaitlistModal
         visible={waitlistOpen !== null}
@@ -316,13 +350,13 @@ export function PremiumUpgradeScreen() {
 function PlanCard({
   plan,
   index,
-  current,
+  state,
   loading,
   onPress,
 }: {
   plan: Plan;
   index: number;
-  current: boolean;
+  state: CardState;
   loading?: boolean;
   onPress: () => void;
 }) {
@@ -382,11 +416,23 @@ function PlanCard({
 
       <View style={{ height: spacing.md }} />
 
-      {current ? (
+      {state === 'current' ? (
         <View style={styles.currentBtn}>
           <Ionicons name="checkmark-circle" size={18} color={colors.sageDeep} />
           <Text style={styles.currentBtnText}>Your current plan</Text>
         </View>
+      ) : state === 'included' ? (
+        <View style={styles.includedBtn}>
+          <Ionicons name="checkmark-circle" size={16} color={colors.textMuted} />
+          <Text style={styles.includedBtnText}>Included in your plan</Text>
+        </View>
+      ) : state === 'upgrade' ? (
+        <Button
+          label={`Upgrade to ${plan.name}`}
+          variant="primary"
+          loading={loading}
+          onPress={onPress}
+        />
       ) : (
         <Button
           label={plan.highlight ? `Get ${plan.name} · ₹${plan.price}/mo` : `Choose ${plan.name}`}
@@ -396,6 +442,42 @@ function PlanCard({
         />
       )}
     </Animated.View>
+  );
+}
+
+// Celebration after a successful purchase / coupon redemption. Warm, on-brand
+// thank-you instead of a plain OS-style alert — the moment should feel special.
+function ThankYouModal({
+  tier,
+  onClose,
+}: {
+  tier: 'plus' | 'family' | null;
+  onClose: () => void;
+}) {
+  const name = tier === 'family' ? 'ORBII Family' : 'ORBII Plus';
+  return (
+    <Modal visible={tier !== null} animationType="fade" transparent>
+      <View style={styles.thanksBackdrop}>
+        <View style={styles.thanksCard}>
+          <Mascot pose="celebrate" size={128} />
+          <View style={styles.thanksBadge}>
+            <Ionicons name="sparkles" size={13} color={colors.goldDeep} />
+            <Text style={styles.thanksBadgeText}>{name} unlocked</Text>
+          </View>
+          <Text style={styles.thanksTitle}>Thank you 💛</Text>
+          <Text style={styles.thanksBody}>
+            {tier === 'family'
+              ? 'Your whole family is protected now. Verified responders, unlimited Voice SOS and live tracking are all switched on.'
+              : 'Every Premium feature is switched on. Verified responders, unlimited Voice SOS and always-on protection are yours.'}
+          </Text>
+          <Text style={styles.thanksNote}>
+            You're one of ORBII's early members. That means the world to us.
+          </Text>
+          <View style={{ height: spacing.md }} />
+          <Button label="Let's go" onPress={onClose} />
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -618,6 +700,72 @@ const styles = StyleSheet.create({
     fontFamily: 'Poppins_600SemiBold',
     fontSize: 15,
     color: colors.sageDeep,
+  },
+  includedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.creamDeep,
+  },
+  includedBtnText: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 14.5,
+    color: colors.textMuted,
+  },
+  thanksBackdrop: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  thanksCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: colors.cream,
+    borderRadius: radius.xxl,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
+    ...shadows.sheet,
+  },
+  thanksBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.goldSoft,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    marginTop: spacing.xs,
+  },
+  thanksBadgeText: {
+    ...typography.label,
+    color: colors.goldDeep,
+  },
+  thanksTitle: {
+    ...typography.h1,
+    color: colors.textPrimary,
+    marginTop: spacing.sm,
+  },
+  thanksBody: {
+    ...typography.body,
+    fontSize: 14.5,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: spacing.xs,
+  },
+  thanksNote: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.peachDeep,
+    textAlign: 'center',
+    marginTop: spacing.sm,
+    fontFamily: 'Poppins_600SemiBold',
   },
   couponCard: {
     backgroundColor: colors.surface,

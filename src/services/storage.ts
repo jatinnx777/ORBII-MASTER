@@ -8,6 +8,7 @@ const KEYS = {
   notifications: 'orbii:notifications',
   premiumWaitlist: 'orbii:premium:waitlist',
   premiumCoupon: 'orbii:premium:coupon-at',
+  premiumTier: 'orbii:premium:tier',
   safetyTest: 'orbii:safety-test-done',
   safetyModes: 'orbii:safety-modes',
   locale: 'orbii:locale',

@@ -51,8 +51,8 @@ import {
   subscribeToAlerts,
 } from '@/services/community';
 import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
-import { premiumStatusResolved } from '@/redux/slices/userSlice';
-import { resolvePremiumActive } from '@/services/razorpay';
+import { premiumTierResolved } from '@/redux/slices/userSlice';
+import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue } from '@/services/sos-queue';
 import { refreshUserRole } from '@/services/roles';
@@ -161,8 +161,8 @@ function RootNavigator() {
   // its 1-month window; otherwise the subscription is dismissed.
   useEffect(() => {
     if (status !== 'authenticated') return;
-    resolvePremiumActive()
-      .then((active) => store.dispatch(premiumStatusResolved(active)))
+    resolvePremiumTier()
+      .then((tier) => store.dispatch(premiumTierResolved(tier)))
       .catch(() => undefined);
   }, [status]);
 

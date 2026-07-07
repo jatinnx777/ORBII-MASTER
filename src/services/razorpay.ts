@@ -135,12 +135,14 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
     if (verifyErr || verify?.premium !== true) {
       return { ok: false, error: 'Payment could not be verified.' };
     }
+    await setLocalTier(plan === 'family' ? 'family' : 'plus');
     return { ok: true };
   }
 
   // 3b. Test-mode fallback (edge functions not deployed): trust the client
   //     success. Premium is granted locally only — for production, deploy the
   //     create-order + verify-payment functions so grants are server-verified.
+  await setLocalTier(plan === 'family' ? 'family' : 'plus');
   return { ok: true };
 }
 
@@ -170,9 +172,10 @@ export async function fetchEntitlement(): Promise<boolean> {
   }
 }
 
-/// Record an ORBII coupon redemption (also gives one month of Plus).
+/// Record an ORBII coupon redemption. The gift is one month of ORBII Plus.
 export async function markCouponRedeemed(): Promise<void> {
   await setItem(storageKeys.premiumCoupon, Date.now());
+  await setLocalTier('plus');
 }
 
 async function couponPremiumActive(): Promise<boolean> {
@@ -181,13 +184,45 @@ async function couponPremiumActive(): Promise<boolean> {
   return Date.now() - at <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
 }
 
-/// The single source of truth for "is Plus active right now": a paid
-/// subscription (server, survives reinstall) OR a coupon redemption (local) —
+export type PremiumTier = 'none' | 'plus' | 'family';
+
+type TierRecord = { tier: 'plus' | 'family'; at: number };
+
+// Persist which tier the user bought (locally), gated by the same 1-month
+// window as premium itself. This is what lets the Plans screen show "current
+// plan" / "upgrade" instead of re-selling something they already own.
+export async function setLocalTier(tier: 'plus' | 'family'): Promise<void> {
+  await setItem(storageKeys.premiumTier, { tier, at: Date.now() });
+}
+
+async function localTier(): Promise<PremiumTier> {
+  const rec = await getItem<TierRecord>(storageKeys.premiumTier);
+  if (!rec?.tier) return 'none';
+  if (Date.now() - rec.at > PLUS_VALID_DAYS * 24 * 60 * 60 * 1000) return 'none';
+  return rec.tier;
+}
+
+/// The single source of truth for "is premium active right now": a paid
+/// subscription (server, survives reinstall) OR a coupon / local purchase —
 /// each within the 1-month window. Call on launch to reconcile `isPremium`.
 export async function resolvePremiumActive(): Promise<boolean> {
-  const [paid, coupon] = await Promise.all([
+  const [paid, coupon, local] = await Promise.all([
     fetchEntitlement(),
     couponPremiumActive(),
+    localTier(),
   ]);
-  return paid || coupon;
+  return paid || coupon || local !== 'none';
+}
+
+/// Which tier is active right now. Local purchase record is the most specific
+/// signal; a server entitlement with no known tier is treated as Plus.
+export async function resolvePremiumTier(): Promise<PremiumTier> {
+  const [paid, coupon, local] = await Promise.all([
+    fetchEntitlement(),
+    couponPremiumActive(),
+    localTier(),
+  ]);
+  if (local !== 'none') return local;
+  if (paid || coupon) return 'plus';
+  return 'none';
 }
