@@ -29,7 +29,12 @@ import {
   signInSucceeded,
 } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
-import { sendPhoneOtp, verifyPhoneOtp } from '@/services/auth';
+import {
+  sendEmailOtp,
+  sendOtpToE164,
+  verifyEmailOtp,
+  verifyPhoneOtp,
+} from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
 
 // 6-digit OTP entry. Renders as a single TextInput styled to look like
@@ -44,7 +49,11 @@ export function PhoneVerifyScreen({
 }: AuthScreenProps<'PhoneVerify'>) {
   const { t } = useTranslation();
   const dispatch = useAppDispatch();
+  // The same screen verifies an SMS code or an email code.
   const phone = route.params.phone;
+  const email = route.params.email;
+  const target = phone ?? email ?? '';
+  const isEmail = !phone && !!email;
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +85,9 @@ export function PhoneVerifyScreen({
     setError(null);
     dispatch(signInStarted());
     try {
-      const { profile, needsProfile, history } = await verifyPhoneOtp(phone, code);
+      const { profile, needsProfile, history } = isEmail
+        ? await verifyEmailOtp(email!, code)
+        : await verifyPhoneOtp(phone!, code);
       dispatch(signInSucceeded({ profile, needsProfile }));
       dispatch(historyHydrated(history));
       if (needsProfile) {
@@ -96,7 +107,8 @@ export function PhoneVerifyScreen({
     setResending(true);
     setError(null);
     try {
-      await sendPhoneOtp(phone.replace(/^\+91/, ''));
+      if (isEmail) await sendEmailOtp(email!);
+      else await sendOtpToE164(phone!);
       setResendIn(RESEND_COOLDOWN_S);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('phone.otpFailed'));
@@ -140,9 +152,10 @@ export function PhoneVerifyScreen({
               { opacity: enter, transform: [{ translateY }] },
             ]}
           >
-            <Text style={styles.title}>{t('phone.verifyTitle')}</Text>
+            <Text style={styles.title}>OTP Verification</Text>
             <Text style={styles.subtitle}>
-              {t('phone.verifySubtitle', { phone })}
+              We have sent a verification code to{'\n'}
+              <Text style={styles.target}>{target}</Text>
             </Text>
             <View style={styles.testHint}>
               <Ionicons name="flask-outline" size={12} color={colors.brandDeep} />
@@ -255,6 +268,11 @@ const styles = StyleSheet.create({
     marginTop: 8,
     paddingHorizontal: spacing.md,
     lineHeight: 20,
+  },
+  target: {
+    fontFamily: fontFamilies.poppinsBold,
+    color: colors.textPrimary,
+    fontSize: 15,
   },
   otpField: {
     position: 'absolute',

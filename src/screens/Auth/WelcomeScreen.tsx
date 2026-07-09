@@ -1,28 +1,41 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { appAlert } from '@/components/common';
-import { Animated, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { PrivacyPolicyModal } from '@/components/common';
-
-// The real illustrated Orbi (from the brand artwork).
-const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
-import { colors, radius, shadows, spacing, typography, fontFamilies } from '@/theme';
-import { useAppDispatch, useAppSelector } from '@/redux/store';
+import React, { useState } from 'react';
 import {
-  signInFailed,
-  signInStarted,
-  signInSucceeded,
-} from '@/redux/slices/userSlice';
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { appAlert, PrivacyPolicyModal } from '@/components/common';
+import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
+import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { signInFailed, signInStarted, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
 import { policyAccepted } from '@/redux/slices/appSlice';
-import { signInWithGoogle, DEV_AUTH } from '@/services/auth';
+import { signInWithGoogle, sendOtpToE164, sendEmailOtp, DEV_AUTH } from '@/services/auth';
+import { CountryPickerSheet } from './CountryPickerSheet';
+import { DEFAULT_COUNTRY, type Country } from './countries';
 import type { AuthScreenProps } from '@/navigation/types';
 
-// Welcome Back, matched to the reference design: ORBII lockup, Orbi on a
-// cloud with a time-aware greeting bubble, three sign-in pills, Sign Up
-// link and the safety-data footnote. Google is the real auth; Apple/Email
-// are honest "coming soon" until configured.
+const ORBI = require('../../../assets/onboarding/orbi-hero.png');
+
+// Phone-first sign in. Mobile + OTP is the primary path (that's how India logs
+// in), with email OTP and Google as fallbacks. A safety app deliberately has no
+// "skip login" — an SOS with no identity reaches nobody.
+
+// The soft tile wall behind the sheet: what ORBII actually does, as icons.
+const TILES: (keyof typeof Ionicons.glyphMap)[] = [
+  'mic', 'shield-checkmark', 'location', 'people', 'call', 'navigate',
+  'heart', 'walk', 'notifications', 'lock-closed', 'hand-left', 'medkit',
+];
+
 export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   const dispatch = useAppDispatch();
   const status = useAppSelector((s) => s.user.status);
@@ -31,33 +44,42 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   const policyOk = policyAcceptedAt !== null;
 
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [mode, setMode] = useState<'phone' | 'email'>('phone');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
 
-  // Time-aware bubble: Orbi greets the moment, not a template.
-  const hour = new Date().getHours();
-  const bubbleText =
-    hour < 5
-      ? 'Up late? I’m right here.'
-      : hour < 12
-        ? 'Good morning.\nLovely to see you.'
-        : hour < 17
-          ? 'Good afternoon.\nGood to see you.'
-          : hour < 21
-            ? 'Good evening.\nGood to see you.'
-            : 'Heading out tonight?\nI’ve got you.';
+  const expected = country.len ?? 0;
+  const phoneOk = expected ? phone.length === expected : phone.length >= 6;
+  const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
+  const ready = (mode === 'phone' ? phoneOk : emailOk) && !sending;
 
-  // Soft float on the cloud + pop-in.
-  const float = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(float, { toValue: 1, duration: 2400, useNativeDriver: true }),
-        Animated.timing(float, { toValue: 0, duration: 2400, useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [float]);
-  const floatY = float.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+  const handleContinue = async () => {
+    if (!ready) return;
+    if (!policyOk) {
+      setPolicyOpen(true);
+      return;
+    }
+    setSending(true);
+    try {
+      if (mode === 'phone') {
+        const e164 = await sendOtpToE164(`${country.dial}${phone}`);
+        navigation.navigate('PhoneVerify', { phone: e164 });
+      } else {
+        const addr = await sendEmailOtp(email);
+        navigation.navigate('PhoneVerify', { email: addr });
+      }
+    } catch (err) {
+      appAlert(
+        "Couldn't send the code",
+        err instanceof Error ? err.message : 'Please try again in a moment.',
+      );
+    } finally {
+      setSending(false);
+    }
+  };
 
   const handleGoogle = async () => {
     if (!policyOk) {
@@ -69,9 +91,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
       const { profile, needsProfile, history } = await signInWithGoogle();
       dispatch(signInSucceeded({ profile, needsProfile }));
       dispatch(historyHydrated(history));
-      if (needsProfile) {
-        navigation.reset({ index: 0, routes: [{ name: 'ProfileSetup' }] });
-      }
+      if (needsProfile) navigation.reset({ index: 0, routes: [{ name: 'ProfileSetup' }] });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed.';
       dispatch(signInFailed({ error: message }));
@@ -79,70 +99,148 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     }
   };
 
-  const comingSoon = (method: string) =>
-    appAlert(`${method} sign-in coming soon`, 'For now, please continue with Google.');
-
   return (
     <View style={styles.root}>
+      {/* ── Tile wall ── */}
+      <View style={styles.wall} pointerEvents="none">
+        {[0, 1, 2].map((row) => (
+          <View key={row} style={[styles.wallRow, { marginLeft: row % 2 ? -34 : 0 }]}>
+            {TILES.slice(row * 4, row * 4 + 4).map((icon) => (
+              <View key={icon} style={styles.tile}>
+                <Ionicons name={icon} size={30} color={colors.sageDeep} />
+              </View>
+            ))}
+          </View>
+        ))}
+        <LinearGradient
+          colors={['rgba(245,246,243,0)', colors.cream, colors.cream]}
+          locations={[0, 0.62, 1]}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* ORBII lockup */}
-          <View style={styles.brandRow}>
-            <Ionicons name="shield-checkmark" size={16} color={colors.peachDeep} />
-            <Text style={styles.brand}>ORBII</Text>
-          </View>
+        <View style={styles.topRow}>
+          <View />
+          <Pressable
+            onPress={() => setMode((m) => (m === 'phone' ? 'email' : 'phone'))}
+            style={styles.switchPill}
+            hitSlop={8}
+          >
+            <Ionicons
+              name={mode === 'phone' ? 'mail-outline' : 'call-outline'}
+              size={14}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.switchText}>
+              {mode === 'phone' ? 'Use email' : 'Use phone'}
+            </Text>
+          </Pressable>
+        </View>
 
-          {/* Orbi on a cloud + time-aware bubble */}
-          <View style={styles.hero}>
-            <View style={styles.speechBubble}>
-              <Text style={styles.speechText}>{bubbleText}</Text>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView
+            contentContainerStyle={styles.scroll}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.logoTile}>
+              <Image source={ORBI} style={styles.logoImg} resizeMode="contain" />
             </View>
-            <Animated.View style={{ transform: [{ translateY: floatY }], alignItems: 'center' }}>
-              <Image source={ORBI_HERO} style={styles.heroImage} resizeMode="contain" />
-            </Animated.View>
-          </View>
 
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.sub}>Your guardian is ready whenever you need it.</Text>
+            <Text style={styles.headline}>Help is one word away</Text>
+            <Text style={styles.sub}>Log in or sign up</Text>
 
-          <View style={styles.ctaStack}>
-            <AuthButton
-              icon={<Text style={[styles.gMark, { color: '#4285F4' }]}>G</Text>}
-              label={isSigningIn ? 'Signing you in…' : 'Continue with Google'}
+            {mode === 'phone' ? (
+              <View style={styles.inputRow}>
+                <Pressable style={styles.countryBtn} onPress={() => setPickerOpen(true)}>
+                  <Text style={styles.flag}>{country.flag}</Text>
+                  <Ionicons name="chevron-down" size={15} color={colors.textSecondary} />
+                </Pressable>
+                <View style={styles.phoneField}>
+                  <Text style={styles.dial}>{country.dial}</Text>
+                  <TextInput
+                    value={phone}
+                    onChangeText={(v) =>
+                      setPhone(v.replace(/\D/g, '').slice(0, country.len ?? 14))
+                    }
+                    placeholder="Enter mobile number"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="number-pad"
+                    style={styles.input}
+                  />
+                </View>
+              </View>
+            ) : (
+              <View style={styles.emailField}>
+                <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="Enter your email"
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.input}
+                />
+              </View>
+            )}
+
+            <Pressable
+              onPress={handleContinue}
+              disabled={!ready}
+              style={[styles.continue, !ready && styles.continueOff]}
+              accessibilityRole="button"
+            >
+              <Text style={[styles.continueText, !ready && styles.continueTextOff]}>
+                {sending ? 'Sending code…' : 'Continue'}
+              </Text>
+            </Pressable>
+
+            <View style={styles.divider}>
+              <View style={styles.line} />
+              <Text style={styles.or}>or</Text>
+              <View style={styles.line} />
+            </View>
+
+            <Pressable
               onPress={handleGoogle}
               disabled={isSigningIn}
-            />
-            <AuthButton
-              icon={<Ionicons name="logo-apple" size={20} color={colors.textPrimary} />}
-              label="Continue with Apple"
-              onPress={() => comingSoon('Apple')}
-            />
-            <AuthButton
-              icon={<Ionicons name="mail-outline" size={19} color={colors.textPrimary} />}
-              label="Continue with Email"
-              onPress={() => comingSoon('Email')}
-            />
-          </View>
+              style={({ pressed }) => [styles.googleBtn, pressed && { opacity: 0.9 }]}
+            >
+              <Text style={styles.gMark}>G</Text>
+              <Text style={styles.googleText}>
+                {isSigningIn ? 'Signing you in…' : 'Continue with Google'}
+              </Text>
+            </Pressable>
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
+            {DEV_AUTH.enabled ? (
+              <Text style={styles.devHint}>Test mode: OTP is bypassed.</Text>
+            ) : null}
+          </ScrollView>
+        </KeyboardAvoidingView>
 
-          <Pressable style={styles.signupRow} onPress={handleGoogle} hitSlop={8} disabled={isSigningIn}>
-            <Text style={styles.signupText}>Don't have an account? </Text>
-            <Text style={styles.signupLink}>Sign Up</Text>
+        <View style={styles.terms}>
+          <Text style={styles.termsText}>By continuing, you agree to our: </Text>
+          <Pressable onPress={() => setPolicyOpen(true)} hitSlop={6}>
+            <Text style={styles.termsLink}>Terms & Privacy policy</Text>
           </Pressable>
-
-          <Pressable style={styles.privacyRow} onPress={() => setPolicyOpen(true)} hitSlop={8}>
-            <Ionicons name="shield-checkmark-outline" size={13} color={colors.sageDeep} />
-            <Text style={styles.privacyText}>Your safety data belongs to you.</Text>
-          </Pressable>
-
-          {DEV_AUTH.enabled ? <Text style={styles.devHint}>Sign-in is off in this build.</Text> : null}
-        </ScrollView>
+        </View>
       </SafeAreaView>
+
+      <CountryPickerSheet
+        visible={pickerOpen}
+        selected={country}
+        onSelect={(c) => {
+          setCountry(c);
+          setPhone('');
+        }}
+        onClose={() => setPickerOpen(false)}
+      />
 
       <PrivacyPolicyModal
         visible={policyOpen}
@@ -156,141 +254,163 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   );
 }
 
-function AuthButton({
-  icon,
-  label,
-  onPress,
-  disabled,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  onPress: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={({ pressed }) => [styles.authBtn, pressed && styles.authBtnPressed, disabled && { opacity: 0.6 }]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-    >
-      <View style={styles.authIcon}>{icon}</View>
-      <Text style={styles.authLabel}>{label}</Text>
-    </Pressable>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
+  flex: { flex: 1 },
   safe: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
+
+  wall: { position: 'absolute', top: -20, left: 0, right: 0, height: 400 },
+  wallRow: { flexDirection: 'row', gap: 14, marginBottom: 14, paddingHorizontal: 14 },
+  tile: {
+    width: 88,
+    height: 88,
+    borderRadius: 22,
+    backgroundColor: colors.sageSoft,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  brandRow: {
+
+  topRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.xs,
+  },
+  switchPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginTop: spacing.sm,
-  },
-  brand: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 13,
-    letterSpacing: 3,
-    color: colors.textPrimary,
-  },
-  hero: {
-    width: '100%',
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  speechBubble: {
-    alignSelf: 'flex-end',
-    marginRight: spacing.lg,
     backgroundColor: colors.surface,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    borderBottomRightRadius: 4,
-    marginBottom: -6,
-    zIndex: 2,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
     ...shadows.icon,
   },
-  speechText: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 16,
-    color: colors.textSecondary,
+  switchText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textSecondary },
+
+  scroll: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
+
+  logoTile: {
+    width: 96,
+    height: 96,
+    borderRadius: 26,
+    backgroundColor: colors.sage,
+    alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+    ...shadows.card,
   },
-  heroImage: { width: 240, height: 192 },
-  title: {
-    ...typography.displaySmall,
+  logoImg: { width: 78, height: 78 },
+
+  headline: {
+    fontFamily: fontFamilies.poppinsBold,
     fontSize: 30,
     color: colors.textPrimary,
     textAlign: 'center',
-    marginTop: spacing.md,
+    letterSpacing: -0.6,
   },
   sub: {
-    ...typography.body,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 16,
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: 4,
-    maxWidth: 300,
+    marginBottom: spacing.lg,
   },
-  ctaStack: {
-    alignSelf: 'stretch',
-    gap: spacing.sm,
-    marginTop: spacing.xl,
-  },
-  authBtn: {
+
+  inputRow: { flexDirection: 'row', gap: spacing.sm },
+  countryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.pill,
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    height: 60,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.inputBorder,
     backgroundColor: colors.surface,
-    ...shadows.card,
   },
-  authBtnPressed: { transform: [{ scale: 0.98 }], opacity: 0.95 },
-  authIcon: { width: 24, alignItems: 'center', marginRight: spacing.md },
-  authLabel: {
-    ...typography.button,
-    fontFamily: 'Poppins_600SemiBold',
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  gMark: { fontFamily: 'Poppins_700Bold', fontSize: 18 },
-  divider: {
+  flag: { fontSize: 24 },
+  phoneField: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
-    alignSelf: 'stretch',
-    marginTop: spacing.lg,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    height: 60,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.surface,
   },
-  dividerLine: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { ...typography.label, color: colors.textMuted },
-  signupRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.md },
-  signupText: { ...typography.body, fontSize: 14, color: colors.textSecondary },
-  signupLink: {
-    ...typography.body,
-    fontSize: 14,
-    fontFamily: 'Poppins_600SemiBold',
-    color: colors.peachDeep,
-  },
-  privacyRow: {
+  emailField: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
-    marginTop: spacing.lg,
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    height: 60,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.inputBorder,
+    backgroundColor: colors.surface,
   },
-  privacyText: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
-  devHint: {
-    ...typography.caption,
-    color: colors.textMuted,
+  dial: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 16, color: colors.textPrimary },
+  input: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 16, color: colors.textPrimary },
+
+  continue: {
+    height: 58,
+    borderRadius: radius.lg,
+    backgroundColor: colors.sage,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginTop: spacing.md,
+    ...shadows.hero,
+  },
+  continueOff: { backgroundColor: '#C9CBC6', shadowOpacity: 0 },
+  continueText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16.5, color: colors.textInverse },
+  continueTextOff: { color: '#FFFFFF' },
+
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginVertical: spacing.lg },
+  line: { flex: 1, height: 1, backgroundColor: colors.border },
+  or: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted },
+
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 56,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    ...shadows.icon,
+  },
+  gMark: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: '#4285F4' },
+  googleText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
+
+  devHint: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 12,
+    color: colors.textMuted,
     textAlign: 'center',
+    marginTop: spacing.md,
+  },
+
+  terms: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    paddingVertical: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.divider,
+  },
+  termsText: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textMuted },
+  termsLink: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12,
+    color: colors.sageDeep,
+    textDecorationLine: 'underline',
   },
 });

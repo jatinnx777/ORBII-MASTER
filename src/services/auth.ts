@@ -86,6 +86,63 @@ export async function sendPhoneOtp(rawPhone: string): Promise<string> {
   return phone;
 }
 
+// Country-agnostic variant: the caller has already built a full E.164 number
+// (dial code + national number) from the country picker.
+export async function sendOtpToE164(e164: string): Promise<string> {
+  if (!/^\+\d{7,15}$/.test(e164)) {
+    throw new Error('Enter a valid mobile number.');
+  }
+  if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
+    await delay(400);
+    return e164;
+  }
+  const { error } = await supabase.auth.signInWithOtp({ phone: e164 });
+  if (error) throw new Error(error.message);
+  return e164;
+}
+
+// ── Email OTP (free on Supabase; no SMS gateway needed) ──────────────────
+// Sends a 6-digit code. NOTE: Supabase's default email template sends a magic
+// LINK — switch the "Magic Link" template to use {{ .Token }} to get a code.
+export async function sendEmailOtp(email: string): Promise<string> {
+  const clean = email.trim().toLowerCase();
+  if (!/^\S+@\S+\.\S+$/.test(clean)) throw new Error('Enter a valid email address.');
+  if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
+    await delay(400);
+    return clean;
+  }
+  const { error } = await supabase.auth.signInWithOtp({
+    email: clean,
+    options: { shouldCreateUser: true },
+  });
+  if (error) throw new Error(error.message);
+  return clean;
+}
+
+export async function verifyEmailOtp(
+  email: string,
+  code: string,
+): Promise<SignInResult> {
+  const cleaned = code.replace(/\D/g, '');
+  if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
+    await delay(500);
+    if (cleaned !== TEST_OTP_CODE) {
+      throw new Error(`Test mode is on. Use ${TEST_OTP_CODE} as the OTP.`);
+    }
+    const profile = emptyProfile({ uid: `test_${cleaned}`, email, name: null, photo: null });
+    return { profile, needsProfile: true, history: [] };
+  }
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: cleaned,
+    type: 'email',
+  });
+  if (error || !data?.user) {
+    throw new Error(error?.message ?? 'OTP verification failed.');
+  }
+  return bootstrapProfile(data.user);
+}
+
 // Verifies the OTP, exchanges it for a session, then runs the same
 // profile-bootstrap flow as Google sign-in (fetches/creates profile,
 // hydrates friends + emergency contacts + history).

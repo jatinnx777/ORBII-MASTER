@@ -6,7 +6,8 @@ export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
   PhoneSignIn: undefined;
-  PhoneVerify: { phone: string };
+  // OTP entry — either a phone (SMS) or an email code.
+  PhoneVerify: { phone?: string; email?: string };
   LanguageSelector: undefined;
   ProfileSetup: undefined;
   // Note: IdVerification removed alongside the helper system cut.
