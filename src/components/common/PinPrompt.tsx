@@ -126,6 +126,11 @@ export function PinPrompt({
       visible={visible}
       animationType="fade"
       onRequestClose={onCancel}
+      // Android: focusing from the `visible` effect races the modal window
+      // being attached, so the number pad never opens when the prompt is
+      // rendered already-visible (the mandatory PIN setup screen). onShow fires
+      // once the window really exists.
+      onShow={() => setTimeout(() => inputRef.current?.focus(), 60)}
     >
       <Pressable style={styles.backdrop} onPress={onCancel}>
         <Animated.View
@@ -157,7 +162,16 @@ export function PinPrompt({
             autoFocus
           />
 
-          <View style={styles.dotsRow}>
+          {/* Tapping the dots re-opens the number pad. Without this, a user who
+              dismisses the keyboard is stuck staring at a PIN box she cannot
+              type into — and on the mandatory setup screen, stuck for good. */}
+          <Pressable
+            style={styles.dotsRow}
+            onPress={() => inputRef.current?.focus()}
+            accessibilityRole="button"
+            accessibilityLabel="Enter your PIN"
+            hitSlop={16}
+          >
             {Array.from({ length: PIN_LEN }).map((_, i) => {
               const filled = i < activeValue.length;
               return (
@@ -171,7 +185,7 @@ export function PinPrompt({
                 />
               );
             })}
-          </View>
+          </Pressable>
 
           {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
 
