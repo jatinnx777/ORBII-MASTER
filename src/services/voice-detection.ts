@@ -47,6 +47,23 @@ export function setCustomPhrases(phrases: string[]): void {
   customPhrases = phrases.filter((p) => p.trim().length >= 3);
 }
 
+export function isListening(): boolean {
+  return listening;
+}
+
+// The native guard only reads the phrase list when startGuard() is called, so a
+// phrase added or removed while protection is already ON would never trigger an
+// SOS. Re-issue startGuard with the new set so an edit takes effect instantly.
+export async function applyPhrases(phrases: string[]): Promise<void> {
+  setCustomPhrases(phrases);
+  if (!available || !listening) return;
+  try {
+    await VoiceGuard!.startGuard(customPhrases, 0);
+  } catch {
+    // guard will pick the phrases up on its next start
+  }
+}
+
 export type VoiceDetectionStatus =
   | 'idle'
   | 'requesting-permission'

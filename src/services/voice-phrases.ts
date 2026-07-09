@@ -1,5 +1,5 @@
 import { getItem, setItem, storageKeys } from './storage';
-import { setCustomPhrases } from './voice-detection';
+import { applyPhrases, setCustomPhrases } from './voice-detection';
 
 // Custom Voice SOS secret phrases. Users pick their own trigger words
 // (e.g. "Call the stars", "Orbii help") on top of the always-on built-in
@@ -29,7 +29,9 @@ export async function savePhrases(phrases: string[]): Promise<string[]> {
     new Set(phrases.map(normalize).filter((p) => p.length >= MIN_LEN)),
   ).slice(0, MAX_PHRASES);
   await setItem<string[]>(storageKeys.voicePhrases, cleaned);
-  setCustomPhrases(cleaned);
+  // Push straight into the RUNNING guard, not just the JS cache — otherwise a
+  // phrase saved while protection is on silently never fires.
+  await applyPhrases(cleaned);
   return cleaned;
 }
 

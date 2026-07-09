@@ -306,12 +306,7 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
     } else {
       await setVoiceLang({ hindi: hindiOn && ready });
     }
-    // IKEA effect + real security: a self-chosen secret phrase makes the
-    // protection hers, and is safer than the public defaults.
-    const p = phrase.trim();
-    if (p.length >= 3) {
-      await addPhrase(p).catch(() => undefined);
-    }
+    // The secret phrase is asked once, in guided setup — not here as well.
     onDone();
   };
 
@@ -427,30 +422,10 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
           </View>
         </View>
 
-        {/* Optional secret phrase: hers alone, on top of the built-in words */}
-        <View style={lstyles.langCard}>
-          <View style={lstyles.langHead}>
-            <View style={{ flex: 1 }}>
-              <Text style={lstyles.langTitle}>Your secret phrase</Text>
-              <Text style={lstyles.langHint}>
-                Optional. A phrase only you would say, so no one can guess it.
-              </Text>
-            </View>
-            <Ionicons name="key" size={18} color={C.yellow} />
-          </View>
-          <TextInput
-            value={phrase}
-            onChangeText={setPhrase}
-            placeholder='e.g. "call the stars"'
-            placeholderTextColor={C.sub}
-            autoCapitalize="none"
-            autoCorrect={false}
-            maxLength={40}
-            style={lstyles.phraseInput}
-          />
-        </View>
-
-        <Text style={lstyles.note}>You can change this anytime in Settings → Voice SOS.</Text>
+        <Text style={lstyles.note}>
+          You'll pick your secret phrase in the next step. You can change it
+          anytime in Settings → Voice SOS.
+        </Text>
       </ScrollView>
 
       <View style={[lstyles.bottom, { paddingBottom: insets.bottom + spacing.md }]}>
