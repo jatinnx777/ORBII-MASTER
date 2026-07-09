@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -31,6 +32,13 @@ import type { AppStackParamList } from '@/navigation/types';
 import type { SOSLocation } from '@/types';
 
 const COUNTDOWN_SECONDS = 5;
+
+// Countdown ring geometry.
+const RING = 260;
+const STROKE = 14;
+const R = (RING - STROKE) / 2;
+const CIRC = 2 * Math.PI * R;
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
@@ -241,29 +249,43 @@ export function CountdownScreen() {
             {isTest ? 'Practice SOS in' : 'Sending your SOS in'}
           </Text>
 
-          <Animated.Text
-            style={[styles.number, { color: accent, transform: [{ scale: pulse }] }]}
-          >
-            {triggering ? '…' : Math.max(seconds, 0)}
-          </Animated.Text>
-          {!triggering ? <Text style={styles.unit}>seconds</Text> : null}
-
-          {!isInstant && !triggering ? (
-            <View style={styles.progressTrack}>
-              <Animated.View
-                style={[
-                  styles.progressFill,
-                  {
-                    backgroundColor: accent,
-                    width: progress.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0%', '100%'],
-                    }),
-                  },
-                ]}
+          {/* A real countdown ring: the arc drains as the seconds do. */}
+          <View style={styles.ringWrap}>
+            <Svg width={RING} height={RING}>
+              <Circle
+                cx={RING / 2}
+                cy={RING / 2}
+                r={R}
+                stroke={colors.creamDeep}
+                strokeWidth={STROKE}
+                fill="none"
               />
+              <AnimatedCircle
+                cx={RING / 2}
+                cy={RING / 2}
+                r={R}
+                stroke={accent}
+                strokeWidth={STROKE}
+                strokeLinecap="round"
+                fill="none"
+                strokeDasharray={CIRC}
+                strokeDashoffset={progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [CIRC, 0],
+                })}
+                // start the arc at 12 o'clock
+                transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+              />
+            </Svg>
+            <View style={styles.ringCenter} pointerEvents="none">
+              <Animated.Text
+                style={[styles.number, { color: accent, transform: [{ scale: pulse }] }]}
+              >
+                {triggering ? '…' : Math.max(seconds, 0)}
+              </Animated.Text>
+              {!triggering ? <Text style={styles.unit}>seconds</Text> : null}
             </View>
-          ) : null}
+          </View>
 
           <Text style={styles.caption}>
             {triggering
@@ -331,10 +353,22 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
   },
+  ringWrap: {
+    width: RING,
+    height: RING,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: spacing.md,
+  },
+  ringCenter: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   number: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 132,
-    lineHeight: 148,
+    fontSize: 96,
+    lineHeight: 108,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
