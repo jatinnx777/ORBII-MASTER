@@ -70,8 +70,10 @@ export async function tipHelper(
 }
 
 export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
-  // 1. Try a server-side order (secure path). If the create-order edge
-  //    function isn't deployed, fall back to a direct test-mode checkout.
+  // 1. The order MUST come from the server. Without a server order there is no
+  //    signature to verify later, which means no way to prove the payment was
+  //    real — so we refuse to open checkout at all rather than take money we
+  //    can't verify (or hand out premium we can't justify).
   let order:
     | { orderId: string; amount: number; currency?: string; keyId?: string }
     | null = null;
@@ -81,11 +83,18 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
     });
     if (data?.orderId) order = data;
   } catch {
-    // functions not deployed → fall back below
+    // fall through to the guard below
+  }
+  if (!order?.orderId) {
+    return {
+      ok: false,
+      error:
+        'Payments are not set up yet. Deploy the create-order and verify-payment functions first.',
+    };
   }
 
-  const keyId = order?.keyId ?? RAZORPAY_TEST_KEY_ID;
-  const amount = order?.amount ?? PLAN_AMOUNT[plan];
+  const keyId = order.keyId ?? RAZORPAY_TEST_KEY_ID;
+  const amount = order.amount ?? PLAN_AMOUNT[plan];
 
   // 2. Open Razorpay checkout.
   let payment: {
@@ -118,30 +127,24 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
     return { ok: false, error: err?.description ?? 'Payment failed.' };
   }
 
-  // 3a. Secure path: server verifies the HMAC signature + grants the
-  //     entitlement. This is the only authoritative grant.
-  if (order?.orderId) {
-    const { data: verify, error: verifyErr } = await supabase.functions.invoke(
-      'verify-payment',
-      {
-        body: {
-          orderId: order.orderId,
-          paymentId: payment.razorpay_payment_id,
-          signature: payment.razorpay_signature,
-          plan,
-        },
+  // 3. The ONLY way premium is ever granted: the server re-checks Razorpay's
+  //    HMAC signature and writes the entitlement with the service-role key.
+  //    There is deliberately no "trust the client" fallback — a device can
+  //    always fake a checkout callback, so an unverified success grants nothing.
+  const { data: verify, error: verifyErr } = await supabase.functions.invoke(
+    'verify-payment',
+    {
+      body: {
+        orderId: order.orderId,
+        paymentId: payment.razorpay_payment_id,
+        signature: payment.razorpay_signature,
+        plan,
       },
-    );
-    if (verifyErr || verify?.premium !== true) {
-      return { ok: false, error: 'Payment could not be verified.' };
-    }
-    await setLocalTier(plan === 'family' ? 'family' : 'plus');
-    return { ok: true };
+    },
+  );
+  if (verifyErr || verify?.premium !== true) {
+    return { ok: false, error: 'Payment could not be verified. You have not been charged for premium.' };
   }
-
-  // 3b. Test-mode fallback (edge functions not deployed): trust the client
-  //     success. Premium is granted locally only — for production, deploy the
-  //     create-order + verify-payment functions so grants are server-verified.
   await setLocalTier(plan === 'family' ? 'family' : 'plus');
   return { ok: true };
 }
@@ -152,24 +155,31 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
 const PLUS_VALID_DAYS = 30;
 
 /// Reads the user's entitlement so premium persists across re-login / reinstall
-/// — but only while it's within the 1-month validity window.
-export async function fetchEntitlement(): Promise<boolean> {
+/// — but only while it's within the 1-month validity window. This row can only
+/// ever be written by the verify-payment Edge Function (service role), so it is
+/// the authoritative answer to "did this person actually pay?".
+/// Returns the paid tier, or 'none'.
+export async function fetchEntitlementTier(): Promise<PremiumTier> {
   const uid = (await supabase.auth.getUser()).data.user?.id;
-  if (!uid) return false;
+  if (!uid) return 'none';
   try {
     const { data } = await supabase
       .from('entitlements')
-      .select('premium_enabled, status, purchase_date')
+      .select('premium_enabled, status, purchase_date, plan_type')
       .eq('user_id', uid)
       .maybeSingle();
-    if (!data?.premium_enabled || data.status !== 'active') return false;
+    if (!data?.premium_enabled || data.status !== 'active') return 'none';
     const purchasedAt = data.purchase_date ? Date.parse(data.purchase_date) : 0;
-    if (!purchasedAt) return false;
-    const ageMs = Date.now() - purchasedAt;
-    return ageMs <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
+    if (!purchasedAt) return 'none';
+    if (Date.now() - purchasedAt > PLUS_VALID_DAYS * 24 * 60 * 60 * 1000) return 'none';
+    return data.plan_type === 'family' ? 'family' : 'plus';
   } catch {
-    return false;
+    return 'none';
   }
+}
+
+export async function fetchEntitlement(): Promise<boolean> {
+  return (await fetchEntitlementTier()) !== 'none';
 }
 
 async function currentUid(): Promise<string | null> {
@@ -226,27 +236,28 @@ async function localTier(): Promise<PremiumTier> {
   return rec.tier;
 }
 
-/// The single source of truth for "is premium active right now": a paid
-/// subscription (server, survives reinstall) OR a coupon / local purchase —
-/// each within the 1-month window. Call on launch to reconcile `isPremium`.
+/// Is premium active right now? Call on launch to reconcile `isPremium`.
 export async function resolvePremiumActive(): Promise<boolean> {
-  const [paid, coupon, local] = await Promise.all([
-    fetchEntitlement(),
-    couponPremiumActive(),
-    localTier(),
-  ]);
-  return paid || coupon || local !== 'none';
+  return (await resolvePremiumTier()) !== 'none';
 }
 
-/// Which tier is active right now. Local purchase record is the most specific
-/// signal; a server entitlement with no known tier is treated as Plus.
+/// Which tier is active right now.
+///
+/// Precedence matters. The SERVER entitlement wins — it's the only record that
+/// proves a real, signature-verified payment, and it survives reinstall. The
+/// local records are secondary: the ORBII coupon is a deliberate free grant,
+/// and the local tier is just a cached echo of a verified purchase so the
+/// Plans screen renders correctly offline. Neither can invent a paid tier the
+/// server doesn't know about.
 export async function resolvePremiumTier(): Promise<PremiumTier> {
-  const [paid, coupon, local] = await Promise.all([
-    fetchEntitlement(),
+  const [serverTier, coupon, local] = await Promise.all([
+    fetchEntitlementTier(),
     couponPremiumActive(),
     localTier(),
   ]);
+  if (serverTier !== 'none') return serverTier;
+  if (coupon) return 'plus';
+  // Offline echo of a previously verified purchase (uid-scoped, 1-month window).
   if (local !== 'none') return local;
-  if (paid || coupon) return 'plus';
   return 'none';
 }
