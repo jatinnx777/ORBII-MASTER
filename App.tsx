@@ -30,6 +30,7 @@ import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
 import { GuidedSetupScreen } from '@/screens/Setup/GuidedSetupScreen';
+import { SafetyPinSetupScreen } from '@/screens/Setup/SafetyPinSetupScreen';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 import {
   AppDialogHost,
@@ -88,8 +89,12 @@ function RootNavigator() {
   // First-run guided setup (circle → secret phrase → protected). Shown once
   // after sign-in; null = still loading the flag from storage.
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
+  const [pinReady, setPinReady] = useState<boolean | null>(null);
   useEffect(() => {
     getItem<boolean>(storageKeys.guidedSetup).then((v) => setSetupDone(!!v));
+    void isPinSet()
+      .then(setPinReady)
+      .catch(() => setPinReady(false));
   }, []);
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
   const helperMode = useAppSelector((s) => s.app.helperMode);
@@ -236,10 +241,19 @@ function RootNavigator() {
           );
           return;
         }
+        // Trigger metadata from VoiceGuardService: which phrase fired, and the
+        // pre-roll clip captured BEFORE she spoke. Both optional — an older
+        // service build sends a bare `orbii://voice-sos`.
+        const q = (key: string): string | undefined => {
+          const m = url.match(new RegExp(`[?&]${key}=([^&]+)`));
+          return m ? decodeURIComponent(m[1]) : undefined;
+        };
+        const phrase = q('phrase');
+        const preroll = q('preroll');
         // Quota is recorded by CountdownScreen only when the SOS actually
         // fires, so a cancelled countdown doesn't burn a free activation.
         // @ts-expect-error - SOSCountdown is in the AppStack only.
-        navigationRef.navigate('SOSCountdown', { voice: true });
+        navigationRef.navigate('SOSCountdown', { voice: true, phrase, preroll });
         return;
       }
       const token = extractJoinToken(url);
@@ -322,6 +336,11 @@ function RootNavigator() {
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;
   if (status === 'authenticated') {
+    // The safety PIN is mandatory and write-once. Gate BEFORE guided setup so
+    // it's part of registration — and so the existing users who never had one
+    // are asked exactly once, on their next launch.
+    if (pinReady === null) return null;
+    if (!pinReady) return <SafetyPinSetupScreen onDone={() => setPinReady(true)} />;
     if (setupDone === null) return null;
     if (!setupDone) {
       return (

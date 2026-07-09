@@ -27,7 +27,17 @@ export type TabParamList = {
 
 export type AppStackParamList = {
   Tabs: { screen?: keyof TabParamList } | undefined;
-  SOSCountdown: { instant?: boolean; test?: boolean; voice?: boolean } | undefined;
+  SOSCountdown:
+    | {
+        instant?: boolean;
+        test?: boolean;
+        voice?: boolean;
+        /** Which phrase/sound fired the voice trigger — for false-positive tuning. */
+        phrase?: string;
+        /** Absolute path to the pre-roll WAV captured before the trigger. */
+        preroll?: string;
+      }
+    | undefined;
   ActiveSOS: undefined;
   // Victim-facing "help is coming" screen shown once a helper accepts. All
   // params optional so it degrades gracefully if some data isn't in yet.

@@ -125,9 +125,18 @@ export function VoicePhrasesScreen() {
       });
       return;
     }
-    const next = await addPhrase(text);
-    setPhrases(next);
-    setInput('');
+    try {
+      const next = await addPhrase(text);
+      setPhrases(next);
+      setInput('');
+    } catch (err) {
+      // A phrase ORBII can never hear, or one that fires constantly, is worse
+      // than none. Tell her exactly why rather than silently dropping it.
+      appAlert(
+        "That phrase won't work",
+        err instanceof Error ? err.message : 'Pick a different phrase.',
+      );
+    }
   };
 
   const onRemove = async (p: string) => {

@@ -20,7 +20,8 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded } from '@/redux/slices/userSlice';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
-import { addPhrase, PHRASE_EXAMPLES } from '@/services/voice-phrases';
+import { addPhrase, validatePhrase, PHRASE_EXAMPLES } from '@/services/voice-phrases';
+import { critical } from '@/services/failures';
 import { startListening } from '@/services/voice-detection';
 import { requestBatteryExemption } from '@/services/background-voice';
 import { getCurrentPermission } from '@/services/location';
@@ -106,10 +107,23 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
 
   const activateProtection = async () => {
     if (activating) return;
+    const p = phrase.trim();
+    // Validate BEFORE activating. Swallowing a rejected phrase here would leave
+    // her believing a secret phrase is armed when nothing was ever saved.
+    if (p.length > 0) {
+      const check = validatePhrase(p);
+      if (!check.ok) {
+        appAlert("That phrase won't work", check.reason);
+        return;
+      }
+    }
     setActivating(true);
     try {
-      const p = phrase.trim();
-      if (p.length >= 3) await addPhrase(p).catch(() => undefined);
+      if (p.length >= 3) {
+        await addPhrase(p).catch(
+          critical('voice.phrase', 'custom phrase failed to save during setup'),
+        );
+      }
       const res = await startListening();
       setVoiceOn(res.ok);
       // OEM killer fix: ask the system to keep ORBII alive in the background.

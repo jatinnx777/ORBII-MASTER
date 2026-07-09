@@ -88,6 +88,53 @@ export async function uploadSosRecording(
 }
 
 /**
+ * Upload the pre-roll clip — the 15 seconds the mic captured BEFORE the voice
+ * trigger fired. This is often the only recording of the threat itself, since
+ * the SOS clip only starts once she's already shouting.
+ *
+ * Stored beside the main clip as `<uid>/<sosId>-preroll.wav`.
+ */
+export async function uploadPreRoll(
+  userId: string,
+  sosId: string,
+  localUri: string,
+): Promise<boolean> {
+  try {
+    const path = localUri.startsWith('file://') ? localUri : `file://${localUri}`;
+    const file = new File(path);
+    if (!file.exists) return false;
+    const bytes = await file.bytes();
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .upload(`${userId}/${sosId}-preroll.wav`, bytes, {
+        contentType: 'audio/wav',
+        upsert: true,
+      });
+    if (error) {
+      addBreadcrumb({
+        category: 'sos.recording',
+        severity: 'warn',
+        message: `pre-roll upload failed: ${error.message}`,
+      });
+      return false;
+    }
+    addBreadcrumb({
+      category: 'sos.recording',
+      severity: 'info',
+      message: `pre-roll uploaded for SOS ${sosId}`,
+    });
+    return true;
+  } catch (err) {
+    reportError(err, {
+      category: 'sos.recording',
+      message: 'pre-roll upload threw',
+      tags: { sosId },
+    });
+    return false;
+  }
+}
+
+/**
  * Retry anything that failed while the phone was offline. Safe to call on every
  * app start; drops entries whose local file is gone.
  */

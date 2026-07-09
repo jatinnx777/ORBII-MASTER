@@ -19,6 +19,7 @@ import {
 const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {
     startGuard(phrases: string[], durationMs: number): Promise<boolean>;
+    setWhisperMode(enabled: boolean): Promise<boolean>;
     stopGuard(): Promise<boolean>;
   };
 };
@@ -49,6 +50,22 @@ export function setCustomPhrases(phrases: string[]): void {
 
 export function isListening(): boolean {
   return listening;
+}
+
+/**
+ * Whisper mode. The silence gate that keeps the battery alive also makes the
+ * engine deafest to a whispered plea — exactly the situation where an attacker
+ * is standing next to her. Opt-in; costs battery. Re-issues startGuard so it
+ * applies to the already-running service.
+ */
+export async function setWhisperMode(enabled: boolean): Promise<void> {
+  if (!available) return;
+  try {
+    await VoiceGuard!.setWhisperMode(enabled);
+    if (listening) await VoiceGuard!.startGuard(customPhrases, 0);
+  } catch {
+    // takes effect on the next start
+  }
 }
 
 // The native guard only reads the phrase list when startGuard() is called, so a

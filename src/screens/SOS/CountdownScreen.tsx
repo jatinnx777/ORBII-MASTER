@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { appAlert } from '@/components/common';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { appAlert, PinPrompt } from '@/components/common';
+import { isPinSet, verifyPin } from '@/services/safety-pin';
+import { uploadPreRoll } from '@/services/sos-audio';
 import {
   Animated,
   AppState,
@@ -69,6 +71,17 @@ export function CountdownScreen() {
   const [triggering, setTriggering] = useState(false);
   const cancelledRef = useRef(false);
   const triggeredRef = useRef(false);
+
+  // Duress guard state (voice triggers only, and only when a PIN exists).
+  const [pinGuarded, setPinGuarded] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isVoice) return;
+    isPinSet()
+      .then(setPinGuarded)
+      .catch(() => undefined);
+  }, [isVoice]);
 
   // Macro-animation: a ring that smoothly drains over the countdown + a soft
   // pulse on the number each second, so the wait feels alive, not static.
@@ -142,12 +155,33 @@ export function CountdownScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleCancel = () => {
+  // Actually stop the SOS. Only reached once any duress guard has passed.
+  const doCancel = useCallback(() => {
     cancelledRef.current = true;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(
-      () => undefined,
-    );
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    // A cancelled VOICE trigger is a false positive. Cancelled ÷ (cancelled +
+    // confirmed) is the voice engine's real error rate — the number we've never
+    // measured and can now tune thresholds against.
+    if (isVoice) {
+      trackEvent('voice_sos_cancelled', {
+        phrase: route.params?.phrase ?? null,
+        secondsLeft: Math.max(seconds, 0),
+      });
+    }
     navigation.goBack();
+  }, [isVoice, navigation, route.params?.phrase, seconds]);
+
+  // Duress guard. If an attacker has the phone, the easiest way to kill an SOS
+  // is to tap Cancel. When the user set a safety PIN, a VOICE-triggered SOS
+  // (she never chose to open this screen) can only be cancelled by proving it's
+  // her. Manual SOS is untouched — she pressed the button, she can unpress it.
+  const handleCancel = () => {
+    if (triggering) return;
+    if (isVoice && pinGuarded) {
+      setPinOpen(true);
+      return;
+    }
+    doCancel();
   };
 
   const triggerSOS = async () => {
@@ -179,6 +213,17 @@ export function CountdownScreen() {
         contacts: profile.emergencyContacts.length,
         kind: isTest ? 'test' : 'real',
       });
+      // The other half of the false-positive rate: a voice trigger the user
+      // let run to zero, i.e. a genuine detection.
+      if (isVoice && !isTest) {
+        trackEvent('voice_sos_confirmed', { phrase: route.params?.phrase ?? null });
+        // The 15s captured BEFORE she spoke — often the only recording of the
+        // threat itself. We only learn the sosId here, so upload now.
+        const preroll = route.params?.preroll;
+        if (preroll) {
+          void uploadPreRoll(profile.uid, record.id, preroll);
+        }
+      }
       dispatch(sosDispatchSucceeded(record));
       if (isVoice && !isTest) void recordVoiceSOS();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
@@ -307,9 +352,34 @@ export function CountdownScreen() {
             triggering && styles.cancelDisabled,
           ]}
         >
-          <Text style={styles.cancelText}>I’m safe, cancel</Text>
+          <Text style={styles.cancelText}>
+            {isVoice && pinGuarded ? 'I’m safe, cancel (PIN)' : 'I’m safe, cancel'}
+          </Text>
         </Pressable>
       </SafeAreaView>
+
+      {/* Duress guard: only the real user can call off a voice-triggered SOS. */}
+      <PinPrompt
+        visible={pinOpen}
+        mode="verify"
+        title="Enter your safety PIN"
+        body="ORBII heard your emergency phrase. Confirm it's you to cancel."
+        errorText={pinError}
+        onCancel={() => {
+          setPinOpen(false);
+          setPinError(null);
+        }}
+        onSubmit={async (pin) => {
+          const ok = await verifyPin(pin);
+          if (!ok) {
+            setPinError('Wrong PIN. Your SOS is still counting down.');
+            return;
+          }
+          setPinOpen(false);
+          setPinError(null);
+          doCancel();
+        }}
+      />
     </View>
   );
 }
