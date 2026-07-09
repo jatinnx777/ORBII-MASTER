@@ -25,6 +25,8 @@ import java.nio.channels.FileChannel
 class ScreamDetector(
   context: Context,
   private val onDanger: (label: String, score: Float) -> Unit,
+  /** A sound too weak to fire alone, but usable to corroborate a soft word. */
+  private val onWeak: (label: String, score: Float) -> Unit = { _, _ -> },
 ) {
   companion object {
     private const val TAG = "ScreamDetector"
@@ -39,6 +41,8 @@ class ScreamDetector(
     val index: Int,
     val fireOnce: Float,   // single-window score that fires immediately
     val fireTwice: Float,  // score that fires when seen twice in a row
+    // Never fires alone. Only corroborates a soft word heard nearby in time.
+    val corroborate: Float = 0.40f,
   )
 
   private var interpreter: Interpreter? = null
@@ -160,6 +164,14 @@ class ScreamDetector(
         onDanger(t.name, s)
         lastAbove[t.index] = false
         return
+      }
+      // Corroboration tier: too weak to fire on its own, but real evidence
+      // that something is wrong. VoiceGuardService remembers it briefly, and a
+      // soft word like "help" or "bachao" — which is far too common to fire
+      // alone — becomes a trigger when it lands inside this window. Neither
+      // signal is trusted by itself; together they are.
+      if (s >= t.corroborate) {
+        onWeak(t.name, s)
       }
     }
   }

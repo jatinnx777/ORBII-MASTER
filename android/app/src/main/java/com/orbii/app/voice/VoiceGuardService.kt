@@ -64,6 +64,28 @@ class VoiceGuardService : Service() {
     // silence (which reads ~0–80) while letting soft speech through.
     private const val VAD_RMS = 200.0
 
+    // Whisper mode. A woman with an attacker beside her does not shout — she
+    // whispers. The 200 gate buys battery life but makes the engine deafest in
+    // exactly that situation. Opt-in, because it feeds far more audio to ASR.
+    const val EXTRA_WHISPER = "whisper"
+    private const val WHISPER_VAD_RMS = 90.0
+
+    // Pre-roll: keep the last N seconds of raw mic audio so the SOS clip starts
+    // BEFORE she spoke. 15s @ 16k mono 16-bit ≈ 470 KB.
+    private const val PREROLL_SECONDS = 15
+    private const val PREROLL_DIR = "sos-preroll"
+
+    // Fusion. These words are far too common to fire an SOS alone — but paired
+    // with a weak distress sound (a scream YAMNet scored below its own firing
+    // bar) they are strong evidence. This lets BOTH thresholds drop without
+    // raising false positives, because neither signal is ever trusted alone.
+    private val SOFT_WORDS = setOf(
+      "help", "no", "stop", "please", "leave",
+      "bachao", "madad", "chodo", "nahi", "mummy",
+      "बचाओ", "मदद", "नहीं",
+    )
+    private const val FUSION_WINDOW_MS = 6000L
+
     // Smart auto-gain: lift quiet/muffled speech (pocket, purse) toward a
     // target loudness before the recognizer sees it, with a hard ceiling so we
     // never blow up background noise or clip badly.
@@ -111,6 +133,13 @@ class VoiceGuardService : Service() {
   private var screamDetector: ScreamDetector? = null
   private var phrases: List<String> = emptyList()
   @Volatile private var smoothedGain = 1.0
+  /** Rolling window of raw mic audio, so evidence starts before the trigger. */
+  @Volatile private var preRoll: PreRollBuffer? = null
+  /** Active silence gate; drops to WHISPER_VAD_RMS when whisper mode is on. */
+  @Volatile private var vadRms = VAD_RMS
+  /** When a weak (non-firing) distress sound was last heard — fusion input. */
+  @Volatile private var lastWeakDangerAt = 0L
+  @Volatile private var lastWeakLabel = ""
   private var wakeLock: PowerManager.WakeLock? = null
   private val main = Handler(Looper.getMainLooper())
 
@@ -125,6 +154,11 @@ class VoiceGuardService : Service() {
     val source = raw ?: prefs.getString("phrases", "") ?: ""
     val custom = source.split("\n").map { it.trim().lowercase() }.filter { it.length >= 3 }
     phrases = (custom + BUILT_IN).distinct()
+    // Whisper mode persists across a START_STICKY restart, same as the phrases.
+    if (intent != null && intent.hasExtra(EXTRA_WHISPER)) {
+      prefs.edit().putBoolean("whisper", intent.getBooleanExtra(EXTRA_WHISPER, false)).apply()
+    }
+    vadRms = if (prefs.getBoolean("whisper", false)) WHISPER_VAD_RMS else VAD_RMS
     val durationMs = if (intent != null && intent.hasExtra(EXTRA_DURATION_MS)) {
       val d = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
       prefs.edit().putLong("duration", d).apply()
@@ -187,10 +221,20 @@ class VoiceGuardService : Service() {
     // Distress-sound layer (screaming / crying / glass) on the same stream.
     // Best-effort: if the model can't load, voice phrases still protect.
     screamDetector = try {
-      ScreamDetector(this) { label, score ->
-        VoiceMetrics.lastText = "[$label ${String.format("%.2f", score)}]"
-        triggerNow(label, 0L)
-      }
+      ScreamDetector(
+        this,
+        onDanger = { label, score ->
+          VoiceMetrics.lastText = "[$label ${String.format("%.2f", score)}]"
+          triggerNow(label, 0L)
+        },
+        onWeak = { label, score ->
+          // Not enough to fire. Remembered for a few seconds so that a soft
+          // word ("help", "bachao") spoken alongside it becomes a trigger.
+          lastWeakDangerAt = System.currentTimeMillis()
+          lastWeakLabel = label
+          VoiceMetrics.screamScore = score.toDouble()
+        },
+      )
     } catch (e: Exception) {
       Log.e(TAG, "scream detector unavailable", e)
       null
@@ -219,17 +263,23 @@ class VoiceGuardService : Service() {
     }
 
     val buffer = ShortArray(bufSize / 2)
+    preRoll = PreRollBuffer(SAMPLE_RATE, PREROLL_SECONDS)
+    prunePreRolls()
     VoiceMetrics.running = true
-    VoiceMetrics.vadThreshold = VAD_RMS
+    VoiceMetrics.vadThreshold = vadRms
     var speechStart = 0L
     try {
       record.startRecording()
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
+        // Keep EVERY frame, silence included, and keep it RAW (before
+        // applyGain mutates the buffer). The seconds before she speaks are the
+        // ones the old recording threw away.
+        preRoll?.write(buffer, n)
         val level = rms(buffer, n)
         VoiceMetrics.rms = level
-        val active = level >= VAD_RMS
+        val active = level >= vadRms
         VoiceMetrics.vadActive = active
         if (!active) {
           // Speech just ended. The VAD gate means the recognizers never get
@@ -338,8 +388,23 @@ class VoiceGuardService : Service() {
     // matches the word "help" but NOT "hello" / "helping" / "yellow". This is
     // what stops ordinary speech from firing an SOS.
     val t = " " + text.lowercase().trim().replace(Regex("\\s+"), " ") + " "
-    val hit = phrases.firstOrNull { t.contains(" $it ") } ?: return
-    triggerNow(hit, speechStart)
+    val hit = phrases.firstOrNull { t.contains(" $it ") }
+    if (hit != null) {
+      triggerNow(hit, speechStart)
+      return
+    }
+    // FUSION. A soft word never fires by itself — "help" and "no" are far too
+    // common. But if a distress sound was heard within the last few seconds at
+    // a score too weak to fire on its own, the pair is strong evidence and both
+    // thresholds can safely be lower than either could be alone.
+    val now = System.currentTimeMillis()
+    if (now - lastWeakDangerAt <= FUSION_WINDOW_MS) {
+      val soft = SOFT_WORDS.firstOrNull { t.contains(" $it ") }
+      if (soft != null) {
+        triggerNow("$lastWeakLabel+$soft", speechStart)
+        lastWeakDangerAt = 0L // consume it; don't re-fire on the next partial
+      }
+    }
   }
 
   // Repeat detection. Two paths:
@@ -383,7 +448,15 @@ class VoiceGuardService : Service() {
       VoiceMetrics.lastLatencyMs = latency
       VoiceMetrics.totalLatencyMs += latency
     }
-    fireSos()
+    // Freeze the 15 seconds that led up to this. Best-effort: a failed dump
+    // must never stop the SOS from firing.
+    val preRollPath = try {
+      preRoll?.dumpWav(File(filesDir, PREROLL_DIR), "preroll_$now.wav")?.absolutePath
+    } catch (e: Exception) {
+      Log.w(TAG, "pre-roll dump failed", e)
+      null
+    }
+    fireSos(hit, preRollPath)
   }
 
   // Voice trigger → bring up the SOS countdown SCREEN over the lock screen, so
@@ -396,8 +469,33 @@ class VoiceGuardService : Service() {
   // from this microphone foreground service (exempt from background-activity
   // limits while it runs). MainActivity is showWhenLocked + turnScreenOn, so
   // whichever lands wakes the screen and shows the countdown immediately.
-  private fun fireSos() {
-    val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse("orbii://voice-sos")).apply {
+  /**
+   * Pre-roll clips are raw audio of the user's life. Once the JS layer has
+   * uploaded (or abandoned) one, it has no reason to linger — drop anything
+   * older than a day so a phone never accumulates recordings.
+   */
+  private fun prunePreRolls() {
+    try {
+      val dir = File(filesDir, PREROLL_DIR)
+      if (!dir.isDirectory) return
+      val cutoff = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+      dir.listFiles()?.forEach { f -> if (f.lastModified() < cutoff) f.delete() }
+    } catch (e: Exception) {
+      Log.w(TAG, "pre-roll prune failed", e)
+    }
+  }
+
+  private fun fireSos(phrase: String? = null, preRollPath: String? = null) {
+    // Carry the trigger metadata to the JS layer: `phrase` lets us measure the
+    // false-positive rate per phrase (a cancelled countdown IS a false
+    // positive), and `preroll` points at the audio from before she spoke.
+    val uri = StringBuilder("orbii://voice-sos")
+    val params = mutableListOf<String>()
+    phrase?.let { params.add("phrase=" + Uri.encode(it)) }
+    preRollPath?.let { params.add("preroll=" + Uri.encode(it)) }
+    if (params.isNotEmpty()) uri.append("?").append(params.joinToString("&"))
+
+    val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse(uri.toString())).apply {
       setPackage(packageName)
       addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }

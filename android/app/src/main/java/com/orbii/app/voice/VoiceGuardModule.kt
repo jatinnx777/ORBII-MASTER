@@ -94,6 +94,22 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Whisper mode lowers the silence gate so a whispered plea still reaches the
+   * recognizers. Persisted by the service; takes effect on the next startGuard,
+   * which savePhrases()/applyPhrases() already re-issues.
+   */
+  @ReactMethod
+  fun setWhisperMode(enabled: Boolean, promise: Promise) {
+    try {
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("whisper", enabled).apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("whisper_failed", e)
+    }
+  }
+
   @ReactMethod
   fun stopGuard(promise: Promise) {
     try {
