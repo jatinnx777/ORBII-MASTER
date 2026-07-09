@@ -23,6 +23,7 @@ import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle, deleteAccount } from '@/services/auth';
 import { clearCachedContacts } from '@/services/emergency-contacts';
 import { clearCachedProfile } from '@/services/profile-cache';
+import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -50,6 +51,10 @@ export function ProfileScreen() {
       icon: 'log-out',
       onConfirm: async () => {
         await signOutFromGoogle();
+        // The PIN lives on the device, not the account. Clear it so the next
+        // person to sign in on this phone isn't locked behind a PIN they
+        // never chose (and can't cancel an SOS).
+        await clearPin().catch(() => undefined);
         dispatch(signedOut());
       },
     });
@@ -75,6 +80,7 @@ export function ProfileScreen() {
         // A deleted account must leave no local trace.
         await clearCachedContacts(profile.uid).catch(() => undefined);
         await clearCachedProfile(profile.uid).catch(() => undefined);
+        await clearPin().catch(() => undefined);
         dispatch(signedOut());
       },
     });

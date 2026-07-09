@@ -35,11 +35,25 @@ export async function isPinSet(): Promise<boolean> {
   }
 }
 
+/**
+ * Set the PIN. WRITE-ONCE by design.
+ *
+ * The PIN's whole job is to stop an attacker holding the phone from calling off
+ * an SOS. If it could be changed from inside the app, that attacker could
+ * simply change it — so once set, it is set. It's collected during registration
+ * and never again. Enforced here, not in the UI, so no screen can bypass it.
+ */
 export async function setPin(pin: string): Promise<void> {
   if (!/^\d{4}$/.test(pin)) throw new Error('PIN must be exactly 4 digits.');
+  if (await isPinSet()) {
+    throw new Error('Your safety PIN is already set and cannot be changed.');
+  }
   await secureStorage.setItem(KEY, hash(pin));
 }
 
+/**
+ * Only for account deletion / sign-out cleanup — never a user-facing "remove".
+ */
 export async function clearPin(): Promise<void> {
   await secureStorage.removeItem(KEY);
 }

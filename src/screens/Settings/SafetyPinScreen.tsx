@@ -1,70 +1,16 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { appAlert } from '@/components/common';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PinPrompt } from '@/components/common';
-import {
-  clearPin,
-  isPinSet,
-  setPin,
-  verifyPin,
-} from '@/services/safety-pin';
-import {
-  colors,
-  fontFamilies,
-  radius,
-  shadows,
-  spacing,
-  typography,
-} from '@/theme';
+import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import type { AppScreenProps } from '@/navigation/types';
 
-// Safety PIN management. The PIN itself is stored in SecureStore as a
-// FNV hash (see services/safety-pin.ts). This screen is just the user-
-// facing surface: see current state, set a new PIN, or remove it.
+// The safety PIN is collected once, at registration, and is write-once by
+// design (see services/safety-pin.ts). There is deliberately no "change" and no
+// "remove" here: a PIN that an attacker holding the phone could change or
+// delete would not protect anyone. So this screen only explains it.
 
 export function SafetyPinScreen({ navigation }: AppScreenProps<'SafetyPin'>) {
-  const [loading, setLoading] = useState(true);
-  const [hasPin, setHasPin] = useState(false);
-  const [setSheetOpen, setSetSheetOpen] = useState(false);
-  const [verifySheetOpen, setVerifySheetOpen] = useState(false);
-  const [pendingAction, setPendingAction] = useState<'set' | 'clear' | null>(null);
-  const [pinError, setPinError] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const v = await isPinSet();
-    setHasPin(v);
-    setLoading(false);
-  }, []);
-
-  useEffect(() => {
-    refresh();
-  }, [refresh]);
-
-  const onChangePin = () => {
-    setPinError(null);
-    if (hasPin) {
-      setPendingAction('set');
-      setVerifySheetOpen(true);
-    } else {
-      setSetSheetOpen(true);
-    }
-  };
-
-  const onRemovePin = () => {
-    setPinError(null);
-    setPendingAction('clear');
-    setVerifySheetOpen(true);
-  };
-
   return (
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
@@ -82,207 +28,115 @@ export function SafetyPinScreen({ navigation }: AppScreenProps<'SafetyPin'>) {
         </View>
 
         <View style={styles.body}>
-          <View style={styles.heroIcon}>
-            <Ionicons name="shield-checkmark" size={28} color={colors.brandDeep} />
+          <View style={styles.statusCard}>
+            <View style={styles.lockCircle}>
+              <Ionicons name="lock-closed" size={26} color={colors.sageDeep} />
+            </View>
+            <Text style={styles.statusTitle}>Your PIN is set</Text>
+            <Text style={styles.statusSub}>
+              It's stored only on this phone, as a hash. Nobody at ORBII can see
+              it, and it is never sent anywhere.
+            </Text>
           </View>
-          <Text style={styles.heroTitle}>
-            {hasPin ? 'Safety PIN is on' : 'Add a safety PIN'}
-          </Text>
-          <Text style={styles.heroBody}>
-            A 4-digit code you'll need to cancel an active SOS. Stops an attacker
-            who grabbed your phone from silently dismissing the alert.
-          </Text>
 
-          {loading ? (
-            <View style={{ marginTop: spacing.lg }}>
-              <ActivityIndicator color={colors.brandDeep} />
-            </View>
-          ) : (
-            <View style={styles.actions}>
-              <Pressable
-                onPress={onChangePin}
-                style={({ pressed }) => [
-                  styles.primary,
-                  pressed && styles.pressed,
-                ]}
-                accessibilityRole="button"
-              >
-                <Ionicons
-                  name={hasPin ? 'key' : 'add'}
-                  size={16}
-                  color={colors.textInverse}
-                />
-                <Text style={styles.primaryText}>
-                  {hasPin ? 'Change PIN' : 'Set up PIN'}
-                </Text>
-              </Pressable>
-              {hasPin ? (
-                <Pressable
-                  onPress={onRemovePin}
-                  style={({ pressed }) => [
-                    styles.danger,
-                    pressed && styles.pressed,
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Ionicons
-                    name="trash-outline"
-                    size={16}
-                    color={colors.error}
-                  />
-                  <Text style={styles.dangerText}>Remove PIN</Text>
-                </Pressable>
-              ) : null}
-            </View>
-          )}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>What it protects</Text>
+            <Text style={styles.cardBody}>
+              If ORBII hears your emergency phrase, a 5-second countdown starts.
+              Your PIN is what someone must enter to cancel it — so a person who
+              has taken your phone cannot silence your SOS.
+            </Text>
+          </View>
+
+          <View style={styles.warnCard}>
+            <Ionicons name="alert-circle" size={18} color={colors.coralDeep} />
+            <Text style={styles.warnText}>
+              Your PIN <Text style={styles.warnBold}>cannot be changed</Text>.
+              A PIN an attacker could change would protect no one. Never share it.
+            </Text>
+          </View>
         </View>
       </SafeAreaView>
-
-      <PinPrompt
-        visible={setSheetOpen}
-        mode="set"
-        errorText={pinError}
-        onCancel={() => setSetSheetOpen(false)}
-        onSubmit={async (pin) => {
-          try {
-            await setPin(pin);
-            setSetSheetOpen(false);
-            await refresh();
-            appAlert('PIN saved', 'Your safety PIN is active.');
-          } catch (err) {
-            setPinError(err instanceof Error ? err.message : 'Could not save PIN.');
-          }
-        }}
-      />
-
-      <PinPrompt
-        visible={verifySheetOpen}
-        mode="verify"
-        title="Confirm with your current PIN"
-        body="Enter your existing PIN to continue."
-        errorText={pinError}
-        onCancel={() => {
-          setVerifySheetOpen(false);
-          setPendingAction(null);
-          setPinError(null);
-        }}
-        onSubmit={async (pin) => {
-          const ok = await verifyPin(pin);
-          if (!ok) {
-            setPinError('Wrong PIN. Try again.');
-            return;
-          }
-          setVerifySheetOpen(false);
-          setPinError(null);
-          if (pendingAction === 'clear') {
-            await clearPin();
-            await refresh();
-            appAlert('PIN removed', 'Cancelling an SOS no longer needs a PIN.');
-          } else if (pendingAction === 'set') {
-            setSetSheetOpen(true);
-          }
-          setPendingAction(null);
-        }}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background },
+  root: { flex: 1, backgroundColor: colors.cream },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    paddingTop: spacing.sm,
   },
   backBtn: {
     width: 40,
     height: 40,
     borderRadius: 20,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    ...shadows.icon,
   },
-  title: {
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  body: {
-    flex: 1,
+  title: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textPrimary },
+  body: { padding: spacing.lg, gap: spacing.md },
+
+  statusCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
     alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-  },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 22,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.md,
-  },
-  heroTitle: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    letterSpacing: -0.4,
-    textAlign: 'center',
-  },
-  heroBody: {
-    ...typography.body,
-    fontSize: 13.5,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 20,
-    maxWidth: 320,
-    marginTop: spacing.sm,
-  },
-  actions: {
-    marginTop: spacing.xl,
-    width: '100%',
-    gap: spacing.sm,
-  },
-  primary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
-    backgroundColor: colors.brandDeep,
+    gap: spacing.xs,
     ...shadows.card,
   },
-  primaryText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
-    color: colors.textInverse,
-    letterSpacing: 0.2,
-  },
-  danger: {
-    flexDirection: 'row',
+  lockCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.sageSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: radius.lg,
+    marginBottom: spacing.sm,
+  },
+  statusTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 19, color: colors.textPrimary },
+  statusSub: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+  },
+
+  card: {
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: 'rgba(255,77,77,0.25)',
+    borderRadius: radius.xxl,
+    padding: spacing.lg,
+    gap: 6,
+    ...shadows.card,
   },
-  dangerText: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 14,
-    color: colors.error,
-    letterSpacing: 0.2,
+  cardTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15.5, color: colors.textPrimary },
+  cardBody: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textSecondary,
   },
-  pressed: {
-    opacity: 0.92,
-    transform: [{ scale: 0.98 }],
+
+  warnCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.coralSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
   },
+  warnText: {
+    flex: 1,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary,
+  },
+  warnBold: { fontFamily: fontFamilies.poppinsBold },
 });

@@ -29,6 +29,7 @@ import {
 import { ACCENT_LIST, accentOf } from '@/theme/accents';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
@@ -100,6 +101,8 @@ export function SettingsScreen() {
       icon: 'log-out',
       onConfirm: async () => {
         await signOutFromGoogle();
+        // Device-local PIN: clear it so the next user sets their own.
+        await clearPin().catch(() => undefined);
         dispatch(signedOut());
       },
     });
