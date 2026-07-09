@@ -28,6 +28,7 @@ import { openSMSComposer } from '@/services/sms';
 import { buildSOSMessage } from '@/services/whatsapp-sos';
 import { fetchRoute, formatEta } from '@/services/osrm';
 import { upsertSOSRecord } from '@/services/sos-history';
+import { critical, degraded } from '@/services/failures';
 import {
   colors,
   fontFamilies,
@@ -360,7 +361,9 @@ export function ActiveSOSScreen() {
             dispatch(sosCancelled());
             // Tell every nearby helper the SOS is over so it stops showing
             // "someone needs help" on their phones.
-            broadcastResolved(activeSOS.id).catch(() => undefined);
+            broadcastResolved(activeSOS.id).catch(
+              degraded('sos.broadcast', 'could not broadcast SOS resolution'),
+            );
             const record = {
               ...activeSOS,
               responders: helperSummaries,
@@ -371,7 +374,9 @@ export function ActiveSOSScreen() {
               ),
             };
             dispatch(historyRecordAdded(record));
-            upsertSOSRecord(record).catch(() => undefined);
+            upsertSOSRecord(record).catch(
+              critical('sos.record', 'resolved SOS did not persist to Supabase'),
+            );
           }
           dispatch(sosCleared());
           navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
@@ -410,7 +415,9 @@ export function ActiveSOSScreen() {
         });
         dispatch(sosResolved({ responderId: responder?.id ?? null, rating }));
         // Clear the alert from every nearby helper's phone.
-        broadcastResolved(activeSOS.id).catch(() => undefined);
+        broadcastResolved(activeSOS.id).catch(
+              degraded('sos.broadcast', 'could not broadcast SOS resolution'),
+            );
         const record = {
           ...activeSOS,
           helpers: helperSummaries,
@@ -421,7 +428,9 @@ export function ActiveSOSScreen() {
           responseTime: Math.round((Date.now() - activeSOS.timestamp) / 1000),
         };
         dispatch(historyRecordAdded(record));
-        upsertSOSRecord(record).catch(() => undefined);
+        upsertSOSRecord(record).catch(
+              critical('sos.record', 'resolved SOS did not persist to Supabase'),
+            );
       }
       dispatch(sosCleared());
       navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });

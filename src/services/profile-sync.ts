@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import type { UserProfile } from '@/types';
 import { syncUsersPublic } from './users-public';
+import { reportError } from './error-reporting';
 
 // Best-effort profile persistence to Supabase. The expected `profiles`
 // table schema (paste into Supabase SQL editor):
@@ -49,10 +50,17 @@ export async function syncProfile(profile: UserProfile): Promise<void> {
       { onConflict: 'id' },
     );
     if (error) {
-      // Table missing or RLS blocking. Warn once, never spam.
+      // Table missing or RLS blocking. This is a DURABLE write — losing it is
+      // exactly why a user's name/photo vanishes on sign-out — so report it
+      // once (never spam) rather than a console.warn that does nothing in a
+      // release build.
       if (!warnedMissingTable) {
         warnedMissingTable = true;
-        console.warn('[profile-sync] not active:', error.message);
+        reportError(error, {
+          category: 'profile.sync',
+          message: 'profile did not sync to Supabase — data is device-only',
+          data: { code: error.code, hint: error.hint },
+        });
       }
     }
     // Mirror the public-facing fields into users_public so search works.

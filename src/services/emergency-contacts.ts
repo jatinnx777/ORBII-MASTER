@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getItem, setItem } from './storage';
+import { reportError } from './error-reporting';
 import type { EmergencyContact } from '@/types';
 
 // Durable, per-user local cache of emergency contacts. This is a SAFETY NET:
@@ -105,7 +106,15 @@ export async function upsertEmergencyContact(
     .select('*')
     .single<ContactRow>();
   if (error || !data) {
-    console.warn('[emergency-contacts] upsert failed:', error?.message);
+    // DURABLE write. A lost guardian number means an SOS reaches nobody, so
+    // this has to be visible in client_errors — not a console.warn that
+    // evaporates in release. The local cache still protects the user.
+    reportError(error ?? new Error('no row returned'), {
+      category: 'contacts.upsert',
+      message: 'emergency contact did not save to Supabase',
+      tags: { contactId: contact.id },
+      data: { code: error?.code, hint: error?.hint },
+    });
     return null;
   }
   return rowToContact(data);
@@ -120,7 +129,11 @@ export async function deleteEmergencyContact(
     .delete()
     .match({ id: contactId, user_id: userId });
   if (error) {
-    console.warn('[emergency-contacts] delete failed:', error.message);
+    reportError(error, {
+      category: 'contacts.delete',
+      message: 'emergency contact delete did not reach Supabase',
+      tags: { contactId },
+    });
     return false;
   }
   return true;

@@ -1,5 +1,6 @@
 import * as FileSystem from 'expo-file-system';
 import { supabase } from './supabase';
+import { reportError } from './error-reporting';
 
 // Profile photo upload. ImagePicker gives a LOCAL file uri (file://…) which
 // is meaningless after sign-out / on another device, so we upload it to the
@@ -29,7 +30,13 @@ export async function uploadAvatar(
       upsert: true,
     });
     if (error) {
-      console.warn('[avatars] upload failed:', error.message);
+      // Falling back to localUri means a file:// path gets stored, and that
+      // path dies. EditProfile warns the user; this makes sure WE see it too.
+      reportError(error, {
+        category: 'avatar.upload',
+        message: 'avatar upload failed — photo will not survive sign-out',
+        tags: { userId },
+      });
       return localUri;
     }
     const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
