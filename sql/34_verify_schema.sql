@@ -69,10 +69,22 @@ from expected_functions e
 union all
 -- 4. Storage buckets ---------------------------------------------------------
 -- 'avatars' missing is the #1 cause of the profile photo vanishing on sign-out.
+-- 'sos-recordings' is NOT yet used by the app: SOS audio is currently kept only
+-- on the device, so a missing bucket breaks nothing today — it's only needed
+-- once the evidence upload is wired (sql/11_sos_audio.sql creates it).
 select '4. bucket', e.id,
-  case when exists (select 1 from storage.buckets b where b.id = e.id) then 'OK' else '❌ MISSING' end,
-  case when e.id = 'avatars' and not exists (select 1 from storage.buckets b where b.id = 'avatars')
-       then 'run sql/17_avatars.sql — profile photos will not survive sign-out' else '' end
+  case
+    when exists (select 1 from storage.buckets b where b.id = e.id) then 'OK'
+    when e.id = 'sos-recordings' then '○ not needed yet'
+    else '❌ MISSING'
+  end,
+  case
+    when e.id = 'avatars' and not exists (select 1 from storage.buckets b where b.id = 'avatars')
+      then 'run sql/17_avatars.sql — profile photos will not survive sign-out'
+    when e.id = 'sos-recordings' and not exists (select 1 from storage.buckets b where b.id = 'sos-recordings')
+      then 'unused today; run sql/11_sos_audio.sql before wiring evidence upload'
+    else ''
+  end
 from expected_buckets e
 
 union all
