@@ -52,6 +52,10 @@ import { trackEvent } from '@/services/analytics';
 import { fireLocalNotification } from '@/services/notifications';
 import { subscribeLiveLocation, publishVictimLocation } from '@/services/live-location';
 import { watchLocation, type LocationWatcher } from '@/services/location';
+import {
+  startVictimLocationUpdates,
+  stopVictimLocationUpdates,
+} from '@/services/sos-location-task';
 import { RewardService } from '@/services/rewards';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
@@ -227,24 +231,41 @@ export function ActiveSOSScreen() {
   }, []);
 
   // Publish the victim's own live position so a responding helper's tracking
-  // screen follows them if they keep moving, instead of a stale drop pin.
-  // Stops the moment the SOS is resolved.
+  // screen follows her if she keeps moving, instead of a stale drop pin.
+  //
+  // This runs as an OS background location task backed by a foreground service,
+  // NOT a React effect — during a real emergency the phone is in a pocket with
+  // the screen locked, and foreground-only tracking dies there. If the OS
+  // refuses to start it we fall back to foreground watching rather than going
+  // silent, because a frozen pin is worse than a slightly stale one.
   useEffect(() => {
     if (!activeSOS?.id || resolved) return;
-    const handle = publishVictimLocation(activeSOS.id);
-    if (userLocation) handle.publish(userLocation);
-    let watcher: LocationWatcher | null = null;
-    watchLocation((point) => handle.publish(point), {
-      distanceIntervalMeters: 6,
-      timeIntervalMs: 2000,
-    })
-      .then((w) => {
-        watcher = w;
+    const sosId = activeSOS.id;
+    let cancelled = false;
+    let fallbackWatcher: LocationWatcher | null = null;
+    let fallbackHandle: ReturnType<typeof publishVictimLocation> | null = null;
+
+    void startVictimLocationUpdates(sosId).then((ok) => {
+      if (cancelled || ok) return;
+      // Fallback: foreground-only. Better than nothing.
+      fallbackHandle = publishVictimLocation(sosId);
+      if (userLocation) fallbackHandle.publish(userLocation);
+      watchLocation((point) => fallbackHandle?.publish(point), {
+        distanceIntervalMeters: 6,
+        timeIntervalMs: 2000,
       })
-      .catch(() => undefined);
+        .then((w) => {
+          if (cancelled) w.remove();
+          else fallbackWatcher = w;
+        })
+        .catch(degraded('sos.location', 'foreground victim watch failed'));
+    });
+
     return () => {
-      watcher?.remove();
-      handle.unsubscribe();
+      cancelled = true;
+      fallbackWatcher?.remove();
+      fallbackHandle?.unsubscribe();
+      void stopVictimLocationUpdates();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSOS?.id, resolved]);

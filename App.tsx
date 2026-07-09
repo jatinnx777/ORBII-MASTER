@@ -57,6 +57,9 @@ import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue } from '@/services/sos-queue';
 import { flushPendingSosAudio } from '@/services/sos-audio';
+// Side-effect import: registers the background victim-location task with the OS
+// so a headless invocation (app killed mid-SOS) can still find it.
+import { reconcileVictimLocationTask } from '@/services/sos-location-task';
 import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
@@ -199,6 +202,9 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void flushPendingSosAudio();
+    // If we were killed mid-SOS, the location task may still be registered with
+    // no screen left to stop it. Don't leak a foreground service.
+    void reconcileVictimLocationTask();
   }, [status]);
 
   // Deep-link join handler. Listens for orbii://join/<token> AND

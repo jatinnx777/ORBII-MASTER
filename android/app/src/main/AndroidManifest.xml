@@ -19,6 +19,15 @@
        user's secret phrase on-device while the app is backgrounded. Opt-in. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE"/>
+  <!-- Live victim tracking during an ACTIVE SOS only. Android 14+ requires an
+       explicit FGS type permission; expo-location declares the service with
+       foregroundServiceType="location". Without this the helper's map freezes
+       on a stale pin the moment the victim's screen locks.
+       ACCESS_BACKGROUND_LOCATION is a Play "sensitive permission" and needs the
+       Permissions Declaration Form — the justification is exactly this: sharing
+       a victim's live location with responders during an in-progress emergency. -->
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
   <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
   <!-- Re-arm background Voice SOS after a device reboot (opt-in feature). -->
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
