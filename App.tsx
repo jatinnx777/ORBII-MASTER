@@ -55,6 +55,7 @@ import { premiumTierResolved } from '@/redux/slices/userSlice';
 import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue } from '@/services/sos-queue';
+import { flushPendingSosAudio } from '@/services/sos-audio';
 import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
@@ -186,6 +187,13 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     return initSOSQueue();
+  }, [status]);
+
+  // Retry any SOS audio evidence that couldn't upload during the emergency
+  // itself (the network is exactly what fails when it matters).
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    void flushPendingSosAudio();
   }, [status]);
 
   // Deep-link join handler. Listens for orbii://join/<token> AND

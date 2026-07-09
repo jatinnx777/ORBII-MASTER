@@ -7,6 +7,7 @@ import {
 import * as FileSystem from 'expo-file-system';
 import { useEffect, useRef } from 'react';
 import { addBreadcrumb, reportError } from './error-reporting';
+import { uploadSosRecording } from './sos-audio';
 
 // SOS audio recorder.
 //
@@ -140,6 +141,15 @@ export function useSOSRecorder(args: {
             severity: 'info',
             message: `recording saved on-device for SOS ${args.sosId}`,
           });
+          // Get the evidence off the phone. Never blocks, never throws; a
+          // failed upload is queued and retried on the next app start.
+          if (args.userId) {
+            void uploadSosRecording(
+              args.userId,
+              args.sosId,
+              sosRecordingUri(args.sosId),
+            );
+          }
         } catch (err) {
           reportError(err, {
             category: 'sos.recording',
