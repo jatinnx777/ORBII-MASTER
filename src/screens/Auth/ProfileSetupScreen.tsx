@@ -61,6 +61,7 @@ export function ProfileSetupScreen() {
   const [phoneInput, setPhoneInput] = useState(
     profile?.phone ? formatPhoneForDisplay(profile.phone.replace(/^\+91/, '')) : '',
   );
+  const [phoneConfirm, setPhoneConfirm] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
   const [contactRelation, setContactRelation] = useState('');
@@ -70,6 +71,10 @@ export function ProfileSetupScreen() {
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
   const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
   const phoneValid = isValidIndianPhone(phoneDigits);
+  // Typed twice: this is the number an SOS dials, and it's locked once saved.
+  const confirmDigits = phoneConfirm.replace(/\D/g, '').slice(0, 10);
+  const phoneMismatch = confirmDigits.length === 10 && confirmDigits !== phoneDigits;
+  const phoneConfirmed = phoneValid && confirmDigits === phoneDigits;
   const contactPhoneDigits = contactPhone.replace(/\D/g, '').slice(0, 10);
   const contactPhoneValid = isValidIndianPhone(contactPhoneDigits);
   // A guardian must be someone else. Blocking self-as-contact stops the most
@@ -83,7 +88,7 @@ export function ProfileSetupScreen() {
   const stepReady = useMemo(() => {
     if (step === 'identity') return isValidName(name) && usernameValid;
     if (step === 'photo') return true; // photo is optional
-    if (step === 'phone') return phoneValid;
+    if (step === 'phone') return phoneConfirmed;
     if (step === 'contact') {
       return (
         isValidName(contactName) &&
@@ -93,7 +98,7 @@ export function ProfileSetupScreen() {
       );
     }
     return false;
-  }, [step, name, usernameValid, phoneValid, contactName, contactPhoneValid, contactSameAsOwn, contactRelation]);
+  }, [step, name, usernameValid, phoneConfirmed, contactName, contactPhoneValid, contactSameAsOwn, contactRelation]);
 
   const goNext = async () => {
     setError(null);
@@ -106,7 +111,17 @@ export function ProfileSetupScreen() {
       return;
     }
     if (step === 'phone') {
-      setStep('contact');
+      // Second confirmation. This is the number helpers and your circle dial in
+      // an emergency, and it cannot be changed afterwards — so make the user
+      // look at it once more before it's locked.
+      appAlert(
+        'Confirm your number',
+        `+91 ${formatPhoneForDisplay(phoneDigits)}\n\nThis is the number your circle and helpers will call in an emergency. It cannot be changed later.`,
+        [
+          { text: 'Edit', style: 'cancel' },
+          { text: 'Yes, lock it', onPress: () => setStep('contact') },
+        ],
+      );
       return;
     }
     // step === 'contact' → save everything
@@ -232,11 +247,17 @@ export function ProfileSetupScreen() {
           {step === 'phone' ? (
             <PhoneStep
               value={phoneInput}
+              confirmValue={phoneConfirm}
+              mismatch={phoneMismatch}
               error={error}
               onChange={(v) => {
                 const digits = v.replace(/\D/g, '').slice(0, 10);
                 setPhoneInput(formatPhoneForDisplay(digits));
                 if (error) setError(null);
+              }}
+              onChangeConfirm={(v) => {
+                const digits = v.replace(/\D/g, '').slice(0, 10);
+                setPhoneConfirm(formatPhoneForDisplay(digits));
               }}
             />
           ) : null}
@@ -441,12 +462,18 @@ function PhotoStep({
 
 function PhoneStep({
   value,
+  confirmValue,
+  mismatch,
   error,
   onChange,
+  onChangeConfirm,
 }: {
   value: string;
+  confirmValue: string;
+  mismatch: boolean;
   error: string | null;
   onChange: (v: string) => void;
+  onChangeConfirm: (v: string) => void;
 }) {
   return (
     <View style={styles.stepBody}>
@@ -456,6 +483,16 @@ function PhoneStep({
         title="Your phone number"
         subtitle="Helpers and your emergency contacts use this to reach you."
       />
+
+      <View style={styles.lockNotice}>
+        <Ionicons name="lock-closed" size={16} color={colors.coralDeep} />
+        <Text style={styles.lockText}>
+          This number <Text style={styles.lockBold}>cannot be changed later</Text>.
+          It's what your circle and helpers dial in an emergency, so enter it
+          carefully.
+        </Text>
+      </View>
+
       <Input
         label="Mobile number"
         keyboardType="number-pad"
@@ -467,6 +504,17 @@ function PhoneStep({
         placeholder="98765 43210"
         leftAdornment={<Text style={styles.countryCode}>+91</Text>}
         error={error ?? undefined}
+        containerStyle={styles.input}
+      />
+      <Input
+        label="Re-enter mobile number"
+        keyboardType="number-pad"
+        maxLength={11}
+        value={confirmValue}
+        onChangeText={onChangeConfirm}
+        placeholder="98765 43210"
+        leftAdornment={<Text style={styles.countryCode}>+91</Text>}
+        error={mismatch ? "Numbers don't match. Check both carefully." : undefined}
         containerStyle={styles.input}
       />
     </View>
@@ -651,6 +699,23 @@ const styles = StyleSheet.create({
     ...typography.bodyMedium,
     color: colors.textPrimary,
   },
+  lockNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.coralSoft,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  lockText: {
+    flex: 1,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary,
+  },
+  lockBold: { fontFamily: fontFamilies.poppinsBold },
   relationLabel: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 12,

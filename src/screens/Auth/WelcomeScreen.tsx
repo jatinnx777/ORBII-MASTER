@@ -19,18 +19,18 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signInFailed, signInStarted, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
 import { policyAccepted } from '@/redux/slices/appSlice';
-import { signInWithGoogle, sendOtpToE164, sendEmailOtp, DEV_AUTH } from '@/services/auth';
-import { CountryPickerSheet } from './CountryPickerSheet';
-import { DEFAULT_COUNTRY, type Country } from './countries';
+import { signInWithGoogle, sendEmailOtp, DEV_AUTH } from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
 
 const ORBI = require('../../../assets/onboarding/orbi-hero.png');
 
-// Phone-first sign in. Mobile + OTP is the primary path (that's how India logs
-// in), with email OTP and Google as fallbacks. A safety app deliberately has no
-// "skip login" — an SOS with no identity reaches nobody.
+// Sign in with Google (OAuth) or an email OTP. Both are free and need no SMS
+// gateway. The user's phone is collected once during profile setup — it is the
+// number an SOS actually dials, so it's confirmed twice and then locked.
+//
+// A safety app deliberately has no "skip login": an SOS with no identity
+// reaches nobody.
 
-// The soft tile wall behind the sheet: what ORBII actually does, as icons.
 const TILES: (keyof typeof Ionicons.glyphMap)[] = [
   'mic', 'shield-checkmark', 'location', 'people', 'call', 'navigate',
   'heart', 'walk', 'notifications', 'lock-closed', 'hand-left', 'medkit',
@@ -44,48 +44,21 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
   const policyOk = policyAcceptedAt !== null;
 
   const [policyOpen, setPolicyOpen] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
-  const [mode, setMode] = useState<'phone' | 'email'>('phone');
-  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [sending, setSending] = useState(false);
 
-  const expected = country.len ?? 0;
-  const phoneOk = expected ? phone.length === expected : phone.length >= 6;
   const emailOk = /^\S+@\S+\.\S+$/.test(email.trim());
-  const ready = (mode === 'phone' ? phoneOk : emailOk) && !sending;
 
-  const handleContinue = async () => {
-    if (!ready) return;
+  const gate = () => {
     if (!policyOk) {
       setPolicyOpen(true);
-      return;
+      return false;
     }
-    setSending(true);
-    try {
-      if (mode === 'phone') {
-        const e164 = await sendOtpToE164(`${country.dial}${phone}`);
-        navigation.navigate('PhoneVerify', { phone: e164 });
-      } else {
-        const addr = await sendEmailOtp(email);
-        navigation.navigate('PhoneVerify', { email: addr });
-      }
-    } catch (err) {
-      appAlert(
-        "Couldn't send the code",
-        err instanceof Error ? err.message : 'Please try again in a moment.',
-      );
-    } finally {
-      setSending(false);
-    }
+    return true;
   };
 
   const handleGoogle = async () => {
-    if (!policyOk) {
-      setPolicyOpen(true);
-      return;
-    }
+    if (!gate()) return;
     dispatch(signInStarted());
     try {
       const { profile, needsProfile, history } = await signInWithGoogle();
@@ -96,6 +69,23 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
       const message = err instanceof Error ? err.message : 'Google sign-in failed.';
       dispatch(signInFailed({ error: message }));
       if (!/cancel/i.test(message)) appAlert("Couldn't sign in", message);
+    }
+  };
+
+  const handleEmail = async () => {
+    if (!emailOk || sending) return;
+    if (!gate()) return;
+    setSending(true);
+    try {
+      const addr = await sendEmailOtp(email);
+      navigation.navigate('PhoneVerify', { email: addr });
+    } catch (err) {
+      appAlert(
+        "Couldn't send the code",
+        err instanceof Error ? err.message : 'Please try again in a moment.',
+      );
+    } finally {
+      setSending(false);
     }
   };
 
@@ -120,24 +110,6 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
       </View>
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={styles.topRow}>
-          <View />
-          <Pressable
-            onPress={() => setMode((m) => (m === 'phone' ? 'email' : 'phone'))}
-            style={styles.switchPill}
-            hitSlop={8}
-          >
-            <Ionicons
-              name={mode === 'phone' ? 'mail-outline' : 'call-outline'}
-              size={14}
-              color={colors.textSecondary}
-            />
-            <Text style={styles.switchText}>
-              {mode === 'phone' ? 'Use email' : 'Use phone'}
-            </Text>
-          </Pressable>
-        </View>
-
         <KeyboardAvoidingView
           style={styles.flex}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -154,50 +126,15 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
             <Text style={styles.headline}>Help is one word away</Text>
             <Text style={styles.sub}>Log in or sign up</Text>
 
-            {mode === 'phone' ? (
-              <View style={styles.inputRow}>
-                <Pressable style={styles.countryBtn} onPress={() => setPickerOpen(true)}>
-                  <Text style={styles.flag}>{country.flag}</Text>
-                  <Ionicons name="chevron-down" size={15} color={colors.textSecondary} />
-                </Pressable>
-                <View style={styles.phoneField}>
-                  <Text style={styles.dial}>{country.dial}</Text>
-                  <TextInput
-                    value={phone}
-                    onChangeText={(v) =>
-                      setPhone(v.replace(/\D/g, '').slice(0, country.len ?? 14))
-                    }
-                    placeholder="Enter mobile number"
-                    placeholderTextColor={colors.textMuted}
-                    keyboardType="number-pad"
-                    style={styles.input}
-                  />
-                </View>
-              </View>
-            ) : (
-              <View style={styles.emailField}>
-                <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
-                <TextInput
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Enter your email"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={styles.input}
-                />
-              </View>
-            )}
-
             <Pressable
-              onPress={handleContinue}
-              disabled={!ready}
-              style={[styles.continue, !ready && styles.continueOff]}
+              onPress={handleGoogle}
+              disabled={isSigningIn}
+              style={({ pressed }) => [styles.googleBtn, pressed && { opacity: 0.92 }]}
               accessibilityRole="button"
             >
-              <Text style={[styles.continueText, !ready && styles.continueTextOff]}>
-                {sending ? 'Sending code…' : 'Continue'}
+              <Text style={styles.gMark}>G</Text>
+              <Text style={styles.googleText}>
+                {isSigningIn ? 'Signing you in…' : 'Continue with Google'}
               </Text>
             </Pressable>
 
@@ -207,14 +144,28 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
               <View style={styles.line} />
             </View>
 
+            <View style={styles.emailField}>
+              <Ionicons name="mail-outline" size={18} color={colors.textMuted} />
+              <TextInput
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Enter your email"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                style={styles.input}
+              />
+            </View>
+
             <Pressable
-              onPress={handleGoogle}
-              disabled={isSigningIn}
-              style={({ pressed }) => [styles.googleBtn, pressed && { opacity: 0.9 }]}
+              onPress={handleEmail}
+              disabled={!emailOk || sending}
+              style={[styles.continue, (!emailOk || sending) && styles.continueOff]}
+              accessibilityRole="button"
             >
-              <Text style={styles.gMark}>G</Text>
-              <Text style={styles.googleText}>
-                {isSigningIn ? 'Signing you in…' : 'Continue with Google'}
+              <Text style={styles.continueText}>
+                {sending ? 'Sending code…' : 'Email me a code'}
               </Text>
             </Pressable>
 
@@ -231,16 +182,6 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
           </Pressable>
         </View>
       </SafeAreaView>
-
-      <CountryPickerSheet
-        visible={pickerOpen}
-        selected={country}
-        onSelect={(c) => {
-          setCountry(c);
-          setPhone('');
-        }}
-        onClose={() => setPickerOpen(false)}
-      />
 
       <PrivacyPolicyModal
         visible={policyOpen}
@@ -270,26 +211,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'flex-end',
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
+    paddingBottom: spacing.md,
   },
-  switchPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-    ...shadows.icon,
-  },
-  switchText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textSecondary },
-
-  scroll: { flexGrow: 1, justifyContent: 'flex-end', paddingHorizontal: spacing.lg, paddingBottom: spacing.md },
 
   logoTile: {
     width: 96,
@@ -320,31 +247,23 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
-  inputRow: { flexDirection: 'row', gap: spacing.sm },
-  countryBtn: {
+  googleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    height: 60,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.inputBorder,
-    backgroundColor: colors.surface,
-  },
-  flag: { fontSize: 24 },
-  phoneField: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    height: 60,
+    height: 58,
     borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.inputBorder,
     backgroundColor: colors.surface,
+    ...shadows.card,
   },
+  gMark: { fontFamily: fontFamilies.poppinsBold, fontSize: 19, color: '#4285F4' },
+  googleText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15.5, color: colors.textPrimary },
+
+  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginVertical: spacing.lg },
+  line: { flex: 1, height: 1, backgroundColor: colors.border },
+  or: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted },
+
   emailField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -356,7 +275,6 @@ const styles = StyleSheet.create({
     borderColor: colors.inputBorder,
     backgroundColor: colors.surface,
   },
-  dial: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 16, color: colors.textPrimary },
   input: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 16, color: colors.textPrimary },
 
   continue: {
@@ -370,24 +288,6 @@ const styles = StyleSheet.create({
   },
   continueOff: { backgroundColor: '#C9CBC6', shadowOpacity: 0 },
   continueText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16.5, color: colors.textInverse },
-  continueTextOff: { color: '#FFFFFF' },
-
-  divider: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginVertical: spacing.lg },
-  line: { flex: 1, height: 1, backgroundColor: colors.border },
-  or: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted },
-
-  googleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    height: 56,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-    ...shadows.icon,
-  },
-  gMark: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: '#4285F4' },
-  googleText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
 
   devHint: {
     fontFamily: fontFamilies.interMedium,
