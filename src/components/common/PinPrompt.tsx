@@ -6,7 +6,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -37,6 +36,14 @@ export type PinPromptProps = {
 
 const PIN_LEN = 4;
 
+// The drawn number pad. '' is a blank cell so 0 sits under 8.
+const KEYS: string[][] = [
+  ['1', '2', '3'],
+  ['4', '5', '6'],
+  ['7', '8', '9'],
+  ['', '0', 'back'],
+];
+
 export function PinPrompt({
   visible,
   mode,
@@ -50,7 +57,6 @@ export function PinPrompt({
   const [confirm, setConfirm] = useState('');
   const [stage, setStage] = useState<'enter' | 'confirm'>('enter');
   const enter = useRef(new Animated.Value(0)).current;
-  const inputRef = useRef<TextInput | null>(null);
 
   useEffect(() => {
     Animated.timing(enter, {
@@ -63,8 +69,6 @@ export function PinPrompt({
       setPin('');
       setConfirm('');
       setStage('enter');
-      // expo / RN modals don't autofocus the field on Android reliably.
-      setTimeout(() => inputRef.current?.focus(), 200);
     }
   }, [visible, enter]);
 
@@ -73,7 +77,6 @@ export function PinPrompt({
       setPin(value);
       setStage('confirm');
       setConfirm('');
-      setTimeout(() => inputRef.current?.focus(), 50);
       return;
     }
     if (mode === 'set' && stage === 'confirm') {
@@ -98,6 +101,12 @@ export function PinPrompt({
       handleNext(digits);
     }
   };
+
+  const handleDigit = (d: string) => {
+    if (activeValue.length >= PIN_LEN) return;
+    handleChange(activeValue + d);
+  };
+  const handleBackspace = () => handleChange(activeValue.slice(0, -1));
 
   const heading =
     title ??
@@ -126,20 +135,18 @@ export function PinPrompt({
       visible={visible}
       animationType="fade"
       onRequestClose={onCancel}
-      // Android: focusing from the `visible` effect races the modal window
-      // being attached, so the number pad never opens when the prompt is
-      // rendered already-visible (the mandatory PIN setup screen). onShow fires
-      // once the window really exists.
-      onShow={() => setTimeout(() => inputRef.current?.focus(), 60)}
     >
       <Pressable style={styles.backdrop} onPress={onCancel}>
+        {/* A nested Pressable swallows the backdrop's dismiss press, which is
+            what the old onStartShouldSetResponder was for — but a raw responder
+            claim also competed with child touches. */}
         <Animated.View
           style={[
             styles.sheet,
             { opacity: enter, transform: [{ translateY }] },
           ]}
-          onStartShouldSetResponder={() => true}
         >
+          <Pressable style={styles.sheetInner} onPress={() => undefined}>
           <View style={styles.handle} />
           <View style={styles.iconWrap}>
             <Ionicons
@@ -151,27 +158,7 @@ export function PinPrompt({
           <Text style={styles.title}>{heading}</Text>
           <Text style={styles.body}>{subline}</Text>
 
-          <TextInput
-            ref={inputRef}
-            value={activeValue}
-            onChangeText={handleChange}
-            keyboardType="number-pad"
-            maxLength={PIN_LEN}
-            secureTextEntry
-            style={styles.invisible}
-            autoFocus
-          />
-
-          {/* Tapping the dots re-opens the number pad. Without this, a user who
-              dismisses the keyboard is stuck staring at a PIN box she cannot
-              type into — and on the mandatory setup screen, stuck for good. */}
-          <Pressable
-            style={styles.dotsRow}
-            onPress={() => inputRef.current?.focus()}
-            accessibilityRole="button"
-            accessibilityLabel="Enter your PIN"
-            hitSlop={16}
-          >
+          <View style={styles.dotsRow}>
             {Array.from({ length: PIN_LEN }).map((_, i) => {
               const filled = i < activeValue.length;
               return (
@@ -185,7 +172,40 @@ export function PinPrompt({
                 />
               );
             })}
-          </Pressable>
+          </View>
+
+          {/* ORBII draws its own number pad rather than asking Android for one.
+              The old hidden-TextInput trick depended on the soft keyboard
+              opening for a 1x1, opacity:0 field — which it doesn't reliably do,
+              and that left the mandatory PIN screen impossible to complete.
+              A drawn pad has no such failure mode, and it's what banking apps
+              do anyway: nothing to autofill, nothing for a keyboard to log. */}
+          <View style={styles.keypad}>
+            {KEYS.map((row, r) => (
+              <View key={r} style={styles.keyRow}>
+                {row.map((k) => {
+                  if (k === '') return <View key="gap" style={styles.keyGap} />;
+                  const isBack = k === 'back';
+                  return (
+                    <Pressable
+                      key={k}
+                      onPress={() => (isBack ? handleBackspace() : handleDigit(k))}
+                      disabled={isBack ? activeValue.length === 0 : activeValue.length >= PIN_LEN}
+                      style={({ pressed }) => [styles.key, pressed && styles.keyPressed]}
+                      accessibilityRole="button"
+                      accessibilityLabel={isBack ? 'Delete' : k}
+                    >
+                      {isBack ? (
+                        <Ionicons name="backspace-outline" size={24} color={colors.textPrimary} />
+                      ) : (
+                        <Text style={styles.keyText}>{k}</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
 
           {errorText ? <Text style={styles.error}>{errorText}</Text> : null}
 
@@ -199,6 +219,7 @@ export function PinPrompt({
             accessibilityRole="button"
           >
             <Text style={styles.cancelText}>Cancel</Text>
+          </Pressable>
           </Pressable>
         </Animated.View>
       </Pressable>
@@ -251,16 +272,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     marginTop: 2,
   },
-  invisible: {
-    position: 'absolute',
-    opacity: 0,
-    width: 1,
-    height: 1,
+  sheetInner: {
+    width: '100%',
+    alignItems: 'center',
   },
   dotsRow: {
     flexDirection: 'row',
     gap: 14,
     marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  keypad: {
+    alignSelf: 'stretch',
+    marginTop: spacing.xs,
+  },
+  keyRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  key: {
+    flex: 1,
+    height: 62,
+    margin: 4,
+    borderRadius: radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.cream,
+  },
+  // Blank cell under 7 — keeps 0 centred without rendering a fake button.
+  keyGap: { flex: 1, height: 62, margin: 4 },
+  keyPressed: {
+    backgroundColor: colors.creamDeep,
+    transform: [{ scale: 0.96 }],
+  },
+  keyText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
+    color: colors.textPrimary,
   },
   dot: {
     width: 16,
