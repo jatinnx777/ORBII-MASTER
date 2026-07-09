@@ -6,6 +6,7 @@ import { profileHydrated } from './slices/userSlice';
 import { safetyModesHydrated } from './slices/safetyModesSlice';
 import { syncProfile } from '@/services/profile-sync';
 import { cacheContactsLocally } from '@/services/emergency-contacts';
+import { cacheProfileLocally } from '@/services/profile-cache';
 import type { GhostModeState, DeadmanTimerState } from './slices/safetyModesSlice';
 import {
   clearSession,
@@ -106,6 +107,9 @@ function subscribePersist() {
           next.user.profile.uid,
           next.user.profile.emergencyContacts,
         );
+        // Same safety net for the identity fields (name / username / photo /
+        // phone), so an edit survives sign-out even if the server sync failed.
+        void cacheProfileLocally(next.user.profile);
       } else {
         // Sign-out clears the session profile, but NOT the per-user contacts
         // cache — re-login restores it.

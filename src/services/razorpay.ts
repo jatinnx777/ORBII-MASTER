@@ -172,33 +172,57 @@ export async function fetchEntitlement(): Promise<boolean> {
   }
 }
 
+async function currentUid(): Promise<string | null> {
+  try {
+    return (await supabase.auth.getUser()).data.user?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function withinWindow(at: number): boolean {
+  return Date.now() - at <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
+}
+
 /// Record an ORBII coupon redemption. The gift is one month of ORBII Plus.
 export async function markCouponRedeemed(): Promise<void> {
-  await setItem(storageKeys.premiumCoupon, Date.now());
+  const uid = await currentUid();
+  await setItem(storageKeys.premiumCoupon, { at: Date.now(), uid });
   await setLocalTier('plus');
 }
 
+type CouponRecord = { at: number; uid: string | null };
+
 async function couponPremiumActive(): Promise<boolean> {
-  const at = await getItem<number>(storageKeys.premiumCoupon);
-  if (!at) return false;
-  return Date.now() - at <= PLUS_VALID_DAYS * 24 * 60 * 60 * 1000;
+  const rec = await getItem<CouponRecord | number>(storageKeys.premiumCoupon);
+  // Legacy unscoped records (a bare timestamp) granted premium to EVERY account
+  // on the device. Ignore them so the grant is dropped rather than inherited.
+  if (!rec || typeof rec === 'number') return false;
+  const uid = await currentUid();
+  if (!uid || rec.uid !== uid) return false;
+  return withinWindow(rec.at);
 }
 
 export type PremiumTier = 'none' | 'plus' | 'family';
 
-type TierRecord = { tier: 'plus' | 'family'; at: number };
+type TierRecord = { tier: 'plus' | 'family'; at: number; uid: string | null };
 
-// Persist which tier the user bought (locally), gated by the same 1-month
-// window as premium itself. This is what lets the Plans screen show "current
-// plan" / "upgrade" instead of re-selling something they already own.
+// Persist which tier the user bought (locally), scoped to the user who bought
+// it and gated by the same 1-month window as premium itself. Scoping matters:
+// without it, one test purchase left premium switched on for every account that
+// ever signed in on that phone.
 export async function setLocalTier(tier: 'plus' | 'family'): Promise<void> {
-  await setItem(storageKeys.premiumTier, { tier, at: Date.now() });
+  const uid = await currentUid();
+  await setItem(storageKeys.premiumTier, { tier, at: Date.now(), uid });
 }
 
 async function localTier(): Promise<PremiumTier> {
   const rec = await getItem<TierRecord>(storageKeys.premiumTier);
   if (!rec?.tier) return 'none';
-  if (Date.now() - rec.at > PLUS_VALID_DAYS * 24 * 60 * 60 * 1000) return 'none';
+  const uid = await currentUid();
+  // Not signed in, a different account, or a legacy unscoped record → no grant.
+  if (!uid || rec.uid !== uid) return 'none';
+  if (!withinWindow(rec.at)) return 'none';
   return rec.tier;
 }
 

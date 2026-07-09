@@ -111,6 +111,16 @@ export function EditProfileScreen() {
         }),
       );
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      // uploadAvatar falls back to the on-device path when the upload fails, so
+      // a still-local URI means the photo never reached storage. Say so instead
+      // of pretending it saved everywhere.
+      if (photoChanged && updated.photoUri?.startsWith('file://')) {
+        appAlert(
+          'Photo saved on this phone only',
+          "We couldn't upload your picture, so it won't appear for your circle or on a new device. Check your connection and try again.",
+        );
+        return;
+      }
       navigation.goBack();
     } finally {
       setSaving(false);

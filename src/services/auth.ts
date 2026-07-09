@@ -7,6 +7,7 @@ import { syncUsersPublic } from './users-public';
 import { syncProfile } from './profile-sync';
 import { uploadAvatar } from './avatars';
 import { loadEmergencyContacts } from './emergency-contacts';
+import { mergeCachedProfile } from './profile-cache';
 import { fetchSOSHistory } from './sos-history';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
 
@@ -224,10 +225,13 @@ async function bootstrapProfile(
   ]);
 
   if (row) {
-    const profile = rowToProfile(row, user.email ?? '');
+    let profile = rowToProfile(row, user.email ?? '');
     profile.friends = friends;
     profile.emergencyContacts = emergencyContacts;
     if (!profile.phone && opts.fallbackPhone) profile.phone = opts.fallbackPhone;
+    // Restore anything the server didn't have (e.g. the profiles sync silently
+    // failed) so a name/photo/username survives sign-out → sign-in.
+    profile = await mergeCachedProfile(profile);
     if (profile.username) {
       syncUsersPublic(profile).catch(() => undefined);
     }
@@ -238,7 +242,7 @@ async function bootstrapProfile(
     };
   }
 
-  const profile = emptyProfile({
+  let profile = emptyProfile({
     uid: user.id,
     email: user.email ?? '',
     name: (user.user_metadata?.full_name as string | undefined) ?? null,
@@ -247,7 +251,14 @@ async function bootstrapProfile(
   profile.friends = friends;
   profile.emergencyContacts = emergencyContacts;
   if (opts.fallbackPhone) profile.phone = opts.fallbackPhone;
-  return { profile, needsProfile: true, history };
+  // No server row (table missing, or first sign-in on a fresh project): fall
+  // back to whatever this user last had on this device.
+  profile = await mergeCachedProfile(profile);
+  return {
+    profile,
+    needsProfile: !profile.username || !profile.phone,
+    history,
+  };
 }
 
 function emptyProfile(args: {
