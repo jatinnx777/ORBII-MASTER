@@ -519,12 +519,12 @@ const styles = StyleSheet.create({
   privacyText: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textMuted, flex: 1 },
 
   qaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  qa: { width: '31.5%', alignItems: 'center', gap: 8, paddingVertical: spacing.md, borderRadius: 20, backgroundColor: colors.cream },
+  qa: { width: '31.5%', alignItems: 'center', gap: 8, paddingVertical: spacing.md, borderRadius: 20, backgroundColor: colors.creamDeep },
   qaIco: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   qaName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textPrimary },
 
   expHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  expIco: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center' },
+  expIco: { width: 40, height: 40, borderRadius: 13, backgroundColor: colors.creamDeep, alignItems: 'center', justifyContent: 'center' },
   expH: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textPrimary },
   expHint: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted, marginTop: 1 },
   rows: { gap: 0 },

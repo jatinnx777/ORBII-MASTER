@@ -297,7 +297,11 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.cream,
+    // creamDeep, not cream: these keys sit on a WHITE sheet and cream is only
+    // 4% darker than white — the pad was there but effectively invisible.
+    backgroundColor: colors.creamDeep,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // Blank cell under 7 — keeps 0 centred without rendering a fake button.
   keyGap: { flex: 1, height: 62, margin: 4 },
