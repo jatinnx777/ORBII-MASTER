@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { publishVictimLocation, type VictimPublishHandle } from './live-location';
 import { getItem, setItem } from './storage';
+import { haversineMeters } from '@/utils/geo';
 import { addBreadcrumb, reportError } from './error-reporting';
 import type { GeoPoint } from '@/types';
 
@@ -28,6 +29,22 @@ const ACTIVE_SOS_KEY = 'orbii:sos:active-id';
 // The realtime channel is expensive to open, so keep one per SOS across ticks.
 let handle: VictimPublishHandle | null = null;
 let handleSosId: string | null = null;
+
+// Adaptive cadence. A 3s fix rate plus a foreground service visibly drains the
+// phone, and an SOS can run for an hour. When she stops moving there is nothing
+// new to send, so we back off; the moment she moves again we tighten up. Fast
+// mode is what the helper navigates by, so we resume it eagerly (one moving fix
+// is enough) and only relax after a sustained still period.
+type Cadence = 'fast' | 'slow';
+const FAST = { timeInterval: 3000, distanceInterval: 5 };
+const SLOW = { timeInterval: 15000, distanceInterval: 25 };
+const STILL_M = 12; // moved less than this = standing still
+const STILL_BEFORE_SLOW_MS = 90_000;
+
+let cadence: Cadence = 'fast';
+let lastPoint: GeoPoint | null = null;
+let stillSince = 0;
+let switching = false;
 
 function publisherFor(sosId: string): VictimPublishHandle {
   if (handleSosId !== sosId) {
@@ -60,6 +77,7 @@ TaskManager.defineTask(SOS_LOCATION_TASK, async ({ data, error }) => {
       longitude: last.coords.longitude,
     };
     publisherFor(sosId).publish(point);
+    await adaptCadence(point);
   } catch (err) {
     reportError(err, {
       category: 'sos.location',
@@ -67,6 +85,67 @@ TaskManager.defineTask(SOS_LOCATION_TASK, async ({ data, error }) => {
     });
   }
 });
+
+/** Start (or restart) the OS location stream at the given cadence. */
+async function startUpdates(mode: Cadence): Promise<void> {
+  const rate = mode === 'fast' ? FAST : SLOW;
+  await Location.startLocationUpdatesAsync(SOS_LOCATION_TASK, {
+    accuracy: Location.Accuracy.High,
+    timeInterval: rate.timeInterval,
+    distanceInterval: rate.distanceInterval,
+    // Never let Android decide the emergency is boring and pause us.
+    pausesUpdatesAutomatically: false,
+    showsBackgroundLocationIndicator: true,
+    foregroundService: {
+      notificationTitle: 'ORBII SOS is active',
+      notificationBody: 'Sharing your live location with your helpers.',
+      notificationColor: '#4BAD3F',
+    },
+  });
+  cadence = mode;
+}
+
+/**
+ * Decide whether to speed up or slow down. Restarting the stream is the only
+ * way to change the OS cadence, so it's guarded: never re-enter, and only slow
+ * down after she's been still for a sustained window.
+ */
+async function adaptCadence(point: GeoPoint): Promise<void> {
+  const moved = lastPoint ? haversineMeters(lastPoint, point) : Infinity;
+  lastPoint = point;
+  const now = Date.now();
+
+  if (moved > STILL_M) {
+    stillSince = 0;
+    if (cadence === 'slow' && !switching) {
+      switching = true;
+      try {
+        await startUpdates('fast'); // she's moving again — helpers need this
+      } catch {
+        // keep whatever cadence we had
+      } finally {
+        switching = false;
+      }
+    }
+    return;
+  }
+
+  if (stillSince === 0) stillSince = now;
+  if (
+    cadence === 'fast' &&
+    !switching &&
+    now - stillSince >= STILL_BEFORE_SLOW_MS
+  ) {
+    switching = true;
+    try {
+      await startUpdates('slow');
+    } catch {
+      // keep fast; wasting battery beats losing her
+    } finally {
+      switching = false;
+    }
+  }
+}
 
 /**
  * Start publishing the victim's position for `sosId`, and keep publishing with
@@ -85,19 +164,9 @@ export async function startVictimLocationUpdates(sosId: string): Promise<boolean
 
     if (await Location.hasStartedLocationUpdatesAsync(SOS_LOCATION_TASK)) return true;
 
-    await Location.startLocationUpdatesAsync(SOS_LOCATION_TASK, {
-      accuracy: Location.Accuracy.High,
-      timeInterval: 3000,
-      distanceInterval: 5,
-      // Never let Android decide the emergency is boring and pause us.
-      pausesUpdatesAutomatically: false,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: 'ORBII SOS is active',
-        notificationBody: 'Sharing your live location with your helpers.',
-        notificationColor: '#4BAD3F',
-      },
-    });
+    lastPoint = null;
+    stillSince = 0;
+    await startUpdates('fast');
     addBreadcrumb({
       category: 'sos.location',
       severity: 'info',
@@ -127,6 +196,10 @@ export async function stopVictimLocationUpdates(): Promise<void> {
   handle?.unsubscribe();
   handle = null;
   handleSosId = null;
+  cadence = 'fast';
+  lastPoint = null;
+  stillSince = 0;
+  switching = false;
 }
 
 /**
