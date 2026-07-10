@@ -1349,13 +1349,17 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingVertical: 10,
     borderRadius: radius.md,
-    backgroundColor: colors.background,
+    // White, not `background`. These sit directly on the cream scroll, so a
+    // `background` fill made them the same colour as the page behind them and
+    // the tip amounts vanished into it.
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
+    ...shadows.icon,
   },
   tipPillHighlight: {
     borderColor: colors.primary,
-    backgroundColor: 'rgba(255,77,77,0.08)',
+    backgroundColor: colors.brandSoft,
   },
   tipPillEmoji: {
     fontSize: 14,
@@ -1391,7 +1395,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.primary,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     marginTop: spacing.sm,
   },
   cancelText: {
