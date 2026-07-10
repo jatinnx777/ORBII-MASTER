@@ -126,6 +126,10 @@ export function ActiveSOSScreen() {
   // Mint the 4-digit completion code as soon as the SOS is live, so it's on
   // screen before any helper arrives.
   const [rescueCode, setRescueCode] = useState<string | null>(null);
+  // Kept hidden by default. If someone takes her phone mid-SOS, a code sitting
+  // in plain sight tells him help is coming. She reveals it deliberately, at
+  // the moment her helper is in front of her.
+  const [codeShown, setCodeShown] = useState(false);
   useEffect(() => {
     if (!activeSOS?.id || activeSOS.kind === 'test') return;
     let alive = true;
@@ -675,13 +679,22 @@ export function ActiveSOSScreen() {
             let him close the rescue. Nobody can complete a rescue they never
             attended. */}
         {!resolved && rescueCode ? (
-          <View style={styles.codeCard}>
-            <Text style={styles.codeLabel}>SHOW THIS CODE TO YOUR HELPER</Text>
-            <Text style={styles.codeValue}>{rescueCode}</Text>
-            <Text style={styles.codeHint}>
-              Only read it out once they are with you. It proves they really came.
+          <Pressable
+            style={styles.codeCard}
+            onPress={() => setCodeShown((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={codeShown ? 'Hide rescue code' : 'Reveal rescue code'}
+          >
+            <Text style={styles.codeLabel}>
+              {codeShown ? 'READ THIS OUT TO YOUR HELPER' : 'YOUR HELPER CODE'}
             </Text>
-          </View>
+            <Text style={styles.codeValue}>{codeShown ? rescueCode : '••••'}</Text>
+            <Text style={styles.codeHint}>
+              {codeShown
+                ? 'Tap to hide. Only say it once they are standing with you.'
+                : 'Tap to reveal. Keep it hidden until your helper is with you.'}
+            </Text>
+          </Pressable>
         ) : null}
 
         {!resolved ? <DeliverySummary delivery={delivery} /> : null}

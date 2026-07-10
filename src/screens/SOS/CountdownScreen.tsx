@@ -77,11 +77,11 @@ export function CountdownScreen() {
   const [pinOpen, setPinOpen] = useState(false);
   const [pinError, setPinError] = useState<string | null>(null);
   useEffect(() => {
-    if (!isVoice) return;
+    if (isTest) return; // practice runs must always be cancellable
     isPinSet()
       .then(setPinGuarded)
       .catch(() => undefined);
-  }, [isVoice]);
+  }, [isTest]);
 
   // Macro-animation: a ring that smoothly drains over the countdown + a soft
   // pulse on the number each second, so the wait feels alive, not static.
@@ -172,12 +172,13 @@ export function CountdownScreen() {
   }, [isVoice, navigation, route.params?.phrase, seconds]);
 
   // Duress guard. If an attacker has the phone, the easiest way to kill an SOS
-  // is to tap Cancel. When the user set a safety PIN, a VOICE-triggered SOS
-  // (she never chose to open this screen) can only be cancelled by proving it's
-  // her. Manual SOS is untouched — she pressed the button, she can unpress it.
+  // is to tap Cancel. Guarding only VOICE triggers left the obvious hole open:
+  // she presses the button, he snatches the phone and taps Cancel inside five
+  // seconds, for free. Any real SOS now needs the PIN to call off. A practice
+  // run never does.
   const handleCancel = () => {
     if (triggering) return;
-    if (isVoice && pinGuarded) {
+    if (!isTest && pinGuarded) {
       setPinOpen(true);
       return;
     }
@@ -363,7 +364,7 @@ export function CountdownScreen() {
         visible={pinOpen}
         mode="verify"
         title="Enter your safety PIN"
-        body="ORBII heard your emergency phrase. Confirm it's you to cancel."
+        body="Confirm it's really you before calling off this SOS."
         errorText={pinError}
         onCancel={() => {
           setPinOpen(false);
