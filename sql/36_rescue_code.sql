@@ -14,8 +14,11 @@
 -- we have: geofencing says the phone was nearby, the code says a human actually
 -- spoke to her.
 
+-- NOTE ON TYPES: sql/03 declares `sos_events.id text`, but every live project
+-- actually has `id uuid` (that file even says so). rescue_events.sos_id is uuid
+-- too, so uuid is the correct type here — a text column cannot carry the FK.
 create table if not exists sos_verify_codes (
-  sos_id     text primary key references sos_events(id) on delete cascade,
+  sos_id     uuid primary key references sos_events(id) on delete cascade,
   user_id    uuid not null references auth.users(id) on delete cascade,
   code       text not null check (code ~ '^[0-9]{4}$'),
   created_at timestamptz not null default now()
@@ -38,7 +41,10 @@ alter table rescue_events
 -- ---------------------------------------------------------------------------
 -- Victim: fetch (creating on first call) the code for her SOS.
 -- ---------------------------------------------------------------------------
-create or replace function ensure_sos_code(p_sos text)
+-- Drop a stale text-signature version from a partial earlier run.
+drop function if exists ensure_sos_code(text);
+
+create or replace function ensure_sos_code(p_sos uuid)
 returns text
 language plpgsql security definer set search_path = public as $$
 declare uid uuid := auth.uid(); existing text; owner uuid;
@@ -99,7 +105,7 @@ begin
   return true;
 end $$;
 
-revoke all on function ensure_sos_code(text) from public, anon;
+revoke all on function ensure_sos_code(uuid) from public, anon;
 revoke all on function verify_rescue_code(uuid, text) from public, anon;
-grant execute on function ensure_sos_code(text) to authenticated;
+grant execute on function ensure_sos_code(uuid) to authenticated;
 grant execute on function verify_rescue_code(uuid, text) to authenticated;
