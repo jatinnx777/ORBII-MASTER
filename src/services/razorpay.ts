@@ -158,33 +158,40 @@ const PLUS_VALID_DAYS = 30;
 /// — but only while it's within the 1-month validity window. This row can only
 /// ever be written by the verify-payment Edge Function (service role), so it is
 /// the authoritative answer to "did this person actually pay?".
-/// Returns the paid tier, or 'none'.
-export async function fetchEntitlementTier(): Promise<PremiumTier> {
-  const uid = (await supabase.auth.getUser()).data.user?.id;
-  if (!uid) return 'none';
+///
+/// 'unknown' means WE COULD NOT ASK (offline, server down, no session yet). It
+/// is not the same as 'none', and conflating the two is what silently deleted
+/// people's subscriptions: one failed read on a train and premium was gone.
+export async function fetchEntitlementTier(): Promise<PremiumTier | 'unknown'> {
+  const uid = await currentUid();
+  if (!uid) return 'unknown';
   try {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('entitlements')
       .select('premium_enabled, status, purchase_date, plan_type')
       .eq('user_id', uid)
       .maybeSingle();
+    if (error) return 'unknown';
     if (!data?.premium_enabled || data.status !== 'active') return 'none';
     const purchasedAt = data.purchase_date ? Date.parse(data.purchase_date) : 0;
     if (!purchasedAt) return 'none';
     if (Date.now() - purchasedAt > PLUS_VALID_DAYS * 24 * 60 * 60 * 1000) return 'none';
     return data.plan_type === 'family' ? 'family' : 'plus';
   } catch {
-    return 'none';
+    return 'unknown';
   }
 }
 
-export async function fetchEntitlement(): Promise<boolean> {
-  return (await fetchEntitlementTier()) !== 'none';
-}
-
+/// The signed-in user's id, read from the LOCAL session.
+///
+/// This used to call `supabase.auth.getUser()`, which is a network round-trip to
+/// the auth server. Every uid-scoped premium record was therefore gated on a
+/// request that fails offline or on a slow first frame after sign-in — and a
+/// null uid reads as "no premium". `getSession()` reads the persisted session
+/// from disk and never leaves the device.
 async function currentUid(): Promise<string | null> {
   try {
-    return (await supabase.auth.getUser()).data.user?.id ?? null;
+    return (await supabase.auth.getSession()).data.session?.user?.id ?? null;
   } catch {
     return null;
   }
@@ -203,13 +210,12 @@ export async function markCouponRedeemed(): Promise<void> {
 
 type CouponRecord = { at: number; uid: string | null };
 
-async function couponPremiumActive(): Promise<boolean> {
+async function couponPremiumActive(uid: string): Promise<boolean> {
   const rec = await getItem<CouponRecord | number>(storageKeys.premiumCoupon);
   // Legacy unscoped records (a bare timestamp) granted premium to EVERY account
   // on the device. Ignore them so the grant is dropped rather than inherited.
   if (!rec || typeof rec === 'number') return false;
-  const uid = await currentUid();
-  if (!uid || rec.uid !== uid) return false;
+  if (rec.uid !== uid) return false;
   return withinWindow(rec.at);
 }
 
@@ -226,22 +232,16 @@ export async function setLocalTier(tier: 'plus' | 'family'): Promise<void> {
   await setItem(storageKeys.premiumTier, { tier, at: Date.now(), uid });
 }
 
-async function localTier(): Promise<PremiumTier> {
+async function localTier(uid: string): Promise<PremiumTier> {
   const rec = await getItem<TierRecord>(storageKeys.premiumTier);
   if (!rec?.tier) return 'none';
-  const uid = await currentUid();
-  // Not signed in, a different account, or a legacy unscoped record → no grant.
-  if (!uid || rec.uid !== uid) return 'none';
+  // A different account, or a legacy unscoped record → no grant.
+  if (rec.uid !== uid) return 'none';
   if (!withinWindow(rec.at)) return 'none';
   return rec.tier;
 }
 
-/// Is premium active right now? Call on launch to reconcile `isPremium`.
-export async function resolvePremiumActive(): Promise<boolean> {
-  return (await resolvePremiumTier()) !== 'none';
-}
-
-/// Which tier is active right now.
+/// Which tier is active right now, or `null` when we genuinely could not tell.
 ///
 /// Precedence matters. The SERVER entitlement wins — it's the only record that
 /// proves a real, signature-verified payment, and it survives reinstall. The
@@ -249,15 +249,27 @@ export async function resolvePremiumActive(): Promise<boolean> {
 /// and the local tier is just a cached echo of a verified purchase so the
 /// Plans screen renders correctly offline. Neither can invent a paid tier the
 /// server doesn't know about.
-export async function resolvePremiumTier(): Promise<PremiumTier> {
+///
+/// `null` is the important case. Downgrading somebody to free because a read
+/// failed is a bug that looks exactly like theft to the person who paid, so an
+/// unanswerable question returns null and callers leave the tier untouched.
+/// Only a successful server read that says "nothing here", with no local grant
+/// either, is allowed to return 'none'.
+export async function resolvePremiumTier(): Promise<PremiumTier | null> {
+  const uid = await currentUid();
+  if (!uid) return null; // no session yet — ask again once there is one
+
   const [serverTier, coupon, local] = await Promise.all([
     fetchEntitlementTier(),
-    couponPremiumActive(),
-    localTier(),
+    couponPremiumActive(uid),
+    localTier(uid),
   ]);
-  if (serverTier !== 'none') return serverTier;
+
+  if (serverTier === 'plus' || serverTier === 'family') return serverTier;
   if (coupon) return 'plus';
   // Offline echo of a previously verified purchase (uid-scoped, 1-month window).
   if (local !== 'none') return local;
+  // Nothing local to fall back on and the server never answered.
+  if (serverTier === 'unknown') return null;
   return 'none';
 }

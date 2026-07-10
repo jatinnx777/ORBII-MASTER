@@ -151,7 +151,8 @@ export function PremiumUpgradeScreen() {
     // Sync the active tier from server + local records so premium persists
     // across re-login / reinstall and a lapsed month downgrades cleanly.
     resolvePremiumTier().then((resolved) => {
-      dispatch(premiumTierResolved(resolved));
+      // null = unknown, not 'none'. Never downgrade on a failed read.
+      if (resolved) dispatch(premiumTierResolved(resolved));
     });
   }, [dispatch]);
 

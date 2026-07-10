@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { reportError } from './error-reporting';
 
 // Responder profile for the ORBII Helpers app — verification + trust +
 // recognition (NOT earnings). Backed by helper_profiles (sql/23).
@@ -79,22 +80,38 @@ export function isFullyVerified(p: HelperProfile): boolean {
   );
 }
 
-/** Load the signed-in user's helper profile, creating a pending one if absent. */
+/**
+ * Load the signed-in user's helper profile. `null` means "no application yet".
+ *
+ * This used to INSERT a pending row when none existed, so merely opening the
+ * intro screen filed an application. It also swallowed every error, so when the
+ * read failed the screen just showed the Apply button forever and the real
+ * cause never reached client_errors. Applying is now the only thing that
+ * creates a row (apply_as_responder, sql/24).
+ */
 export async function loadHelperProfile(userId: string): Promise<HelperProfile | null> {
+  const { data, error } = await supabase
+    .from('helper_profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) {
+    reportError(error, {
+      category: 'responder.profile',
+      message: 'could not read helper_profiles',
+      data: { code: error.code, hint: error.hint, details: error.details },
+    });
+    throw new Error(error.message);
+  }
+  return data ? fromRow(data as Row) : null;
+}
+
+/** Same read, but a failure looks like "no application". For screens that only
+ *  display a profile and have nothing useful to say when the read breaks. The
+ *  error is still reported. */
+export async function loadHelperProfileSafe(userId: string): Promise<HelperProfile | null> {
   try {
-    const { data } = await supabase
-      .from('helper_profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-    if (data) return fromRow(data as Row);
-    // First open → create a pending profile.
-    const { data: created } = await supabase
-      .from('helper_profiles')
-      .insert({ user_id: userId })
-      .select('*')
-      .maybeSingle();
-    return created ? fromRow(created as Row) : null;
+    return await loadHelperProfile(userId);
   } catch {
     return null;
   }

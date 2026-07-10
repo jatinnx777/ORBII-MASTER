@@ -18,7 +18,7 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import {
   guardianLevel,
-  loadHelperProfile,
+  loadHelperProfileSafe,
   type GuardianLevel,
   type HelperProfile,
 } from '@/services/helper-profile';
@@ -58,7 +58,7 @@ export function MissionsScreen() {
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
     const [p, s] = await Promise.all([
-      loadHelperProfile(profile.uid),
+      loadHelperProfileSafe(profile.uid),
       loadHelperStats(),
     ]);
     setHp(p);

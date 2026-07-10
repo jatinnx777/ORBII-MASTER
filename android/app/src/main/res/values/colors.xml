@@ -1,4 +1,5 @@
 <resources>
+  <color name="appBackground">#F5F6F3</color>
   <color name="splashscreen_background">#4BAD3F</color>
   <color name="iconBackground">#4BAD3F</color>
   <color name="colorPrimary">#E9B084</color>

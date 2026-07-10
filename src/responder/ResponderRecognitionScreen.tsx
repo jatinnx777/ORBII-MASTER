@@ -7,7 +7,7 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import {
   guardianLevel,
-  loadHelperProfile,
+  loadHelperProfileSafe,
   type GuardianLevel,
   type HelperProfile,
 } from '@/services/helper-profile';
@@ -29,7 +29,7 @@ export function ResponderRecognitionScreen() {
       let alive = true;
       (async () => {
         if (!profile?.uid) return;
-        const p = await loadHelperProfile(profile.uid);
+        const p = await loadHelperProfileSafe(profile.uid);
         if (alive) setHp(p);
       })();
       return () => {

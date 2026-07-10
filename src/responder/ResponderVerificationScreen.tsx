@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
-import { loadHelperProfile, type HelperProfile } from '@/services/helper-profile';
+import { loadHelperProfileSafe, type HelperProfile } from '@/services/helper-profile';
 import {
   pickAndUploadDoc,
   signedDocUrl,
@@ -75,7 +75,7 @@ export function ResponderVerificationScreen() {
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
-    const p = await loadHelperProfile(profile.uid);
+    const p = await loadHelperProfileSafe(profile.uid);
     setHp(p);
     // Resolve signed preview URLs for already-uploaded docs.
     if (p) {

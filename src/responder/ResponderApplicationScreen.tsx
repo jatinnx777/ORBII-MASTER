@@ -40,8 +40,12 @@ export function ResponderApplicationScreen() {
       let alive = true;
       (async () => {
         if (!profile?.uid) return;
-        const p = await loadHelperProfile(profile.uid);
-        if (alive) setHp(p);
+        try {
+          const p = await loadHelperProfile(profile.uid);
+          if (alive) setHp(p);
+        } catch {
+          if (alive) setHp(null); // reported inside; treat as "not applied yet"
+        }
       })();
       return () => {
         alive = false;
@@ -51,18 +55,32 @@ export function ResponderApplicationScreen() {
 
   const applied = hp?.verificationStatus === 'pending' || role === 'responder';
 
+  // Applying is step one. Step two is uploading Aadhaar / PAN / a selfie, which
+  // is the screen people were never taken to: the old code filed the
+  // application, re-read the profile, and if THAT read failed it swallowed the
+  // error and left the button sitting there. Nothing on screen ever moved, so
+  // it looked like the button did nothing. Now the RPC succeeding is enough to
+  // move you forward; the profile read is only a nicety.
   const apply = async () => {
+    if (submitting) return;
     setSubmitting(true);
     const res = await applyAsResponder();
-    setSubmitting(false);
-    if (res.ok) {
-      const p = profile?.uid ? await loadHelperProfile(profile.uid) : null;
-      setHp(p);
+    if (!res.ok) {
+      setSubmitting(false);
+      // Say what actually went wrong. Blaming the user's connection for a
+      // server-side problem is how this bug stayed invisible.
+      appAlert('Could not submit', res.error);
       return;
     }
-    // Say what actually went wrong. Blaming the user's connection for a
-    // server-side problem is how this bug stayed invisible.
-    appAlert('Could not submit', res.error);
+    if (profile?.uid) {
+      try {
+        setHp(await loadHelperProfile(profile.uid));
+      } catch {
+        // Application is filed regardless; the verification screen re-reads it.
+      }
+    }
+    setSubmitting(false);
+    navigation.navigate('ResponderVerification');
   };
 
   return (

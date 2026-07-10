@@ -28,7 +28,6 @@ create table if not exists helper_profiles (
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now()
 );
-
 alter table helper_profiles enable row level security;
 
 -- A helper manages only their OWN profile. (Verification flips to 'verified'

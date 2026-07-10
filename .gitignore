@@ -46,3 +46,7 @@ serviceAccountKey.json
 # Build artifacts too large for GitHub (kept on disk, served via orbii.in)
 /ORBII-latest.apk
 /ORBII-playstore.aab
+
+# Release APK: 130MB+, exceeds GitHub's 100MB file limit.
+# Distributed as a GitHub release asset, not a repo file.
+ORBII-latest.apk

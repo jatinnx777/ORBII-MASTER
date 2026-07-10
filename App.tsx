@@ -5,6 +5,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Notifications from 'expo-notifications';
 import {
+  DefaultTheme,
   NavigationContainer,
   createNavigationContainerRef,
 } from '@react-navigation/native';
@@ -79,6 +80,13 @@ import { isPinSet } from '@/services/safety-pin';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
+
+// ORBII is a light-only app. Pin the navigator's background to cream so a
+// half-faded screen never reveals anything darker behind it.
+const navTheme = {
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: colors.cream },
+};
 
 SplashScreen.preventAutoHideAsync().catch(() => {
   /* ignore */
@@ -171,7 +179,11 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     resolvePremiumTier()
-      .then((tier) => store.dispatch(premiumTierResolved(tier)))
+      // null = we couldn't tell (offline, no session yet). Leave the tier alone
+      // rather than silently taking premium away from someone who paid.
+      .then((tier) => {
+        if (tier) store.dispatch(premiumTierResolved(tier));
+      })
       .catch(() => undefined);
   }, [status]);
 
@@ -634,7 +646,7 @@ export default function App() {
           <View style={styles.root} onLayout={onReady}>
             <StatusBar style="dark" />
             <OfflineBanner />
-            <NavigationContainer ref={navigationRef}>
+            <NavigationContainer ref={navigationRef} theme={navTheme}>
               <RootNavigator />
             </NavigationContainer>
           </View>

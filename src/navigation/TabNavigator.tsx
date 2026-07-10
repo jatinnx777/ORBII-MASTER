@@ -54,6 +54,10 @@ export function TabNavigator() {
         animation: 'fade',
         // Keep all tabs mounted so switching back is instant, never a blank.
         lazy: false,
+        // Mid-fade neither screen is fully opaque, so whatever sits behind them
+        // shows through. Paint it cream instead of letting the native window
+        // (black on a phone in dark mode) be what the user sees.
+        sceneStyle: { backgroundColor: colors.cream },
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
