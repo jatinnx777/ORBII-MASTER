@@ -33,7 +33,7 @@ import { trackEvent } from '@/services/analytics';
 //   3. You're Protected          — an HONEST checklist (rows only turn green
 //      when the underlying signal is actually true), then enter the app.
 
-type StepId = 'circle' | 'phrase' | 'done';
+type StepId = 'circle' | 'phrase' | 'practice' | 'done';
 
 const ROLES = [
   { key: 'Parent', icon: 'person' as const },
@@ -55,6 +55,11 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
   const [activating, setActivating] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
   const [locationOn, setLocationOn] = useState(false);
+  // Compulsory practice run. Local only: no dispatch, no contacts pinged. It
+  // exists so the first time she sees the countdown is NOT during an emergency.
+  const [practiceRunning, setPracticeRunning] = useState(false);
+  const [practiceDone, setPracticeDone] = useState(false);
+  const [practiceLeft, setPracticeLeft] = useState(5);
 
   // Gentle slide-in per step.
   const enter = useRef(new Animated.Value(0)).current;
@@ -133,8 +138,29 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
       trackEvent('setup_protection_activated', { ok: res.ok, customPhrase: p.length >= 3 });
     } finally {
       setActivating(false);
-      setStep('done');
+      setStep('practice');
     }
+  };
+
+  const runPractice = () => {
+    if (practiceRunning || practiceDone) return;
+    setPracticeRunning(true);
+    setPracticeLeft(5);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+    const started = Date.now();
+    const id = setInterval(() => {
+      const left = Math.max(0, 5 - Math.floor((Date.now() - started) / 1000));
+      setPracticeLeft(left);
+      if (left > 0) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+        return;
+      }
+      clearInterval(id);
+      setPracticeRunning(false);
+      setPracticeDone(true);
+      trackEvent('sos_triggered', { kind: 'test', source: 'onboarding_practice' });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    }, 1000);
   };
 
   const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] });
@@ -290,6 +316,65 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
               </Pressable>
               <Text style={styles.skipNote}>
                 Built-in phrases like "help help" always work, even without a custom phrase.
+              </Text>
+            </ScrollView>
+          ) : null}
+
+          {step === 'practice' ? (
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.heroWrap}>
+                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
+              </View>
+              <Text style={styles.title}>Practise it once</Text>
+              <Text style={styles.sub}>
+                A safety feature you have never used is a safety feature you don't
+                have. Run one practice SOS now. Nobody is alerted.
+              </Text>
+
+              <View style={styles.practiceWrap}>
+                <Pressable
+                  onPress={runPractice}
+                  disabled={practiceRunning || practiceDone}
+                  style={({ pressed }) => [
+                    styles.practiceBtn,
+                    practiceDone && styles.practiceBtnDone,
+                    pressed && !practiceDone && { transform: [{ scale: 0.97 }] },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Run a practice SOS"
+                >
+                  {practiceDone ? (
+                    <Ionicons name="checkmark" size={44} color={colors.textInverse} />
+                  ) : practiceRunning ? (
+                    <Text style={styles.practiceCount}>{practiceLeft}</Text>
+                  ) : (
+                    <Text style={styles.practiceLabel}>SOS</Text>
+                  )}
+                </Pressable>
+                <Text style={styles.practiceHint}>
+                  {practiceDone
+                    ? "That's exactly what a real SOS feels like."
+                    : practiceRunning
+                      ? 'Counting down. In a real emergency you could cancel here.'
+                      : 'Tap to start your practice countdown.'}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => setStep('done')}
+                disabled={!practiceDone}
+                style={({ pressed }) => [
+                  styles.cta,
+                  !practiceDone && { opacity: 0.5 },
+                  pressed && styles.ctaPressed,
+                ]}
+              >
+                <Text style={styles.ctaText}>
+                  {practiceDone ? 'Continue' : 'Run the practice to continue'}
+                </Text>
+              </Pressable>
+              <Text style={styles.skipNote}>
+                This practice is required. It never alerts anyone.
               </Text>
             </ScrollView>
           ) : null}
@@ -495,6 +580,26 @@ const styles = StyleSheet.create({
   checkIconOff: { backgroundColor: colors.creamDeep },
   checkLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
   checkHint: { ...typography.caption, fontSize: 11.5, color: colors.textMuted, marginTop: 1 },
+  practiceWrap: { alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
+  practiceBtn: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    backgroundColor: colors.coral,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
+  practiceBtnDone: { backgroundColor: colors.sage },
+  practiceLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 34, color: colors.textInverse, letterSpacing: 2 },
+  practiceCount: { fontFamily: fontFamilies.poppinsBold, fontSize: 56, color: colors.textInverse },
+  practiceHint: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 300,
+  },
   cta: {
     backgroundColor: colors.peach,
     borderRadius: radius.pill,

@@ -47,8 +47,11 @@ import {
 // the user hits back from step 1 we keep them in AuthNavigator (no
 // way out without finishing setup — same gate as before).
 
-type Step = 'identity' | 'photo' | 'phone' | 'contact';
-const STEPS: Step[] = ['identity', 'photo', 'phone', 'contact'];
+// The emergency contact used to be collected here AND again in guided setup's
+// "Build Your Safety Circle". Asking twice made people think the first one
+// hadn't saved. Guided setup owns it now (it also blocks using your own number).
+type Step = 'identity' | 'photo' | 'phone';
+const STEPS: Step[] = ['identity', 'photo', 'phone'];
 
 export function ProfileSetupScreen() {
   const dispatch = useAppDispatch();
@@ -62,9 +65,6 @@ export function ProfileSetupScreen() {
     profile?.phone ? formatPhoneForDisplay(profile.phone.replace(/^\+91/, '')) : '',
   );
   const [phoneConfirm, setPhoneConfirm] = useState('');
-  const [contactName, setContactName] = useState('');
-  const [contactPhone, setContactPhone] = useState('');
-  const [contactRelation, setContactRelation] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -75,12 +75,6 @@ export function ProfileSetupScreen() {
   const confirmDigits = phoneConfirm.replace(/\D/g, '').slice(0, 10);
   const phoneMismatch = confirmDigits.length === 10 && confirmDigits !== phoneDigits;
   const phoneConfirmed = phoneValid && confirmDigits === phoneDigits;
-  const contactPhoneDigits = contactPhone.replace(/\D/g, '').slice(0, 10);
-  const contactPhoneValid = isValidIndianPhone(contactPhoneDigits);
-  // A guardian must be someone else. Blocking self-as-contact stops the most
-  // common setup mistake: entering your own number, so an SOS pings nobody.
-  const contactSameAsOwn =
-    contactPhoneValid && phoneValid && contactPhoneDigits === phoneDigits;
 
   const currentIndex = STEPS.indexOf(step);
   const progress = (currentIndex + 1) / STEPS.length;
@@ -89,16 +83,8 @@ export function ProfileSetupScreen() {
     if (step === 'identity') return isValidName(name) && usernameValid;
     if (step === 'photo') return true; // photo is optional
     if (step === 'phone') return phoneConfirmed;
-    if (step === 'contact') {
-      return (
-        isValidName(contactName) &&
-        contactPhoneValid &&
-        !contactSameAsOwn &&
-        !!contactRelation.trim()
-      );
-    }
     return false;
-  }, [step, name, usernameValid, phoneConfirmed, contactName, contactPhoneValid, contactSameAsOwn, contactRelation]);
+  }, [step, name, usernameValid, phoneConfirmed]);
 
   const goNext = async () => {
     setError(null);
@@ -119,13 +105,11 @@ export function ProfileSetupScreen() {
         `+91 ${formatPhoneForDisplay(phoneDigits)}\n\nThis is the number your circle and helpers will call in an emergency. It cannot be changed later.`,
         [
           { text: 'Edit', style: 'cancel' },
-          { text: 'Yes, lock it', onPress: () => setStep('contact') },
+          { text: 'Yes, lock it', onPress: () => void submitAll() },
         ],
       );
       return;
     }
-    // step === 'contact' → save everything
-    await submitAll();
   };
 
   const goBack = () => {
@@ -183,22 +167,10 @@ export function ProfileSetupScreen() {
         username,
       });
       const now = Date.now();
-      // Add the first emergency contact alongside the profile save.
-      // We do this BEFORE dispatching profileUpdated so the user lands
-      // on Home with their contact already in state.
-      const newContact = {
-        id: `ec_${Date.now()}_${Math.floor(Math.random() * 1e6)}`,
-        name: contactName.trim(),
-        phone: toE164India(contactPhoneDigits),
-        relation: contactRelation.trim(),
-      };
-      await upsertEmergencyContact(profile.uid, newContact).catch(() => undefined);
-      dispatch(contactAdded(newContact));
       dispatch(
         profileUpdated({
           ...updated,
           phone: toE164India(phoneDigits),
-          emergencyContacts: [...(updated.emergencyContacts ?? []), newContact],
           usernameChangedAt: now,
           photoChangedAt: photoUri ? now : null,
         }),
@@ -262,36 +234,10 @@ export function ProfileSetupScreen() {
             />
           ) : null}
 
-          {step === 'contact' ? (
-            <ContactStep
-              name={contactName}
-              phone={contactPhone}
-              relation={contactRelation}
-              phoneError={
-                contactSameAsOwn
-                  ? "This is your own number. Your guardian has to be someone else who can reach you."
-                  : null
-              }
-              error={error}
-              onName={(v) => {
-                setContactName(v);
-                if (error) setError(null);
-              }}
-              onPhone={(v) => {
-                const digits = v.replace(/\D/g, '').slice(0, 10);
-                setContactPhone(formatPhoneForDisplay(digits));
-                if (error) setError(null);
-              }}
-              onRelation={(v) => {
-                setContactRelation(v);
-                if (error) setError(null);
-              }}
-            />
-          ) : null}
 
           <View style={styles.footer}>
             <Button
-              label={step === 'contact' ? 'Finish setup' : 'Continue'}
+              label={step === 'phone' ? 'Finish setup' : 'Continue'}
               onPress={goNext}
               loading={isSaving}
               disabled={!stepReady}
@@ -382,7 +328,7 @@ function IdentityStep({
     <View style={styles.stepBody}>
       <StepTitle
         mascot="wave"
-        eyebrow="STEP 1 OF 4"
+        eyebrow="STEP 1 OF 3"
         title="What should we call you?"
         subtitle="This is what your circle and helpers see when you fire an SOS."
       />
@@ -429,7 +375,7 @@ function PhotoStep({
     <View style={styles.stepBody}>
       <StepTitle
         mascot="neutral"
-        eyebrow="STEP 2 OF 4"
+        eyebrow="STEP 2 OF 3"
         title="Add a photo"
         subtitle="Helpers responding to your SOS can recognise you faster. Optional, but recommended."
       />
@@ -479,7 +425,7 @@ function PhoneStep({
     <View style={styles.stepBody}>
       <StepTitle
         mascot="headset"
-        eyebrow="STEP 3 OF 4"
+        eyebrow="STEP 3 OF 3"
         title="Your phone number"
         subtitle="Helpers and your emergency contacts use this to reach you."
       />
@@ -517,87 +463,6 @@ function PhoneStep({
         error={mismatch ? "Numbers don't match. Check both carefully." : undefined}
         containerStyle={styles.input}
       />
-    </View>
-  );
-}
-
-function ContactStep({
-  name,
-  phone,
-  relation,
-  error,
-  phoneError,
-  onName,
-  onPhone,
-  onRelation,
-}: {
-  name: string;
-  phone: string;
-  relation: string;
-  error: string | null;
-  phoneError: string | null;
-  onName: (v: string) => void;
-  onPhone: (v: string) => void;
-  onRelation: (v: string) => void;
-}) {
-  const RELATIONS = ['Mother', 'Father', 'Sibling', 'Partner', 'Friend', 'Other'];
-  return (
-    <View style={styles.stepBody}>
-      <StepTitle
-        mascot="shield"
-        eyebrow="STEP 4 OF 4"
-        title="Your first emergency contact"
-        subtitle="The person who gets a WhatsApp ping the moment you fire SOS. You can add more later."
-      />
-      <Input
-        label="Their name"
-        autoCapitalize="words"
-        value={name}
-        onChangeText={onName}
-        placeholder="e.g. Mom"
-        maxLength={50}
-        containerStyle={styles.input}
-      />
-      <Input
-        label="Their phone number"
-        keyboardType="number-pad"
-        maxLength={11}
-        value={phone}
-        onChangeText={onPhone}
-        placeholder="98765 43210"
-        leftAdornment={<Text style={styles.countryCode}>+91</Text>}
-        error={phoneError ?? undefined}
-        containerStyle={styles.input}
-      />
-      <Text style={styles.relationLabel}>Relation</Text>
-      <View style={styles.relationGrid}>
-        {RELATIONS.map((r) => {
-          const active = r === relation;
-          return (
-            <Pressable
-              key={r}
-              onPress={() => onRelation(r)}
-              style={[styles.relationChip, active && styles.relationChipActive]}
-              accessibilityRole="button"
-            >
-              <Text
-                style={[
-                  styles.relationChipText,
-                  active && styles.relationChipTextActive,
-                ]}
-              >
-                {r}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {error ? (
-        <View style={styles.errorRow}>
-          <Ionicons name="alert-circle" size={14} color={colors.error} />
-          <Text style={styles.errorText}>{error}</Text>
-        </View>
-      ) : null}
     </View>
   );
 }
