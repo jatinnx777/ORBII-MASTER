@@ -23,6 +23,9 @@ with expected_tables(name) as (values
   ('victim_contact_hashes'), ('reward_config'), ('reward_secrets')
 ),
 expected_functions(name) as (values
+  -- roles / responder onboarding (sql/24). Missing these = "Become a Responder"
+  -- fails and no one ever gets the Missions tab.
+  ('apply_as_responder'), ('prevent_role_self_change'), ('is_admin'),
   ('delete_my_account'), ('is_circle_member'), ('find_user_by_phone'),
   ('sos_events_nearby'), ('helper_stats'), ('admin_credit_earning'), ('request_payout'),
   ('normalize_phone'), ('hash_phone'), ('hash_phone_plain'),
@@ -34,6 +37,16 @@ expected_functions(name) as (values
 ),
 expected_buckets(id) as (values
   ('avatars'), ('sos-recordings'), ('responder-docs')
+),
+-- A table can exist while a column a later migration adds is missing. That is
+-- precisely how `profiles.role` went absent while every table read "OK".
+expected_columns(tbl, col) as (values
+  ('profiles', 'role'),
+  ('profiles', 'photo_uri'),
+  ('profiles', 'username_changed_at'),
+  ('sos_events', 'audio_path'),
+  ('helper_profiles', 'verification_status'),
+  ('helper_profiles', 'trust_score')
 ),
 expected_realtime(name) as (values
   ('circle_events'), ('shared_trips'), ('circle_members'),
@@ -55,6 +68,20 @@ from pg_class c
 join pg_namespace n on n.oid = c.relnamespace
 where n.nspname = 'public' and c.relkind = 'r'
   and c.relname in (select name from expected_tables)
+
+union all
+-- 2b. Columns added by later migrations --------------------------------------
+select '2b. column', e.tbl || '.' || e.col,
+  case when exists (
+    select 1 from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = e.tbl and c.column_name = e.col
+  ) then 'OK' else '❌ MISSING' end,
+  case when e.tbl = 'profiles' and e.col = 'role' and not exists (
+    select 1 from information_schema.columns c
+    where c.table_schema = 'public' and c.table_name = 'profiles' and c.column_name = 'role'
+  ) then 'run sql/24_roles.sql — responder applications and the Missions tab are dead without it'
+  else '' end
+from expected_columns e
 
 union all
 -- 3. Functions ---------------------------------------------------------------

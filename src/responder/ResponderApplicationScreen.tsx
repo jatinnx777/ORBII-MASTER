@@ -53,14 +53,16 @@ export function ResponderApplicationScreen() {
 
   const apply = async () => {
     setSubmitting(true);
-    const ok = await applyAsResponder();
+    const res = await applyAsResponder();
     setSubmitting(false);
-    if (ok) {
+    if (res.ok) {
       const p = profile?.uid ? await loadHelperProfile(profile.uid) : null;
       setHp(p);
-    } else {
-      appAlert('Could not submit', 'Please check your connection and try again.');
+      return;
     }
+    // Say what actually went wrong. Blaming the user's connection for a
+    // server-side problem is how this bug stayed invisible.
+    appAlert('Could not submit', res.error);
   };
 
   return (
