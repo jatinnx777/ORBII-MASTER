@@ -30,6 +30,8 @@ import {
   type MLMarker,
   type MLRoute,
 } from '@/components/common';
+import { PinPrompt } from '@/components/common';
+import { verifyRescueCode } from '@/services/rescue-code';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { startTracking, type TrackingSnapshot, type TrackingHandle, type AccuracyLevel } from '@/services/tracking';
@@ -292,13 +294,43 @@ export function HelperNavigationScreen() {
     setSharing(next);
     trackRef.current?.setShare(next);
   };
-  const handleArrived = () => {
+  // Completing a rescue is no longer a button the helper taps about himself.
+  // He must be within 50 m AND type the 4-digit code that only the victim can
+  // see — she reads it out once he's actually standing in front of her.
+  const [codeOpen, setCodeOpen] = useState(false);
+  const [codeError, setCodeError] = useState<string | null>(null);
+
+  const openCodeEntry = () => {
     if (!within50 || announced) return;
-    trackEvent('helper_arrived', { name });
-    trackRef.current?.markArrived();
-    setAnnounced(true);
-    setEvents((e) => [...e, { key: 'arrived', label: 'You arrived', at: Date.now(), icon: 'checkmark-done-circle' }]);
-    void recordHelperResponse();
+    setCodeError(null);
+    setCodeOpen(true);
+  };
+
+  const submitCode = async (code: string) => {
+    const eventId = rewardEventId.current;
+    if (!eventId) {
+      setCodeError('This rescue is not registered on the server yet.');
+      return;
+    }
+    const res = await verifyRescueCode(eventId, code);
+    if (res.ok) {
+      setCodeOpen(false);
+      setCodeError(null);
+      trackEvent('helper_arrived', { name });
+      trackRef.current?.markArrived();
+      setAnnounced(true);
+      setEvents((e) => [
+        ...e,
+        { key: 'arrived', label: 'Rescue completed', at: Date.now(), icon: 'checkmark-done-circle' },
+      ]);
+      void recordHelperResponse();
+      return;
+    }
+    setCodeError(
+      res.wrong
+        ? 'That code is wrong. Ask her to read it out again.'
+        : res.error,
+    );
   };
 
   return (
@@ -352,7 +384,22 @@ export function HelperNavigationScreen() {
         onMessage={message}
         onNavigate={navigateExt}
         onShare={toggleShare}
-        onArrived={handleArrived}
+        onArrived={openCodeEntry}
+      />
+
+      {/* She reads the code out; he types it. Server-verified — he never sees
+          it, so he cannot complete a rescue he did not attend. */}
+      <PinPrompt
+        visible={codeOpen}
+        mode="verify"
+        title="Enter her 4-digit code"
+        body="Ask her to read out the code on her screen. This confirms you reached her."
+        errorText={codeError}
+        onCancel={() => {
+          setCodeOpen(false);
+          setCodeError(null);
+        }}
+        onSubmit={submitCode}
       />
     </View>
   );
@@ -465,12 +512,16 @@ function TrackingSheet(props: {
         ]}
       >
         <Ionicons
-          name={props.announced ? 'time' : 'checkmark-circle'}
+          name={props.announced ? 'checkmark-done-circle' : 'keypad'}
           size={18}
           color={props.within50 && !props.announced ? colors.textInverse : colors.textPrimary}
         />
         <Text style={[styles.arriveText, props.within50 && !props.announced && { color: colors.textInverse }]}>
-          {props.announced ? 'Waiting for them to confirm…' : props.within50 ? "I've reached" : 'Get within 50 m to confirm arrival'}
+          {props.announced
+            ? 'Rescue completed'
+            : props.within50
+              ? 'Enter her 4-digit code'
+              : 'Get within 50 m to complete'}
         </Text>
       </Pressable>
 
@@ -640,7 +691,7 @@ const styles = StyleSheet.create({
   metrics: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.cream,
+    backgroundColor: colors.creamDeep,
     borderRadius: radius.xl,
     paddingVertical: spacing.md,
     marginTop: spacing.md,
@@ -667,7 +718,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.creamDeep,
     borderRadius: radius.pill,
     paddingVertical: 16,
     marginTop: spacing.md,

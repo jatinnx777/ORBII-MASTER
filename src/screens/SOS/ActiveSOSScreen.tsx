@@ -57,6 +57,7 @@ import {
   stopVictimLocationUpdates,
 } from '@/services/sos-location-task';
 import { RewardService } from '@/services/rewards';
+import { ensureSosCode } from '@/services/rescue-code';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
@@ -121,6 +122,20 @@ export function ActiveSOSScreen() {
   // Have we already prompted to escalate to 112? Reset whenever we get
   // a real responder so a late-arriving acceptor cancels the timer.
   const [escalationPrompted, setEscalationPrompted] = useState(false);
+
+  // Mint the 4-digit completion code as soon as the SOS is live, so it's on
+  // screen before any helper arrives.
+  const [rescueCode, setRescueCode] = useState<string | null>(null);
+  useEffect(() => {
+    if (!activeSOS?.id || activeSOS.kind === 'test') return;
+    let alive = true;
+    void ensureSosCode(activeSOS.id).then((c) => {
+      if (alive) setRescueCode(c);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [activeSOS?.id, activeSOS?.kind]);
 
   const sheet = useBrandSheet();
   const myUid = useAppSelector((s) => s.user.profile?.uid ?? null);
@@ -655,6 +670,20 @@ export function ActiveSOSScreen() {
           <Text style={styles.statusBannerText}>{statusBannerText}</Text>
         </View>
 
+        {/* The rescue code. Only she can see it. She reads it out to the helper
+            once he's physically in front of her, and only then does his app
+            let him close the rescue. Nobody can complete a rescue they never
+            attended. */}
+        {!resolved && rescueCode ? (
+          <View style={styles.codeCard}>
+            <Text style={styles.codeLabel}>SHOW THIS CODE TO YOUR HELPER</Text>
+            <Text style={styles.codeValue}>{rescueCode}</Text>
+            <Text style={styles.codeHint}>
+              Only read it out once they are with you. It proves they really came.
+            </Text>
+          </View>
+        ) : null}
+
         {!resolved ? <DeliverySummary delivery={delivery} /> : null}
 
         <Pressable
@@ -1157,6 +1186,39 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.brandDeep,
     letterSpacing: 0.2,
+  },
+  codeCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xxl,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: colors.sage,
+    ...shadows.card,
+  },
+  codeLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    letterSpacing: 1,
+    color: colors.sageDeep,
+  },
+  codeValue: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 52,
+    letterSpacing: 12,
+    color: colors.textPrimary,
+    marginTop: 4,
+    marginLeft: 12, // optical: letterSpacing pads the right of the last glyph
+    fontVariant: ['tabular-nums'],
+  },
+  codeHint: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginTop: 4,
+    maxWidth: 280,
   },
   mapCard: {
     height: 280,
