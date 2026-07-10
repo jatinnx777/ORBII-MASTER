@@ -1,36 +1,28 @@
 import * as Contacts from 'expo-contacts';
-import * as Crypto from 'expo-crypto';
 import { RewardService } from './RewardService';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// ContactMatchService — OPT-IN, privacy-first fraud protection. When the user
-// turns it on, we hash their address book ON THE DEVICE (SHA-256 with a fixed
-// domain salt, via expo-crypto) and upload ONLY the hashes. Raw phone numbers
-// never leave the phone and are never stored. The server later hashes a
-// responding helper's number the same way to check "is this helper already in
-// the victim's contacts?" — a strong self-dealing signal — without either side
-// ever seeing the other's number.
+// ContactMatchService — OPT-IN, privacy-first fraud protection.
 //
-// This scheme MUST byte-match hash_phone_plain() in sql/33:
-//   sha256("orbii-contact-match-v1:" + last10digits)
+// We used to hash the address book on the device with a salt baked into the
+// APK. That looked safer than it was: anyone can extract that salt, and Indian
+// mobile numbers are only ~4 billion candidates, so a leak of
+// `victim_contact_hashes` could be brute-forced back into real phone books on
+// a single GPU.
+//
+// Now the numbers are sent over TLS to `store_contact_hashes`, a SECURITY
+// DEFINER function that hashes them with a pepper held in `reward_secrets` —
+// a table with RLS and NO read policy, so no client can ever read it. Raw
+// digits are hashed on arrival and only the hash is persisted; nothing raw is
+// ever written to a table. Reversing the hashes now requires a full database
+// dump, not just the app binary.
 //
 // NOTE: reading contacts uses the READ_CONTACTS permission, which the Play
 // Store treats as sensitive. It is OFF by default and only requested on
 // explicit user consent.
 
-const CONTACT_SALT = 'orbii-contact-match-v1';
-
 function normalize(phone: string): string {
   return phone.replace(/\D/g, '').slice(-10);
-}
-
-async function hashPhone(phone: string): Promise<string | null> {
-  const n = normalize(phone);
-  if (n.length < 10) return null;
-  return Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${CONTACT_SALT}:${n}`,
-  );
 }
 
 export const ContactMatchService = {
@@ -59,22 +51,24 @@ export const ContactMatchService = {
     return this.sync();
   },
 
-  // Re-hash and re-upload the address book. Safe to call periodically.
+  // Re-upload the address book for hashing. Safe to call periodically.
   async sync(): Promise<number> {
     if (!(await this.isEnabled())) return 0;
     const { data } = await Contacts.getContactsAsync({
       fields: [Contacts.Fields.PhoneNumbers],
     });
-    const hashes = new Set<string>();
+    // Normalised, de-duplicated. Sent over TLS and hashed server-side with a
+    // pepper no client can read; the raw digits are never stored anywhere.
+    const numbers = new Set<string>();
     for (const c of data) {
       for (const p of c.phoneNumbers ?? []) {
         if (!p.number) continue;
-        const h = await hashPhone(p.number);
-        if (h) hashes.add(h);
+        const n = normalize(p.number);
+        if (n.length === 10) numbers.add(n);
       }
     }
-    await RewardService.storeContactHashesPrehashed(Array.from(hashes));
+    await RewardService.storeContactHashes(Array.from(numbers));
     await setItem(storageKeys.contactMatchAt, Date.now());
-    return hashes.size;
+    return numbers.size;
   },
 };
