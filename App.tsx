@@ -27,6 +27,7 @@ import {
 import { store, useAppSelector } from '@/redux/store';
 import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
+import { supabase } from '@/services/supabase';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -180,6 +181,23 @@ function RootNavigator() {
       // rather than silently taking premium away from someone who paid.
       .then((tier) => {
         if (tier) store.dispatch(premiumTierResolved(tier));
+      })
+      .catch(() => undefined);
+  }, [status]);
+
+  // Give Realtime the user's JWT so PRIVATE channels (the per-SOS live-location
+  // streams, gated by Realtime Authorization in sql/39) can authorize. The
+  // client sets this automatically on a fresh SIGNED_IN, but a session restored
+  // from storage on a cold start may not fire that event — without this the
+  // private subscribe is refused and live tracking silently dies. Belt and
+  // suspenders: set it explicitly on every authenticated launch.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        const token = data.session?.access_token;
+        if (token) void supabase.realtime.setAuth(token);
       })
       .catch(() => undefined);
   }, [status]);

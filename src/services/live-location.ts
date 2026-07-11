@@ -41,7 +41,9 @@ export function publishLiveLocation(
   responder: Responder,
 ): LiveLocationHandle {
   const channel = supabase.channel(channelName(sosId), {
-    config: { broadcast: { ack: false, self: false } },
+    // private: Realtime Authorization gates this topic (sql/39) so only the
+    // SOS's real participants can join. Requires an authenticated session.
+    config: { private: true, broadcast: { ack: false, self: false } },
   });
   let subscribed = false;
   channel.subscribe((status) => {
@@ -92,7 +94,8 @@ export type VictimPublishHandle = {
 
 export function publishVictimLocation(sosId: string): VictimPublishHandle {
   const channel = supabase.channel(victimChannelName(sosId), {
-    config: { broadcast: { ack: false, self: false } },
+    // private: gated by Realtime Authorization (sql/39) — participants only.
+    config: { private: true, broadcast: { ack: false, self: false } },
   });
   let subscribed = false;
   channel.subscribe((status) => {
@@ -127,7 +130,8 @@ export function subscribeVictimLocation(
 ): { unsubscribe: () => void } {
   const channel = supabase
     .channel(victimChannelName(sosId), {
-      config: { broadcast: { ack: false, self: false } },
+      // private: gated by Realtime Authorization (sql/39) — participants only.
+      config: { private: true, broadcast: { ack: false, self: false } },
     })
     .on('broadcast', { event: 'vpos' }, (msg) => {
       const payload = msg.payload as VictimLocationPayload | undefined;
@@ -152,7 +156,8 @@ export function subscribeLiveLocation(
 ): { unsubscribe: () => void } {
   const channel = supabase
     .channel(channelName(sosId), {
-      config: { broadcast: { ack: false, self: false } },
+      // private: gated by Realtime Authorization (sql/39) — participants only.
+      config: { private: true, broadcast: { ack: false, self: false } },
     })
     .on('broadcast', { event: 'pos' }, (msg) => {
       const payload = msg.payload as LiveLocationPayload | undefined;
