@@ -817,8 +817,9 @@ export function ActiveSOSScreen() {
         <View style={styles.tipFootnote}>
           <Ionicons name="shield-checkmark" size={14} color={colors.success} />
           <Text style={styles.tipFootnoteText}>
-            Stay on this screen until your helper arrives. Police and emergency
-            contacts have already been notified.
+            Stay on this screen until your helper arrives. Your circle and nearby
+            helpers have been alerted. To reach the police, use the Call 112
+            button above.
           </Text>
         </View>
 
