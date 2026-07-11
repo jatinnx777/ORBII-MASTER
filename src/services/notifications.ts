@@ -34,6 +34,22 @@ function configure() {
       lightColor: '#FF0000',
       sound: 'default',
     }).catch(() => undefined);
+    // Incoming help request for a VERIFIED HELPER — someone nearby needs them
+    // right now. Max importance so it wakes the screen and heads-up over the
+    // lock screen even if the app has been closed all day. Separate channel so
+    // the user can't silence family SOS and stranger requests together, and so
+    // it reads distinctly. bypassDnd: a life-safety call must ring through.
+    Notifications.setNotificationChannelAsync('incoming_sos', {
+      name: 'Incoming help requests',
+      description: 'Someone nearby needs your help right now.',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 800, 200, 800, 200, 800, 200, 800],
+      enableVibrate: true,
+      bypassDnd: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      lightColor: '#FF0000',
+      sound: 'default',
+    }).catch(() => undefined);
     // Lower-priority "ongoing" channel for the persistent SOS shortcut. We
     // want it visible on the lock screen and impossible to dismiss by swipe,
     // but it shouldn't make sound or vibrate (it's a shortcut, not an alert).

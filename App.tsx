@@ -442,6 +442,14 @@ export default function App() {
         navigationRef.navigate('CommunityAlerts');
         return;
       }
+      // A verified helper tapped an incoming-help request (premium victim
+      // nearby). Same destination — the nearby-alerts list shows the live SOS
+      // and lets them accept and navigate.
+      if (data.kind === 'incoming_sos' && navigationRef.isReady()) {
+        // @ts-expect-error - CommunityAlerts is in the AppStack only.
+        navigationRef.navigate('CommunityAlerts');
+        return;
+      }
       if (data.kind === 'community_alert' && navigationRef.isReady()) {
         const alertId = typeof data.alertId === 'string' ? data.alertId : null;
         if (alertId) {

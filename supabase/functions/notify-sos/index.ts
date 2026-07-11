@@ -33,10 +33,12 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // 1. The SOS row.
+    // 1. The SOS row. `circle_only` is the premium flag (true = free user, who
+    // must never reach strangers; false = premium, whose SOS may reach the
+    // verified-helper pool).
     const { data: sos } = await admin
       .from('sos_events')
-      .select('id, user_id, user_name, lat, lng')
+      .select('id, user_id, user_name, lat, lng, circle_only')
       .eq('id', sosId)
       .single();
     if (!sos) return json({ error: 'sos not found' }, 404);
@@ -74,30 +76,71 @@ Deno.serve(async (req) => {
       if (u?.id && u.id !== victim) recipients.add(u.id);
     }
 
-    if (recipients.size === 0) return json({ sent: 0, reason: 'no recipients' });
-
-    // 4. Their push tokens.
-    const { data: toks } = await admin
-      .from('push_tokens')
-      .select('token')
-      .in('user_id', [...recipients]);
-    const tokens = (toks ?? [])
-      .map((t: { token: string }) => t.token)
-      .filter((t: string) => !!t && t.startsWith('ExponentPushToken'));
-    if (tokens.length === 0) return json({ sent: 0, reason: 'no tokens' });
-
-    // 5. Send (chunked at 100, Expo's limit).
     const name = sos.user_name ?? 'Someone';
-    const messages = tokens.map((to: string) => ({
-      to,
-      title: `🆘 ${name} needs help`,
-      body: 'Tap to see their live location and respond.',
-      sound: 'default',
-      priority: 'high',
-      channelId: 'sos',
-      data: { kind: 'sos_push', sosId, lat: sos.lat, lng: sos.lng },
-    }));
+    const messages: Record<string, unknown>[] = [];
 
+    // 4. Circle + contacts get the standard SOS push.
+    if (recipients.size > 0) {
+      const { data: toks } = await admin
+        .from('push_tokens')
+        .select('token')
+        .in('user_id', [...recipients]);
+      const tokens = (toks ?? [])
+        .map((t: { token: string }) => t.token)
+        .filter((t: string) => !!t && t.startsWith('ExponentPushToken'));
+      for (const to of tokens) {
+        messages.push({
+          to,
+          title: `🆘 ${name} needs help`,
+          body: 'Tap to see their live location and respond.',
+          sound: 'default',
+          priority: 'high',
+          channelId: 'sos',
+          data: { kind: 'sos_push', sosId, lat: sos.lat, lng: sos.lng },
+        });
+      }
+    }
+
+    // 5. VERIFIED HELPERS — only for a PREMIUM victim (circle_only === false),
+    // and only those online + nearby. They get a distinct, louder channel so a
+    // stranger-help request reads differently from a family alert, and it reaches
+    // them even when the app has been closed all day. Circle members already
+    // covered above are excluded so nobody is double-pushed.
+    if (sos.circle_only === false && sos.lat != null && sos.lng != null) {
+      const { data: helpers } = await admin.rpc('dispatch_verified_helpers', {
+        p_lat: sos.lat,
+        p_lng: sos.lng,
+        p_radius_km: 7,
+        p_exclude: victim,
+      });
+      const helperIds = (helpers ?? [])
+        .map((h: { user_id: string }) => h.user_id)
+        .filter((id: string) => !recipients.has(id));
+      if (helperIds.length > 0) {
+        const { data: htoks } = await admin
+          .from('push_tokens')
+          .select('token')
+          .in('user_id', helperIds);
+        const helperTokens = (htoks ?? [])
+          .map((t: { token: string }) => t.token)
+          .filter((t: string) => !!t && t.startsWith('ExponentPushToken'));
+        for (const to of helperTokens) {
+          messages.push({
+            to,
+            title: '🆘 Someone needs help now',
+            body: `${name} is in danger nearby. Tap to respond.`,
+            sound: 'default',
+            priority: 'high',
+            channelId: 'incoming_sos',
+            data: { kind: 'incoming_sos', sosId, lat: sos.lat, lng: sos.lng, name },
+          });
+        }
+      }
+    }
+
+    if (messages.length === 0) return json({ sent: 0, reason: 'no recipients' });
+
+    // 6. Send (chunked at 100, Expo's limit).
     let sent = 0;
     for (let i = 0; i < messages.length; i += 100) {
       const chunk = messages.slice(i, i + 100);
