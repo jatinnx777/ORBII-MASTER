@@ -20,20 +20,19 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded } from '@/redux/slices/userSlice';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
-import { addPhrase, validatePhrase, PHRASE_EXAMPLES } from '@/services/voice-phrases';
-import { critical } from '@/services/failures';
 import { startListening } from '@/services/voice-detection';
 import { requestBatteryExemption } from '@/services/background-voice';
 import { getCurrentPermission } from '@/services/location';
 import { trackEvent } from '@/services/analytics';
 
 // First-run guided setup, shown once after sign-in (per the reference design):
-//   1. Build Your Safety Circle  — add the people ORBII reaches in an emergency
-//   2. Choose Your Secret Phrase — her own phrase + activate voice protection
-//   3. You're Protected          — an HONEST checklist (rows only turn green
+//   1. Build Your Safety Circle — add the people ORBII reaches in an emergency
+//   2. Turn on Voice SOS        — activate hands-free "help, help" protection
+//   3. Practise it once         — a compulsory test SOS (nobody is alerted)
+//   4. You're Protected         — an HONEST checklist (rows only turn green
 //      when the underlying signal is actually true), then enter the app.
 
-type StepId = 'circle' | 'phrase' | 'practice' | 'done';
+type StepId = 'circle' | 'voice' | 'practice' | 'done';
 
 const ROLES = [
   { key: 'Parent', icon: 'person' as const },
@@ -51,7 +50,6 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
   const [openRole, setOpenRole] = useState<string | null>(null);
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
-  const [phrase, setPhrase] = useState('');
   const [activating, setActivating] = useState(false);
   const [voiceOn, setVoiceOn] = useState(false);
   const [locationOn, setLocationOn] = useState(false);
@@ -112,30 +110,15 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
 
   const activateProtection = async () => {
     if (activating) return;
-    const p = phrase.trim();
-    // Validate BEFORE activating. Swallowing a rejected phrase here would leave
-    // her believing a secret phrase is armed when nothing was ever saved.
-    if (p.length > 0) {
-      const check = validatePhrase(p);
-      if (!check.ok) {
-        appAlert("That phrase won't work", check.reason);
-        return;
-      }
-    }
     setActivating(true);
     try {
-      if (p.length >= 3) {
-        await addPhrase(p).catch(
-          critical('voice.phrase', 'custom phrase failed to save during setup'),
-        );
-      }
       const res = await startListening();
       setVoiceOn(res.ok);
       // OEM killer fix: ask the system to keep ORBII alive in the background.
       // On Xiaomi/Oppo/Vivo the voice service is killed otherwise, silently
       // breaking protection. Baking this into setup makes it hard to skip.
       if (res.ok) await requestBatteryExemption().catch(() => undefined);
-      trackEvent('setup_protection_activated', { ok: res.ok, customPhrase: p.length >= 3 });
+      trackEvent('setup_protection_activated', { ok: res.ok });
     } finally {
       setActivating(false);
       setStep('practice');
@@ -251,7 +234,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
               })}
 
               <Pressable
-                onPress={() => setStep('phrase')}
+                onPress={() => setStep('voice')}
                 style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
               >
                 <Text style={styles.ctaText}>Continue</Text>
@@ -262,39 +245,25 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
             </ScrollView>
           ) : null}
 
-          {step === 'phrase' ? (
+          {step === 'voice' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
               <View style={styles.heroWrap}>
                 <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
               </View>
-              <Text style={styles.title}>Choose Your Secret Phrase</Text>
-              <Text style={styles.sub}>ORBII listens only for your emergency phrase.</Text>
+              <Text style={styles.title}>Turn on Voice SOS</Text>
+              <Text style={styles.sub}>
+                If you can't reach your phone, just shout "help, help" and ORBII
+                triggers an SOS on its own.
+              </Text>
 
-              <View style={styles.fieldCard}>
-                <Text style={styles.fieldLabel}>Emergency Phrase</Text>
-                <TextInput
-                  value={phrase}
-                  onChangeText={setPhrase}
-                  placeholder="Type your phrase"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={40}
-                  style={styles.input}
-                />
-              </View>
-
-              <Text style={styles.examplesLabel}>Examples</Text>
-              <View style={styles.chipsRow}>
-                {PHRASE_EXAMPLES.map((ex) => (
-                  <Pressable
-                    key={ex}
-                    onPress={() => setPhrase(ex.toLowerCase())}
-                    style={({ pressed }) => [styles.chip, pressed && { opacity: 0.85 }]}
-                  >
-                    <Text style={styles.chipText}>{ex}</Text>
-                  </Pressable>
-                ))}
+              <View style={styles.voiceCard}>
+                <View style={styles.voiceBadge}>
+                  <Ionicons name="mic" size={26} color={colors.coralDeep} />
+                </View>
+                <Text style={styles.voiceCue}>"Help, help!"</Text>
+                <Text style={styles.voiceCueSub}>
+                  That's it. Nothing to memorise, in English or Hindi.
+                </Text>
               </View>
 
               <View style={styles.privacyCard}>
@@ -315,7 +284,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
                 <Text style={styles.ctaText}>{activating ? 'Activating…' : 'Activate Protection'}</Text>
               </Pressable>
               <Text style={styles.skipNote}>
-                Built-in phrases like "help help" always work, even without a custom phrase.
+                We'll ask for microphone access so ORBII can listen for you.
               </Text>
             </ScrollView>
           ) : null}
@@ -524,30 +493,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   miniSaveText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
-  fieldCard: {
+  voiceCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: spacing.md,
-    gap: spacing.sm,
+    padding: spacing.lg,
+    alignItems: 'center',
+    gap: spacing.xs,
     ...shadows.card,
   },
-  fieldLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
-  examplesLabel: {
+  voiceBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.coralSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+  },
+  voiceCue: { fontFamily: fontFamilies.poppinsBold, fontSize: 22, color: colors.textPrimary },
+  voiceCueSub: {
     ...typography.caption,
     fontSize: 12.5,
     color: colors.textSecondary,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
+    textAlign: 'center',
   },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  chip: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 9,
-    ...shadows.icon,
-  },
-  chipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textSecondary },
   privacyCard: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -36,17 +36,14 @@ export type VoiceKeyword =
   | 'please help'
   | 'save me'
   | 'bachao'
-  | 'madad'
-  | 'custom';
+  | 'madad';
 
-// User-defined secret phrases (managed by services/voice-phrases.ts). Passed to
-// the native engine on top of the always-on built-in panic words. Stored only
-// on device; never leave the phone.
-let customPhrases: string[] = [];
-
-export function setCustomPhrases(phrases: string[]): void {
-  customPhrases = phrases.filter((p) => p.trim().length >= 3);
-}
+// No custom phrases. In a real emergency nobody remembers an invented secret
+// word — they just shout "help, help". The native engine's built-in panic
+// words ("help help", "save me", "bachao", "madad", plus their near-miss forms
+// and cross-shout repeat detection) are always armed, so we start the guard
+// with an empty extra-phrase list.
+const NO_EXTRA_PHRASES: string[] = [];
 
 export function isListening(): boolean {
   return listening;
@@ -62,22 +59,9 @@ export async function setWhisperMode(enabled: boolean): Promise<void> {
   if (!available) return;
   try {
     await VoiceGuard!.setWhisperMode(enabled);
-    if (listening) await VoiceGuard!.startGuard(customPhrases, 0);
+    if (listening) await VoiceGuard!.startGuard(NO_EXTRA_PHRASES, 0);
   } catch {
     // takes effect on the next start
-  }
-}
-
-// The native guard only reads the phrase list when startGuard() is called, so a
-// phrase added or removed while protection is already ON would never trigger an
-// SOS. Re-issue startGuard with the new set so an edit takes effect instantly.
-export async function applyPhrases(phrases: string[]): Promise<void> {
-  setCustomPhrases(phrases);
-  if (!available || !listening) return;
-  try {
-    await VoiceGuard!.startGuard(customPhrases, 0);
-  } catch {
-    // guard will pick the phrases up on its next start
   }
 }
 
@@ -151,7 +135,7 @@ export async function startListening(): Promise<{ ok: boolean; reason?: string }
   setStatus('starting');
   try {
     // duration 0 = listen until explicitly stopped.
-    await VoiceGuard!.startGuard(customPhrases, 0);
+    await VoiceGuard!.startGuard(NO_EXTRA_PHRASES, 0);
     void ensureFullScreenIntentAccess();
     listening = true;
     setStatus('listening');

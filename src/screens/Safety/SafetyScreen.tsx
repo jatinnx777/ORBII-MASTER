@@ -30,7 +30,6 @@ import {
   loadBgVoiceState,
   startBackgroundVoice,
 } from '@/services/background-voice';
-import { loadPhrases } from '@/services/voice-phrases';
 import { getVoiceMetrics } from '@/services/voice-metrics';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -93,8 +92,7 @@ function ProtectionStatusCard() {
     if (state === 'paused' && !busy) {
       setBusy(true);
       try {
-        const phrases = await loadPhrases();
-        await startBackgroundVoice(phrases, bg.hours);
+        await startBackgroundVoice([], bg.hours);
         await refresh();
       } finally {
         setBusy(false);
@@ -109,7 +107,7 @@ function ProtectionStatusCard() {
       dot: colors.sage,
       icon: 'shield-checkmark' as const,
       title: 'Protection active',
-      body: 'ORBII is listening for your safe phrase.',
+      body: 'ORBII is listening. Just shout "help, help".',
     },
     paused: {
       bg: colors.coralSoft,
@@ -337,7 +335,7 @@ function VoiceSOSCard() {
         <IconBadge icon="mic" tint="lavender" size={42} />
         <View style={{ flex: 1, marginLeft: spacing.md }}>
           <Text style={styles.cardTitle}>Voice SOS</Text>
-          <Text style={styles.cardDesc}>Say your phrase and we fire an SOS, hands-free.</Text>
+          <Text style={styles.cardDesc}>Shout "help, help" and we fire an SOS, hands-free.</Text>
         </View>
         <Switch
           value={listening}

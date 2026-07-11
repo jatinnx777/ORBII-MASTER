@@ -6,7 +6,6 @@ import {
   stopBackgroundVoice,
 } from '@/services/background-voice';
 import { getStatus, startListening, stopListening } from '@/services/voice-detection';
-import { loadPhrases } from '@/services/voice-phrases';
 
 // Voice SOS language handling.
 //
@@ -120,9 +119,8 @@ async function reloadEngineIfRunning(): Promise<void> {
   try {
     const bg = await loadBgVoiceState();
     if (bg.enabled) {
-      const phrases = await loadPhrases();
       await stopBackgroundVoice();
-      await startBackgroundVoice(phrases, bg.hours);
+      await startBackgroundVoice([], bg.hours);
       return; // background owns the service; don't double-bounce
     }
   } catch {

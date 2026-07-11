@@ -37,9 +37,6 @@ const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
   'priority_helpers',
 ]);
 
-// Free tier: one custom voice trigger phrase. ORBII Plus: unlimited.
-export const FREE_VOICE_PHRASE_LIMIT = 1;
-
 // Free tier: up to 3 emergency contacts.
 export const FREE_CONTACT_LIMIT = 3;
 

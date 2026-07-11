@@ -71,7 +71,6 @@ import {
   stopBackgroundVoice,
 } from '@/services/background-voice';
 import { useIsPremium } from '@/services/entitlements';
-import { loadPhrases } from '@/services/voice-phrases';
 import {
   startListening,
   stopListening,
@@ -354,11 +353,10 @@ export function HomeScreen() {
     async (hours: number) => {
       const ok = await ensureMicPerms();
       if (!ok) {
-        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for a call for help.');
         return;
       }
-      const phrases = await loadPhrases();
-      const started = await startBackgroundVoice(phrases, hours);
+      const started = await startBackgroundVoice([], hours);
       if (!started) {
         appAlert('Not available', 'Background protection runs on the installed Android app.');
         return;
@@ -403,7 +401,7 @@ export function HomeScreen() {
     }
     appAlert(
       'Protect me for…',
-      'ORBII will keep listening for your phrase, even in the background.',
+      'ORBII will keep listening for a call for help, even in the background.',
       [
         { text: '12 hours', onPress: () => armBackground(12) },
         { text: '24 hours', onPress: () => armBackground(24) },

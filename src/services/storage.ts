@@ -17,7 +17,6 @@ const KEYS = {
   activeCircleId: 'orbii:circles:active',
   inviteSeen: 'orbii:circles:invite-seen',
   voiceUsage: 'orbii:voice-usage',
-  voicePhrases: 'orbii:voice-phrases',
   bgVoice: 'orbii:bg-voice',
   voiceLang: 'orbii:voice-lang',
   fsiAsked: 'orbii:fsi-asked',

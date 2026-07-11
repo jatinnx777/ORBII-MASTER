@@ -64,7 +64,6 @@ import { reconcileVictimLocationTask } from '@/services/sos-location-task';
 import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
-import { loadPhrases } from '@/services/voice-phrases';
 import { voiceSOSStatus } from '@/services/voice-limits';
 import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
@@ -120,13 +119,11 @@ function RootNavigator() {
     }
   }, [status]);
 
-  // Prime the voice recogniser with the user's saved secret phrases, and
-  // re-arm background protection if the user left it on.
+  // Re-arm always-on background protection if the user left it on. The engine
+  // listens for the built-in panic words ("help, help"), so no phrases to load.
   useEffect(() => {
-    loadPhrases().then((phrases) => {
-      loadBgVoiceState().then((bg) => {
-        if (bg.enabled) startBackgroundVoice(phrases, bg.hours).catch(() => undefined);
-      });
+    loadBgVoiceState().then((bg) => {
+      if (bg.enabled) startBackgroundVoice([], bg.hours).catch(() => undefined);
     });
   }, []);
 

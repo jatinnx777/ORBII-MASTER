@@ -148,8 +148,8 @@ export function SettingsScreen() {
           <Row
             icon="mic-outline"
             tint="coral"
-            label="Voice SOS phrases"
-            value="Set your own secret phrases to trigger an SOS"
+            label="Voice SOS"
+            value={'Shout "help, help" to trigger an SOS, hands-free'}
             onPress={() => navigation.navigate('VoicePhrases')}
           />
         </Card>

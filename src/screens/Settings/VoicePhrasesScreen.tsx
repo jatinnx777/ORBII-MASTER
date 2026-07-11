@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,13 +16,6 @@ import { useNavigation } from '@react-navigation/native';
 import { IconBadge, Mascot } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import {
-  PHRASE_EXAMPLES,
-  VOICE_PHRASE_LIMITS,
-  addPhrase,
-  loadPhrases,
-  removePhrase,
-} from '@/services/voice-phrases';
-import {
   PROTECTION_DURATIONS,
   backgroundVoiceAvailable,
   loadBgVoiceState,
@@ -31,7 +23,7 @@ import {
   startBackgroundVoice,
   stopBackgroundVoice,
 } from '@/services/background-voice';
-import { useIsPremium, FREE_VOICE_PHRASE_LIMIT } from '@/services/entitlements';
+import { useIsPremium } from '@/services/entitlements';
 import { promptUpgrade } from '@/services/paywall';
 import {
   downloadHindiPack,
@@ -41,16 +33,18 @@ import {
   removeHindiPack,
 } from '@/services/voice-language';
 
+// Voice SOS settings. There is no custom phrase to set — in a real emergency
+// nobody remembers an invented secret word, they just shout "help, help". The
+// engine listens for the built-in panic words (always on, on-device). This
+// screen only manages the optional Hindi language pack and always-on
+// background protection.
 export function VoicePhrasesScreen() {
   const navigation = useNavigation();
   const isPremium = useIsPremium();
-  const [phrases, setPhrases] = useState<string[]>([]);
-  const [input, setInput] = useState('');
   const [bgEnabled, setBgEnabled] = useState(false);
   const [bgHours, setBgHours] = useState(12);
 
   useEffect(() => {
-    loadPhrases().then(setPhrases);
     loadBgVoiceState().then((s) => {
       setBgEnabled(s.enabled);
       setBgHours(s.hours);
@@ -81,16 +75,12 @@ export function VoicePhrasesScreen() {
         });
         return;
       }
-      if (phrases.length === 0) {
-        appAlert('Add a phrase first', 'Set at least one secret phrase before turning on background protection.');
-        return;
-      }
       const ok = await ensureMicPerms();
       if (!ok) {
-        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for your phrase.');
+        appAlert('Microphone needed', 'Allow microphone access so ORBII can listen for a call for help.');
         return;
       }
-      const started = await startBackgroundVoice(phrases, bgHours);
+      const started = await startBackgroundVoice([], bgHours);
       if (!started) {
         appAlert('Not available', 'Background protection runs only on the Android app build.');
         return;
@@ -107,46 +97,8 @@ export function VoicePhrasesScreen() {
   const changeDuration = (hours: number) => {
     setBgHours(hours);
     saveBgVoiceState({ enabled: bgEnabled, hours });
-    if (bgEnabled) startBackgroundVoice(phrases, hours);
+    if (bgEnabled) startBackgroundVoice([], hours);
   };
-
-  const onAdd = async () => {
-    const text = input.trim();
-    if (text.length < VOICE_PHRASE_LIMITS.min) return;
-    // Free tier: one trigger phrase. ORBII Plus: unlimited (up to the
-    // technical max).
-    if (!isPremium && phrases.length >= FREE_VOICE_PHRASE_LIMIT) {
-      promptUpgrade({
-        feature: 'Unlimited voice trigger phrases',
-        body:
-          'Free includes one trigger phrase. Upgrade to ORBII Plus (₹99/month) ' +
-          'for unlimited custom phrases and multiple emergency keywords.',
-        onUpgrade: () => navigation.navigate('PremiumUpgrade' as never),
-      });
-      return;
-    }
-    try {
-      const next = await addPhrase(text);
-      setPhrases(next);
-      setInput('');
-    } catch (err) {
-      // A phrase ORBII can never hear, or one that fires constantly, is worse
-      // than none. Tell her exactly why rather than silently dropping it.
-      appAlert(
-        "That phrase won't work",
-        err instanceof Error ? err.message : 'Pick a different phrase.',
-      );
-    }
-  };
-
-  const onRemove = async (p: string) => {
-    setPhrases(await removePhrase(p));
-  };
-
-  const effectiveMax = isPremium
-    ? VOICE_PHRASE_LIMITS.max
-    : FREE_VOICE_PHRASE_LIMIT;
-  const atLimit = phrases.length >= effectiveMax;
 
   return (
     <View style={styles.root}>
@@ -173,71 +125,27 @@ export function VoicePhrasesScreen() {
         <ScrollView
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
         >
           <View style={styles.hero}>
             <Mascot pose="headset" size={120} />
-            <Text style={styles.heroTitle}>Choose your secret phrase</Text>
+            <Text style={styles.heroTitle}>Just shout for help</Text>
             <Text style={styles.heroBody}>
-              ORBII listens for your phrase and fires an SOS, hands-free. Pick
-              something you'd only say in an emergency.
+              If you can't reach your phone, shout "help, help" and ORBII fires
+              an SOS, hands-free. Nothing to set up, nothing to remember.
             </Text>
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.label}>Your phrase</Text>
-            <View style={styles.inputRow}>
-              <TextInput
-                value={input}
-                onChangeText={setInput}
-                placeholder="Type a phrase"
-                placeholderTextColor={colors.textMuted}
-                style={styles.input}
-                editable={!atLimit}
-                onSubmitEditing={onAdd}
-                returnKeyType="done"
-              />
-              <Pressable
-                onPress={onAdd}
-                disabled={atLimit || input.trim().length < VOICE_PHRASE_LIMITS.min}
-                style={({ pressed }) => [
-                  styles.addBtn,
-                  (atLimit || input.trim().length < VOICE_PHRASE_LIMITS.min) && styles.addBtnOff,
-                  pressed && { opacity: 0.9 },
-                ]}
-              >
-                <Ionicons name="add" size={22} color={colors.textPrimary} />
-              </Pressable>
+            <Text style={styles.label}>What ORBII listens for</Text>
+            <View style={styles.cueRow}>
+              <IconBadge icon="volume-high" tint="coral" size={36} />
+              <Text style={styles.cueText}>"Help, help"  ·  "Save me"</Text>
             </View>
-
-            <Text style={styles.examplesLabel}>Examples</Text>
-            <View style={styles.examples}>
-              {PHRASE_EXAMPLES.map((ex) => (
-                <Pressable
-                  key={ex}
-                  onPress={() => setInput(ex)}
-                  style={({ pressed }) => [styles.exampleChip, pressed && { opacity: 0.8 }]}
-                >
-                  <Text style={styles.exampleText}>{ex}</Text>
-                </Pressable>
-              ))}
+            <View style={styles.cueRow}>
+              <IconBadge icon="language" tint="lavender" size={36} />
+              <Text style={styles.cueText}>"बचाओ"  ·  "मदद"  (with the Hindi pack)</Text>
             </View>
           </View>
-
-          {phrases.length > 0 ? (
-            <View style={styles.card}>
-              <Text style={styles.label}>Saved phrases</Text>
-              {phrases.map((p) => (
-                <View key={p} style={styles.phraseRow}>
-                  <IconBadge icon="mic" tint="lavender" size={36} />
-                  <Text style={styles.phraseText}>{p}</Text>
-                  <Pressable onPress={() => onRemove(p)} hitSlop={8}>
-                    <Ionicons name="close-circle" size={22} color={colors.textMuted} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          ) : null}
 
           <LanguageCard />
 
@@ -247,8 +155,8 @@ export function VoicePhrasesScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bgTitle}>Background protection</Text>
                   <Text style={styles.bgSub}>
-                    Keep listening for your phrase even when the app is closed.
-                    Runs on-device, nothing is uploaded.
+                    Keep listening even when the app is closed. Runs on-device,
+                    nothing is uploaded.
                   </Text>
                 </View>
                 <Switch
@@ -279,9 +187,9 @@ export function VoicePhrasesScreen() {
           <View style={styles.note}>
             <Ionicons name="shield-checkmark" size={16} color={colors.sageDeep} />
             <Text style={styles.noteText}>
-              The words "help" and "save me" always work in English, even without
-              a custom phrase. Add the Hindi pack above for "bachao" and "madad".
-              Your phrases never leave this device.
+              "Help" and "save me" always work in English, on-device. Add the
+              Hindi pack above for "bachao" and "madad". Your voice never leaves
+              this phone.
             </Text>
           </View>
         </ScrollView>
@@ -429,41 +337,8 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     marginBottom: spacing.sm,
   },
-  inputRow: { flexDirection: 'row', gap: spacing.sm },
-  input: {
-    flex: 1,
-    borderRadius: radius.md,
-    backgroundColor: colors.cream,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 13,
-    fontFamily: 'Inter_500Medium',
-    fontSize: 15,
-    color: colors.textPrimary,
-  },
-  addBtn: {
-    width: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.peach,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addBtnOff: { backgroundColor: colors.creamDeep },
-  examplesLabel: { ...typography.label, color: colors.textMuted, marginTop: spacing.md, marginBottom: spacing.sm },
-  examples: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  exampleChip: {
-    backgroundColor: colors.cream,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-  },
-  exampleText: { ...typography.label, color: colors.textSecondary },
-  phraseRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  phraseText: { flex: 1, ...typography.bodyMedium, color: colors.textPrimary },
+  cueRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm },
+  cueText: { flex: 1, ...typography.bodyMedium, color: colors.textPrimary },
   langRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   langDivider: { height: 1, backgroundColor: colors.divider, marginVertical: spacing.md },
   langName: { ...typography.bodyMedium, fontFamily: 'Poppins_600SemiBold', color: colors.textPrimary },

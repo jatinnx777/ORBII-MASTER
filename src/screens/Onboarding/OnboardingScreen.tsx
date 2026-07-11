@@ -33,7 +33,6 @@ import {
   removeHindiPack,
   setVoiceLang,
 } from '@/services/voice-language';
-import { addPhrase } from '@/services/voice-phrases';
 
 const { width } = Dimensions.get('window');
 
@@ -306,7 +305,6 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
     } else {
       await setVoiceLang({ hindi: hindiOn && ready });
     }
-    // The secret phrase is asked once, in guided setup — not here as well.
     onDone();
   };
 
@@ -423,8 +421,8 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
         </View>
 
         <Text style={lstyles.note}>
-          You'll pick your secret phrase in the next step. You can change it
-          anytime in Settings → Voice SOS.
+          In an emergency, just shout "help, help" and ORBII hears you. No
+          phrase to remember. Manage this anytime in Settings → Voice SOS.
         </Text>
       </ScrollView>
 

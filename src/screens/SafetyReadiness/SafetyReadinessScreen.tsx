@@ -57,7 +57,7 @@ export function SafetyReadinessScreen() {
   const items: ChecklistItem[] = [
     { id: 'account', icon: 'person-circle', title: 'Create your account', body: 'You’re signed in and ready.', done: signals.account },
     { id: 'contact', icon: 'people', title: 'Add an emergency contact', body: 'Someone we alert the moment you need help.', done: signals.contact },
-    { id: 'voice', icon: 'mic', title: 'Enable Voice SOS', body: 'Say your phrase to get help hands-free.', done: signals.voice },
+    { id: 'voice', icon: 'mic', title: 'Enable Voice SOS', body: 'Shout "help, help" to get help hands-free.', done: signals.voice },
     { id: 'notifications', icon: 'notifications', title: 'Turn on notifications', body: 'So you never miss an alert.', done: signals.notifications },
     { id: 'location', icon: 'location', title: 'Share your location', body: 'So help can reach the right place fast.', done: signals.location },
     { id: 'test', icon: 'shield-checkmark', title: 'Run a safety test', body: 'See ORBII spring into action, safely.', done: signals.test },

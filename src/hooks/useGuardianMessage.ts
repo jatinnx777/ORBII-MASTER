@@ -24,7 +24,7 @@ const POOLS: Record<GuardianContext, string[]> = {
     'Your circle is connected.',
   ],
   voiceReady: [
-    'Listening for your phrase.',
+    'Listening. Just shout for help.',
     'Voice protection active.',
     'Ready to help.',
   ],
