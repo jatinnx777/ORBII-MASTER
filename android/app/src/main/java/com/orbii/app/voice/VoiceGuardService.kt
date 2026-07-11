@@ -148,6 +148,8 @@ class VoiceGuardService : Service() {
 
   @Volatile private var running = false
   private var screamDetector: ScreamDetector? = null
+  /** Band-pass voice filter: strips out-of-band noise before VAD + ASR. */
+  private var denoiser: VoiceDenoiser? = null
   private var phrases: List<String> = emptyList()
   @Volatile private var smoothedGain = 1.0
   /** Rolling window of raw mic audio, so evidence starts before the trigger. */
@@ -291,6 +293,7 @@ class VoiceGuardService : Service() {
 
     val buffer = ShortArray(FRAME_SAMPLES)
     preRoll = PreRollBuffer(SAMPLE_RATE, PREROLL_SECONDS)
+    denoiser = VoiceDenoiser(SAMPLE_RATE)
     prunePreRolls()
     VoiceMetrics.running = true
     var speechStart = 0L
@@ -299,10 +302,13 @@ class VoiceGuardService : Service() {
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
-        // Keep EVERY frame, silence included, and keep it RAW (before
-        // applyGain mutates the buffer). The seconds before she speaks are the
-        // ones the old recording threw away.
+        // Keep EVERY frame, silence included, and keep it RAW (before the
+        // denoiser/gain mutate the buffer). The seconds before she speaks are
+        // the ones the old recording threw away, and evidence must stay real.
         preRoll?.write(buffer, n)
+        // Band-pass to the voice range BEFORE the gate, so rumble/hiss can't
+        // pass the VAD as "speech" and the recognizer hears a cleaner shout.
+        denoiser?.process(buffer, n)
         val level = rms(buffer, n)
         VoiceMetrics.rms = level
         // Gate rides a margin above the tracked ambient noise floor.
@@ -363,6 +369,7 @@ class VoiceGuardService : Service() {
       record.release()
       screamDetector?.close()
       screamDetector = null
+      denoiser = null
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
