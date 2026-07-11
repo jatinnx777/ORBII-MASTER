@@ -102,11 +102,19 @@ android {
         applicationId 'com.orbii.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 26569
-        versionName "30.4.0"
+        versionCode 26570
+        versionName "30.5.0"
         // Ship only the locales the app actually has strings for. Strips
         // dozens of library translations (androidx etc.) from resources.
         resConfigs "en", "hi"
+
+        // arm64 only. reactNativeArchitectures governs RN's own libraries, but
+        // the prebuilt AARs (MapLibre, Vosk, TensorFlow Lite) each ship their
+        // own 32-bit .so. This filters the final APK so none of them are
+        // packaged, removing ~30 MB of duplicated native code.
+        ndk {
+            abiFilters "arm64-v8a"
+        }
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""
         // Bundled wake-word access key. Source priority:

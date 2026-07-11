@@ -58,17 +58,30 @@ class VoiceGuardService : Service() {
     // never allocate a second recognizer.
     private const val MODEL_EN = "vosk-model-en"
     private const val MODEL_HI = "vosk-model-hi"
-    // RMS threshold below which we treat the frame as silence (skip ASR).
-    // Lowered for higher recall — quieter / first-time utterances used to be
-    // gated out, so the user had to repeat the phrase. 200 still skips true
-    // silence (which reads ~0–80) while letting soft speech through.
-    private const val VAD_RMS = 200.0
+
+    // Read the mic in short frames, not one-second blocks. A shouted "help" is
+    // ~300-400 ms; averaged across a whole second of buffer its energy fell
+    // below the gate, so a muffled or far-away shout was thrown away as silence
+    // and the user had to repeat it many times. 200 ms frames keep a short
+    // shout's energy intact for the gate to see.
+    private const val FRAME_SAMPLES = SAMPLE_RATE / 5 // 200 ms
+
+    // Adaptive silence gate. A single fixed RMS threshold cannot work in both a
+    // quiet bedroom and a noisy street: set it high enough to ignore a quiet
+    // room's hum and it deafens the phone to muffled speech from a bag/pocket;
+    // set it low and a noisy room feeds ASR constantly. Instead we TRACK the
+    // ambient noise floor and require speech to stand a margin above it. This
+    // is the main fix for "it only hears me with the phone at my mouth".
+    private const val NOISE_MARGIN = 2.0    // speech must be this x the ambient floor
+    private const val MIN_GATE = 85.0       // never demand less (a silent room still gates)
+    private const val MAX_GATE = 650.0      // never demand more (so a loud room can't deafen us)
 
     // Whisper mode. A woman with an attacker beside her does not shout — she
-    // whispers. The 200 gate buys battery life but makes the engine deafest in
-    // exactly that situation. Opt-in, because it feeds far more audio to ASR.
+    // whispers. Far more sensitive: a smaller margin and a lower floor. Opt-in,
+    // because it feeds much more audio to ASR (battery).
     const val EXTRA_WHISPER = "whisper"
-    private const val WHISPER_VAD_RMS = 90.0
+    private const val WHISPER_MARGIN = 1.5
+    private const val WHISPER_MIN_GATE = 50.0
 
     // Pre-roll: keep the last N seconds of raw mic audio so the SOS clip starts
     // BEFORE she spoke. 15s @ 16k mono 16-bit ≈ 470 KB.
@@ -88,9 +101,11 @@ class VoiceGuardService : Service() {
 
     // Smart auto-gain: lift quiet/muffled speech (pocket, purse) toward a
     // target loudness before the recognizer sees it, with a hard ceiling so we
-    // never blow up background noise or clip badly.
+    // never blow up background noise or clip badly. Raised to +21 dB: speech
+    // through a bag or purse can be attenuated far more than +15 dB could
+    // recover, and the recognizer needs it near TARGET_RMS to transcribe well.
     private const val TARGET_RMS = 3000.0
-    private const val MAX_GAIN = 6.0 // ~ +15.5 dB
+    private const val MAX_GAIN = 12.0 // ~ +21.5 dB
 
     // Emergency phrases, matched whole-word in maybeTrigger. Bare "help" is
     // deliberately NOT here — it's too common in normal conversation. Instead
@@ -122,11 +137,13 @@ class VoiceGuardService : Service() {
     // "bacho". A single near-miss does nothing; the same distress sound twice
     // in seconds is what fires, so ordinary speech stays safe.
     private val REPEAT_GROUPS = listOf(
-      listOf("help", "hell", "held"),
+      listOf("help", "hell", "held", "yelp"),
       listOf("बचाओ", "bachao", "bacho"),
       listOf("मदद", "madad", "madat"),
     )
-    private const val REPEAT_WINDOW_MS = 8000L
+    // Widened: a scared, muffled "help ... help" often has a long gap between
+    // the two shouts, and short read frames mean each is a separate final.
+    private const val REPEAT_WINDOW_MS = 12000L
   }
 
   @Volatile private var running = false
@@ -135,8 +152,12 @@ class VoiceGuardService : Service() {
   @Volatile private var smoothedGain = 1.0
   /** Rolling window of raw mic audio, so evidence starts before the trigger. */
   @Volatile private var preRoll: PreRollBuffer? = null
-  /** Active silence gate; drops to WHISPER_VAD_RMS when whisper mode is on. */
-  @Volatile private var vadRms = VAD_RMS
+  /** Estimated ambient noise level; the gate rides a margin above it. */
+  @Volatile private var noiseFloor = 150.0
+  /** Speech must exceed noiseFloor * this. Lower in whisper mode. */
+  @Volatile private var gateMargin = NOISE_MARGIN
+  /** The gate never drops below this. Lower in whisper mode. */
+  @Volatile private var gateMin = MIN_GATE
   /** When a weak (non-firing) distress sound was last heard — fusion input. */
   @Volatile private var lastWeakDangerAt = 0L
   @Volatile private var lastWeakLabel = ""
@@ -158,7 +179,13 @@ class VoiceGuardService : Service() {
     if (intent != null && intent.hasExtra(EXTRA_WHISPER)) {
       prefs.edit().putBoolean("whisper", intent.getBooleanExtra(EXTRA_WHISPER, false)).apply()
     }
-    vadRms = if (prefs.getBoolean("whisper", false)) WHISPER_VAD_RMS else VAD_RMS
+    if (prefs.getBoolean("whisper", false)) {
+      gateMargin = WHISPER_MARGIN
+      gateMin = WHISPER_MIN_GATE
+    } else {
+      gateMargin = NOISE_MARGIN
+      gateMin = MIN_GATE
+    }
     val durationMs = if (intent != null && intent.hasExtra(EXTRA_DURATION_MS)) {
       val d = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
       prefs.edit().putLong("duration", d).apply()
@@ -245,10 +272,10 @@ class VoiceGuardService : Service() {
       AudioFormat.CHANNEL_IN_MONO,
       AudioFormat.ENCODING_PCM_16BIT,
     )
-    val bufSize = maxOf(minBuf, SAMPLE_RATE) // ~1s
+    val bufSize = maxOf(minBuf, SAMPLE_RATE) // ~1s internal buffer (read in 200ms frames)
     val record = try {
       AudioRecord(
-        MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        pickAudioSource(),
         SAMPLE_RATE,
         AudioFormat.CHANNEL_IN_MONO,
         AudioFormat.ENCODING_PCM_16BIT,
@@ -262,11 +289,10 @@ class VoiceGuardService : Service() {
       return
     }
 
-    val buffer = ShortArray(bufSize / 2)
+    val buffer = ShortArray(FRAME_SAMPLES)
     preRoll = PreRollBuffer(SAMPLE_RATE, PREROLL_SECONDS)
     prunePreRolls()
     VoiceMetrics.running = true
-    VoiceMetrics.vadThreshold = vadRms
     var speechStart = 0L
     try {
       record.startRecording()
@@ -279,9 +305,17 @@ class VoiceGuardService : Service() {
         preRoll?.write(buffer, n)
         val level = rms(buffer, n)
         VoiceMetrics.rms = level
-        val active = level >= vadRms
+        // Gate rides a margin above the tracked ambient noise floor.
+        val gate = (noiseFloor * gateMargin).coerceIn(gateMin, MAX_GATE)
+        VoiceMetrics.vadThreshold = gate
+        val active = level >= gate
         VoiceMetrics.vadActive = active
         if (!active) {
+          // Ambient frame: pull the noise floor toward it. Rise slowly, so a
+          // room getting louder can't chase away real speech; fall fast, so a
+          // room that just went quiet becomes sensitive again right away.
+          val rate = if (level > noiseFloor) 0.02 else 0.2
+          noiseFloor += (level - noiseFloor) * rate
           // Speech just ended. The VAD gate means the recognizers never get
           // fed silence, so Vosk's endpointer can't finalise on its own —
           // WITHOUT this flush, final results (and cross-utterance repeat
@@ -341,6 +375,24 @@ class VoiceGuardService : Service() {
   // actual trigger words fire.
   private fun makeRecognizer(model: Model): Recognizer {
     return Recognizer(model, SAMPLE_RATE.toFloat()).apply { setWords(true) }
+  }
+
+  // Pick the mic input best suited to far-field, muffled speech (bag/pocket).
+  // UNPROCESSED gives the raw signal with the phone's own noise-suppressor and
+  // AGC turned OFF — that processing is tuned for a phone held to your face and
+  // actively eats muffled/quiet speech as "noise", the exact audio we must
+  // keep. We then apply our own gentle gain. Not every device supports it, so
+  // fall back to VOICE_RECOGNITION.
+  private fun pickAudioSource(): Int {
+    return try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+      val supported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.N &&
+        am.getProperty(android.media.AudioManager.PROPERTY_SUPPORT_AUDIO_SOURCE_UNPROCESSED) == "true"
+      if (supported) MediaRecorder.AudioSource.UNPROCESSED
+      else MediaRecorder.AudioSource.VOICE_RECOGNITION
+    } catch (e: Exception) {
+      MediaRecorder.AudioSource.VOICE_RECOGNITION
+    }
   }
 
   private fun rms(buf: ShortArray, n: Int): Double {
@@ -578,7 +630,7 @@ class VoiceGuardService : Service() {
     val n = Notification.Builder(this, CH_ONGOING)
       .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
       .setContentTitle("ORBII is protecting you")
-      .setContentText("Listening for your safety phrase")
+      .setContentText("Listening. Shout \"help, help\" if you need me.")
       .setOngoing(true)
       .setContentIntent(pi)
       .build()
