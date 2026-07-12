@@ -1,6 +1,7 @@
 import { NativeModules, Platform } from 'react-native';
 import { getItem, setItem, storageKeys } from './storage';
 import { appAlert } from '@/components/common/AppDialog';
+import { logVoiceSessionStart, logVoiceSessionEnd } from './voice-sessions';
 
 
 const { VoiceGuard } = NativeModules as {
@@ -66,6 +67,9 @@ export async function startBackgroundVoice(
     void ensureFullScreenIntentAccess();
     // Survive a reboot — BootReceiver re-arms the service if this is set.
     void VoiceGuard.setBootRestore?.(true);
+    // Audit log (fire-and-forget). whisper state is read where it's toggled;
+    // default false here keeps the call simple and never blocks arming.
+    void logVoiceSessionStart(durationHours, false);
     return true;
   } catch {
     return false;
@@ -76,6 +80,8 @@ export async function stopBackgroundVoice(): Promise<void> {
   if (!VoiceGuard) return;
   // Don't resurrect it after a reboot once the user has turned it off.
   void VoiceGuard.setBootRestore?.(false);
+  // Close the audit-log row for this session (manual turn-off).
+  void logVoiceSessionEnd('manual');
   try {
     await VoiceGuard.stopGuard();
   } catch {

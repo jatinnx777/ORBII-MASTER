@@ -28,6 +28,7 @@ import { store, useAppSelector } from '@/redux/store';
 import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
+import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -208,6 +209,13 @@ function RootNavigator() {
     if (status !== 'authenticated') return;
     const uid = store.getState().user.profile?.uid;
     if (uid) void registerPushToken(uid);
+  }, [status]);
+
+  // Close out any Voice SOS audit row whose timer lapsed while the app was
+  // closed, so the legal log reflects the natural expiry the service performed.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    void reconcileExpiredVoiceSessions();
   }, [status]);
 
   // Pull the authoritative role (user / responder / admin) so the Missions tab

@@ -18,6 +18,7 @@ const KEYS = {
   inviteSeen: 'orbii:circles:invite-seen',
   voiceUsage: 'orbii:voice-usage',
   bgVoice: 'orbii:bg-voice',
+  voiceSessionId: 'orbii:voice-session-id',
   voiceLang: 'orbii:voice-lang',
   fsiAsked: 'orbii:fsi-asked',
   disclosureAck: 'orbii:disclosure-ack',

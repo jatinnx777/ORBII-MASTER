@@ -74,7 +74,12 @@ class VoiceGuardService : Service() {
     // is the main fix for "it only hears me with the phone at my mouth".
     private const val NOISE_MARGIN = 2.0    // speech must be this x the ambient floor
     private const val MIN_GATE = 85.0       // never demand less (a silent room still gates)
-    private const val MAX_GATE = 650.0      // never demand more (so a loud room can't deafen us)
+    private const val MAX_GATE = 450.0      // never demand more (so a loud room can't deafen us)
+    // Self-healing: every frame the floor leaks a hair back toward MIN_GATE, so a
+    // burst of noise — or muffled speech mistaken for noise — can never ratchet
+    // the gate up and leave the phone progressively deafer over a long session.
+    // This is the fix for "it catches fewer words the longer it runs".
+    private const val FLOOR_LEAK = 0.0015
 
     // Whisper mode. A woman with an attacker beside her does not shout — she
     // whispers. Far more sensitive: a smaller margin and a lower floor. Opt-in,
@@ -204,7 +209,12 @@ class VoiceGuardService : Service() {
       thread(name = "voice-guard") { listenLoop() }
     }
     if (durationMs > 0L) {
-      main.postDelayed({ stopSelf() }, durationMs)
+      main.postDelayed({
+        // Tell her the timed protection just ended, so it never lapses silently
+        // and leave her feeling covered when she isn't. Then stop.
+        notifyProtectionEnded()
+        stopSelf()
+      }, durationMs)
     }
     return START_STICKY
   }
@@ -311,16 +321,19 @@ class VoiceGuardService : Service() {
         denoiser?.process(buffer, n)
         val level = rms(buffer, n)
         VoiceMetrics.rms = level
+        // Self-healing leak: drift the floor back toward the minimum every frame
+        // (even during speech), so it can never get stuck high and deafen us.
+        noiseFloor -= (noiseFloor - gateMin) * FLOOR_LEAK
         // Gate rides a margin above the tracked ambient noise floor.
         val gate = (noiseFloor * gateMargin).coerceIn(gateMin, MAX_GATE)
         VoiceMetrics.vadThreshold = gate
         val active = level >= gate
         VoiceMetrics.vadActive = active
         if (!active) {
-          // Ambient frame: pull the noise floor toward it. Rise slowly, so a
-          // room getting louder can't chase away real speech; fall fast, so a
-          // room that just went quiet becomes sensitive again right away.
-          val rate = if (level > noiseFloor) 0.02 else 0.2
+          // Ambient frame: track the real noise level. Fall fast toward a
+          // quieter room; rise only VERY slowly, so neither a transient nor a
+          // muffled sub-gate shout can inflate the floor and ratchet the gate up.
+          val rate = if (level > noiseFloor) 0.006 else 0.25
           noiseFloor += (level - noiseFloor) * rate
           // Speech just ended. The VAD gate means the recognizers never get
           // fed silence, so Vosk's endpointer can't finalise on its own —
@@ -595,6 +608,26 @@ class VoiceGuardService : Service() {
       .setAutoCancel(true)
       .build()
     nm().notify(ALERT_ID + 1, n)
+  }
+
+  // A timed Voice SOS session just ran out. Tell her clearly (a heads-up alert,
+  // not a jarring full-screen takeover for an "it turned off" event) so she is
+  // never left believing she's protected when the timer has lapsed. Tapping
+  // reopens ORBII to turn it back on.
+  private fun notifyProtectionEnded() {
+    val open = packageManager.getLaunchIntentForPackage(packageName)
+    val pi = PendingIntent.getActivity(
+      this, 3, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+    val n = Notification.Builder(this, CH_ALERT)
+      .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
+      .setContentTitle("Voice SOS protection ended")
+      .setContentText("Your timed protection is now off. Tap to turn it back on.")
+      .setPriority(Notification.PRIORITY_HIGH)
+      .setContentIntent(pi)
+      .setAutoCancel(true)
+      .build()
+    nm().notify(ALERT_ID + 2, n)
   }
 
   // ── model management (copy bundled model from assets, once) ─
