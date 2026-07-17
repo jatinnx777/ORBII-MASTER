@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Dimensions,
   Image,
   Linking,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -80,15 +82,19 @@ export function HomeScreen() {
     });
   }, [peers, circleUids, profile?.friends]);
 
+  // EVERY nearby person on the map, shown only as an avatar pin — photo or
+  // initial, no name and no personal details on the front map. We deliberately
+  // do NOT distinguish verified helpers from ordinary users here; on the map
+  // they're all just people around you.
   const avatars = useMemo<AvatarMarker[]>(() => {
     const list: AvatarMarker[] = [];
     if (me) list.push({ id: 'me', coordinate: me, photoUri: profile?.photoUri ?? null, name: 'You' });
     for (const p of peers) {
-      if (p.userId === profile?.uid || !circleUids.has(p.userId) || !p.location) continue;
-      list.push({ id: p.userId, coordinate: p.location, photoUri: p.photoUri, name: p.name || 'Circle' });
+      if (p.userId === profile?.uid || !p.location) continue;
+      list.push({ id: p.userId, coordinate: p.location, photoUri: p.photoUri, name: p.name || '' });
     }
     return list;
-  }, [me, peers, circleUids, profile?.uid, profile?.photoUri]);
+  }, [me, peers, profile?.uid, profile?.photoUri]);
 
   const activeAlerts = alerts?.length ?? 0;
   const setupDone = pct >= READINESS_CAP;
@@ -97,6 +103,38 @@ export function HomeScreen() {
     const near = me ? `${query} near ${me.latitude},${me.longitude}` : query;
     Linking.openURL(`https://www.google.com/maps/search/${encodeURIComponent(near)}`).catch(() => undefined);
   };
+
+  // ── Draggable bottom sheet (built-in PanResponder — no extra libs) ──
+  // The sheet is anchored near the top; a translateY moves it DOWN to the
+  // collapsed resting position. Dragging the handle slides it, and it snaps to
+  // fully-open or collapsed on release.
+  const EXPANDED_TOP = insets.top + 54;
+  const range = SHEET_TOP - EXPANDED_TOP; // travel from open (0) to collapsed
+  const sheetY = useRef(new Animated.Value(range)).current;
+  const dragStart = useRef(range);
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 5,
+      onPanResponderGrant: () => {
+        sheetY.stopAnimation((v) => { dragStart.current = v; });
+      },
+      onPanResponderMove: (_e, g) => {
+        const next = Math.max(0, Math.min(range, dragStart.current + g.dy));
+        sheetY.setValue(next);
+      },
+      onPanResponderRelease: (_e, g) => {
+        const cur = Math.max(0, Math.min(range, dragStart.current + g.dy));
+        const open = g.vy < -0.4 || (g.vy <= 0.4 && cur < range / 2);
+        Animated.spring(sheetY, {
+          toValue: open ? 0 : range,
+          useNativeDriver: true,
+          stiffness: 220,
+          damping: 26,
+          mass: 0.9,
+        }).start();
+      },
+    }),
+  ).current;
 
   const onShare = async () => {
     if (sharing) return;
@@ -157,10 +195,21 @@ export function HomeScreen() {
         </Pressable>
       </View>
 
-      {/* ── LAYER 2: bottom sheet ── */}
-      <View style={[styles.sheet, { top: SHEET_TOP, paddingBottom: insets.bottom + 96 }]}>
-        <View style={styles.handle} />
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.sheetScroll}>
+      {/* ── LAYER 2: draggable bottom sheet ── */}
+      <Animated.View
+        style={[
+          styles.sheet,
+          { top: EXPANDED_TOP, bottom: -range, transform: [{ translateY: sheetY }] },
+        ]}
+      >
+        {/* Only the handle zone drives the drag, so the list still scrolls. */}
+        <View {...pan.panHandlers} style={styles.handleZone}>
+          <View style={styles.handle} />
+        </View>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 96 }]}
+        >
           {/* A. Safety status */}
           <Pressable
             onPress={() => navigation.navigate('SafetyReadiness')}
@@ -279,7 +328,7 @@ export function HomeScreen() {
             <GridTile icon="recording-outline" title="Record evidence" sub="Your recordings" onPress={() => navigation.navigate('Recordings')} />
           </View>
         </ScrollView>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -379,7 +428,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 16,
   },
-  handle: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: colors.creamDeep, marginBottom: spacing.sm },
+  handleZone: { alignItems: 'center', paddingTop: 4, paddingBottom: spacing.sm },
+  handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.creamDeep },
   sheetScroll: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.md },
 
   statusCard: { backgroundColor: colors.brandSoft, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },

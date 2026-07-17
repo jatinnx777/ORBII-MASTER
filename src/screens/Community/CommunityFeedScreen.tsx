@@ -53,6 +53,9 @@ export function CommunityFeedScreen() {
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'mine'>('all');
+
+  const shown = filter === 'mine' ? posts.filter((p) => p.authorId === myUid) : posts;
 
   const refresh = useCallback(async () => {
     setPosts(await loadFeed());
@@ -185,16 +188,30 @@ export function CommunityFeedScreen() {
               </Pressable>
             </View>
 
+            {/* All / My posts filter */}
+            <View style={styles.filterRow}>
+              <Pressable onPress={() => setFilter('all')} style={[styles.filterBtn, filter === 'all' && styles.filterOn]}>
+                <Text style={[styles.filterText, filter === 'all' && styles.filterTextOn]}>All posts</Text>
+              </Pressable>
+              <Pressable onPress={() => setFilter('mine')} style={[styles.filterBtn, filter === 'mine' && styles.filterOn]}>
+                <Text style={[styles.filterText, filter === 'mine' && styles.filterTextOn]}>My posts</Text>
+              </Pressable>
+            </View>
+
             {loading ? (
               <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
-            ) : posts.length === 0 ? (
+            ) : shown.length === 0 ? (
               <View style={styles.empty}>
                 <Ionicons name="chatbubbles-outline" size={34} color={colors.textMuted} />
-                <Text style={styles.emptyText}>No posts yet.</Text>
-                <Text style={styles.emptyHint}>Be the first to share something.</Text>
+                <Text style={styles.emptyText}>
+                  {filter === 'mine' ? "You haven't posted yet." : 'No posts yet.'}
+                </Text>
+                <Text style={styles.emptyHint}>
+                  {filter === 'mine' ? 'Your posts will show here.' : 'Be the first to share something.'}
+                </Text>
               </View>
             ) : (
-              posts.map((p) => (
+              shown.map((p) => (
                 <PostCard
                   key={p.id}
                   post={p}
@@ -398,6 +415,17 @@ const styles = StyleSheet.create({
   },
   postBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textInverse },
 
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    backgroundColor: colors.creamDeep,
+    borderRadius: radius.pill,
+    padding: 4,
+  },
+  filterBtn: { flex: 1, alignItems: 'center', paddingVertical: 9, borderRadius: radius.pill },
+  filterOn: { backgroundColor: colors.surface, ...shadows.icon },
+  filterText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textSecondary },
+  filterTextOn: { color: colors.brandDeep },
   empty: { alignItems: 'center', gap: 8, paddingVertical: spacing.xxl },
   emptyText: {
     fontFamily: fontFamilies.poppinsSemiBold,
