@@ -341,8 +341,8 @@ export function HomeScreen() {
             <QuickTile
               icon="people-outline"
               label="Community"
-              hint="Helpers nearby"
-              onPress={() => navigation.navigate('CommunityAlerts')}
+              hint="Share & support"
+              onPress={() => navigation.navigate('CommunityFeed')}
             />
             <QuickTile
               icon="navigate-outline"

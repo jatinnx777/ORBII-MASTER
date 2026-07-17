@@ -9,6 +9,7 @@ import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScre
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { RecordingsScreen } from '@/screens/Recordings/RecordingsScreen';
+import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
@@ -112,6 +113,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="Recordings"
         component={RecordingsScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CommunityFeed"
+        component={CommunityFeedScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

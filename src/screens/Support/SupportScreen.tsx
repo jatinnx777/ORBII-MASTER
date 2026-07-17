@@ -115,6 +115,13 @@ export function SupportScreen() {
           <Text style={styles.sectionLabel}>COMMUNITY</Text>
           <View style={styles.card}>
             <Row
+              icon="chatbubbles"
+              title="Community feed"
+              body="Share your experiences, ask, and support others."
+              onPress={() => navigation.navigate('CommunityFeed')}
+            />
+            <View style={styles.divider} />
+            <Row
               icon="people"
               title="People helping nearby"
               body="See active alerts around you and respond."

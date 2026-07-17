@@ -61,6 +61,7 @@ export type AppStackParamList = {
   SafetyReadiness: undefined;
   Geofences: undefined;
   Recordings: undefined;
+  CommunityFeed: undefined;
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;
