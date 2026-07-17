@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Image,
   Linking,
   Pressable,
@@ -9,20 +11,33 @@ import {
   Text,
   View,
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import * as Haptics from 'expo-haptics';
 import { appAlert } from '@/components/common';
-import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
-import { useReadiness, READINESS_CAP } from '@/services/readiness';
+import { useReadiness } from '@/services/readiness';
 import { subscribePresence, type PresencePeer } from '@/services/community';
-import { getFastLocation } from '@/services/location';
+import {
+  isListening,
+  startListening,
+  stopListening,
+  subscribeStatus,
+  type VoiceDetectionStatus,
+} from '@/services/voice-detection';
+import {
+  startBackgroundVoice,
+  stopBackgroundVoice,
+  saveBgVoiceState,
+  requestBatteryExemption,
+} from '@/services/background-voice';
 import { shareMyLocation } from '@/services/location-share';
 import { comingSoon } from '@/services/coming-soon';
-import type { GeoPoint } from '@/types';
+import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -35,101 +50,87 @@ function greetingFor(hour: number): string {
   return 'Good night';
 }
 
-// Nearby-place categories. Tapping one opens the phone's own maps app searching
-// for that category around the user. Real and free — no places API, no ₹ cost.
-const PLACES = [
-  { key: 'police', label: 'Police', icon: 'shield-outline' as const, query: 'police station' },
-  { key: 'hospital', label: 'Hospital', icon: 'medkit-outline' as const, query: 'hospital' },
-  { key: 'cafe', label: 'Cafe', icon: 'cafe-outline' as const, query: 'cafe' },
-  { key: 'metro', label: 'Metro', icon: 'train-outline' as const, query: 'metro station' },
-];
-
 export function HomeScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const profile = useAppSelector((s) => s.user.profile);
-  const alerts = useAppSelector((s) => s.community.alerts);
-  const tier = profile?.premiumTier ?? null; // null | 'plus' | 'family'
-  const { pct, doneCount, total, reload } = useReadiness();
+  const tier = profile?.premiumTier ?? null;
+  const { pct } = useReadiness();
 
-  const [me, setMe] = useState<GeoPoint | null>(null);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>(
+    isListening() ? 'listening' : 'idle',
+  );
   const [peers, setPeers] = useState<PresencePeer[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState(false);
 
-  // uids of my circle (friends) — the only peers I plot.
+  useEffect(() => subscribeStatus(setVoiceStatus), []);
+  useEffect(() => subscribePresence(setPeers), []);
+  useFocusEffect(useCallback(() => undefined, []));
+
+  const voiceOn = voiceStatus === 'listening' || voiceStatus === 'starting';
+
   const circleUids = useMemo(
-    () =>
-      new Set(
-        (profile?.friends ?? [])
-          .map((f) => f.uid)
-          .filter((u): u is string => !!u),
-      ),
+    () => new Set((profile?.friends ?? []).map((f) => f.uid).filter((u): u is string => !!u)),
     [profile?.friends],
   );
 
-  useEffect(() => subscribePresence(setPeers), []);
+  // Circle members: friends, tagged online if we can see them in presence.
+  const members = useMemo(() => {
+    const online = new Map<string, PresencePeer>();
+    for (const p of peers) if (circleUids.has(p.userId)) online.set(p.userId, p);
+    return (profile?.friends ?? []).map((f) => {
+      const live = f.uid ? online.get(f.uid) : undefined;
+      return {
+        uid: f.uid ?? f.username,
+        name: (live?.name || f.name || f.username || 'Member') as string,
+        photoUri: live?.photoUri ?? null,
+        online: !!live,
+      };
+    });
+  }, [peers, circleUids, profile?.friends]);
 
-  const loadMe = useCallback(async () => {
-    try {
-      setMe(await getFastLocation());
-    } catch {
-      // location off — the map just centres on the circle instead
-    }
-  }, []);
+  // Online verified responders visible right now. Honest count — it may be
+  // small, but the number is real.
+  const respondersNearby = peers.filter((p) => p.isVerified && p.userId !== profile?.uid).length;
 
-  useFocusEffect(
-    useCallback(() => {
-      reload();
-      void loadMe();
-    }, [reload, loadMe]),
-  );
+  const firstName = (profile?.name ?? '').trim().split(' ')[0] || 'there';
+  const greeting = greetingFor(new Date().getHours());
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    reload();
-    await loadMe();
-    setRefreshing(false);
-  }, [reload, loadMe]);
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
-  // Map avatars: me + online circle members who are sharing a location.
-  const avatars = useMemo<AvatarMarker[]>(() => {
-    const list: AvatarMarker[] = [];
-    if (me) {
-      list.push({
-        id: 'me',
-        coordinate: me,
-        photoUri: profile?.photoUri ?? null,
-        name: 'You',
-      });
+  const toggleVoice = async () => {
+    if (busy) return;
+    setBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
+    try {
+      if (voiceOn) {
+        await stopBackgroundVoice();
+        await saveBgVoiceState({ enabled: false, hours: 0 });
+        await stopListening();
+        return;
+      }
+      const res = await startListening();
+      if (!res.ok) {
+        appAlert(
+          "Voice SOS couldn't start",
+          res.reason === 'permission-denied'
+            ? 'ORBII needs microphone access to hear you call for help.'
+            : 'Voice SOS runs on the installed Android app.',
+        );
+        return;
+      }
+      await startBackgroundVoice([], 0).catch(() => undefined);
+      await saveBgVoiceState({ enabled: true, hours: 0 });
+      await requestBatteryExemption().catch(() => undefined);
+      trackEvent('voice_sos_enabled', { from: 'home_hero' });
+    } finally {
+      setBusy(false);
     }
-    for (const p of peers) {
-      if (p.userId === profile?.uid) continue;
-      if (!circleUids.has(p.userId)) continue;
-      if (!p.location) continue;
-      list.push({
-        id: p.userId,
-        coordinate: p.location,
-        photoUri: p.photoUri,
-        name: p.name || 'Circle',
-      });
-    }
-    return list;
-  }, [me, peers, circleUids, profile?.uid, profile?.photoUri]);
-
-  const onlineCircle = avatars.length - (me ? 1 : 0);
-  const firstName = (profile?.name ?? '').trim().split(' ')[0] || 'there';
-  const greeting = greetingFor(new Date().getHours());
-  const setupDone = pct >= READINESS_CAP;
-  const activeAlerts = alerts?.length ?? 0;
-  const barColor = setupDone ? colors.sage : colors.brand;
-
-  const openPlaces = (query: string) => {
-    const near = me ? `${query} near ${me.latitude},${me.longitude}` : query;
-    const url = `https://www.google.com/maps/search/${encodeURIComponent(near)}`;
-    Linking.openURL(url).catch(() =>
-      Linking.openURL(`geo:0,0?q=${encodeURIComponent(query)}`).catch(() => undefined),
-    );
   };
 
   const onShare = async () => {
@@ -137,15 +138,13 @@ export function HomeScreen() {
     setSharing(true);
     try {
       const res = await shareMyLocation();
-      if (!res.ok) {
-        appAlert("Couldn't share your location", res.error);
-        return;
-      }
       appAlert(
-        'Location shared',
-        res.contact
-          ? `A maps link was sent to ${res.contact}, and your circle was notified.`
-          : 'Your circle was notified with your location.',
+        res.ok ? 'Location shared' : "Couldn't share your location",
+        res.ok
+          ? res.contact
+            ? `A maps link was sent to ${res.contact}, and your circle was notified.`
+            : 'Your circle was notified with your location.'
+          : res.error,
       );
     } finally {
       setSharing(false);
@@ -162,12 +161,30 @@ export function HomeScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
           }
         >
-          {/* ── Header ── */}
+          {/* ── 1. Header ── */}
           <View style={styles.header}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.greeting}>{greeting},</Text>
+              <Text style={styles.name} numberOfLines={1}>
+                {firstName}
+              </Text>
+              <View style={styles.activeRow}>
+                <View style={[styles.activeDot, { backgroundColor: voiceOn ? colors.sage : colors.textMuted }]} />
+                <Text style={styles.activeText}>
+                  {voiceOn ? 'ORBII is listening for you' : 'ORBII is ready'}
+                </Text>
+              </View>
+            </View>
+            <Pressable
+              onPress={() => navigation.navigate('Notifications')}
+              style={styles.iconBtn}
+              hitSlop={6}
+              accessibilityLabel="Notifications"
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.textPrimary} />
+            </Pressable>
             <Pressable
               onPress={() => navigation.navigate('EditProfile')}
-              style={styles.headerLeft}
-              accessibilityRole="button"
               accessibilityLabel="Your profile"
             >
               {profile?.photoUri ? (
@@ -177,142 +194,98 @@ export function HomeScreen() {
                   <Text style={styles.avatarInitial}>{firstName.charAt(0).toUpperCase()}</Text>
                 </View>
               )}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.greeting}>{greeting},</Text>
-                <Text style={styles.name} numberOfLines={1}>
-                  {firstName}
-                </Text>
-              </View>
-            </Pressable>
-            <Pressable
-              onPress={() => navigation.navigate('Notifications')}
-              style={styles.bell}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Notifications"
-            >
-              <Ionicons name="notifications-outline" size={21} color={colors.textPrimary} />
-              {activeAlerts > 0 ? <View style={styles.bellDot} /> : null}
             </Pressable>
           </View>
 
-          {/* ── Safety status ── */}
-          <Pressable
-            onPress={() => navigation.navigate('SafetyReadiness')}
-            style={({ pressed }) => [styles.statusCard, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel={`Your safety status, ${pct} percent`}
-          >
-            <View style={styles.statusTop}>
-              <Text style={styles.statusTitle}>Your safety status</Text>
-              <Text style={[styles.statusPct, { color: barColor }]}>{pct}% safe</Text>
-            </View>
-            <View style={styles.barTrack}>
-              <View style={[styles.barFill, { width: `${Math.max(pct, 4)}%`, backgroundColor: barColor }]} />
-            </View>
-            <Text style={styles.statusHint}>
-              {setupDone
-                ? "You're fully set up and protected."
-                : `${doneCount} of ${total} steps done. Tap to finish.`}
-            </Text>
-          </Pressable>
+          {/* ── 2. Voice SOS hero ── */}
+          <VoiceHero on={voiceOn} busy={busy} onPress={toggleVoice} />
 
-          {/* ── Live circle map ── */}
-          <View style={styles.mapCard}>
-            <MLMapView
-              style={styles.map}
-              center={me ?? avatars[0]?.coordinate}
-              zoom={14}
-              avatarMarkers={avatars}
-              fitAll={avatars.length > 1}
-              followUser={!!me && avatars.length <= 1}
-              interactive
+          {/* ── 3. Protection score + 4. Circle ── */}
+          <View style={styles.midRow}>
+            <ScoreRing pct={pct} onPress={() => navigation.navigate('SafetyReadiness')} />
+            <CircleStrip
+              members={members}
+              onPress={() => navigation.navigate('Circles')}
             />
-            <View style={styles.mapOverlay} pointerEvents="none">
-              <View style={styles.mapPill}>
-                <Ionicons name="people" size={13} color={colors.brandDeep} />
-                <Text style={styles.mapPillText}>
-                  {onlineCircle > 0
-                    ? `${onlineCircle} in your circle online`
-                    : 'Your circle appears here when online'}
-                </Text>
-              </View>
+          </View>
+
+          {/* ── 5. Bento grid ── */}
+          <View style={styles.bento}>
+            <Pressable
+              onPress={() => navigation.navigate('CommunityAlerts')}
+              style={({ pressed }) => [styles.bentoBig, pressed && styles.pressed]}
+              accessibilityLabel="Responders nearby"
+            >
+              <PulseDots />
+              <Text style={styles.bigNumber}>{respondersNearby}</Text>
+              <Text style={styles.bigLabel}>verified helpers online</Text>
+              <Text style={styles.bigHint}>Tap to see who's responding nearby</Text>
+            </Pressable>
+
+            <View style={styles.bentoCol}>
+              <Pressable
+                onPress={() => comingSoon('Fake call')}
+                style={({ pressed }) => [styles.bentoSmall, pressed && styles.pressed]}
+                accessibilityLabel="Fake call"
+              >
+                <View style={styles.smallIcon}>
+                  <Ionicons name="call-outline" size={18} color={colors.brandDeep} />
+                </View>
+                <Text style={styles.smallLabel}>Fake call</Text>
+                <Text style={styles.smallHint}>Escape a moment</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('SafeJourneyStart')}
+                style={({ pressed }) => [styles.bentoSmall, pressed && styles.pressed]}
+                accessibilityLabel="Safe journey"
+              >
+                <View style={styles.smallIcon}>
+                  <Ionicons name="navigate-outline" size={18} color={colors.brandDeep} />
+                </View>
+                <Text style={styles.smallLabel}>Safe journey</Text>
+                <Text style={styles.smallHint}>Watched travel</Text>
+              </Pressable>
             </View>
           </View>
 
-          {/* ── Location sharing ── */}
+          {/* Share location (full width) */}
           <Pressable
             onPress={onShare}
             disabled={sharing}
             style={({ pressed }) => [styles.shareBtn, (sharing || pressed) && { opacity: 0.9 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Share my location"
+            accessibilityLabel="Share my live location"
           >
             <Ionicons name="paper-plane" size={18} color={colors.textInverse} />
-            <Text style={styles.shareText}>
-              {sharing ? 'Sharing…' : 'Share my live location'}
-            </Text>
+            <Text style={styles.shareText}>{sharing ? 'Sharing…' : 'Share my live location'}</Text>
           </Pressable>
-          <Text style={styles.shareHint}>
-            Texts your top emergency contact and pings your whole circle.
-          </Text>
 
-          {/* ── Nearby places ── */}
-          <Text style={styles.sectionLabel}>NEARBY SAFE PLACES</Text>
-          <View style={styles.placesRow}>
-            {PLACES.map((p) => (
-              <Pressable
-                key={p.key}
-                onPress={() => openPlaces(p.query)}
-                style={({ pressed }) => [styles.placeTile, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Find nearby ${p.label}`}
-              >
-                <View style={styles.placeIcon}>
-                  <Ionicons name={p.icon} size={19} color={colors.brandDeep} />
-                </View>
-                <Text style={styles.placeLabel}>{p.label}</Text>
-              </Pressable>
-            ))}
+          {/* Record evidence + Community small row */}
+          <View style={styles.rowTwo}>
+            <Pressable
+              onPress={() => navigation.navigate('Recordings')}
+              style={({ pressed }) => [styles.miniCard, pressed && styles.pressed]}
+            >
+              <Ionicons name="recording-outline" size={18} color={colors.brandDeep} />
+              <Text style={styles.miniLabel}>Recordings</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => navigation.navigate('CommunityFeed')}
+              style={({ pressed }) => [styles.miniCard, pressed && styles.pressed]}
+            >
+              <Ionicons name="chatbubbles-outline" size={18} color={colors.brandDeep} />
+              <Text style={styles.miniLabel}>Community</Text>
+            </Pressable>
           </View>
 
-          {/* ── Active alerts ── */}
-          <Pressable
-            onPress={() => navigation.navigate('CommunityAlerts')}
-            style={({ pressed }) => [styles.alertCard, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Active alerts"
-          >
-            <View style={[styles.alertIcon, activeAlerts > 0 && { backgroundColor: colors.coralSoft }]}>
-              <Ionicons
-                name={activeAlerts > 0 ? 'alert-circle' : 'shield-checkmark-outline'}
-                size={20}
-                color={activeAlerts > 0 ? colors.coralDeep : colors.sageDeep}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.alertTitle}>
-                {activeAlerts > 0
-                  ? `${activeAlerts} active alert${activeAlerts > 1 ? 's' : ''} nearby`
-                  : 'No active alerts'}
-              </Text>
-              <Text style={styles.alertSub}>View all alerts</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
-
-          {/* ── Premium upsell. Tier-aware: free users see "Go Pro", Plus users
-              see the upgrade to Family, and Family users see nothing (they
-              already have the top plan, so an ad would just annoy them). ── */}
+          {/* Premium (tier-aware) */}
           {tier !== 'family' ? (
             <Pressable
               onPress={() => navigation.navigate('PremiumUpgrade')}
               style={({ pressed }) => [styles.proCard, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={tier === 'plus' ? 'Upgrade to ORBII Family' : 'Upgrade to ORBII Plus'}
+              accessibilityLabel={tier === 'plus' ? 'Upgrade to Family' : 'Upgrade to Plus'}
             >
               <View style={styles.proIcon}>
-                <Ionicons name="sparkles" size={18} color={colors.goldDeep} />
+                <Ionicons name="sparkles" size={17} color={colors.goldDeep} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.proTitle}>
@@ -320,114 +293,195 @@ export function HomeScreen() {
                 </Text>
                 <Text style={styles.proSub}>
                   {tier === 'plus'
-                    ? 'Protect up to 4 people you love on one plan.'
+                    ? 'Protect up to 4 people you love.'
                     : 'Verified helpers reach you, not just your circle.'}
                 </Text>
               </View>
-              <View style={styles.proBtn}>
-                <Text style={styles.proBtnText}>Upgrade</Text>
-              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
             </Pressable>
           ) : null}
-
-          {/* ── Quick actions ── */}
-          <View style={styles.grid}>
-            <QuickTile
-              icon="call-outline"
-              label="Fake call"
-              hint="Escape risky moments"
-              onPress={() => comingSoon('Fake call')}
-            />
-            <QuickTile
-              icon="people-outline"
-              label="Community"
-              hint="Share & support"
-              onPress={() => navigation.navigate('CommunityFeed')}
-            />
-            <QuickTile
-              icon="navigate-outline"
-              label="Location sharing"
-              hint="Send your live spot"
-              onPress={onShare}
-            />
-            <QuickTile
-              icon="recording-outline"
-              label="Record evidence"
-              hint="Your SOS recordings"
-              onPress={() => navigation.navigate('Recordings')}
-            />
-          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
-function QuickTile({
-  icon,
-  label,
-  hint,
-  onPress,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  label: string;
-  hint: string;
-  onPress: () => void;
-}) {
+// ── Voice hero: an animated, breathing microphone ──────────────────────────
+function VoiceHero({ on, busy, onPress }: { on: boolean; busy: boolean; onPress: () => void }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!on) {
+      pulse.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1400, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [on, pulse]);
+
+  const ring1 = { transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }], opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }) };
+  const ring2 = { transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.4] }) }], opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 0] }) };
+
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.quickTile, pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] }]}
-      accessibilityRole="button"
-      accessibilityLabel={label}
+      disabled={busy}
+      style={({ pressed }) => [styles.hero, on && styles.heroOn, pressed && { opacity: 0.96 }]}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: on }}
+      accessibilityLabel="Voice SOS"
     >
-      <View style={styles.quickIcon}>
-        <Ionicons name={icon} size={20} color={colors.brandDeep} />
+      <View style={styles.heroMicWrap}>
+        {on ? <Animated.View style={[styles.heroRing, ring2]} /> : null}
+        {on ? <Animated.View style={[styles.heroRing, ring1]} /> : null}
+        <View style={[styles.heroMic, on && styles.heroMicOn]}>
+          <Ionicons name={on ? 'mic' : 'mic-outline'} size={40} color={on ? colors.brand : colors.textInverse} />
+        </View>
       </View>
-      <Text style={styles.quickLabel} numberOfLines={1}>
-        {label}
-      </Text>
-      <Text style={styles.quickHint} numberOfLines={1}>
-        {hint}
+      <Text style={styles.heroTitle}>{on ? 'Voice SOS is on' : 'Activate Voice SOS'}</Text>
+      <Text style={styles.heroSub}>
+        {on ? 'Just shout “help, help”. I’m listening, even in the background.' : 'Tap once. Then you never have to touch your phone to get help.'}
       </Text>
     </Pressable>
   );
 }
 
+// ── Circular protection score ──────────────────────────────────────────────
+function ScoreRing({ pct, onPress }: { pct: number; onPress: () => void }) {
+  const size = 128;
+  const stroke = 11;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct / 100) * circ;
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.scoreCard, pressed && styles.pressed]}
+      accessibilityLabel={`Protection score ${pct} percent`}
+    >
+      <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <Svg width={size} height={size} style={{ position: 'absolute' }}>
+          <Circle cx={size / 2} cy={size / 2} r={r} stroke={colors.creamDeep} strokeWidth={stroke} fill="none" />
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={colors.brand}
+            strokeWidth={stroke}
+            fill="none"
+            strokeLinecap="round"
+            strokeDasharray={`${dash} ${circ}`}
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        </Svg>
+        <Text style={styles.scoreNum}>{pct}</Text>
+        <Text style={styles.scoreUnit}>protected</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// ── Life360-style circle strip ─────────────────────────────────────────────
+function CircleStrip({
+  members,
+  onPress,
+}: {
+  members: { uid: string; name: string; photoUri: string | null; online: boolean }[];
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.circleCard, pressed && styles.pressed]}
+      accessibilityLabel="Your circle"
+    >
+      <Text style={styles.circleTitle}>Your circle</Text>
+      {members.length === 0 ? (
+        <View style={styles.circleEmpty}>
+          <Ionicons name="person-add-outline" size={20} color={colors.brandDeep} />
+          <Text style={styles.circleEmptyText}>Add the people you trust</Text>
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.md }}>
+          {members.slice(0, 8).map((m) => (
+            <View key={m.uid} style={styles.member}>
+              <View style={[styles.memberRing, { borderColor: m.online ? colors.sage : colors.creamDeep }]}>
+                {m.photoUri ? (
+                  <Image source={{ uri: m.photoUri }} style={styles.memberImg} />
+                ) : (
+                  <View style={styles.memberFallback}>
+                    <Text style={styles.memberInitial}>{m.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.memberName} numberOfLines={1}>
+                {m.name.split(' ')[0]}
+              </Text>
+              <Text style={[styles.memberState, { color: m.online ? colors.sageDeep : colors.textMuted }]}>
+                {m.online ? 'Safe' : 'Offline'}
+              </Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </Pressable>
+  );
+}
+
+// ── Pulsing dots for the "helpers nearby" card ─────────────────────────────
+function PulseDots() {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(a, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0, duration: 900, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [a]);
+  const op = a.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
+  return (
+    <View style={styles.pulseWrap}>
+      <Animated.View style={[styles.pulseDot, { opacity: op }]} />
+      <Animated.View style={[styles.pulseDot, { opacity: a }]} />
+      <Animated.View style={[styles.pulseDot, { opacity: op }]} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
-  quickTile: {
-    flexGrow: 1,
-    flexBasis: '46%',
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    gap: 6,
-    ...shadows.card,
-  },
-  quickIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 2,
-  },
-  quickLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
-  quickHint: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary },
-  scroll: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  scroll: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingTop: spacing.xs },
   pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
+  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm },
+  greeting: { ...typography.caption, fontSize: 13, color: colors.textSecondary },
+  name: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
+    color: colors.textPrimary,
+    letterSpacing: -0.5,
+    marginTop: -2,
   },
-  headerLeft: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flex: 1 },
+  activeRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
+  activeDot: { width: 7, height: 7, borderRadius: 4 },
+  activeText: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary },
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.icon,
+  },
   avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.creamDeep },
   avatarFallback: {
     width: 44,
@@ -438,75 +492,134 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.brandDeep },
-  greeting: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary },
-  name: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 19,
-    color: colors.textPrimary,
-    letterSpacing: -0.3,
-  },
-  bell: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.icon,
-  },
-  bellDot: {
-    position: 'absolute',
-    top: 11,
-    right: 12,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.coral,
-    borderWidth: 1.5,
-    borderColor: colors.surface,
-  },
 
-  statusCard: {
+  hero: {
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
+    borderRadius: radius.xxl,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    alignItems: 'center',
     gap: spacing.sm,
     ...shadows.card,
   },
-  statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
-  statusPct: { fontFamily: fontFamilies.poppinsBold, fontSize: 15 },
-  barTrack: { height: 9, borderRadius: 5, backgroundColor: colors.creamDeep, overflow: 'hidden' },
-  barFill: { height: '100%', borderRadius: 5 },
-  statusHint: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
+  heroOn: { backgroundColor: colors.brandSoft },
+  heroMicWrap: { width: 120, height: 120, alignItems: 'center', justifyContent: 'center' },
+  heroRing: {
+    position: 'absolute',
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.brand,
+  },
+  heroMic: {
+    width: 84,
+    height: 84,
+    borderRadius: 42,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.hero,
+  },
+  heroMicOn: { backgroundColor: colors.surface },
+  heroTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 19,
+    color: colors.textPrimary,
+    marginTop: spacing.xs,
+  },
+  heroSub: {
+    ...typography.caption,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 17,
+    maxWidth: 280,
+  },
 
-  mapCard: {
-    height: 230,
+  midRow: { flexDirection: 'row', gap: spacing.md },
+  scoreCard: {
+    backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    overflow: 'hidden',
-    backgroundColor: colors.creamDeep,
+    padding: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
     ...shadows.card,
   },
-  map: { flex: 1 },
-  mapOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    alignItems: 'center',
-    padding: spacing.sm,
-  },
-  mapPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  scoreNum: { fontFamily: fontFamilies.poppinsBold, fontSize: 34, color: colors.textPrimary, lineHeight: 38 },
+  scoreUnit: { ...typography.caption, fontSize: 11, color: colors.textSecondary, marginTop: -2 },
+
+  circleCard: {
+    flex: 1,
     backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    ...shadows.icon,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    justifyContent: 'center',
+    ...shadows.card,
   },
-  mapPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, color: colors.textPrimary },
+  circleTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
+  circleEmpty: { alignItems: 'center', gap: 6, paddingVertical: spacing.md },
+  circleEmptyText: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, textAlign: 'center' },
+  member: { alignItems: 'center', width: 56 },
+  memberRing: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 2.5,
+    padding: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberImg: { width: '100%', height: '100%', borderRadius: 22 },
+  memberFallback: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.brandDeep },
+  memberName: { fontFamily: fontFamilies.interMedium, fontSize: 11, color: colors.textPrimary, marginTop: 4 },
+  memberState: { ...typography.caption, fontSize: 9.5 },
+
+  bento: { flexDirection: 'row', gap: spacing.md },
+  bentoBig: {
+    flex: 1.25,
+    backgroundColor: colors.brand,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    justifyContent: 'flex-end',
+    minHeight: 160,
+    ...shadows.card,
+  },
+  pulseWrap: { flexDirection: 'row', gap: 5, position: 'absolute', top: spacing.md, left: spacing.lg },
+  pulseDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.textInverse },
+  bigNumber: { fontFamily: fontFamilies.poppinsBold, fontSize: 44, color: colors.textInverse, lineHeight: 48 },
+  bigLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textInverse, opacity: 0.95 },
+  bigHint: { ...typography.caption, fontSize: 11, color: colors.textInverse, opacity: 0.8, marginTop: 4 },
+
+  bentoCol: { flex: 1, gap: spacing.md },
+  bentoSmall: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    justifyContent: 'center',
+    gap: 4,
+    ...shadows.card,
+  },
+  smallIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  smallLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
+  smallHint: { ...typography.caption, fontSize: 10.5, color: colors.textSecondary },
 
   shareBtn: {
     flexDirection: 'row',
@@ -519,60 +632,20 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   shareText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textInverse },
-  shareHint: {
-    ...typography.caption,
-    fontSize: 11.5,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: -spacing.xs,
-  },
 
-  sectionLabel: {
-    ...typography.label,
-    fontSize: 11,
-    color: colors.textMuted,
-    letterSpacing: 1,
-    marginBottom: -spacing.xs,
-  },
-  placesRow: { flexDirection: 'row', gap: spacing.sm },
-  placeTile: {
+  rowTwo: { flexDirection: 'row', gap: spacing.md },
+  miniCard: {
     flex: 1,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
-    paddingVertical: spacing.md,
-    alignItems: 'center',
-    gap: 7,
-    ...shadows.card,
-  },
-  placeIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  placeLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textPrimary },
-
-  alertCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
-    padding: spacing.md,
+    paddingVertical: spacing.md,
     ...shadows.card,
   },
-  alertIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.sageSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alertTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
-  alertSub: { ...typography.caption, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  miniLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
 
   proCard: {
     flexDirection: 'row',
@@ -590,35 +663,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  proTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 14.5, color: colors.textPrimary },
+  proTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 14, color: colors.textPrimary },
   proSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
-  proBtn: {
-    backgroundColor: colors.brand,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-  },
-  proBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textInverse },
-
-  learnCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    padding: spacing.md,
-    gap: spacing.sm,
-    ...shadows.card,
-  },
-  learnTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  learnIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  learnTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
-  learnSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
-  learnPct: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.brandDeep },
-  learnBarTrack: { height: 7, borderRadius: 4, backgroundColor: colors.creamDeep, overflow: 'hidden' },
-  learnBarFill: { height: '100%', borderRadius: 4, backgroundColor: colors.brand },
 });
