@@ -48,7 +48,7 @@ export const shadows = {
     elevation: 8,
   },
   hero: {
-    shadowColor: '#4BAD3F',
+    shadowColor: '#7B5FC7',
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.30,
     shadowRadius: 20,

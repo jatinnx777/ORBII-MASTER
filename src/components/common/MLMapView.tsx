@@ -70,7 +70,7 @@ const COLOURS = {
   user: '#3B82F6',
   helper: '#7BC47F',
   'helper-verified': '#5BA85F',
-  destination: '#FF6B57',
+  destination: '#FF5A5F',
 } as const;
 
 function toCoords(p: GeoPoint): [number, number] {

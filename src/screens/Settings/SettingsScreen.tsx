@@ -24,9 +24,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
   pushEnabledSet,
-  accentSet,
 } from '@/redux/slices/appSlice';
-import { ACCENT_LIST, accentOf } from '@/theme/accents';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
 import { clearPin } from '@/services/safety-pin';
@@ -43,7 +41,6 @@ export function SettingsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const push = useAppSelector((s) => s.app.pushEnabled);
-  const accent = useAppSelector((s) => s.app.accent);
   const isResponder = useIsResponder();
 
   const sheet = useBrandSheet();
@@ -263,36 +260,6 @@ export function SettingsScreen() {
 
         <SectionHeader title="Preferences" />
         <Card style={styles.rowsCard}>
-          <View style={styles.accentRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.accentLabel}>App accent</Text>
-              <Text style={styles.accentHint}>Make ORBII feel like yours</Text>
-            </View>
-            <View style={styles.accentDots}>
-              {ACCENT_LIST.map((a) => {
-                const selected = accentOf(accent).id === a.id;
-                return (
-                  <Pressable
-                    key={a.id}
-                    onPress={() => dispatch(accentSet(a.id))}
-                    hitSlop={6}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${a.label} accent`}
-                    style={[
-                      styles.accentDot,
-                      { backgroundColor: a.soft, borderColor: a.deep },
-                      selected && styles.accentDotOn,
-                    ]}
-                  >
-                    {selected ? (
-                      <Ionicons name="checkmark" size={13} color={a.deep} />
-                    ) : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-          <Divider />
           <Row
             icon="language"
             tint="gold"
@@ -376,25 +343,6 @@ const styles = StyleSheet.create({
     color: colors.goldDeep,
     letterSpacing: 0.4,
   },
-  accentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  accentLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
-  accentHint: { fontFamily: fontFamilies.interRegular, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  accentDots: { flexDirection: 'row', gap: 10 },
-  accentDot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accentDotOn: { borderWidth: 2.5 },
   rowsCard: {
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,

@@ -20,9 +20,8 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { appAlert } from '@/components/common';
 import { fontFamilies, radius, spacing } from '@/theme';
-import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { onboardingCompleted, accentSet } from '@/redux/slices/appSlice';
-import { ACCENT_LIST, accentOf } from '@/theme/accents';
+import { useAppDispatch } from '@/redux/store';
+import { onboardingCompleted } from '@/redux/slices/appSlice';
 import { trackEvent } from '@/services/analytics';
 import {
   downloadHindiPack,
@@ -259,7 +258,6 @@ export function OnboardingScreen() {
 function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
   const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
-  const accent = accentOf(useAppSelector((s) => s.app.accent));
   const supported = hindiPackSupported();
   const [hindiOn, setHindiOn] = useState(false);
   const [ready, setReady] = useState(false);
@@ -388,38 +386,6 @@ function VoiceLanguageSetup({ onDone }: { onDone: () => void }) {
           ) : null}
         </View>
 
-        {/* Pick your accent: personalisation before the app even opens */}
-        <View style={lstyles.langCard}>
-          <View style={lstyles.langHead}>
-            <View style={{ flex: 1 }}>
-              <Text style={lstyles.langTitle}>Pick your colour</Text>
-              <Text style={lstyles.langHint}>Make ORBII feel like yours. Change it anytime.</Text>
-            </View>
-            <Ionicons name="color-palette" size={18} color={C.yellow} />
-          </View>
-          <View style={lstyles.accentRow}>
-            {ACCENT_LIST.map((a) => {
-              const selected = accent.id === a.id;
-              return (
-                <Pressable
-                  key={a.id}
-                  onPress={() => dispatch(accentSet(a.id))}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${a.label} accent`}
-                  style={[
-                    lstyles.accentDot,
-                    { backgroundColor: a.soft, borderColor: a.deep },
-                    selected && lstyles.accentDotOn,
-                  ]}
-                >
-                  {selected ? <Ionicons name="checkmark" size={15} color={a.deep} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-
         <Text style={lstyles.note}>
           In an emergency, just shout "help, help" and ORBII hears you. No
           phrase to remember. Manage this anytime in Settings → Voice SOS.
@@ -450,16 +416,6 @@ function LangChip({ text }: { text: string }) {
 const lstyles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg, paddingHorizontal: spacing.lg },
   scroll: { paddingBottom: spacing.xl, gap: spacing.md },
-  accentRow: { flexDirection: 'row', gap: 12, marginTop: spacing.sm },
-  accentDot: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1.5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  accentDotOn: { borderWidth: 3 },
   phraseInput: {
     marginTop: spacing.sm,
     backgroundColor: C.bg,

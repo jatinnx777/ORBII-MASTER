@@ -99,7 +99,7 @@ async function startUpdates(mode: Cadence): Promise<void> {
     foregroundService: {
       notificationTitle: 'ORBII SOS is active',
       notificationBody: 'Sharing your live location with your helpers.',
-      notificationColor: '#4BAD3F',
+      notificationColor: '#7B5FC7',
     },
   });
   cadence = mode;

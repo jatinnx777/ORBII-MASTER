@@ -51,7 +51,7 @@ export async function tipHelper(
       currency: 'INR',
       name: 'ORBII',
       description: `Thank ${helperName || 'your helper'}`,
-      theme: { color: '#7BC47F' },
+      theme: { color: '#7B5FC7' },
       prefill: { email: profile?.email ?? '', contact: profile?.phone ?? '' },
     });
     void supabase.functions
@@ -112,7 +112,7 @@ export async function purchasePlan(plan: PlanId): Promise<PurchaseResult> {
       name: PLAN_NAME[plan],
       description:
         plan === 'family' ? 'Protect up to 4 people' : 'Enhanced protection',
-      theme: { color: '#FF6B57' },
+      theme: { color: '#7B5FC7' },
       prefill: {
         email: profile?.email ?? '',
         contact: profile?.phone ?? '',

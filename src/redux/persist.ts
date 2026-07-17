@@ -22,7 +22,6 @@ type PersistedApp = {
   shakeSOS?: boolean;
   helperMode?: boolean;
   policyAcceptedAt?: number | null;
-  accent?: string;
 };
 
 export async function hydrateStore() {
@@ -80,8 +79,7 @@ function subscribePersist() {
       next.app.pushEnabled !== prev.app.pushEnabled ||
       next.app.shakeSOS !== prev.app.shakeSOS ||
       next.app.helperMode !== prev.app.helperMode ||
-      next.app.policyAcceptedAt !== prev.app.policyAcceptedAt ||
-      next.app.accent !== prev.app.accent
+      next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
       setItem<PersistedApp>(storageKeys.settings, {
         onboarded: next.app.onboarded,
@@ -90,7 +88,6 @@ function subscribePersist() {
         shakeSOS: next.app.shakeSOS,
         helperMode: next.app.helperMode,
         policyAcceptedAt: next.app.policyAcceptedAt,
-        accent: next.app.accent,
       });
     }
     if (next.user.profile !== prev.user.profile) {

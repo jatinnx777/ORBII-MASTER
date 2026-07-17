@@ -1,8 +1,8 @@
 <resources>
-  <color name="appBackground">#F5F6F3</color>
-  <color name="splashscreen_background">#4BAD3F</color>
-  <color name="iconBackground">#4BAD3F</color>
-  <color name="colorPrimary">#E9B084</color>
-  <color name="colorPrimaryDark">#E9B084</color>
-  <color name="notification_color">#4BAD3F</color>
+  <color name="appBackground">#F7F5FC</color>
+  <color name="splashscreen_background">#7B5FC7</color>
+  <color name="iconBackground">#7B5FC7</color>
+  <color name="colorPrimary">#7B5FC7</color>
+  <color name="colorPrimaryDark">#5E45A0</color>
+  <color name="notification_color">#7B5FC7</color>
 </resources>

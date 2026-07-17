@@ -13,8 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
-import { SafetyScreen } from '@/screens/Safety/SafetyScreen';
-import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
+import { EmergencyScreen } from '@/screens/Emergency/EmergencyScreen';
+import { SupportScreen } from '@/screens/Support/SupportScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useIsResponder } from '@/services/roles';
@@ -30,13 +30,13 @@ const ICONS: Record<
   { active: IoniconsName; inactive: IoniconsName; label: string }
 > = {
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
-  Safety: {
+  Emergency: {
     active: 'shield-checkmark',
     inactive: 'shield-checkmark-outline',
-    label: 'Safety',
+    label: 'Emergency',
   },
+  Support: { active: 'heart', inactive: 'heart-outline', label: 'Support' },
   Missions: { active: 'flash', inactive: 'flash-outline', label: 'Missions' },
-  Membership: { active: 'sparkles', inactive: 'sparkles-outline', label: 'Plans' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
 
@@ -61,11 +61,11 @@ export function TabNavigator() {
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Safety" component={SafetyScreen} />
+      <Tab.Screen name="Emergency" component={EmergencyScreen} />
+      <Tab.Screen name="Support" component={SupportScreen} />
       {showMissions ? (
         <Tab.Screen name="Missions" component={MissionsScreen} />
       ) : null}
-      <Tab.Screen name="Membership" component={PremiumUpgradeScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

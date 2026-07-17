@@ -17,13 +17,11 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScreenContainer } from '@/components/common';
-import { useAppSelector } from '@/redux/store';
 import { requestPermission } from '@/services/location';
 import { requestNotificationPermission } from '@/services/notifications';
 import { setItem, storageKeys } from '@/services/storage';
 import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
-import { accentOf } from '@/theme/accents';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -47,7 +45,6 @@ type ChecklistItem = {
 export function SafetyReadinessScreen() {
   const navigation = useNavigation<Nav>();
   const { signals, doneCount, total, pct, reload } = useReadiness();
-  const accent = accentOf(useAppSelector((s) => s.app.accent));
 
   const [simOpen, setSimOpen] = useState(false);
   const [busy, setBusy] = useState<ItemId | null>(null);
@@ -125,8 +122,8 @@ export function SafetyReadinessScreen() {
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* big % + progress */}
-          <View style={[styles.heroCard, { backgroundColor: accent.soft + '55' }]}>
-            <Text style={[styles.pct, { color: accent.deep }]}>{pct}%</Text>
+          <View style={[styles.heroCard, { backgroundColor: colors.brandSoft + '55' }]}>
+            <Text style={[styles.pct, { color: colors.brandDeep }]}>{pct}%</Text>
             <Text style={styles.headline}>{headline}</Text>
             <View style={styles.barTrack}>
               <Animated.View
@@ -134,7 +131,7 @@ export function SafetyReadinessScreen() {
                   styles.barFill,
                   {
                     width: progress.interpolate({ inputRange: [0, 1], outputRange: ['4%', '100%'] }),
-                    backgroundColor: pct >= READINESS_CAP ? colors.sage : accent.deep,
+                    backgroundColor: pct >= READINESS_CAP ? colors.sage : colors.brandDeep,
                   },
                 ]}
               />

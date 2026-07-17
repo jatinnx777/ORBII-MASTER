@@ -30,6 +30,7 @@ type EventName =
   // engine's real false-positive rate.
   | 'voice_sos_cancelled'
   | 'voice_sos_confirmed'
+  | 'voice_sos_enabled'
   | 'voice_phrase_rejected'
   | 'route_fetched'
   | 'silent_sos_toggled'
