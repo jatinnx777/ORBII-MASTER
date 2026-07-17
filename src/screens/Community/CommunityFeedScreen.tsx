@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -306,6 +306,8 @@ function Comments({ postId }: { postId: string }) {
   const [items, setItems] = useState<FeedComment[] | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
+  // When set, the next send is a REPLY to this comment.
+  const [replyTo, setReplyTo] = useState<FeedComment | null>(null);
 
   const load = useCallback(async () => setItems(await loadComments(postId)), [postId]);
   useFocusEffect(
@@ -314,13 +316,30 @@ function Comments({ postId }: { postId: string }) {
     }, [load]),
   );
 
+  // Group into top-level comments + their replies.
+  const threads = useMemo(() => {
+    const list = items ?? [];
+    const tops = list.filter((c) => !c.parentId);
+    const byParent = new Map<string, FeedComment[]>();
+    for (const c of list) {
+      if (!c.parentId) continue;
+      const arr = byParent.get(c.parentId) ?? [];
+      arr.push(c);
+      byParent.set(c.parentId, arr);
+    }
+    return tops.map((t) => ({ comment: t, replies: byParent.get(t.id) ?? [] }));
+  }, [items]);
+
   const send = async () => {
     if (busy || !draft.trim()) return;
     setBusy(true);
     try {
-      const ok = await addComment(postId, draft);
+      // A reply attaches to its thread's TOP comment so nesting stays one level.
+      const parentId = replyTo ? replyTo.parentId ?? replyTo.id : null;
+      const ok = await addComment(postId, draft, parentId);
       if (ok) {
         setDraft('');
+        setReplyTo(null);
         await load();
       }
     } finally {
@@ -328,40 +347,62 @@ function Comments({ postId }: { postId: string }) {
     }
   };
 
+  const CommentRow = ({ c, isReply }: { c: FeedComment; isReply?: boolean }) => (
+    <View style={[styles.commentRow, isReply && styles.replyRow]}>
+      <View style={[styles.commentAvatar, isReply && styles.replyAvatar]}>
+        <Text style={styles.commentInitial}>{c.authorName.charAt(0).toUpperCase()}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.commentName}>
+          {c.authorName} · <Text style={styles.commentTime}>{timeAgo(c.createdAt)}</Text>
+        </Text>
+        <Text style={styles.commentBody}>{c.body}</Text>
+        {!isReply ? (
+          <Pressable onPress={() => setReplyTo(c)} hitSlop={6}>
+            <Text style={styles.replyLink}>Reply</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.comments}>
       {items === null ? (
         <ActivityIndicator color={colors.brand} style={{ paddingVertical: spacing.sm }} />
       ) : (
-        items.map((c) => (
-          <View key={c.id} style={styles.commentRow}>
-            <View style={styles.commentAvatar}>
-              <Text style={styles.commentInitial}>{c.authorName.charAt(0).toUpperCase()}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.commentName}>
-                {c.authorName} · <Text style={styles.commentTime}>{timeAgo(c.createdAt)}</Text>
-              </Text>
-              <Text style={styles.commentBody}>{c.body}</Text>
-            </View>
+        threads.map(({ comment, replies }: { comment: FeedComment; replies: FeedComment[] }) => (
+          <View key={comment.id}>
+            <CommentRow c={comment} />
+            {replies.map((r) => (
+              <CommentRow key={r.id} c={r} isReply />
+            ))}
           </View>
         ))
       )}
+
+      {replyTo ? (
+        <View style={styles.replyingBar}>
+          <Text style={styles.replyingText} numberOfLines={1}>
+            Replying to {replyTo.authorName}
+          </Text>
+          <Pressable onPress={() => setReplyTo(null)} hitSlop={8}>
+            <Ionicons name="close" size={15} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+      ) : null}
+
       <View style={styles.commentCompose}>
         <TextInput
           value={draft}
           onChangeText={setDraft}
-          placeholder="Add a comment…"
+          placeholder={replyTo ? `Reply to ${replyTo.authorName}…` : 'Add a comment…'}
           placeholderTextColor={colors.textMuted}
           style={styles.commentInput}
           maxLength={1000}
         />
         <Pressable onPress={send} disabled={busy || !draft.trim()} hitSlop={6}>
-          <Ionicons
-            name="send"
-            size={19}
-            color={draft.trim() ? colors.brand : colors.textMuted}
-          />
+          <Ionicons name="send" size={19} color={draft.trim() ? colors.brand : colors.textMuted} />
         </Pressable>
       </View>
     </View>
@@ -485,6 +526,19 @@ const styles = StyleSheet.create({
   commentName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textPrimary },
   commentTime: { fontFamily: fontFamilies.interRegular, fontSize: 11, color: colors.textMuted },
   commentBody: { fontFamily: fontFamilies.interRegular, fontSize: 13.5, color: colors.textPrimary, marginTop: 1 },
+  replyRow: { marginLeft: 34, marginTop: spacing.xs },
+  replyAvatar: { width: 22, height: 22, borderRadius: 11 },
+  replyLink: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, color: colors.brandDeep, marginTop: 3 },
+  replyingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+  },
+  replyingText: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.brandDeep },
   commentCompose: {
     flexDirection: 'row',
     alignItems: 'center',

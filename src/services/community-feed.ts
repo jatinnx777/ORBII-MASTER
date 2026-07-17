@@ -19,6 +19,7 @@ export type FeedPost = {
 
 export type FeedComment = {
   id: string;
+  parentId: string | null;
   authorId: string;
   authorName: string;
   authorPhoto: string | null;
@@ -77,6 +78,7 @@ export async function loadComments(postId: string): Promise<FeedComment[]> {
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map((r) => ({
     id: r.id as string,
+    parentId: (r.parent_id as string) ?? null,
     authorId: r.author_id as string,
     authorName: (r.author_name as string) ?? 'ORBII user',
     authorPhoto: (r.author_photo as string) ?? null,
@@ -85,14 +87,21 @@ export async function loadComments(postId: string): Promise<FeedComment[]> {
   }));
 }
 
-export async function addComment(postId: string, body: string): Promise<boolean> {
+export async function addComment(
+  postId: string,
+  body: string,
+  parentId?: string | null,
+): Promise<boolean> {
   const text = body.trim();
   if (!text) return false;
   const uid = (await supabase.auth.getSession()).data.session?.user?.id;
   if (!uid) return false;
-  const { error } = await supabase
-    .from('community_comments')
-    .insert({ post_id: postId, author_id: uid, body: text.slice(0, 1000) });
+  const { error } = await supabase.from('community_comments').insert({
+    post_id: postId,
+    author_id: uid,
+    body: text.slice(0, 1000),
+    parent_id: parentId ?? null,
+  });
   return !error;
 }
 
