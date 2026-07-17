@@ -19,6 +19,7 @@ import {
   Mascot,
   MLMapView,
   useBrandSheet,
+  HelplinesCard,
   type MLMarker,
   type MLMapViewHandle,
   type MLRoute,
@@ -814,12 +815,13 @@ export function ActiveSOSScreen() {
           <TipPill emoji="👏" label="Other" onPress={() => handleTip('other')} />
         </View>
 
+        <HelplinesCard />
+
         <View style={styles.tipFootnote}>
           <Ionicons name="shield-checkmark" size={14} color={colors.success} />
           <Text style={styles.tipFootnoteText}>
             Stay on this screen until your helper arrives. Your circle and nearby
-            helpers have been alerted. To reach the police, use the Call 112
-            button above.
+            helpers have been alerted.
           </Text>
         </View>
 

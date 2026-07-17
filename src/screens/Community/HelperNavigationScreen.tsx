@@ -30,6 +30,7 @@ import {
   type MLMarker,
   type MLRoute,
 } from '@/components/common';
+import { HelplinesCard } from '@/components/common';
 import { PinPrompt } from '@/components/common';
 import { verifyRescueCode } from '@/services/rescue-code';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
@@ -499,6 +500,12 @@ function TrackingSheet(props: {
           onPress={props.onShare}
           active={props.sharing}
         />
+      </View>
+
+      {/* Helplines — the responder may need to call police / an ambulance to
+          the scene, so the numbers are right here, not buried. */}
+      <View style={{ marginTop: spacing.md }}>
+        <HelplinesCard compact />
       </View>
 
       {/* Mark arrived */}

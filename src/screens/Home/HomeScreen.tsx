@@ -18,7 +18,6 @@ import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
-import { useIsPremium } from '@/services/entitlements';
 import { subscribePresence, type PresencePeer } from '@/services/community';
 import { getFastLocation } from '@/services/location';
 import { shareMyLocation } from '@/services/location-share';
@@ -50,7 +49,7 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const profile = useAppSelector((s) => s.user.profile);
   const alerts = useAppSelector((s) => s.community.alerts);
-  const isPremium = useIsPremium();
+  const tier = profile?.premiumTier ?? null; // null | 'plus' | 'family'
   const { pct, doneCount, total, reload } = useReadiness();
 
   const [me, setMe] = useState<GeoPoint | null>(null);
@@ -302,20 +301,28 @@ export function HomeScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
 
-          {/* ── Go Pro ── */}
-          {!isPremium ? (
+          {/* ── Premium upsell. Tier-aware: free users see "Go Pro", Plus users
+              see the upgrade to Family, and Family users see nothing (they
+              already have the top plan, so an ad would just annoy them). ── */}
+          {tier !== 'family' ? (
             <Pressable
               onPress={() => navigation.navigate('PremiumUpgrade')}
               style={({ pressed }) => [styles.proCard, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel="Upgrade to ORBII Plus"
+              accessibilityLabel={tier === 'plus' ? 'Upgrade to ORBII Family' : 'Upgrade to ORBII Plus'}
             >
               <View style={styles.proIcon}>
                 <Ionicons name="sparkles" size={18} color={colors.goldDeep} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.proTitle}>Go Pro with ORBII Plus</Text>
-                <Text style={styles.proSub}>Verified helpers reach you, not just your circle.</Text>
+                <Text style={styles.proTitle}>
+                  {tier === 'plus' ? 'Upgrade to ORBII Family' : 'Go Pro with ORBII Plus'}
+                </Text>
+                <Text style={styles.proSub}>
+                  {tier === 'plus'
+                    ? 'Protect up to 4 people you love on one plan.'
+                    : 'Verified helpers reach you, not just your circle.'}
+                </Text>
               </View>
               <View style={styles.proBtn}>
                 <Text style={styles.proBtnText}>Upgrade</Text>
