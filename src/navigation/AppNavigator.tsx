@@ -7,6 +7,7 @@ import { HelperResponseScreen } from '@/screens/SOS/HelperResponseScreen';
 import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
+import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
@@ -101,6 +102,11 @@ export function AppNavigator() {
         name="SafetyReadiness"
         component={SafetyReadinessScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="Geofences"
+        component={GeofencesScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="ContactForm"

@@ -20,6 +20,7 @@ export type TabParamList = {
   Home: undefined;
   Emergency: undefined;
   Support: undefined;
+  Plus: undefined;
   // Responder-only tab (rendered only when role is responder/admin).
   Missions: undefined;
   Profile: undefined;
@@ -58,6 +59,7 @@ export type AppStackParamList = {
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
   SafetyReadiness: undefined;
+  Geofences: undefined;
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;

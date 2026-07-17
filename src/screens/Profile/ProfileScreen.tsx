@@ -1,23 +1,21 @@
 import React from 'react';
 import {
   Image,
+  Linking,
+  Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import {
-  Card,
-  Row,
-  ScreenContainer,
-  SectionHeader,
-  useBrandSheet,
-} from '@/components/common';
+import { useBrandSheet } from '@/components/common';
 import { APP_VERSION } from '@/services/app-info';
-import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
+import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle, deleteAccount } from '@/services/auth';
@@ -25,23 +23,23 @@ import { clearCachedContacts } from '@/services/emergency-contacts';
 import { clearCachedProfile } from '@/services/profile-cache';
 import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
+import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
+  const insets = useSafeAreaInsets();
   const dispatch = useAppDispatch();
+  const sheet = useBrandSheet();
   const profile = useAppSelector((s) => s.user.profile);
-  const history = useAppSelector((s) => s.history.records);
   const isResponder = useIsResponder();
 
   if (!profile) return null;
 
   const initial = (profile.name || profile.email || 'O').charAt(0).toUpperCase();
-  const sosCount = history.length;
 
-  const sheet = useBrandSheet();
   const handleSignOut = () => {
     sheet.confirm({
       title: 'Sign out?',
@@ -86,288 +84,368 @@ export function ProfileScreen() {
     });
   };
 
+  const shareApp = async () => {
+    try {
+      await Share.share({
+        message:
+          'ORBII gets a woman help before she can even reach her phone. Download: https://orbii.in',
+      });
+    } catch {
+      // dismissed
+    }
+  };
+
   return (
-    <ScreenContainer padded={false} scroll={false}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Profile</Text>
-        </View>
-        <Card style={styles.heroCard}>
-          <View style={styles.avatarWrap}>
+    <View style={styles.root}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView
+          contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.header}>
+            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.sub}>Protected and secure</Text>
+          </View>
+
+          {/* ── Identity ── */}
+          <Pressable
+            onPress={() => navigation.navigate('EditProfile')}
+            style={({ pressed }) => [styles.idCard, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Edit your profile"
+          >
             {profile.photoUri ? (
-              <Image source={{ uri: profile.photoUri }} style={styles.avatarImg} />
+              <Image source={{ uri: profile.photoUri }} style={styles.avatar} />
             ) : (
-              <View style={styles.avatar}>
+              <View style={styles.avatarFallback}>
                 <Text style={styles.avatarInitial}>{initial}</Text>
               </View>
             )}
-            {profile.isPremium ? (
-              <View style={styles.premiumBadge}>
-                <Ionicons name="ribbon" size={14} color={colors.dark} />
-              </View>
-            ) : null}
-          </View>
-          <View style={{ flex: 1 }}>
-            <View style={styles.nameRow}>
-              <Text style={styles.name}>{profile.name ?? 'ORBII user'}</Text>
-              {isResponder ? (
-                <Text style={styles.crown} accessibilityLabel="Verified helper">
-                  {'\u{1F451}'}
-                </Text>
-              ) : null}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.idName} numberOfLines={1}>
+                {profile.name || 'Your name'}
+              </Text>
+              <Text style={styles.idSub} numberOfLines={1}>
+                {profile.phone || profile.email || 'Tap to complete your profile'}
+              </Text>
             </View>
-            <Text style={styles.phone}>{profile.email || profile.phone || ''}</Text>
-            <View style={styles.heroStats}>
-              <StatPill label="SOS sent" value={String(sosCount)} />
-              <StatPill
-                label="Contacts"
-                value={String(profile.emergencyContacts.length)}
-              />
-              {null}
+            <View style={styles.editBtn}>
+              <Ionicons name="pencil" size={15} color={colors.brandDeep} />
             </View>
+          </Pressable>
+
+          {/* ── Grid ── */}
+          <View style={styles.grid}>
+            <GridItem
+              icon="time-outline"
+              label="SOS history"
+              onPress={() => navigation.navigate('History')}
+            />
+            <GridItem
+              icon="people-outline"
+              label="Trusted circle"
+              onPress={() => navigation.navigate('Circles')}
+            />
+            <GridItem
+              icon="folder-open-outline"
+              label="Evidence vault"
+              onPress={() => navigation.navigate('History')}
+            />
+            <GridItem
+              icon="help-circle-outline"
+              label="FAQ"
+              onPress={() => navigation.navigate('About')}
+            />
+            <GridItem
+              icon="call-outline"
+              label="Helpline"
+              onPress={() => Linking.openURL('tel:112').catch(() => undefined)}
+            />
+            <GridItem
+              icon="compass-outline"
+              label="Help tour"
+              onPress={() => navigation.navigate('SafetyReadiness')}
+            />
+            <GridItem
+              icon="chatbox-ellipses-outline"
+              label="Feedback"
+              onPress={() =>
+                Linking.openURL(
+                  'mailto:jaykumar2470f@gmail.com?subject=ORBII%20feedback',
+                ).catch(() => comingSoon('Feedback'))
+              }
+            />
+            <GridItem icon="share-social-outline" label="Share app" onPress={shareApp} />
           </View>
-        </Card>
 
-        <SectionHeader title="Safety" />
-        <Card style={styles.rowsCard}>
-          <Row
-            icon="people"
-            tint="coral"
-            label="Emergency contacts"
-            onPress={() => navigation.navigate('EmergencyContacts')}
-          />
-          <Divider />
-          <Row
-            icon="ribbon"
-            tint="gold"
-            label="ORBII plans"
-            onPress={() => navigation.navigate('PremiumUpgrade')}
-          />
-          <Divider />
-          <Row
-            icon="time"
-            tint="peach"
-            label="SOS history"
-            onPress={() => navigation.navigate('History')}
-          />
-        </Card>
-
-        {isResponder ? (
-          <>
-            <SectionHeader title="Responder" />
-            <Card style={styles.rowsCard}>
-              <Row
-                icon="flash"
-                tint="gold"
-            label="Missions dashboard"
-                onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
-              />
-              <Divider />
-              <Row
-                icon="wallet"
-                tint="sage"
-            label="Earnings & payouts"
-                onPress={() => navigation.navigate('ResponderEarnings')}
-              />
-              <Divider />
-              <Row
-                icon="ribbon"
-                tint="gold"
-            label="Recognition & Guardian level"
-                onPress={() => navigation.navigate('ResponderRecognition')}
-              />
-              <Divider />
-              <Row
-                icon="shield-checkmark"
-                tint="sage"
-            label="Verification"
-                onPress={() => navigation.navigate('ResponderVerification')}
-              />
-            </Card>
-          </>
-        ) : (
-          <>
-            <SectionHeader title="Help others" />
-            <Card style={styles.rowsCard}>
-              <Row
-                icon="shield-checkmark"
-                tint="sage"
-            label="Become an ORBII Responder"
+          {/* ── Responder ── */}
+          <Text style={styles.sectionLabel}>RESPONDER</Text>
+          <View style={styles.card}>
+            {isResponder ? (
+              <>
+                <SettingRow
+                  icon="flash-outline"
+                  label="Missions dashboard"
+                  onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
+                />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="trophy-outline"
+                  label="Recognition & Guardian level"
+                  onPress={() => navigation.navigate('ResponderRecognition')}
+                />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="wallet-outline"
+                  label="Earnings & payouts"
+                  onPress={() => navigation.navigate('ResponderEarnings')}
+                />
+              </>
+            ) : (
+              <SettingRow
+                icon="shield-checkmark-outline"
+                label="Become an ORBII Responder"
                 onPress={() => navigation.navigate('ResponderApplication')}
               />
-            </Card>
-          </>
-        )}
+            )}
+          </View>
 
-        <SectionHeader title="Account" />
-        <Card style={styles.rowsCard}>
-          <Row
-            icon="person-circle"
-            tint="peach"
-            label="Edit profile"
-            onPress={() => navigation.navigate('EditProfile')}
-          />
-          <Divider />
-          <Row
-            icon="settings"
-            tint="neutral"
-            label="Settings"
-            onPress={() => navigation.navigate('Settings')}
-          />
-          <Divider />
-          <Row
-            icon="log-out"
-            label="Sign out"
-            destructive
+          {/* ── Settings ── */}
+          <Text style={styles.sectionLabel}>SETTINGS</Text>
+          <View style={styles.card}>
+            <SettingRow
+              icon="lock-closed-outline"
+              label="Privacy & security"
+              onPress={() => navigation.navigate('SafetyPin')}
+            />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="settings-outline"
+              label="General"
+              onPress={() => navigation.navigate('Settings')}
+            />
+            <View style={styles.divider} />
+            <SettingRow
+              icon="information-circle-outline"
+              label="About ORBII"
+              onPress={() => navigation.navigate('About')}
+            />
+          </View>
+
+          {/* ── Danger zone ── */}
+          <Pressable
             onPress={handleSignOut}
-          />
-          <Divider />
-          <Row
-            icon="trash"
-            label="Delete account"
-            destructive
-            onPress={handleDeleteAccount}
-          />
-        </Card>
+            style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Log out"
+          >
+            <Ionicons name="log-out-outline" size={18} color={colors.coralDeep} />
+            <Text style={styles.logoutText}>Log out</Text>
+          </Pressable>
 
-        <Text style={styles.versionText}>ORBII · v{APP_VERSION}</Text>
-      </ScrollView>
-    </ScreenContainer>
-  );
-}
+          <Pressable onPress={handleDeleteAccount} hitSlop={8} style={styles.deleteBtn}>
+            <Text style={styles.deleteText}>Delete my account</Text>
+          </Pressable>
 
-function StatPill({
-  label,
-  value,
-  color,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-}) {
-  return (
-    <View style={pillStyles.wrap}>
-      <Text style={[pillStyles.value, color ? { color } : null]}>{value}</Text>
-      <Text style={pillStyles.label}>{label}</Text>
+          <Text style={styles.version}>ORBII v{APP_VERSION}</Text>
+        </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
 
-function Divider() {
-  return <View style={styles.divider} />;
+function GridItem({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.gridItem, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.gridIcon}>
+        <Ionicons name={icon} size={20} color={colors.brandDeep} />
+      </View>
+      <Text style={styles.gridLabel} numberOfLines={2}>
+        {label}
+      </Text>
+    </Pressable>
+  );
 }
 
-const pillStyles = StyleSheet.create({
-  wrap: {
-    alignItems: 'flex-start',
-    gap: 2,
-  },
-  value: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  label: {
-    ...typography.caption,
-    color: colors.textSecondary,
-  },
-});
-
-const AVATAR = 72;
+function SettingRow({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.settingRow, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.settingIcon}>
+        <Ionicons name={icon} size={17} color={colors.brandDeep} />
+      </View>
+      <Text style={styles.settingLabel}>{label}</Text>
+      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+    </Pressable>
+  );
+}
 
 const styles = StyleSheet.create({
-  scroll: {
-    paddingBottom: 110,
-  },
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.xs,
-  },
-  headerTitle: {
-    ...typography.displaySmall,
+  root: { flex: 1, backgroundColor: colors.cream },
+  scroll: { paddingHorizontal: spacing.lg, gap: spacing.sm },
+  pressed: { opacity: 0.92 },
+  header: { paddingTop: spacing.md, paddingBottom: spacing.sm },
+  title: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
     color: colors.textPrimary,
+    letterSpacing: -0.4,
   },
-  heroCard: {
-    margin: spacing.lg,
-    marginTop: spacing.sm,
+  sub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
+
+  idCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.card,
   },
-  avatarWrap: {},
-  avatar: {
-    width: AVATAR,
-    height: AVATAR,
-    borderRadius: AVATAR / 2,
-    backgroundColor: colors.peachSoft,
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: colors.creamDeep },
+  avatarFallback: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.peach,
-  },
-  avatarImg: {
-    width: AVATAR,
-    height: AVATAR,
-    borderRadius: AVATAR / 2,
-    borderWidth: 2,
-    borderColor: colors.peach,
   },
   avatarInitial: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 28,
-    color: colors.peachDeep,
+    fontSize: 21,
+    color: colors.brandDeep,
   },
-  premiumBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 24,
-    height: 24,
-    borderRadius: radius.circle,
-    backgroundColor: colors.gold,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.surface,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  name: {
+  idName: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 20,
+    fontSize: 17,
     color: colors.textPrimary,
   },
-  crown: {
-    fontSize: 16,
-    marginTop: -2,
+  idSub: { ...typography.caption, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
+  editBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  phone: {
-    ...typography.caption,
-    color: colors.textSecondary,
-    marginBottom: spacing.sm,
-  },
-  heroStats: {
+
+  grid: {
     flexDirection: 'row',
-    gap: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginTop: spacing.xs,
   },
-  rowsCard: {
-    marginHorizontal: spacing.lg,
-    padding: 0,
+  gridItem: {
+    flexGrow: 1,
+    flexBasis: '30%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    gap: 8,
+    ...shadows.card,
+  },
+  gridIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gridLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11.5,
+    color: colors.textPrimary,
+    textAlign: 'center',
+  },
+
+  sectionLabel: {
+    ...typography.label,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 1,
+    marginTop: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    ...shadows.card,
     overflow: 'hidden',
   },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginHorizontal: spacing.md,
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
   },
-  versionText: {
+  settingIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  settingLabel: {
+    flex: 1,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  divider: { height: 1, backgroundColor: colors.divider, marginLeft: 62 },
+
+  logoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    paddingVertical: 14,
+    marginTop: spacing.md,
+    ...shadows.card,
+  },
+  logoutText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14.5,
+    color: colors.coralDeep,
+  },
+  deleteBtn: { alignItems: 'center', paddingVertical: spacing.md },
+  deleteText: { ...typography.caption, fontSize: 12, color: colors.textMuted },
+  version: {
     ...typography.caption,
+    fontSize: 11,
     color: colors.textMuted,
     textAlign: 'center',
-    marginTop: spacing.xl,
   },
 });

@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { EmergencyScreen } from '@/screens/Emergency/EmergencyScreen';
 import { SupportScreen } from '@/screens/Support/SupportScreen';
+import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useIsResponder } from '@/services/roles';
@@ -36,6 +37,7 @@ const ICONS: Record<
     label: 'Emergency',
   },
   Support: { active: 'heart', inactive: 'heart-outline', label: 'Support' },
+  Plus: { active: 'sparkles', inactive: 'sparkles-outline', label: 'Plus' },
   Missions: { active: 'flash', inactive: 'flash-outline', label: 'Missions' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
@@ -63,6 +65,7 @@ export function TabNavigator() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Emergency" component={EmergencyScreen} />
       <Tab.Screen name="Support" component={SupportScreen} />
+      <Tab.Screen name="Plus" component={PremiumUpgradeScreen} />
       {showMissions ? (
         <Tab.Screen name="Missions" component={MissionsScreen} />
       ) : null}

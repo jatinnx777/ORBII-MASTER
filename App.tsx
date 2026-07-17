@@ -29,6 +29,7 @@ import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
 import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
+import { syncZoneMonitoring } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -216,6 +217,15 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void reconcileExpiredVoiceSessions();
+  }, [status]);
+
+  // Re-arm safe-zone monitoring. The OS holds the geofences, but it forgets
+  // them on reinstall/update, so we re-register whatever zones are set on us
+  // every authenticated launch.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    const uid = store.getState().user.profile?.uid;
+    if (uid) void syncZoneMonitoring(uid);
   }, [status]);
 
   // Pull the authoritative role (user / responder / admin) so the Missions tab
@@ -474,6 +484,12 @@ export default function App() {
       if (data.kind === 'incoming_sos' && navigationRef.isReady()) {
         // @ts-expect-error - CommunityAlerts is in the AppStack only.
         navigationRef.navigate('CommunityAlerts');
+        return;
+      }
+      // Safe zone crossed — open the zone list, which shows the history.
+      if (data.kind === 'geofence' && navigationRef.isReady()) {
+        // @ts-expect-error - Geofences is in the AppStack only.
+        navigationRef.navigate('Geofences');
         return;
       }
       if (data.kind === 'community_alert' && navigationRef.isReady()) {

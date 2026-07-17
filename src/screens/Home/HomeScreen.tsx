@@ -26,6 +26,7 @@ import {
   type VoiceDetectionStatus,
 } from '@/services/voice-detection';
 import { trackEvent } from '@/services/analytics';
+import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -193,24 +194,63 @@ export function HomeScreen() {
             </Text>
           </Pressable>
 
-          {/* ── The SOS. Big, red, unmissable, and the one thing on this screen
-              she must never have to hunt for. ── */}
-          <View style={styles.sosWrap}>
-            <Pressable
-              onPress={() => {
-                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-                  () => undefined,
-                );
-                navigation.navigate('SOSCountdown');
-              }}
-              style={({ pressed }) => [styles.sosBtn, pressed && { transform: [{ scale: 0.97 }] }]}
-              accessibilityRole="button"
-              accessibilityLabel="Send SOS alert"
-            >
+          {/* ── Voice SOS: the primary trigger, because she never has to touch
+              the phone. Toggling this row arms the engine. ── */}
+          <Pressable
+            onPress={toggleVoice}
+            disabled={busy}
+            style={({ pressed }) => [
+              styles.voiceRow,
+              voiceOn && styles.voiceRowOn,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: voiceOn }}
+            accessibilityLabel="Voice SOS"
+          >
+            <View style={[styles.voiceIcon, voiceOn && styles.voiceIconOn]}>
+              <Ionicons
+                name={voiceOn ? 'mic' : 'mic-outline'}
+                size={20}
+                color={voiceOn ? colors.textInverse : colors.brandDeep}
+              />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.voiceTitle}>Voice SOS</Text>
+              <Text style={styles.voiceSub}>
+                {voiceOn
+                  ? 'Listening. Just shout "help, help".'
+                  : 'Tap to activate hands-free protection.'}
+              </Text>
+            </View>
+            <View style={[styles.voicePill, voiceOn && styles.voicePillOn]}>
+              <Text style={[styles.voicePillText, voiceOn && styles.voicePillTextOn]}>
+                {voiceOn ? 'ON' : 'OFF'}
+              </Text>
+            </View>
+          </Pressable>
+
+          {/* ── Manual SOS, right below it. ── */}
+          <Pressable
+            onPress={() => {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+                () => undefined,
+              );
+              navigation.navigate('SOSCountdown');
+            }}
+            style={({ pressed }) => [styles.sosBtn, pressed && { transform: [{ scale: 0.98 }] }]}
+            accessibilityRole="button"
+            accessibilityLabel="Send SOS alert"
+          >
+            <View style={styles.sosBell}>
+              <Ionicons name="notifications" size={20} color={colors.textInverse} />
+            </View>
+            <View style={{ flex: 1 }}>
               <Text style={styles.sosText}>SOS</Text>
-              <Text style={styles.sosSub}>TAP TO SEND ALERT</Text>
-            </Pressable>
-          </View>
+              <Text style={styles.sosSub}>Tap to send alert</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
+          </Pressable>
 
           {/* ── Safe Journey ── */}
           <View style={styles.journeyCard}>
@@ -317,31 +357,54 @@ export function HomeScreen() {
           {/* ── Quick actions ── */}
           <View style={styles.grid}>
             <Tile
-              icon={voiceOn ? 'mic' : 'mic-outline'}
-              label={voiceOn ? 'Voice SOS is on' : 'Activate Voice SOS'}
-              hint={voiceOn ? 'Listening for "help, help"' : 'Hands-free emergency'}
-              active={voiceOn}
-              onPress={toggleVoice}
+              icon="map-outline"
+              label="Safe route"
+              hint="Plan the safest path"
+              onPress={() => comingSoon('Safe route')}
             />
             <Tile
               icon="navigate-outline"
               label="Location sharing"
-              hint="Share your live journey"
+              hint="Send your live location"
               onPress={() => navigation.navigate('SafeJourneyStart')}
+            />
+            <Tile
+              icon="call-outline"
+              label="Fake call"
+              hint="Escape risky situations"
+              onPress={() => comingSoon('Fake call')}
             />
             <Tile
               icon="recording-outline"
               label="Record evidence"
-              hint="Your saved recordings"
+              hint="Audio saved with every SOS"
               onPress={() => navigation.navigate('History')}
             />
-            <Tile
-              icon="people-outline"
-              label="Community"
-              hint="People helping nearby"
-              onPress={() => navigation.navigate('CommunityAlerts')}
-            />
           </View>
+
+          {/* ── Nearby safe places ── */}
+          <Pressable
+            onPress={() =>
+              comingSoon(
+                'Nearby safe places',
+                'We want this to list police stations and hospitals you can actually reach, which needs verified data. It is not live yet. For police right now, call 112.',
+              )
+            }
+            style={({ pressed }) => [styles.placesCard, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Nearby safe places"
+          >
+            <View style={styles.rowIconSm}>
+              <Ionicons name="location-outline" size={18} color={colors.brandDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.alertTitle}>Nearby safe places</Text>
+              <Text style={styles.alertSub}>Police, hospitals and safe spots</Text>
+            </View>
+            <View style={styles.soonPill}>
+              <Text style={styles.soonText}>Soon</Text>
+            </View>
+          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -467,33 +530,79 @@ const styles = StyleSheet.create({
   barFill: { height: '100%', borderRadius: 5 },
   statusHint: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
 
-  sosWrap: { alignItems: 'center', paddingVertical: spacing.sm },
-  sosBtn: {
-    width: 168,
-    height: 168,
-    borderRadius: 84,
-    backgroundColor: colors.coral,
+  voiceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.card,
+  },
+  voiceRowOn: { backgroundColor: colors.brandSoft },
+  voiceIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.coral,
-    shadowOpacity: 0.4,
-    shadowRadius: 24,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 10,
+  },
+  voiceIconOn: { backgroundColor: colors.brand },
+  voiceTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15,
+    color: colors.textPrimary,
+  },
+  voiceSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
+  voicePill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.creamDeep,
+  },
+  voicePillOn: { backgroundColor: colors.brand },
+  voicePillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    letterSpacing: 0.5,
+  },
+  voicePillTextOn: { color: colors.textInverse },
+
+  sosBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.brand,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    shadowColor: colors.brand,
+    shadowOpacity: 0.32,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
+  },
+  sosBell: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sosText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 40,
-    color: colors.textInverse,
-    letterSpacing: 2,
-  },
-  sosSub: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 10.5,
+    fontSize: 20,
     color: colors.textInverse,
     letterSpacing: 1,
-    marginTop: 2,
+  },
+  sosSub: {
+    ...typography.caption,
+    fontSize: 11.5,
+    color: colors.textInverse,
     opacity: 0.95,
+    marginTop: 1,
   },
 
   journeyCard: {
@@ -619,6 +728,30 @@ const styles = StyleSheet.create({
   },
   learnBarFill: { height: '100%', borderRadius: 4, backgroundColor: colors.brand },
 
+  placesCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.card,
+  },
+  rowIconSm: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  soonPill: {
+    backgroundColor: colors.creamDeep,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  soonText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, color: colors.textMuted },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
   tile: {
     flexGrow: 1,

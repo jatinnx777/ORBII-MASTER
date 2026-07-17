@@ -26,6 +26,7 @@ import {
 } from '@/services/voice-detection';
 import { useIsPremium } from '@/services/entitlements';
 import { trackEvent } from '@/services/analytics';
+import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -170,6 +171,39 @@ export function EmergencyScreen() {
               value={shakeSOS}
               onValueChange={(v) => dispatch(shakeSOSToggled(v))}
             />
+            <View style={styles.divider} />
+            <ModeRow
+              icon="power"
+              title="Button press"
+              body="Press power or volume 3 times to fire an SOS."
+              soon
+              onPress={() => comingSoon('Button press trigger')}
+            />
+          </View>
+
+          {/* ── Your circle ── */}
+          <Text style={styles.sectionLabel}>YOUR CIRCLE</Text>
+          <View style={styles.card}>
+            <ModeRow
+              icon="people"
+              title="Trusted circle"
+              body="The people ORBII reaches the instant you need help."
+              onPress={() => navigation.navigate('Circles')}
+            />
+            <View style={styles.divider} />
+            <ModeRow
+              icon="call"
+              title="Emergency contacts"
+              body="Add or change who gets alerted."
+              onPress={() => navigation.navigate('EmergencyContacts')}
+            />
+            <View style={styles.divider} />
+            <ModeRow
+              icon="locate"
+              title="Safe zones"
+              body="Get told when someone you love leaves a safe area."
+              onPress={() => navigation.navigate('Geofences')}
+            />
           </View>
 
           {/* ── Safety modes ── */}
@@ -209,22 +243,32 @@ export function EmergencyScreen() {
           </View>
 
           {/* ── Evidence ── */}
-          <Text style={styles.sectionLabel}>EVIDENCE</Text>
+          <Text style={styles.sectionLabel}>EMERGENCY RECORDING</Text>
+          <View style={styles.recRow}>
+            <RecTile
+              icon="mic"
+              label="Audio record"
+              live
+              onPress={() => navigation.navigate('History')}
+            />
+            <RecTile
+              icon="videocam"
+              label="Video record"
+              onPress={() => comingSoon('Video recording')}
+            />
+            <RecTile
+              icon="camera"
+              label="Photo capture"
+              onPress={() => comingSoon('Photo capture')}
+            />
+          </View>
           <View style={styles.noteCard}>
             <Ionicons name="recording" size={16} color={colors.brandDeep} />
             <Text style={styles.noteText}>
-              During an SOS, ORBII records audio automatically, including the 15
-              seconds before it fired. Your recordings live in SOS history.
+              Audio already records automatically during every SOS, including
+              the 15 seconds before it fired. It's saved in your SOS history.
             </Text>
           </View>
-          <Pressable
-            onPress={() => navigation.navigate('History')}
-            style={({ pressed }) => [styles.historyBtn, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Open SOS history"
-          >
-            <Text style={styles.historyBtnText}>View SOS history</Text>
-          </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
@@ -266,17 +310,48 @@ function ToggleRow({
   );
 }
 
+function RecTile({
+  icon,
+  label,
+  live,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  live?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.recTile, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.recIcon}>
+        <Ionicons name={icon} size={18} color={colors.brandDeep} />
+      </View>
+      <Text style={styles.recLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {!live ? <Text style={styles.recSoon}>Soon</Text> : null}
+    </Pressable>
+  );
+}
+
 function ModeRow({
   icon,
   title,
   body,
   locked,
+  soon,
   onPress,
 }: {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   body: string;
   locked?: boolean;
+  soon?: boolean;
   onPress: () => void;
 }) {
   return (
@@ -297,6 +372,10 @@ function ModeRow({
         <View style={styles.lockPill}>
           <Ionicons name="sparkles" size={11} color={colors.goldDeep} />
           <Text style={styles.lockText}>Plus</Text>
+        </View>
+      ) : soon ? (
+        <View style={styles.soonPill}>
+          <Text style={styles.soonText}>Soon</Text>
         </View>
       ) : (
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -425,6 +504,39 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   lockText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, color: colors.goldDeep },
+
+  soonPill: {
+    backgroundColor: colors.creamDeep,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  soonText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, color: colors.textMuted },
+
+  recRow: { flexDirection: 'row', gap: spacing.sm },
+  recTile: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    alignItems: 'center',
+    gap: 6,
+    ...shadows.card,
+  },
+  recIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11.5,
+    color: colors.textPrimary,
+  },
+  recSoon: { ...typography.caption, fontSize: 9.5, color: colors.textMuted },
 
   noteCard: {
     flexDirection: 'row',

@@ -34,6 +34,19 @@ function configure() {
       lightColor: '#FF0000',
       sound: 'default',
     }).catch(() => undefined);
+    // Safe zone crossed. Important, but NOT an emergency: someone leaving their
+    // college is worth knowing, not worth a siren. Default importance, no DND
+    // bypass — a safety app that buzzes like an SOS for routine events trains
+    // people to ignore the real one.
+    Notifications.setNotificationChannelAsync('safe-zone', {
+      name: 'Safe zone alerts',
+      description: 'When someone in your circle leaves or enters a safe zone.',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 250],
+      enableVibrate: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      sound: 'default',
+    }).catch(() => undefined);
     // Incoming help request for a VERIFIED HELPER — someone nearby needs them
     // right now. Max importance so it wakes the screen and heads-up over the
     // lock screen even if the app has been closed all day. Separate channel so
