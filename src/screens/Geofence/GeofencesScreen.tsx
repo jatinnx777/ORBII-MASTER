@@ -15,6 +15,7 @@ import { appAlert, useBrandSheet } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getCurrentLocation } from '@/services/location';
+import { listCircleMembers, listCircles, type CircleMember } from '@/services/circles';
 import {
   createZone,
   deleteZone,
@@ -49,6 +50,10 @@ export function GeofencesScreen() {
 
   const [label, setLabel] = useState('');
   const [radius, setRadius] = useState(500);
+  // Who the zone is for. null = yourself. Anyone else must share a circle with
+  // you (the server enforces that too — this picker is only the friendly half).
+  const [target, setTarget] = useState<CircleMember | null>(null);
+  const [people, setPeople] = useState<CircleMember[]>([]);
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
@@ -61,6 +66,19 @@ export function GeofencesScreen() {
     setOnMe(b);
     setEvents(e);
     setLoading(false);
+
+    // Everyone I share a circle with — the only people I'm allowed to fence.
+    try {
+      const circles = await listCircles();
+      const lists = await Promise.all(circles.map((c) => listCircleMembers(c.id)));
+      const seen = new Map<string, CircleMember>();
+      for (const m of lists.flat()) {
+        if (m.userId !== profile.uid && !seen.has(m.userId)) seen.set(m.userId, m);
+      }
+      setPeople(Array.from(seen.values()));
+    } catch {
+      setPeople([]);
+    }
   }, [profile?.uid]);
 
   useFocusEffect(
@@ -88,11 +106,10 @@ export function GeofencesScreen() {
         );
         return;
       }
-      // A zone on yourself: the honest default. Fencing someone else is done
-      // from their contact card, so consent is explicit.
       const res = await createZone({
         ownerId: profile.uid,
-        memberId: profile.uid,
+        // Yourself by default; otherwise the circle member you picked.
+        memberId: target?.userId ?? profile.uid,
         label: name,
         lat: point.latitude,
         lng: point.longitude,
@@ -151,6 +168,47 @@ export function GeofencesScreen() {
           {/* ── Create ── */}
           <Text style={styles.sectionLabel}>NEW ZONE AT MY LOCATION</Text>
           <View style={styles.card}>
+            <Text style={styles.fieldLabel}>Who is this zone for?</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.peopleRow}
+            >
+              <Pressable
+                onPress={() => setTarget(null)}
+                style={[styles.person, target === null && styles.personOn]}
+              >
+                <Text style={[styles.personText, target === null && styles.personTextOn]}>
+                  Me
+                </Text>
+              </Pressable>
+              {people.map((p) => {
+                const on = target?.userId === p.userId;
+                return (
+                  <Pressable
+                    key={p.userId}
+                    onPress={() => setTarget(p)}
+                    style={[styles.person, on && styles.personOn]}
+                  >
+                    <Text style={[styles.personText, on && styles.personTextOn]} numberOfLines={1}>
+                      {p.name || p.username || 'Circle member'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {people.length === 0 ? (
+              <Text style={styles.pickerHint}>
+                Only people in your circle can be given a zone. Add someone to
+                your circle first.
+              </Text>
+            ) : target ? (
+              <Text style={styles.pickerHint}>
+                {target.name || 'They'} will see this zone and can remove it.
+                ORBII never tracks anyone secretly.
+              </Text>
+            ) : null}
+
             <TextInput
               value={label}
               onChangeText={setLabel}
@@ -177,7 +235,13 @@ export function GeofencesScreen() {
               disabled={busy}
               style={({ pressed }) => [styles.cta, busy && { opacity: 0.6 }, pressed && styles.pressed]}
             >
-              <Text style={styles.ctaText}>{busy ? 'Creating…' : 'Create zone here'}</Text>
+              <Text style={styles.ctaText}>
+                {busy
+                  ? 'Creating…'
+                  : target
+                    ? `Create zone for ${target.name || 'them'}`
+                    : 'Create zone here'}
+              </Text>
             </Pressable>
           </View>
 
@@ -355,6 +419,32 @@ const styles = StyleSheet.create({
     padding: spacing.md,
     gap: spacing.sm,
     ...shadows.card,
+  },
+  fieldLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13,
+    color: colors.textPrimary,
+  },
+  peopleRow: { gap: spacing.sm, paddingVertical: 2 },
+  person: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 9,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+    maxWidth: 150,
+  },
+  personOn: { backgroundColor: colors.brand },
+  personText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+  personTextOn: { color: colors.textInverse },
+  pickerHint: {
+    ...typography.caption,
+    fontSize: 11,
+    color: colors.textMuted,
+    lineHeight: 15,
   },
   input: {
     backgroundColor: colors.cream,
