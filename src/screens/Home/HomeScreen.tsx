@@ -330,39 +330,93 @@ export function HomeScreen() {
             </Pressable>
           ) : null}
 
-          {/* ── Learning hub ── */}
-          {!setupDone ? (
-            <Pressable
-              onPress={() => navigation.navigate('SafetyReadiness')}
-              style={({ pressed }) => [styles.learnCard, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={`Safety learning hub, ${pct} percent complete`}
-            >
-              <View style={styles.learnTop}>
-                <View style={styles.learnIcon}>
-                  <Ionicons name="school-outline" size={18} color={colors.brandDeep} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.learnTitle}>Safety learning hub</Text>
-                  <Text style={styles.learnSub}>
-                    Learn how ORBII protects you. Disappears once you're done.
-                  </Text>
-                </View>
-                <Text style={styles.learnPct}>{pct}%</Text>
-              </View>
-              <View style={styles.learnBarTrack}>
-                <View style={[styles.learnBarFill, { width: `${Math.max(pct, 4)}%` }]} />
-              </View>
-            </Pressable>
-          ) : null}
+          {/* ── Quick actions ── */}
+          <View style={styles.grid}>
+            <QuickTile
+              icon="call-outline"
+              label="Fake call"
+              hint="Escape risky moments"
+              onPress={() => comingSoon('Fake call')}
+            />
+            <QuickTile
+              icon="people-outline"
+              label="Community"
+              hint="Helpers nearby"
+              onPress={() => navigation.navigate('CommunityAlerts')}
+            />
+            <QuickTile
+              icon="navigate-outline"
+              label="Location sharing"
+              hint="Send your live spot"
+              onPress={onShare}
+            />
+            <QuickTile
+              icon="recording-outline"
+              label="Record evidence"
+              hint="Your SOS recordings"
+              onPress={() => navigation.navigate('Recordings')}
+            />
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>
   );
 }
 
+function QuickTile({
+  icon,
+  label,
+  hint,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  hint: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickTile, pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] }]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <View style={styles.quickIcon}>
+        <Ionicons name={icon} size={20} color={colors.brandDeep} />
+      </View>
+      <Text style={styles.quickLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      <Text style={styles.quickHint} numberOfLines={1}>
+        {hint}
+      </Text>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  quickTile: {
+    flexGrow: 1,
+    flexBasis: '46%',
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: 6,
+    ...shadows.card,
+  },
+  quickIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 2,
+  },
+  quickLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  quickHint: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary },
   scroll: { paddingHorizontal: spacing.lg, gap: spacing.md },
   pressed: { opacity: 0.92, transform: [{ scale: 0.99 }] },
 
