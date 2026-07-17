@@ -34,6 +34,7 @@ type EventName =
   | 'voice_phrase_rejected'
   // Which unbuilt features people actually tap — tells us what to build next.
   | 'coming_soon_tapped'
+  | 'location_shared'
   | 'route_fetched'
   | 'silent_sos_toggled'
   | 'safe_journey_started'

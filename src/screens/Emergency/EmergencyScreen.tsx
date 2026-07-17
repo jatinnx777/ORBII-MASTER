@@ -24,6 +24,12 @@ import {
   subscribeStatus,
   type VoiceDetectionStatus,
 } from '@/services/voice-detection';
+import {
+  startBackgroundVoice,
+  stopBackgroundVoice,
+  saveBgVoiceState,
+  requestBatteryExemption,
+} from '@/services/background-voice';
 import { useIsPremium } from '@/services/entitlements';
 import { trackEvent } from '@/services/analytics';
 import { comingSoon } from '@/services/coming-soon';
@@ -58,6 +64,8 @@ export function EmergencyScreen() {
     setBusy(true);
     try {
       if (!next) {
+        await stopBackgroundVoice();
+        await saveBgVoiceState({ enabled: false, hours: 0 });
         await stopListening();
         return;
       }
@@ -71,6 +79,11 @@ export function EmergencyScreen() {
         );
         return;
       }
+      // Also arm background protection (until turned off) so she stays covered
+      // with the app closed, and ask Android not to kill it.
+      await startBackgroundVoice([], 0).catch(() => undefined);
+      await saveBgVoiceState({ enabled: true, hours: 0 });
+      await requestBatteryExemption().catch(() => undefined);
       trackEvent('voice_sos_enabled', { from: 'emergency_tab' });
     } finally {
       setBusy(false);
@@ -103,7 +116,33 @@ export function EmergencyScreen() {
             <Text style={styles.sub}>Quick access to every way of getting help.</Text>
           </View>
 
-          {/* ── SOS + helpline ── */}
+          {/* ── The big primary action: arm hands-free Voice SOS. It also turns
+              on background protection, so once it's on she never has to touch
+              the phone to get help. ── */}
+          <Pressable
+            onPress={() => toggleVoice(!voiceOn)}
+            disabled={busy}
+            style={({ pressed }) => [
+              styles.voiceCard,
+              voiceOn && styles.voiceCardOn,
+              pressed && { transform: [{ scale: 0.98 }] },
+            ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: voiceOn }}
+            accessibilityLabel="Activate Voice SOS"
+          >
+            <View style={styles.voiceBell}>
+              <Ionicons name={voiceOn ? 'mic' : 'mic-outline'} size={30} color={colors.textInverse} />
+            </View>
+            <Text style={styles.voiceTitle}>{voiceOn ? 'Voice SOS is ON' : 'Activate Voice SOS'}</Text>
+            <Text style={styles.voiceSub}>
+              {voiceOn
+                ? 'Listening for "help, help", even in the background.'
+                : 'Tap to protect yourself hands-free.'}
+            </Text>
+          </Pressable>
+
+          {/* ── Manual SOS + helpline ── */}
           <View style={styles.topRow}>
             <Pressable
               onPress={() => {
@@ -112,58 +151,38 @@ export function EmergencyScreen() {
                 );
                 navigation.navigate('SOSCountdown');
               }}
-              style={({ pressed }) => [styles.sosCard, pressed && { transform: [{ scale: 0.98 }] }]}
+              style={({ pressed }) => [styles.sosBtn, pressed && styles.pressed]}
               accessibilityRole="button"
-              accessibilityLabel="Send SOS alert"
+              accessibilityLabel="Send SOS alert now"
             >
-              <View style={styles.sosBell}>
-                <Ionicons name="notifications" size={22} color={colors.textInverse} />
+              <View style={styles.sosBtnIcon}>
+                <Ionicons name="notifications" size={18} color={colors.textInverse} />
               </View>
-              <Text style={styles.sosTitle}>SOS</Text>
-              <Text style={styles.sosSub}>Tap to send alert</Text>
+              <View>
+                <Text style={styles.sosBtnLabel}>SOS</Text>
+                <Text style={styles.sosBtnHint}>Tap to send alert</Text>
+              </View>
             </Pressable>
 
-            <View style={styles.topRight}>
-              <Pressable
-                onPress={dial112}
-                style={({ pressed }) => [styles.miniCard, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Call emergency helpline 112"
-              >
-                <View style={styles.miniIcon}>
-                  <Ionicons name="call" size={17} color={colors.brandDeep} />
-                </View>
-                <Text style={styles.miniLabel}>Emergency helpline</Text>
-                <Text style={styles.miniHint}>Call 112</Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => navigation.navigate('SOSCountdown', { test: true })}
-                style={({ pressed }) => [styles.miniCard, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Run a practice SOS"
-              >
-                <View style={styles.miniIcon}>
-                  <Ionicons name="shield-checkmark" size={17} color={colors.brandDeep} />
-                </View>
-                <Text style={styles.miniLabel}>Practice SOS</Text>
-                <Text style={styles.miniHint}>Nobody is alerted</Text>
-              </Pressable>
-            </View>
+            <Pressable
+              onPress={dial112}
+              style={({ pressed }) => [styles.callBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Call emergency helpline 112"
+            >
+              <View style={styles.callBtnIcon}>
+                <Ionicons name="call" size={18} color={colors.brandDeep} />
+              </View>
+              <View>
+                <Text style={styles.callBtnLabel}>Call 112</Text>
+                <Text style={styles.callBtnHint}>Emergency line</Text>
+              </View>
+            </Pressable>
           </View>
 
           {/* ── Triggers ── */}
-          <Text style={styles.sectionLabel}>EMERGENCY TRIGGERS</Text>
+          <Text style={styles.sectionLabel}>MORE TRIGGERS</Text>
           <View style={styles.card}>
-            <ToggleRow
-              icon="mic"
-              title="Voice SOS"
-              body='Shout "help, help" and ORBII fires, hands-free.'
-              value={voiceOn}
-              disabled={busy}
-              onValueChange={toggleVoice}
-            />
-            <View style={styles.divider} />
             <ToggleRow
               icon="phone-portrait"
               title="Shake to alert"
@@ -249,7 +268,7 @@ export function EmergencyScreen() {
               icon="mic"
               label="Audio record"
               live
-              onPress={() => navigation.navigate('History')}
+              onPress={() => navigation.navigate('Recordings')}
             />
             <RecTile
               icon="videocam"
@@ -397,60 +416,82 @@ const styles = StyleSheet.create({
   },
   sub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
 
-  topRow: { flexDirection: 'row', gap: spacing.md },
-  sosCard: {
-    flex: 1,
-    backgroundColor: colors.coral,
-    borderRadius: radius.xl,
+  voiceCard: {
+    backgroundColor: colors.brand,
+    borderRadius: radius.xxl,
     padding: spacing.lg,
-    justifyContent: 'center',
-    minHeight: 150,
-    shadowColor: colors.coral,
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 8,
+    alignItems: 'center',
+    gap: 6,
+    shadowColor: colors.brand,
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 9,
   },
-  sosBell: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  voiceCardOn: { backgroundColor: colors.brandDeep },
+  voiceBell: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: 'rgba(255,255,255,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.sm,
+    marginBottom: 4,
   },
-  sosTitle: {
+  voiceTitle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 26,
+    fontSize: 18,
     color: colors.textInverse,
-    letterSpacing: 1,
+    letterSpacing: 0.3,
   },
-  sosSub: { ...typography.caption, fontSize: 11.5, color: colors.textInverse, opacity: 0.95 },
-  topRight: { flex: 1, gap: spacing.md },
-  miniCard: {
+  voiceSub: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textInverse,
+    opacity: 0.95,
+    textAlign: 'center',
+  },
+
+  topRow: { flexDirection: 'row', gap: spacing.md },
+  sosBtn: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.coral,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+  },
+  sosBtnIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sosBtnLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textInverse },
+  sosBtnHint: { ...typography.caption, fontSize: 10.5, color: colors.textInverse, opacity: 0.95 },
+  callBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
-    justifyContent: 'center',
     ...shadows.card,
   },
-  miniIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  callBtnIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  miniLabel: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 12.5,
-    color: colors.textPrimary,
-  },
-  miniHint: { ...typography.caption, fontSize: 10.5, color: colors.textSecondary },
+  callBtnLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+  callBtnHint: { ...typography.caption, fontSize: 10.5, color: colors.textSecondary },
 
   sectionLabel: {
     ...typography.label,

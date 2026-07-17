@@ -149,7 +149,7 @@ export function ProfileScreen() {
             <GridItem
               icon="folder-open-outline"
               label="Evidence vault"
-              onPress={() => navigation.navigate('History')}
+              onPress={() => navigation.navigate('Recordings')}
             />
             <GridItem
               icon="help-circle-outline"

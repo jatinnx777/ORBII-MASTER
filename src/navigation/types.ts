@@ -60,6 +60,7 @@ export type AppStackParamList = {
   EmergencyContacts: undefined;
   SafetyReadiness: undefined;
   Geofences: undefined;
+  Recordings: undefined;
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;

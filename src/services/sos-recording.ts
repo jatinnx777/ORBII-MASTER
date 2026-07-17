@@ -173,3 +173,45 @@ function saveRecordingLocally(localUri: string, sosId: string): void {
   if (dest.exists) dest.delete();
   new FileSystem.File(localUri).copy(dest);
 }
+
+export type SavedRecording = {
+  sosId: string;
+  uri: string;
+  savedAt: number; // ms
+  sizeBytes: number;
+};
+
+/** Every SOS recording saved on this device, newest first. */
+export function listRecordings(): SavedRecording[] {
+  try {
+    const dir = new FileSystem.Directory(FileSystem.Paths.document, REC_DIR);
+    if (!dir.exists) return [];
+    const out: SavedRecording[] = [];
+    for (const entry of dir.list()) {
+      // Only files (an m4a clip), skip any nested dirs.
+      if (!(entry instanceof FileSystem.File)) continue;
+      if (!entry.name.endsWith('.m4a')) continue;
+      out.push({
+        sosId: entry.name.replace(/\.m4a$/, ''),
+        uri: entry.uri,
+        savedAt: entry.modificationTime ?? 0,
+        sizeBytes: entry.size ?? 0,
+      });
+    }
+    return out.sort((a, b) => b.savedAt - a.savedAt);
+  } catch {
+    return [];
+  }
+}
+
+/** Permanently delete one recording from the device. */
+export function deleteRecording(sosId: string): boolean {
+  try {
+    const dir = new FileSystem.Directory(FileSystem.Paths.document, REC_DIR);
+    const f = new FileSystem.File(dir, `${sosId}.m4a`);
+    if (f.exists) f.delete();
+    return true;
+  } catch {
+    return false;
+  }
+}

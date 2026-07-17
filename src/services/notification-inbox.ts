@@ -6,7 +6,7 @@ export type NotificationEntry = {
   body: string;
   createdAt: number;
   read: boolean;
-  kind: 'sos' | 'helper' | 'system';
+  kind: 'sos' | 'helper' | 'system' | 'location_share' | 'geofence';
 };
 
 const MAX_ENTRIES = 100;
