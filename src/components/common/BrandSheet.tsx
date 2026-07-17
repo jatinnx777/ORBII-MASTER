@@ -254,7 +254,7 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
   const tone: Tone = config?.tone ?? 'neutral';
   const openTranslate = slide.interpolate({
     inputRange: [0, 1],
-    outputRange: [340, 0],
+    outputRange: [18, 0],
   });
   // Combine the open animation with the live finger drag.
   const translateY = Animated.add(openTranslate, drag);
@@ -273,22 +273,14 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
           <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
           <Pressable style={styles.backdropTap} onPress={hide} />
           <Animated.View
-            {...pan.panHandlers}
             style={[
               styles.sheet,
-              {
-                // Stack a generous baseline (>= xxl) on top of the safe-area
-                // inset so on phones with no inset (older Androids) the
-                // sheet still sits a thumb's-width above the edge.
-                paddingBottom: Math.max(spacing.xxl, insets.bottom + spacing.xl),
-                marginBottom: insets.bottom > 0 ? 0 : spacing.md,
-                transform: [{ translateY }],
-              },
+              { opacity: fade, transform: [{ translateY }, { scale: fade.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }] },
             ]}
           >
-            <View style={styles.handleZone}>
-              <View style={styles.handle} />
-            </View>
+            <Pressable style={styles.closeBtn} hitSlop={10} onPress={hide} accessibilityLabel="Close">
+              <Ionicons name="close" size={18} color={colors.textSecondary} />
+            </Pressable>
             {config?.icon ? (
               <View
                 style={[
@@ -306,17 +298,20 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
             <Text style={styles.title}>{config?.title}</Text>
             {config?.body ? <Text style={styles.body}>{config.body}</Text> : null}
             <View style={styles.buttonRow}>
-              {(config?.buttons ?? [{ label: 'OK', primary: true }]).map((btn, idx) => (
-                <SheetButtonView
-                  key={idx}
-                  button={btn}
-                  onTap={() => {
-                    hide();
-                    btn.onPress?.();
-                  }}
-                  flex={(config?.buttons?.length ?? 1) > 1 ? 1 : undefined}
-                />
-              ))}
+              {(config?.buttons ?? [{ label: 'OK', primary: true }])
+                // Primary/destructive on top, plain secondary (cancel) below.
+                .slice()
+                .sort((a, b) => (a.primary || a.destructive ? 0 : 1) - (b.primary || b.destructive ? 0 : 1))
+                .map((btn, idx) => (
+                  <SheetButtonView
+                    key={idx}
+                    button={btn}
+                    onTap={() => {
+                      hide();
+                      btn.onPress?.();
+                    }}
+                  />
+                ))}
             </View>
           </Animated.View>
         </Animated.View>
@@ -392,40 +387,41 @@ const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
     // Lighter scrim — the BlurView behind does the heavy lifting now.
-    backgroundColor: 'rgba(20,18,16,0.28)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(20,18,30,0.30)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xl,
   },
   backdropTap: {
     ...StyleSheet.absoluteFillObject,
   },
   sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    width: '100%',
+    maxWidth: 350,
+    backgroundColor: colors.surface,
+    borderRadius: 28,
     paddingHorizontal: spacing.lg,
-    paddingTop: 0,
-    paddingBottom: spacing.xl,
-    gap: spacing.sm,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    gap: spacing.xs,
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 24,
-    elevation: 16,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    elevation: 18,
   },
-  // Larger grab area so the drag-to-dismiss handle is easy to catch.
-  handleZone: {
-    alignSelf: 'stretch',
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.creamDeep,
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xs,
-  },
-  handle: {
-    width: 44,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.border,
-    marginBottom: spacing.sm,
+    justifyContent: 'center',
+    zIndex: 2,
   },
   iconWrap: {
     width: 72,
@@ -449,14 +445,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
   },
   buttonRow: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: spacing.sm,
     marginTop: spacing.md,
     alignSelf: 'stretch',
   },
   btn: {
-    minHeight: 48,
-    borderRadius: radius.md,
+    width: '100%',
+    minHeight: 50,
+    borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.md,

@@ -8,12 +8,15 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 
 // On-brand replacement for React Native's system Alert. `appAlert` mirrors the
-// system alert signature exactly, so call sites can
-// swap one for the other with no behaviour change — but the popup now renders
-// inside the app in ORBII's cream/peach style instead of the grey OS dialog.
+// system alert signature exactly, so call sites can swap one for the other with
+// no behaviour change — but the popup renders inside the app as a centred glass
+// card: frosted backdrop, close X, an icon, a bold title, and full-width pill
+// buttons. One shape for every popup in ORBII.
 
 export type AppDialogButton = {
   text: string;
@@ -29,8 +32,6 @@ type DialogConfig = {
 
 type Listener = (cfg: DialogConfig) => void;
 let listener: Listener | null = null;
-// If a dialog is requested before the host has mounted, hold the most recent
-// one and flush it as soon as the host registers.
 let pending: DialogConfig | null = null;
 
 export function appAlert(
@@ -72,7 +73,7 @@ export function AppDialogHost() {
   const close = (cb?: () => void) => {
     Animated.timing(anim, {
       toValue: 0,
-      duration: 130,
+      duration: 140,
       easing: Easing.in(Easing.quad),
       useNativeDriver: true,
     }).start(() => {
@@ -87,72 +88,73 @@ export function AppDialogHost() {
     cfg.buttons && cfg.buttons.length > 0
       ? cfg.buttons
       : [{ text: 'OK', style: 'default' as const }];
-  // 3+ buttons read better stacked vertically; 1–2 sit side by side.
-  const stacked = buttons.length > 2;
+
+  const hasDestructive = buttons.some((b) => b.style === 'destructive');
+  // Decorative header icon. Destructive dialogs get a warning; everything else
+  // gets a calm brand mark. (appAlert has no icon param, so this is inferred.)
+  const icon = hasDestructive ? 'alert-circle' : 'shield-checkmark';
+  const iconTint = hasDestructive ? colors.coralDeep : colors.brandDeep;
+  const iconBg = hasDestructive ? colors.coralSoft : colors.brandSoft;
 
   return (
-    <Modal
-      transparent
-      visible
-      animationType="fade"
-      statusBarTranslucent
-      onRequestClose={() => close()}
-    >
+    <Modal transparent visible statusBarTranslucent onRequestClose={() => close()}>
       <View style={styles.backdrop}>
+        <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
+        <View style={styles.scrim} />
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} />
+
         <Animated.View
           style={[
             styles.card,
             {
               opacity: anim,
               transform: [
-                {
-                  scale: anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.9, 1],
-                  }),
-                },
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
               ],
             },
           ]}
         >
+          <Pressable style={styles.closeBtn} hitSlop={10} onPress={() => close()} accessibilityLabel="Close">
+            <Ionicons name="close" size={18} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
+            <Ionicons name={icon} size={30} color={iconTint} />
+          </View>
+
           <Text style={styles.title}>{cfg.title}</Text>
           {cfg.message ? <Text style={styles.message}>{cfg.message}</Text> : null}
-          <View style={[styles.btnRow, stacked && styles.btnCol]}>
-            {buttons.map((b, i) => {
-              const cancel = b.style === 'cancel';
-              const destructive = b.style === 'destructive';
-              return (
-                <Pressable
-                  key={`${b.text}-${i}`}
-                  onPress={() => close(b.onPress)}
-                  style={({ pressed }) => [
-                    styles.btn,
-                    stacked ? styles.btnStacked : styles.btnInline,
-                    cancel
-                      ? styles.btnCancel
-                      : destructive
-                        ? styles.btnDestructive
-                        : styles.btnDefault,
-                    pressed && { opacity: 0.85 },
-                  ]}
-                  accessibilityRole="button"
-                >
-                  <Text
-                    style={[
-                      styles.btnText,
-                      cancel
-                        ? styles.btnTextCancel
-                        : destructive
-                          ? styles.btnTextDestructive
-                          : styles.btnTextDefault,
+
+          <View style={styles.btns}>
+            {[...buttons]
+              // Primary/destructive on top, cancel below — like the reference.
+              .sort((a, b) => (a.style === 'cancel' ? 1 : 0) - (b.style === 'cancel' ? 1 : 0))
+              .map((b, i) => {
+                const cancel = b.style === 'cancel';
+                const destructive = b.style === 'destructive';
+                return (
+                  <Pressable
+                    key={`${b.text}-${i}`}
+                    onPress={() => close(b.onPress)}
+                    style={({ pressed }) => [
+                      styles.btn,
+                      cancel ? styles.btnCancel : destructive ? styles.btnDestructive : styles.btnDefault,
+                      pressed && { opacity: 0.9 },
                     ]}
+                    accessibilityRole="button"
                   >
-                    {b.text}
-                  </Text>
-                </Pressable>
-              );
-            })}
+                    <Text
+                      style={[
+                        styles.btnText,
+                        cancel ? styles.btnTextCancel : styles.btnTextInverse,
+                      ]}
+                    >
+                      {b.text}
+                    </Text>
+                  </Pressable>
+                );
+              })}
           </View>
         </Animated.View>
       </View>
@@ -161,64 +163,59 @@ export function AppDialogHost() {
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: colors.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
+  backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,20,30,0.34)' },
   card: {
     width: '100%',
-    maxWidth: 360,
+    maxWidth: 350,
     backgroundColor: colors.surface,
-    borderRadius: radius.xxl,
+    borderRadius: 28,
     paddingHorizontal: spacing.lg,
-    paddingTop: spacing.lg,
-    paddingBottom: spacing.md,
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.lg,
+    alignItems: 'center',
     ...shadows.sheet,
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.creamDeep,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 18,
+    fontSize: 19,
     color: colors.textPrimary,
     letterSpacing: -0.3,
     textAlign: 'center',
   },
   message: {
     fontFamily: fontFamilies.interRegular,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13.5,
+    lineHeight: 19,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.sm,
+    marginTop: spacing.xs,
   },
-  btnRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginTop: spacing.lg,
-  },
-  btnCol: {
-    flexDirection: 'column-reverse',
-  },
-  btn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: radius.lg,
-  },
-  btnInline: { flex: 1 },
-  btnStacked: { width: '100%' },
-  // Default = warm peach (calm). Red is reserved for genuinely destructive
-  // actions, so ordinary "OK" popups never read as an emergency.
-  btnDefault: { backgroundColor: colors.peach },
+  btns: { width: '100%', gap: spacing.sm, marginTop: spacing.lg },
+  btn: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: radius.pill },
+  btnDefault: { backgroundColor: colors.brand },
   btnDestructive: { backgroundColor: colors.coral },
-  btnCancel: { backgroundColor: colors.creamDeep },
-  btnText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 15,
-  },
-  btnTextDefault: { color: colors.textInverse },
-  btnTextDestructive: { color: colors.textInverse },
+  btnCancel: { backgroundColor: 'transparent' },
+  btnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15 },
+  btnTextInverse: { color: colors.textInverse },
   btnTextCancel: { color: colors.textSecondary },
 });

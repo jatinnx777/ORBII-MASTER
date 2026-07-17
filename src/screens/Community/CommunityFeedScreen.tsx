@@ -138,9 +138,13 @@ export function CommunityFeedScreen() {
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.back}>
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </Pressable>
+          {navigation.canGoBack() ? (
+            <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.back}>
+              <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
           <Text style={styles.headerTitle}>Community</Text>
           <View style={{ width: 40 }} />
         </View>
