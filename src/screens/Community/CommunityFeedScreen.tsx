@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { appAlert, useBrandSheet } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -47,6 +47,7 @@ function timeAgo(iso: string): string {
 
 export function CommunityFeedScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const sheet = useBrandSheet();
   const myUid = useAppSelector((s) => s.user.profile?.uid);
   const isPremium = useIsPremium();
@@ -218,10 +219,11 @@ export function CommunityFeedScreen() {
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Create-post FAB (Reddit "+"). Plus-gated. */}
+        {/* Create-post FAB (Reddit "+"). Lifted clear of the floating tab bar
+            (its bar sits ~76px up from the bottom). Plus-gated. */}
         <Pressable
           onPress={openCompose}
-          style={styles.fab}
+          style={[styles.fab, { bottom: insets.bottom + 92 }]}
           accessibilityRole="button"
           accessibilityLabel="Create a post"
         >
@@ -467,7 +469,7 @@ const styles = StyleSheet.create({
     ...shadows.icon,
   },
   headerTitle: { ...typography.h2, fontSize: 17, color: colors.textPrimary },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.md },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 130, gap: spacing.md },
 
   compose: {
     backgroundColor: colors.surface,
@@ -551,7 +553,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.lg,
-    bottom: spacing.xl,
     width: 56,
     height: 56,
     borderRadius: 28,
