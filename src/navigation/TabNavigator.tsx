@@ -10,6 +10,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
@@ -126,11 +127,11 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
         <Text style={styles.fabLabel}>Emergency</Text>
       </Pressable>
 
-      <View style={styles.bar}>
+      <BlurView intensity={40} tint="light" style={styles.bar}>
         <View style={styles.side}>{left.map(renderItem)}</View>
         <View style={styles.centerGap} />
         <View style={styles.side}>{right.map(renderItem)}</View>
-      </View>
+      </BlurView>
     </View>
   );
 }
@@ -169,12 +170,17 @@ function TabItem({
       accessibilityLabel={accessibilityLabel}
       style={styles.item}
     >
-      <Animated.View style={[styles.itemInner, { transform: [{ scale: press }] }]}>
-        {/* Active item sits in a filled brand circle, like the reference. */}
-        <Animated.View style={[styles.iconPill, focused && styles.iconPillOn, { transform: [{ translateY: iconLift }] }]}>
-          <Ionicons name={icon} size={21} color={focused ? colors.textInverse : colors.textMuted} />
-        </Animated.View>
-        {focused ? <Text style={styles.itemLabel} numberOfLines={1}>{label}</Text> : null}
+      {/* Icon-only. The active tab gets a filled brand circle behind it — the
+          circular active-state indicator. No labels, so nothing can overflow
+          its slot or collide with the centre button. */}
+      <Animated.View
+        style={[
+          styles.iconPill,
+          focused && styles.iconPillOn,
+          { transform: [{ scale: press }, { translateY: iconLift }] },
+        ]}
+      >
+        <Ionicons name={icon} size={22} color={focused ? colors.textInverse : colors.textMuted} />
       </Animated.View>
     </Pressable>
   );
@@ -184,23 +190,24 @@ const styles = StyleSheet.create({
   wrap: { position: 'absolute', left: 0, right: 0, paddingHorizontal: 16, alignItems: 'center' },
   bar: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     alignSelf: 'stretch',
-    backgroundColor: colors.surface,
-    paddingHorizontal: 6,
-    paddingTop: 9,
-    paddingBottom: 8,
-    borderRadius: 30,
+    // Frosted glass: translucent fill over the BlurView so the blur reads.
+    backgroundColor: 'rgba(255,255,255,0.62)',
+    paddingHorizontal: 8,
+    paddingVertical: 10,
+    borderRadius: 32,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.8)',
+    borderColor: 'rgba(255,255,255,0.7)',
+    overflow: 'hidden',
     shadowColor: '#2D2D3D',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.09,
+    shadowOpacity: 0.1,
     shadowRadius: 22,
     elevation: 8,
   },
-  side: { flex: 1, flexDirection: 'row' },
-  centerGap: { width: 72 },
+  side: { flex: 1, flexDirection: 'row', justifyContent: 'space-evenly' },
+  centerGap: { width: 76 },
   fabWrap: {
     position: 'absolute',
     top: -26,
@@ -228,9 +235,7 @@ const styles = StyleSheet.create({
     color: colors.coralDeep,
     marginTop: 2,
   },
-  item: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
-  itemInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 4 },
-  iconPill: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  item: { alignItems: 'center', justifyContent: 'center' },
+  iconPill: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
   iconPillOn: { backgroundColor: colors.brand },
-  itemLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, letterSpacing: 0.2, color: colors.brandDeep },
 });
