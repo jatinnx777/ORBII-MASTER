@@ -18,8 +18,9 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 
 export type TabParamList = {
   Home: undefined;
-  Emergency: undefined;
   Community: undefined;
+  Emergency: undefined;
+  Plus: undefined;
   // Responder-only tab (rendered only when role is responder/admin).
   Missions: undefined;
   Profile: undefined;

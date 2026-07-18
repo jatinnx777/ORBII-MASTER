@@ -15,6 +15,7 @@ import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { EmergencyScreen } from '@/screens/Emergency/EmergencyScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
+import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useIsResponder } from '@/services/roles';
@@ -25,17 +26,15 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
+// Emergency is deliberately NOT here — it's the raised centre button, not a
+// side item.
 const ICONS: Partial<Record<
   keyof TabParamList,
   { active: IoniconsName; inactive: IoniconsName; label: string }
 >> = {
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
-  Emergency: {
-    active: 'shield-checkmark',
-    inactive: 'shield-checkmark-outline',
-    label: 'Emergency',
-  },
   Community: { active: 'chatbubbles', inactive: 'chatbubbles-outline', label: 'Community' },
+  Plus: { active: 'sparkles', inactive: 'sparkles-outline', label: 'Plus' },
   Missions: { active: 'flash', inactive: 'flash-outline', label: 'Missions' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
@@ -53,8 +52,9 @@ export function TabNavigator() {
       }}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Emergency" component={EmergencyScreen} />
       <Tab.Screen name="Community" component={CommunityFeedScreen} />
+      <Tab.Screen name="Emergency" component={EmergencyScreen} />
+      <Tab.Screen name="Plus" component={PremiumUpgradeScreen} />
       {showMissions ? <Tab.Screen name="Missions" component={MissionsScreen} /> : null}
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -101,27 +101,29 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     );
   };
 
+  const emergencyFocused = state.routes[state.index]?.name === 'Emergency';
+
   return (
     <View pointerEvents="box-none" style={[styles.wrap, { bottom }]}>
-      {/* Raised centre: ORBII Plus */}
+      {/* Raised centre: EMERGENCY — the one button she must always find fast. */}
       <Pressable
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-          navigation.navigate('PremiumUpgrade' as never);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => undefined);
+          navigation.navigate('Emergency' as never);
         }}
         style={styles.fabWrap}
         accessibilityRole="button"
-        accessibilityLabel="ORBII Plus, upgrade"
+        accessibilityLabel="Emergency"
       >
         <LinearGradient
-          colors={[colors.brand, colors.brandDeep]}
+          colors={[colors.coral, colors.coralDeep]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.fab}
+          style={[styles.fab, emergencyFocused && styles.fabOn]}
         >
-          <Ionicons name="sparkles" size={24} color={colors.textInverse} />
+          <Ionicons name="shield-checkmark" size={26} color={colors.textInverse} />
         </LinearGradient>
-        <Text style={styles.fabLabel}>Plus</Text>
+        <Text style={styles.fabLabel}>Emergency</Text>
       </Pressable>
 
       <View style={styles.bar}>
@@ -223,16 +225,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 4,
     borderColor: colors.cream,
-    shadowColor: colors.brand,
+    shadowColor: colors.coral,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
+    shadowOpacity: 0.45,
     shadowRadius: 12,
     elevation: 10,
   },
+  fabOn: { borderColor: colors.coralSoft },
   fabLabel: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 10,
-    color: colors.brandDeep,
+    color: colors.coralDeep,
     marginTop: 2,
   },
   item: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' },

@@ -21,8 +21,22 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
 import { subscribePresence, type PresencePeer } from '@/services/community';
+import {
+  isListening,
+  startListening,
+  stopListening,
+  subscribeStatus,
+  type VoiceDetectionStatus,
+} from '@/services/voice-detection';
+import {
+  startBackgroundVoice,
+  stopBackgroundVoice,
+  saveBgVoiceState,
+  requestBatteryExemption,
+} from '@/services/background-voice';
 import { getFastLocation } from '@/services/location';
 import { shareMyLocation } from '@/services/location-share';
+import { trackEvent } from '@/services/analytics';
 import { comingSoon } from '@/services/coming-soon';
 import type { GeoPoint } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
@@ -52,8 +66,44 @@ export function HomeScreen() {
   const [peers, setPeers] = useState<PresencePeer[]>([]);
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'people' | 'fake' | 'journey'>('people');
+  const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>(
+    isListening() ? 'listening' : 'idle',
+  );
+  const [voiceBusy, setVoiceBusy] = useState(false);
+  const voiceOn = voiceStatus === 'listening' || voiceStatus === 'starting';
 
+  useEffect(() => subscribeStatus(setVoiceStatus), []);
   useEffect(() => subscribePresence(setPeers), []);
+
+  const toggleVoice = async () => {
+    if (voiceBusy) return;
+    setVoiceBusy(true);
+    try {
+      if (voiceOn) {
+        await stopBackgroundVoice();
+        await saveBgVoiceState({ enabled: false, hours: 0 });
+        await stopListening();
+        return;
+      }
+      const res = await startListening();
+      if (!res.ok) {
+        appAlert(
+          "Voice SOS couldn't start",
+          res.reason === 'permission-denied'
+            ? 'ORBII needs microphone access to hear you call for help.'
+            : 'Voice SOS runs on the installed Android app.',
+        );
+        return;
+      }
+      // Arm background protection too, so she's covered with the app closed.
+      await startBackgroundVoice([], 0).catch(() => undefined);
+      await saveBgVoiceState({ enabled: true, hours: 0 });
+      await requestBatteryExemption().catch(() => undefined);
+      trackEvent('voice_sos_enabled', { from: 'home_box' });
+    } finally {
+      setVoiceBusy(false);
+    }
+  };
   const loadMe = useCallback(async () => {
     try {
       setMe(await getFastLocation());
@@ -210,6 +260,29 @@ export function HomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 96 }]}
         >
+          {/* Voice SOS activation box — also starts background protection. */}
+          <Pressable
+            onPress={toggleVoice}
+            disabled={voiceBusy}
+            style={({ pressed }) => [styles.voiceBox, voiceOn && styles.voiceBoxOn, pressed && styles.pressed]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: voiceOn }}
+            accessibilityLabel="Voice SOS"
+          >
+            <View style={[styles.voiceIcon, voiceOn && styles.voiceIconOn]}>
+              <Ionicons name={voiceOn ? 'mic' : 'mic-outline'} size={22} color={voiceOn ? colors.textInverse : colors.brandDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.voiceTitle}>{voiceOn ? 'Voice SOS is on' : 'Activate Voice SOS'}</Text>
+              <Text style={styles.voiceSub}>
+                {voiceOn ? 'Listening for "help, help", even in the background.' : 'Hands-free. Also runs while the app is closed.'}
+              </Text>
+            </View>
+            <View style={[styles.voicePill, voiceOn && styles.voicePillOn]}>
+              <Text style={[styles.voicePillText, voiceOn && styles.voicePillTextOn]}>{voiceOn ? 'ON' : 'OFF'}</Text>
+            </View>
+          </Pressable>
+
           {/* A. Safety status */}
           <Pressable
             onPress={() => navigation.navigate('SafetyReadiness')}
@@ -431,6 +504,27 @@ const styles = StyleSheet.create({
   handleZone: { alignItems: 'center', paddingTop: 4, paddingBottom: spacing.sm },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.creamDeep },
   sheetScroll: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.md },
+
+  voiceBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1.5,
+    borderColor: colors.brandSoft,
+    ...shadows.card,
+  },
+  voiceBoxOn: { backgroundColor: colors.brandSoft, borderColor: colors.brand },
+  voiceIcon: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  voiceIconOn: { backgroundColor: colors.brand },
+  voiceTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
+  voiceSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
+  voicePill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: colors.creamDeep },
+  voicePillOn: { backgroundColor: colors.brand },
+  voicePillText: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, color: colors.textMuted, letterSpacing: 0.5 },
+  voicePillTextOn: { color: colors.textInverse },
 
   statusCard: { backgroundColor: colors.brandSoft, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },
   statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

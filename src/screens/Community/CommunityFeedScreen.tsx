@@ -28,6 +28,7 @@ import {
   type FeedComment,
   type FeedPost,
 } from '@/services/community-feed';
+import { useIsPremium } from '@/services/entitlements';
 
 // Community — a place to share safety experiences and support each other.
 // Post, up/down vote, comment. Not anonymous to the server (every author is a
@@ -47,6 +48,7 @@ export function CommunityFeedScreen() {
   const navigation = useNavigation();
   const sheet = useBrandSheet();
   const myUid = useAppSelector((s) => s.user.profile?.uid);
+  const isPremium = useIsPremium();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -164,29 +166,48 @@ export function CommunityFeedScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
             }
           >
-            {/* compose */}
-            <View style={styles.compose}>
-              <TextInput
-                value={draft}
-                onChangeText={setDraft}
-                placeholder="Share an experience or a safety tip…"
-                placeholderTextColor={colors.textMuted}
-                style={styles.input}
-                multiline
-                maxLength={2000}
-              />
+            {/* compose — posting is an ORBII Plus feature. Free members can
+                read, vote and comment, but only Plus members create posts. */}
+            {isPremium ? (
+              <View style={styles.compose}>
+                <TextInput
+                  value={draft}
+                  onChangeText={setDraft}
+                  placeholder="Share an experience or a safety tip…"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.input}
+                  multiline
+                  maxLength={2000}
+                />
+                <Pressable
+                  onPress={submit}
+                  disabled={posting || !draft.trim()}
+                  style={({ pressed }) => [
+                    styles.postBtn,
+                    (!draft.trim() || posting) && { opacity: 0.5 },
+                    pressed && { opacity: 0.9 },
+                  ]}
+                >
+                  <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
+                </Pressable>
+              </View>
+            ) : (
               <Pressable
-                onPress={submit}
-                disabled={posting || !draft.trim()}
-                style={({ pressed }) => [
-                  styles.postBtn,
-                  (!draft.trim() || posting) && { opacity: 0.5 },
-                  pressed && { opacity: 0.9 },
-                ]}
+                onPress={() => navigation.navigate('PremiumUpgrade' as never)}
+                style={({ pressed }) => [styles.gate, pressed && { opacity: 0.92 }]}
+                accessibilityRole="button"
+                accessibilityLabel="Upgrade to ORBII Plus to post"
               >
-                <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
+                <View style={styles.gateIcon}>
+                  <Ionicons name="sparkles" size={18} color={colors.goldDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.gateTitle}>Posting is an ORBII Plus feature</Text>
+                  <Text style={styles.gateSub}>You can read, vote and comment for free. Upgrade to share your own posts.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
               </Pressable>
-            </View>
+            )}
 
             {/* All / My posts filter */}
             <View style={styles.filterRow}>
@@ -456,6 +477,18 @@ const styles = StyleSheet.create({
   },
   postBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textInverse },
 
+  gate: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.goldSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  gateIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  gateTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 13.5, color: colors.textPrimary },
+  gateSub: { ...typography.caption, fontSize: 11, color: colors.textSecondary, marginTop: 1, lineHeight: 15 },
   filterRow: {
     flexDirection: 'row',
     gap: spacing.sm,

@@ -102,8 +102,8 @@ android {
         applicationId 'com.orbii.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 26591
-        versionName "31.15.0"
+        versionCode 26592
+        versionName "31.16.0"
         // Ship only the locales the app actually has strings for. Strips
         // dozens of library translations (androidx etc.) from resources.
         resConfigs "en", "hi"
