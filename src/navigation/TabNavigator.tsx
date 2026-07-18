@@ -170,21 +170,11 @@ function TabItem({
       style={styles.item}
     >
       <Animated.View style={[styles.itemInner, { transform: [{ scale: press }] }]}>
-        <Animated.View style={{ transform: [{ translateY: iconLift }] }}>
-          <Ionicons name={icon} size={22} color={focused ? colors.brandDeep : colors.textMuted} />
+        {/* Active item sits in a filled brand circle, like the reference. */}
+        <Animated.View style={[styles.iconPill, focused && styles.iconPillOn, { transform: [{ translateY: iconLift }] }]}>
+          <Ionicons name={icon} size={21} color={focused ? colors.textInverse : colors.textMuted} />
         </Animated.View>
-        <Text
-          style={[
-            styles.itemLabel,
-            {
-              color: focused ? colors.brandDeep : colors.textMuted,
-              fontFamily: focused ? fontFamilies.poppinsBold : fontFamilies.poppinsSemiBold,
-            },
-          ]}
-          numberOfLines={1}
-        >
-          {label}
-        </Text>
+        {focused ? <Text style={styles.itemLabel} numberOfLines={1}>{label}</Text> : null}
       </Animated.View>
     </Pressable>
   );
@@ -239,6 +229,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   item: { flex: 1, minHeight: 46, alignItems: 'center', justifyContent: 'center' },
-  itemInner: { alignItems: 'center', justifyContent: 'center', gap: 3, paddingVertical: 4 },
-  itemLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, letterSpacing: 0.2 },
+  itemInner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 4 },
+  iconPill: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  iconPillOn: { backgroundColor: colors.brand },
+  itemLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, letterSpacing: 0.2, color: colors.brandDeep },
 });

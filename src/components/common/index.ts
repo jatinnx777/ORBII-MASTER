@@ -12,6 +12,7 @@ export { PopIn } from './PopIn';
 export { MascotLoader } from './MascotLoader';
 export { EmptyState } from './EmptyState';
 export { HelplinesCard } from './HelplinesCard';
+export { MoodCheckIn } from './MoodCheckIn';
 export { Skeleton, SkeletonRow, SkeletonList } from './Skeleton';
 export { OSMMapView, type OSMMarker, type OSMPolyline } from './OSMMapView';
 export {

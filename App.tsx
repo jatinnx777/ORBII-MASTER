@@ -40,9 +40,11 @@ import {
   AppDialogHost,
   appAlert,
   BrandSheetProvider,
+  MoodCheckIn,
   OfflineBanner,
   PermissionDisclosureModal,
 } from '@/components/common';
+import { shouldAskMood } from '@/services/mood';
 import { trackEvent } from '@/services/analytics';
 import {
   hidePinnedSOSShortcut,
@@ -103,6 +105,7 @@ function RootNavigator() {
   // after sign-in; null = still loading the flag from storage.
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [pinReady, setPinReady] = useState<boolean | null>(null);
+  const [moodOpen, setMoodOpen] = useState(false);
   useEffect(() => {
     getItem<boolean>(storageKeys.guidedSetup).then((v) => setSetupDone(!!v));
     void isPinSet()
@@ -217,6 +220,16 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void reconcileExpiredVoiceSessions();
+  }, [status]);
+
+  // Wellbeing check-in every 12h. A gentle emotional touch, on-device only.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    shouldAskMood()
+      .then((ask) => {
+        if (ask) setMoodOpen(true);
+      })
+      .catch(() => undefined);
   }, [status]);
 
   // Re-arm safe-zone monitoring. The OS holds the geofences, but it forgets
@@ -408,6 +421,7 @@ function RootNavigator() {
         <AppNavigator />
         {/* Play "prominent disclosure" — shown once before any permission ask. */}
         <PermissionDisclosureModal />
+        <MoodCheckIn visible={moodOpen} onClose={() => setMoodOpen(false)} />
       </>
     );
   }

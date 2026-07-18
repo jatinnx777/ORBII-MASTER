@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -53,6 +54,8 @@ export function CommunityFeedScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [draft, setDraft] = useState('');
+  const [title, setTitle] = useState('');
+  const [composeOpen, setComposeOpen] = useState(false);
   const [posting, setPosting] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState<'all' | 'mine'>('all');
@@ -77,19 +80,29 @@ export function CommunityFeedScreen() {
   };
 
   const submit = async () => {
-    if (posting || !draft.trim()) return;
+    if (posting || !title.trim()) return;
     setPosting(true);
     try {
-      const res = await createPost(draft);
+      const res = await createPost(title, draft);
       if (!res.ok) {
         appAlert("Couldn't post", res.error ?? 'Try again.');
         return;
       }
+      setTitle('');
       setDraft('');
+      setComposeOpen(false);
       await refresh();
     } finally {
       setPosting(false);
     }
+  };
+
+  const openCompose = () => {
+    if (!isPremium) {
+      navigation.navigate('PremiumUpgrade' as never);
+      return;
+    }
+    setComposeOpen(true);
   };
 
   // Optimistic vote: update the number immediately, reconcile on next load.
@@ -166,49 +179,6 @@ export function CommunityFeedScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />
             }
           >
-            {/* compose — posting is an ORBII Plus feature. Free members can
-                read, vote and comment, but only Plus members create posts. */}
-            {isPremium ? (
-              <View style={styles.compose}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="Share an experience or a safety tip…"
-                  placeholderTextColor={colors.textMuted}
-                  style={styles.input}
-                  multiline
-                  maxLength={2000}
-                />
-                <Pressable
-                  onPress={submit}
-                  disabled={posting || !draft.trim()}
-                  style={({ pressed }) => [
-                    styles.postBtn,
-                    (!draft.trim() || posting) && { opacity: 0.5 },
-                    pressed && { opacity: 0.9 },
-                  ]}
-                >
-                  <Text style={styles.postBtnText}>{posting ? 'Posting…' : 'Post'}</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <Pressable
-                onPress={() => navigation.navigate('PremiumUpgrade' as never)}
-                style={({ pressed }) => [styles.gate, pressed && { opacity: 0.92 }]}
-                accessibilityRole="button"
-                accessibilityLabel="Upgrade to ORBII Plus to post"
-              >
-                <View style={styles.gateIcon}>
-                  <Ionicons name="sparkles" size={18} color={colors.goldDeep} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.gateTitle}>Posting is an ORBII Plus feature</Text>
-                  <Text style={styles.gateSub}>You can read, vote and comment for free. Upgrade to share your own posts.</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
-              </Pressable>
-            )}
-
             {/* All / My posts filter */}
             <View style={styles.filterRow}>
               <Pressable onPress={() => setFilter('all')} style={[styles.filterBtn, filter === 'all' && styles.filterOn]}>
@@ -247,7 +217,53 @@ export function CommunityFeedScreen() {
             )}
           </ScrollView>
         </KeyboardAvoidingView>
+
+        {/* Create-post FAB (Reddit "+"). Plus-gated. */}
+        <Pressable
+          onPress={openCompose}
+          style={styles.fab}
+          accessibilityRole="button"
+          accessibilityLabel="Create a post"
+        >
+          <Ionicons name="add" size={30} color={colors.textInverse} />
+        </Pressable>
       </SafeAreaView>
+
+      {/* Compose modal: title (heading) + body (description), Reddit-style. */}
+      <Modal visible={composeOpen} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setComposeOpen(false)}>
+        <KeyboardAvoidingView style={styles.composeRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={styles.composeSheet}>
+            <View style={styles.composeHead}>
+              <Pressable onPress={() => setComposeOpen(false)} hitSlop={8}>
+                <Text style={styles.composeCancel}>Cancel</Text>
+              </Pressable>
+              <Text style={styles.composeHeadTitle}>New post</Text>
+              <Pressable onPress={submit} disabled={posting || !title.trim()} hitSlop={8}>
+                <Text style={[styles.composePost, (!title.trim() || posting) && { opacity: 0.4 }]}>
+                  {posting ? 'Posting…' : 'Post'}
+                </Text>
+              </Pressable>
+            </View>
+            <TextInput
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Title"
+              placeholderTextColor={colors.textMuted}
+              style={styles.titleInput}
+              maxLength={160}
+            />
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Share your experience or a safety tip… (optional)"
+              placeholderTextColor={colors.textMuted}
+              style={styles.bodyInput}
+              multiline
+              maxLength={2000}
+            />
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -289,7 +305,8 @@ function PostCard({
         </Pressable>
       </View>
 
-      <Text style={styles.body}>{post.body}</Text>
+      {post.title ? <Text style={styles.postTitle}>{post.title}</Text> : null}
+      {post.body ? <Text style={styles.body}>{post.body}</Text> : null}
 
       <View style={styles.actions}>
         <Pressable onPress={() => onVote(post, 1)} hitSlop={6} style={styles.voteBtn}>
@@ -528,7 +545,55 @@ const styles = StyleSheet.create({
   authorInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.brandDeep },
   authorName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
   time: { ...typography.caption, fontSize: 11, color: colors.textMuted },
-  body: { fontFamily: fontFamilies.interRegular, fontSize: 14.5, color: colors.textPrimary, lineHeight: 20 },
+  postTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 16.5, color: colors.textPrimary, letterSpacing: -0.2, lineHeight: 22 },
+  body: { fontFamily: fontFamilies.interRegular, fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+
+  fab: {
+    position: 'absolute',
+    right: spacing.lg,
+    bottom: spacing.xl,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.brand,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  composeRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(20,20,30,0.35)' },
+  composeSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: spacing.sm,
+  },
+  composeHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: spacing.xs },
+  composeHeadTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+  composeCancel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textSecondary },
+  composePost: { fontFamily: fontFamilies.poppinsBold, fontSize: 14, color: colors.brand },
+  titleInput: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 17,
+    color: colors.textPrimary,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.divider,
+  },
+  bodyInput: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 14.5,
+    color: colors.textPrimary,
+    minHeight: 100,
+    maxHeight: 220,
+    textAlignVertical: 'top',
+    paddingTop: spacing.sm,
+  },
 
   actions: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@ export type FeedPost = {
   authorId: string;
   authorName: string;
   authorPhoto: string | null;
+  title: string | null;
   body: string;
   createdAt: string;
   ups: number;
@@ -38,6 +39,7 @@ export async function loadFeed(limit = 50, offset = 0): Promise<FeedPost[]> {
     authorId: r.author_id as string,
     authorName: (r.author_name as string) ?? 'ORBII user',
     authorPhoto: (r.author_photo as string) ?? null,
+    title: (r.title as string) ?? null,
     body: r.body as string,
     createdAt: r.created_at as string,
     ups: Number(r.ups ?? 0),
@@ -47,14 +49,18 @@ export async function loadFeed(limit = 50, offset = 0): Promise<FeedPost[]> {
   }));
 }
 
-export async function createPost(body: string): Promise<{ ok: boolean; error?: string }> {
-  const text = body.trim();
-  if (text.length < 1) return { ok: false, error: 'Write something first.' };
+export async function createPost(
+  title: string,
+  body: string,
+): Promise<{ ok: boolean; error?: string }> {
+  const t = title.trim();
+  const b = body.trim();
+  if (t.length < 1) return { ok: false, error: 'Give your post a title.' };
   const uid = (await supabase.auth.getSession()).data.session?.user?.id;
   if (!uid) return { ok: false, error: 'Not signed in.' };
   const { error } = await supabase
     .from('community_posts')
-    .insert({ author_id: uid, body: text.slice(0, 2000) });
+    .insert({ author_id: uid, title: t.slice(0, 160), body: b.slice(0, 2000) });
   return error ? { ok: false, error: error.message } : { ok: true };
 }
 
