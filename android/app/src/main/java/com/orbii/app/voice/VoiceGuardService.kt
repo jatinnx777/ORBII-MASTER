@@ -131,6 +131,17 @@ class VoiceGuardService : Service() {
     )
     private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
 
+    // Single confident distress word. Requiring TWO shouts ("help help") to fire
+    // roughly SQUARES the miss rate: if one "help" is caught ~80% of the time,
+    // two-in-a-row is only ~64%. So a single distress word fires on its own IF
+    // the recogniser is confident it really heard it. A mumbled, low-confidence
+    // "help" still needs the two-shout / fusion paths below. The 5-second
+    // countdown is the guard against the rare false single trigger.
+    private val SINGLE_DISTRESS = setOf(
+      "help", "bachao", "bacho", "madad", "madat", "बचाओ", "मदद",
+    )
+    private const val SINGLE_CONF = 0.62
+
     // Cross-utterance repeat detection. A panicked "help ... help" has a pause
     // between the shouts, so the two-word phrase " help help " may never appear
     // inside a single text — the phrase list alone can NEVER catch it. Hearing
@@ -345,6 +356,7 @@ class VoiceGuardService : Service() {
                 val json = JSONObject(rec.finalResult)
                 updateConfidence(json)
                 val finalText = json.optString("text")
+                confidentSingle(json, speechStart)
                 maybeTrigger(finalText, speechStart)
                 checkRepeatKeyword(finalText, speechStart, isFinal = true)
               } catch (e: Exception) {
@@ -362,6 +374,7 @@ class VoiceGuardService : Service() {
             val json = JSONObject(rec.result)
             updateConfidence(json)
             val finalText = json.optString("text")
+            confidentSingle(json, speechStart)
             maybeTrigger(finalText, speechStart)
             checkRepeatKeyword(finalText, speechStart, isFinal = true)
           } else {
@@ -449,6 +462,22 @@ class VoiceGuardService : Service() {
     var sum = 0.0
     for (i in 0 until arr.length()) sum += arr.getJSONObject(i).optDouble("conf", 0.0)
     VoiceMetrics.lastConfidence = sum / arr.length()
+  }
+
+  // Fire on a SINGLE distress word if the recogniser is confident. Only runs on
+  // finals (the "result" array carries per-word confidence; partials don't), so
+  // one clear "help" triggers, while a mumbled fragment falls through to the
+  // stricter two-shout / fusion paths.
+  private fun confidentSingle(json: JSONObject, speechStart: Long) {
+    val arr = json.optJSONArray("result") ?: return
+    for (i in 0 until arr.length()) {
+      val w = arr.getJSONObject(i)
+      val word = w.optString("word").lowercase().trim()
+      if (word in SINGLE_DISTRESS && w.optDouble("conf", 0.0) >= SINGLE_CONF) {
+        triggerNow(word, speechStart)
+        return
+      }
+    }
   }
 
   @Volatile private var lastFire = 0L
