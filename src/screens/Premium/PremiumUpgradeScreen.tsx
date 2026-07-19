@@ -268,6 +268,12 @@ export function PremiumUpgradeScreen() {
             </View>
           ) : null}
 
+          {!isPremium ? (
+            <Text style={styles.valueLine}>
+              Full protection for <Text style={styles.valueStrong}>less than ₹4 a day</Text>. Cancel anytime.
+            </Text>
+          ) : null}
+
           {PLANS.map((plan, index) => {
             const state = cardStateFor(plan.id);
             return (
@@ -284,6 +290,33 @@ export function PremiumUpgradeScreen() {
               />
             );
           })}
+
+          {!isPremium ? (
+            <>
+              {/* Trust strip — the reassurances that actually convert on a paid
+                  screen: safe payment, no lock-in, instant value. */}
+              <View style={styles.trustStrip}>
+                {[
+                  { icon: 'lock-closed' as const, label: 'Secure\npayment' },
+                  { icon: 'close-circle' as const, label: 'Cancel\nanytime' },
+                  { icon: 'flash' as const, label: 'Instant\nactivation' },
+                ].map((t) => (
+                  <View key={t.label} style={styles.trustItem}>
+                    <View style={styles.trustIcon}>
+                      <Ionicons name={t.icon} size={17} color={colors.brandDeep} />
+                    </View>
+                    <Text style={styles.trustLabel}>{t.label}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.socialProof}>
+                <Ionicons name="shield-checkmark" size={14} color={colors.sageDeep} />
+                <Text style={styles.socialText}>
+                  Payments are handled securely by Razorpay. Your card details never touch ORBII.
+                </Text>
+              </View>
+            </>
+          ) : null}
 
           {/* gift code — only while there's nothing to gift-unlock yet. Once
               premium, we never ask the user to redeem or buy again. */}
@@ -768,6 +801,49 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     fontFamily: 'Poppins_600SemiBold',
   },
+  valueLine: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  valueStrong: { fontFamily: 'Poppins_700Bold', color: colors.brandDeep },
+  trustStrip: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+    ...shadows.card,
+  },
+  trustItem: { alignItems: 'center', gap: 7 },
+  trustIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  trustLabel: {
+    fontFamily: 'Poppins_600SemiBold',
+    fontSize: 11.5,
+    color: colors.textPrimary,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  socialProof: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.sageSoft,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+  },
+  socialText: { flex: 1, ...typography.caption, fontSize: 11.5, color: colors.textSecondary, lineHeight: 16 },
   couponCard: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,

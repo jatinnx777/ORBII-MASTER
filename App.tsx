@@ -722,71 +722,24 @@ export default function App() {
 // Full-screen branded launch screen (orbii wordmark + tagline). Shown briefly
 // over the app on cold start, then fades out. The native splash uses the same
 // orange so the hand-off is seamless.
-// Breathing launch animation. The logo gently swells (breathe in) and settles
-// (breathe out) on the violet field, with two soft rings pulsing outward, then
-// the whole overlay dissolves into the app. Pure Animated — no extra libraries.
 function LaunchOverlay({ onDone }: { onDone: () => void }) {
-  const overlay = useRef(new Animated.Value(1)).current; // 1 = shown, fades to 0
-  const breath = useRef(new Animated.Value(0)).current; // 0..1 breathing driver
-  const enter = useRef(new Animated.Value(0)).current; // initial logo fade/scale
-
+  const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    // 1. Logo appears.
-    Animated.timing(enter, {
-      toValue: 1,
-      duration: 520,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-
-    // 2. Breathe in / out, looping softly.
-    const breathe = Animated.loop(
-      Animated.sequence([
-        Animated.timing(breath, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(breath, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    breathe.start();
-
-    // 3. After a couple of breaths, dissolve into the app.
     const t = setTimeout(() => {
-      breathe.stop();
-      Animated.timing(overlay, {
+      Animated.timing(opacity, {
         toValue: 0,
-        duration: 500,
-        easing: Easing.in(Easing.cubic),
+        duration: 350,
         useNativeDriver: true,
       }).start(() => onDone());
-    }, 2400);
-    return () => {
-      clearTimeout(t);
-      breathe.stop();
-    };
-  }, [overlay, breath, enter, onDone]);
-
-  const logoScale = Animated.multiply(
-    enter.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }),
-    breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }),
-  );
-  const ring1 = {
-    transform: [{ scale: breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] }) }],
-    opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0] }),
-  };
-  const ring2 = {
-    transform: [{ scale: breath.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }) }],
-    opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.22, 0] }),
-  };
-
+    }, 900);
+    return () => clearTimeout(t);
+  }, [opacity, onDone]);
   return (
-    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFillObject, styles.launch, { opacity: overlay }]}>
-      <Animated.View style={[styles.launchRing, ring2]} />
-      <Animated.View style={[styles.launchRing, ring1]} />
-      <Animated.View style={[styles.launchGlow, { opacity: breath.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.5] }) }]} />
-      <Animated.Image
-        source={require('./assets/icon.png')}
-        style={[styles.launchLogo, { opacity: enter, transform: [{ scale: logoScale }] }]}
-        resizeMode="contain"
-      />
+    <Animated.View
+      pointerEvents="none"
+      style={[StyleSheet.absoluteFillObject, styles.launch, { opacity }]}
+    >
+      <Image source={require('./assets/splash.png')} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
     </Animated.View>
   );
 }

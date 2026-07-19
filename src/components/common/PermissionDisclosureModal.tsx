@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getItem, setItem, storageKeys } from '@/services/storage';
+import { requestAllPermissions } from '@/services/permissions';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -53,6 +54,9 @@ export function PermissionDisclosureModal() {
   const accept = async () => {
     await setItem(storageKeys.disclosureAck, true);
     setVisible(false);
+    // Ask for everything now, back-to-back, so protection is ready before it's
+    // ever needed instead of prompting mid-emergency.
+    void requestAllPermissions();
   };
 
   return (
