@@ -21,6 +21,7 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
 import { subscribePresence, type PresencePeer } from '@/services/community';
+import { listCircles, listCircleMembers, type Circle } from '@/services/circles';
 import {
   isListening,
   startListening,
@@ -46,6 +47,9 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 const { height: SCREEN_H } = Dimensions.get('window');
 const MAP_H = Math.round(SCREEN_H * 0.55);
 const SHEET_TOP = Math.round(SCREEN_H * 0.47);
+// So the map always draws immediately (it needs a camera target). It recenters
+// on the user the moment a real fix arrives. Roughly central India.
+const DEFAULT_CENTER = { latitude: 22.9734, longitude: 78.6569 };
 
 const PLACES = [
   { key: 'police', label: 'Police', icon: 'shield-outline' as const, query: 'police station' },
@@ -64,6 +68,9 @@ export function HomeScreen() {
 
   const [me, setMe] = useState<GeoPoint | null>(null);
   const [peers, setPeers] = useState<PresencePeer[]>([]);
+  const [circles, setCircles] = useState<Circle[]>([]);
+  const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
+  const [circleMemberUids, setCircleMemberUids] = useState<Set<string>>(new Set());
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'people' | 'fake' | 'journey'>('people');
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>(
@@ -111,40 +118,68 @@ export function HomeScreen() {
       /* location off */
     }
   }, []);
+  // Load location + the user's circles once on mount, so the map draws right
+  // away and the selector is populated.
+  useEffect(() => {
+    void loadMe();
+    listCircles()
+      .then((cs) => {
+        setCircles(cs);
+        setSelectedCircle((cur) => cur ?? cs.find((c) => c.isDefault)?.id ?? cs[0]?.id ?? null);
+      })
+      .catch(() => undefined);
+  }, [loadMe]);
   useFocusEffect(useCallback(() => { void loadMe(); }, [loadMe]));
 
-  const circleUids = useMemo(
-    () => new Set((profile?.friends ?? []).map((f) => f.uid).filter((u): u is string => !!u)),
-    [profile?.friends],
-  );
+  // Members of the SELECTED circle only — so a user with several circles sees
+  // one clean group on the map, not everyone at once.
+  useEffect(() => {
+    if (!selectedCircle) {
+      setCircleMemberUids(new Set());
+      return;
+    }
+    let alive = true;
+    listCircleMembers(selectedCircle)
+      .then((ms) => {
+        if (alive) setCircleMemberUids(new Set(ms.map((m) => m.userId)));
+      })
+      .catch(() => undefined);
+    return () => { alive = false; };
+  }, [selectedCircle]);
+
+  const selectedCircleName = circles.find((c) => c.id === selectedCircle)?.name ?? 'My circle';
 
   const members = useMemo(() => {
     const online = new Map<string, PresencePeer>();
-    for (const p of peers) if (circleUids.has(p.userId)) online.set(p.userId, p);
-    return (profile?.friends ?? []).map((f) => {
-      const live = f.uid ? online.get(f.uid) : undefined;
-      return {
-        uid: f.uid ?? f.username,
-        name: (live?.name || f.name || f.username || 'Member') as string,
+    for (const p of peers) if (circleMemberUids.has(p.userId)) online.set(p.userId, p);
+    // Members list in the sheet: everyone in the selected circle, tagged online
+    // if we can see them in presence.
+    const out: { uid: string; name: string; photoUri: string | null; online: boolean }[] = [];
+    for (const uid of circleMemberUids) {
+      if (uid === profile?.uid) continue;
+      const live = online.get(uid);
+      out.push({
+        uid,
+        name: live?.name || 'Member',
         photoUri: live?.photoUri ?? null,
         online: !!live,
-      };
-    });
-  }, [peers, circleUids, profile?.friends]);
+      });
+    }
+    return out;
+  }, [peers, circleMemberUids, profile?.uid]);
 
-  // EVERY nearby person on the map, shown only as an avatar pin — photo or
-  // initial, no name and no personal details on the front map. We deliberately
-  // do NOT distinguish verified helpers from ordinary users here; on the map
-  // they're all just people around you.
+  // Map pins: you + the online members of the SELECTED circle. Avatar only, no
+  // names or personal details on the front map.
   const avatars = useMemo<AvatarMarker[]>(() => {
     const list: AvatarMarker[] = [];
     if (me) list.push({ id: 'me', coordinate: me, photoUri: profile?.photoUri ?? null, name: 'You' });
     for (const p of peers) {
       if (p.userId === profile?.uid || !p.location) continue;
+      if (!circleMemberUids.has(p.userId)) continue;
       list.push({ id: p.userId, coordinate: p.location, photoUri: p.photoUri, name: p.name || '' });
     }
     return list;
-  }, [me, peers, profile?.uid, profile?.photoUri]);
+  }, [me, peers, circleMemberUids, profile?.uid, profile?.photoUri]);
 
   const activeAlerts = alerts?.length ?? 0;
   const setupDone = pct >= READINESS_CAP;
@@ -210,8 +245,8 @@ export function HomeScreen() {
       <View style={[styles.mapLayer, { height: MAP_H }]}>
         <MLMapView
           style={{ flex: 1 }}
-          center={me ?? avatars[0]?.coordinate}
-          zoom={14}
+          center={me ?? avatars[0]?.coordinate ?? DEFAULT_CENTER}
+          zoom={me ? 14 : 5}
           avatarMarkers={avatars}
           fitAll={avatars.length > 1}
           followUser={!!me && avatars.length <= 1}
@@ -224,18 +259,53 @@ export function HomeScreen() {
         <Pressable onPress={() => navigation.navigate('Settings')} style={styles.roundCtl} accessibilityLabel="Settings">
           <Ionicons name="settings-outline" size={20} color={colors.brandDeep} />
         </Pressable>
-        <Pressable onPress={() => navigation.navigate('Circles')} style={styles.selector} accessibilityLabel="Choose circle">
-          <Text style={styles.selectorText} numberOfLines={1}>My circle</Text>
-          <Ionicons name="chevron-down" size={16} color={colors.textSecondary} />
-        </Pressable>
+
+        {/* Circle selector — side-scroll to pick which circle to view. The
+            map + members below reflect the chosen circle. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.selectorScroll}
+          contentContainerStyle={styles.selectorRow}
+        >
+          {circles.length === 0 ? (
+            <Pressable onPress={() => navigation.navigate('Circles')} style={styles.chip}>
+              <Ionicons name="add" size={15} color={colors.brandDeep} />
+              <Text style={styles.chipText}>New circle</Text>
+            </Pressable>
+          ) : (
+            circles.map((c) => {
+              const on = c.id === selectedCircle;
+              return (
+                <Pressable key={c.id} onPress={() => setSelectedCircle(c.id)} style={[styles.chip, on && styles.chipOn]}>
+                  <Ionicons name="people" size={14} color={on ? colors.textInverse : colors.brandDeep} />
+                  <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>{c.name}</Text>
+                </Pressable>
+              );
+            })
+          )}
+        </ScrollView>
+
         <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.roundCtl} accessibilityLabel="Notifications">
           <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.brandDeep} />
           {activeAlerts > 0 ? <View style={styles.ctlDot} /> : null}
         </Pressable>
       </View>
 
-      {/* bottom-of-map floating buttons */}
-      <View style={[styles.mapBottom, { top: SHEET_TOP - 54 }]} pointerEvents="box-none">
+      {/* bottom-of-map floating buttons. They ride WITH the sheet (translateY:
+          sheetY) so dragging the sheet up never leaves them overlapping the
+          content, and they fade out as the sheet covers the map. */}
+      <Animated.View
+        style={[
+          styles.mapBottom,
+          {
+            top: EXPANDED_TOP - 54,
+            transform: [{ translateY: sheetY }],
+            opacity: sheetY.interpolate({ inputRange: [0, range * 0.6, range], outputRange: [0, 0.6, 1] }),
+          },
+        ]}
+        pointerEvents="box-none"
+      >
         <Pressable onPress={onShare} disabled={sharing} style={styles.checkIn} accessibilityLabel="Share live location">
           <Ionicons name="shield-checkmark" size={17} color={colors.brand} />
           <Text style={styles.checkInText}>{sharing ? 'Sharing…' : 'Share location'}</Text>
@@ -243,7 +313,7 @@ export function HomeScreen() {
         <Pressable onPress={loadMe} style={styles.roundCtl} accessibilityLabel="Recenter map">
           <Ionicons name="locate" size={19} color={colors.brandDeep} />
         </Pressable>
-      </View>
+      </Animated.View>
 
       {/* ── LAYER 2: draggable bottom sheet ── */}
       <Animated.View
@@ -301,7 +371,7 @@ export function HomeScreen() {
           </Pressable>
 
           {/* B. Circle */}
-          <Text style={styles.sectionH}>Your circle</Text>
+          <Text style={styles.sectionH}>{selectedCircleName}</Text>
           {members.length === 0 ? (
             <Pressable onPress={() => navigation.navigate('Circles')} style={({ pressed }) => [styles.emptyCircle, pressed && styles.pressed]}>
               <Ionicons name="person-add" size={20} color={colors.brandDeep} />
@@ -454,20 +524,24 @@ const styles = StyleSheet.create({
     ...shadows.icon,
   },
   ctlDot: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral, borderWidth: 1.5, borderColor: colors.surface },
-  selector: {
-    flex: 1,
-    height: 44,
+  selectorScroll: { flex: 1 },
+  selectorRow: { gap: spacing.sm, alignItems: 'center', paddingRight: spacing.sm },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.72)',
+    height: 40,
+    paddingHorizontal: spacing.md,
+    backgroundColor: 'rgba(255,255,255,0.82)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 22,
+    borderRadius: 20,
+    maxWidth: 150,
     ...shadows.icon,
   },
-  selectorText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  chipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  chipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
+  chipTextOn: { color: colors.textInverse },
 
   mapBottom: {
     position: 'absolute',
