@@ -70,6 +70,7 @@ import { refreshUserRole } from '@/services/roles';
 import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus } from '@/services/voice-limits';
+import { consumeVoiceTestFire } from '@/services/voice-test';
 import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
 import { initI18n } from '@/i18n';
 import {
@@ -281,6 +282,9 @@ function RootNavigator() {
       // live ActiveSOS map. VoiceGuardService launches us over the lock screen
       // so this works without unlocking.
       if (url.startsWith('orbii://voice-sos')) {
+        // A Voice SOS self-test is running: the engine heard the panic word, so
+        // resolve the test instead of dispatching a real alert. Nothing sent.
+        if (consumeVoiceTestFire()) return;
         if (!navigationRef.isReady()) return;
         // Premium gate: hands-free Voice SOS is metered on the free tier
         // (2/month); Premium is unlimited. This NEVER blocks a real emergency

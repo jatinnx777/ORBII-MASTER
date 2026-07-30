@@ -25,12 +25,14 @@ import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
+import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const onTabScroll = useTabBarScroll();
   const dispatch = useAppDispatch();
   const sheet = useBrandSheet();
   const profile = useAppSelector((s) => s.user.profile);
@@ -39,6 +41,7 @@ export function ProfileScreen() {
   if (!profile) return null;
 
   const initial = (profile.name || profile.email || 'O').charAt(0).toUpperCase();
+  const plan = profile.premiumTier ?? null;
 
   const handleSignOut = () => {
     sheet.confirm({
@@ -101,6 +104,8 @@ export function ProfileScreen() {
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
           showsVerticalScrollIndicator={false}
+          onScroll={onTabScroll}
+          scrollEventThrottle={16}
         >
           <View style={styles.header}>
             <Text style={styles.title}>Profile</Text>
@@ -132,6 +137,39 @@ export function ProfileScreen() {
             <View style={styles.editBtn}>
               <Ionicons name="pencil" size={15} color={colors.brandDeep} />
             </View>
+          </Pressable>
+
+          {/* ── Subscription (moved here from the old Plus tab) ── */}
+          <Pressable
+            onPress={() => navigation.navigate('PremiumUpgrade')}
+            style={({ pressed }) => [styles.planCard, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Manage your plan"
+          >
+            <View style={styles.planIcon}>
+              <Ionicons name="sparkles" size={18} color={colors.goldDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.planTitle}>
+                {plan === 'family' ? 'ORBII Family' : plan === 'plus' ? 'ORBII Plus' : 'Go Pro with ORBII'}
+              </Text>
+              <Text style={styles.planSub}>
+                {plan === 'family'
+                  ? 'Your family plan is active. Tap to manage.'
+                  : plan === 'plus'
+                    ? 'Plus is active. Tap to manage or upgrade to Family.'
+                    : 'Verified helpers reach you, not just your circle.'}
+              </Text>
+            </View>
+            {plan ? (
+              <View style={styles.planActive}>
+                <Text style={styles.planActiveText}>Active</Text>
+              </View>
+            ) : (
+              <View style={styles.planUpgrade}>
+                <Text style={styles.planUpgradeText}>Upgrade</Text>
+              </View>
+            )}
           </Pressable>
 
           {/* ── Grid ── */}
@@ -171,7 +209,7 @@ export function ProfileScreen() {
               label="Feedback"
               onPress={() =>
                 Linking.openURL(
-                  'mailto:jaykumar2470f@gmail.com?subject=ORBII%20feedback',
+                  'mailto:orbiisafety@gmail.com?subject=ORBII%20feedback',
                 ).catch(() => comingSoon('Feedback'))
               }
             />
@@ -355,6 +393,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  planCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.goldSoft,
+    marginTop: spacing.xs,
+    ...shadows.card,
+  },
+  planIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.goldSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+  planSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1, lineHeight: 15 },
+  planActive: {
+    backgroundColor: colors.brandSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+  },
+  planActiveText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, color: colors.brandDeep },
+  planUpgrade: {
+    backgroundColor: colors.gold,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+  },
+  planUpgradeText: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, color: colors.textPrimary },
 
   grid: {
     flexDirection: 'row',

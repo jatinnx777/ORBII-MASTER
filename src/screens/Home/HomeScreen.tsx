@@ -22,6 +22,7 @@ import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
 import { subscribePresence, type PresencePeer } from '@/services/community';
 import { listCircles, listCircleMembers, type Circle } from '@/services/circles';
+import { loadZoneEvents, type ZoneEvent } from '@/services/geofence';
 import {
   isListening,
   startListening,
@@ -71,6 +72,7 @@ export function HomeScreen() {
   const [circles, setCircles] = useState<Circle[]>([]);
   const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
   const [circleMemberUids, setCircleMemberUids] = useState<Set<string>>(new Set());
+  const [zoneEvents, setZoneEvents] = useState<ZoneEvent[]>([]);
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'people' | 'fake' | 'journey'>('people');
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>(
@@ -128,7 +130,10 @@ export function HomeScreen() {
         setSelectedCircle((cur) => cur ?? cs.find((c) => c.isDefault)?.id ?? cs[0]?.id ?? null);
       })
       .catch(() => undefined);
-  }, [loadMe]);
+    if (profile?.uid) {
+      loadZoneEvents(profile.uid).then(setZoneEvents).catch(() => undefined);
+    }
+  }, [loadMe, profile?.uid]);
   useFocusEffect(useCallback(() => { void loadMe(); }, [loadMe]));
 
   // Members of the SELECTED circle only — so a user with several circles sees
@@ -255,8 +260,8 @@ export function HomeScreen() {
       </View>
 
       {/* top floating controls */}
-      <View style={[styles.topControls, { top: insets.top + 8 }]} pointerEvents="box-none">
-        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.roundCtl} accessibilityLabel="Settings">
+      <View style={[styles.topControls, { top: Math.max(insets.top, 12) + 10 }]} pointerEvents="box-none">
+        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.topBtn} accessibilityLabel="Settings">
           <Ionicons name="settings-outline" size={20} color={colors.brandDeep} />
         </Pressable>
 
@@ -286,7 +291,7 @@ export function HomeScreen() {
           )}
         </ScrollView>
 
-        <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.roundCtl} accessibilityLabel="Notifications">
+        <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.topBtn} accessibilityLabel="Notifications">
           <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.brandDeep} />
           {activeAlerts > 0 ? <View style={styles.ctlDot} /> : null}
         </Pressable>
@@ -328,8 +333,38 @@ export function HomeScreen() {
         </View>
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 96 }]}
+          contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 150 }]}
         >
+          {/* Consent-first sharing state — who can see you, right now. The
+              opposite of silent tracking: always visible, always yours to
+              change, and we say plainly that we never sell it. */}
+          <Pressable
+            onPress={() => {
+              if (selectedCircle) navigation.navigate('CircleDetail', { circleId: selectedCircle });
+              else navigation.navigate('Circles');
+            }}
+            style={({ pressed }) => [styles.shareState, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Who can see your location"
+          >
+            <View style={styles.shareEye}>
+              <Ionicons name={members.length ? 'eye' : 'eye-off'} size={18} color={colors.brandDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.shareTitle}>
+                {members.length
+                  ? `${members.length} ${members.length === 1 ? 'person can' : 'people can'} see your location`
+                  : 'No one can see your location'}
+              </Text>
+              <Text style={styles.shareSub}>
+                {members.length
+                  ? `In ${selectedCircleName}. Tap to change who. ORBII never sells your location.`
+                  : 'Add trusted people. Only those you choose can ever see you.'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+
           {/* Voice SOS activation box — also starts background protection. */}
           <Pressable
             onPress={toggleVoice}
@@ -406,6 +441,32 @@ export function HomeScreen() {
             </View>
           )}
 
+          {/* B2. Recent activity — real safe-zone crossings, the calm ambient
+              feed. Only shows when there's something to show. */}
+          {zoneEvents.length > 0 ? (
+            <>
+              <Text style={styles.sectionH}>Recent activity</Text>
+              <View style={styles.card}>
+                {zoneEvents.slice(0, 4).map((e, i) => (
+                  <View key={e.id} style={[styles.activityRow, i > 0 && styles.rowDivider]}>
+                    <View style={[styles.activityIcon, { backgroundColor: e.kind === 'enter' ? colors.sageSoft : colors.creamDeep }]}>
+                      <Ionicons
+                        name={e.kind === 'enter' ? 'enter-outline' : 'exit-outline'}
+                        size={17}
+                        color={e.kind === 'enter' ? colors.sageDeep : colors.brandDeep}
+                      />
+                    </View>
+                    <Text style={styles.activityText}>
+                      {e.kind === 'enter' ? 'Arrived at ' : 'Left '}
+                      <Text style={styles.activityPlace}>{e.label}</Text>
+                    </Text>
+                    <Text style={styles.activityTime}>{timeAgo(e.createdAt)}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          ) : null}
+
           {/* C. Three quick tabs */}
           <View style={styles.tabs}>
             <Pressable onPress={() => setTab('people')} style={[styles.tab, tab === 'people' && styles.tabOn]}>
@@ -424,14 +485,14 @@ export function HomeScreen() {
 
           {/* D. Nearby places */}
           <Text style={styles.miniLabel}>NEARBY SAFE PLACES</Text>
-          <View style={styles.placesRow}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.placesRow}>
             {PLACES.map((p) => (
               <Pressable key={p.key} onPress={() => openPlaces(p.query)} style={({ pressed }) => [styles.placeTile, pressed && styles.pressed]}>
-                <Ionicons name={p.icon} size={19} color={colors.brandDeep} />
+                <Ionicons name={p.icon} size={20} color={colors.brandDeep} />
                 <Text style={styles.placeLabel}>{p.label}</Text>
               </Pressable>
             ))}
-          </View>
+          </ScrollView>
 
           {/* Alerts */}
           <Pressable onPress={() => navigation.navigate('CommunityAlerts')} style={({ pressed }) => [styles.alertCard, pressed && styles.pressed]}>
@@ -476,6 +537,16 @@ export function HomeScreen() {
   );
 }
 
+function timeAgo(iso: string): string {
+  const s = Math.max(1, Math.floor((Date.now() - Date.parse(iso)) / 1000));
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 function GridTile({
   icon,
   title,
@@ -509,9 +580,19 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: 4,
     zIndex: 5,
+    // One unified translucent bar holding the gear, circle tabs and alerts,
+    // so they anchor cleanly over the map instead of floating separately.
+    backgroundColor: 'rgba(255,255,255,0.8)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: 26,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    ...shadows.icon,
   },
+  topBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   roundCtl: {
     width: 44,
     height: 44,
@@ -524,8 +605,10 @@ const styles = StyleSheet.create({
     ...shadows.icon,
   },
   ctlDot: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral, borderWidth: 1.5, borderColor: colors.surface },
-  selectorScroll: { flex: 1 },
-  selectorRow: { gap: spacing.sm, alignItems: 'center', paddingRight: spacing.sm },
+  selectorScroll: { flex: 1, marginHorizontal: 2 },
+  // Extra right padding + a small left pad so the first/last circle chips never
+  // sit flush against the gear/chat icons or get clipped at the scroll edge.
+  selectorRow: { gap: spacing.sm, alignItems: 'center', paddingLeft: 2, paddingRight: spacing.md },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -583,6 +666,28 @@ const styles = StyleSheet.create({
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.creamDeep },
   sheetScroll: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.md },
 
+  shareState: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.card,
+  },
+  shareEye: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shareTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  shareSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 2, lineHeight: 15 },
+
   voiceBox: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -606,8 +711,8 @@ const styles = StyleSheet.create({
 
   statusCard: { backgroundColor: colors.brandSoft, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },
   statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  statusTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
-  statusPct: { fontFamily: fontFamilies.poppinsBold, fontSize: 14.5, color: colors.brandDeep },
+  statusTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textSecondary },
+  statusPct: { fontFamily: fontFamilies.poppinsBold, fontSize: 23, color: colors.brandDeep, letterSpacing: -0.5 },
   bar: { height: 9, borderRadius: 5, backgroundColor: colors.surface, overflow: 'hidden' },
   barFill: { height: '100%', borderRadius: 5, backgroundColor: colors.brand },
   statusHint: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
@@ -628,6 +733,12 @@ const styles = StyleSheet.create({
   mName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
   mStatus: { ...typography.caption, fontSize: 12, marginTop: 1 },
 
+  activityRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingHorizontal: spacing.md, paddingVertical: 12 },
+  activityIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  activityText: { flex: 1, fontFamily: fontFamilies.poppinsRegular, fontSize: 13.5, color: colors.textSecondary },
+  activityPlace: { fontFamily: fontFamilies.poppinsSemiBold, color: colors.textPrimary },
+  activityTime: { ...typography.caption, fontSize: 11.5, color: colors.textMuted },
+
   tabs: { flexDirection: 'row', gap: spacing.sm },
   tab: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
@@ -637,9 +748,9 @@ const styles = StyleSheet.create({
   tabOnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textInverse },
 
   miniLabel: { ...typography.label, fontSize: 11, color: colors.textMuted, letterSpacing: 1, marginBottom: -spacing.xs },
-  placesRow: { flexDirection: 'row', gap: spacing.sm },
+  placesRow: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.lg, paddingVertical: 2 },
   placeTile: {
-    flex: 1, backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: spacing.md,
+    width: 84, backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: spacing.md,
     alignItems: 'center', gap: 7, ...shadows.card,
   },
   placeLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textPrimary },

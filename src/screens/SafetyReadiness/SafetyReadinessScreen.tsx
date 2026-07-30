@@ -21,6 +21,7 @@ import { requestPermission } from '@/services/location';
 import { requestNotificationPermission } from '@/services/notifications';
 import { setItem, storageKeys } from '@/services/storage';
 import { READINESS_CAP, SAFETY_DISCLAIMER, useReadiness } from '@/services/readiness';
+import { cancelVoiceTest, runVoiceTest, type VoiceTestResult } from '@/services/voice-test';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -161,6 +162,7 @@ export function SafetyReadinessScreen() {
           setSimOpen(false);
           load();
         }}
+        onClose={() => setSimOpen(false)}
       />
     </ScreenContainer>
   );
@@ -224,55 +226,121 @@ function ChecklistRow({
   );
 }
 
-const SIM_STEPS = [
-  { icon: 'mic', label: 'Voice detected' },
-  { icon: 'location', label: 'Location ready' },
-  { icon: 'people', label: 'Emergency contacts ready' },
-  { icon: 'shield-checkmark', label: 'Protection active' },
-] as const;
+// Real Voice SOS test. Arms the actual on-device engine and waits to genuinely
+// hear a panic word — no alert is dispatched (see services/voice-test). This is
+// an honest rehearsal of hands-free Voice SOS, not a scripted animation.
+function SafetyTestModal({
+  visible,
+  onDone,
+  onClose,
+}: {
+  visible: boolean;
+  onDone: () => void;
+  onClose: () => void;
+}) {
+  const [state, setState] = useState<'listening' | VoiceTestResult>('listening');
+  const [attempt, setAttempt] = useState(0);
+  const pulse = useRef(new Animated.Value(0)).current;
 
-function SafetyTestModal({ visible, onDone }: { visible: boolean; onDone: () => void }) {
-  const [step, setStep] = useState(0);
+  // Run the real test on open and on every "Try again".
   useEffect(() => {
-    if (!visible) {
-      setStep(0);
+    if (!visible) return;
+    let alive = true;
+    setState('listening');
+    runVoiceTest().then((r) => {
+      if (!alive) return;
+      setState(r);
+      if (r === 'heard') {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+      }
+    });
+    return () => {
+      alive = false;
+      cancelVoiceTest();
+    };
+  }, [visible, attempt]);
+
+  const listening = state === 'listening';
+  const heard = state === 'heard';
+
+  // Pulsing mic ring while the engine listens.
+  useEffect(() => {
+    if (!listening) {
+      pulse.stopAnimation();
+      pulse.setValue(0);
       return;
     }
-    const timers = SIM_STEPS.map((_, i) =>
-      setTimeout(() => {
-        setStep(i + 1);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-      }, (i + 1) * 700),
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+      ]),
     );
-    return () => timers.forEach(clearTimeout);
-  }, [visible]);
+    loop.start();
+    return () => loop.stop();
+  }, [listening, pulse]);
 
-  const complete = step >= SIM_STEPS.length;
+  const title = heard
+    ? 'ORBII heard you'
+    : listening
+      ? 'Say it out loud'
+      : state === 'timeout'
+        ? "Didn't catch that"
+        : state === 'permission'
+          ? 'Microphone needed'
+          : state === 'unavailable'
+            ? 'Not available here'
+            : 'Something went wrong';
+
+  const sub = heard
+    ? 'That is exactly what a real Voice SOS feels like. Nothing was sent, this was only a test.'
+    : listening
+      ? 'Shout "help, help" now, just like you would in a real emergency. ORBII is listening on your device.'
+      : state === 'timeout'
+        ? 'ORBII did not hear a panic word in time. Try again and say "help, help" clearly.'
+        : state === 'permission'
+          ? 'Voice SOS needs microphone access to hear you. Turn it on, then try again.'
+          : state === 'unavailable'
+            ? 'The voice engine could not start on this device.'
+            : 'The test could not run. Please try again.';
+
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.35] });
+  const ringOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.simBackdrop}>
         <View style={styles.simCard}>
-          <Text style={styles.simTitle}>{complete ? "You're protected" : 'Running safety test…'}</Text>
-          <Text style={styles.simSub}>This is only a test. No real alerts are sent.</Text>
-          <View style={{ marginTop: spacing.lg, gap: spacing.sm }}>
-            {SIM_STEPS.map((s, i) => {
-              const on = step > i;
-              return (
-                <View key={s.label} style={[styles.simRow, on && styles.simRowOn]}>
-                  <View style={[styles.simIcon, on && styles.simIconOn]}>
-                    <Ionicons name={on ? 'checkmark' : s.icon} size={16} color={on ? colors.textInverse : colors.textMuted} />
-                  </View>
-                  <Text style={[styles.simLabel, on && styles.simLabelOn]}>{s.label}</Text>
-                </View>
-              );
-            })}
+          <View style={styles.simMicWrap}>
+            {listening ? (
+              <Animated.View style={[styles.simPulseRing, { opacity: ringOpacity, transform: [{ scale }] }]} />
+            ) : null}
+            <View style={[styles.simMicCircle, heard && styles.simMicCircleOk]}>
+              <Ionicons name={heard ? 'checkmark' : listening ? 'mic' : 'mic-off'} size={30} color={colors.textInverse} />
+            </View>
           </View>
-          {complete ? (
+
+          <Text style={[styles.simTitle, styles.simTitleCenter]}>{title}</Text>
+          <Text style={[styles.simSub, styles.simSubCenter]}>{sub}</Text>
+
+          {listening ? (
+            <Pressable onPress={onClose} style={styles.simCancel}>
+              <Text style={styles.simCancelText}>Cancel</Text>
+            </Pressable>
+          ) : heard ? (
             <Pressable onPress={onDone} style={styles.simBtn}>
               <Text style={styles.simBtnText}>Done</Text>
             </Pressable>
-          ) : null}
+          ) : (
+            <View style={styles.simRowBtns}>
+              <Pressable onPress={onClose} style={[styles.simBtn, styles.simBtnGhost]}>
+                <Text style={[styles.simBtnText, styles.simBtnTextGhost]}>Close</Text>
+              </Pressable>
+              <Pressable onPress={() => setAttempt((a) => a + 1)} style={[styles.simBtn, styles.simBtnFlex]}>
+                <Text style={styles.simBtnText}>Try again</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       </View>
     </Modal>
@@ -354,13 +422,19 @@ const styles = StyleSheet.create({
   simBackdrop: { flex: 1, backgroundColor: colors.overlay, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
   simCard: { width: '100%', backgroundColor: colors.surface, borderRadius: radius.xxl, padding: spacing.lg },
   simTitle: { ...typography.h3, color: colors.textPrimary },
+  simTitleCenter: { textAlign: 'center', marginTop: spacing.md },
   simSub: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
-  simRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, opacity: 0.5 },
-  simRowOn: { opacity: 1 },
-  simIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.creamDeep, alignItems: 'center', justifyContent: 'center' },
-  simIconOn: { backgroundColor: colors.sage },
-  simLabel: { ...typography.bodyMedium, color: colors.textSecondary },
-  simLabelOn: { color: colors.textPrimary },
+  simSubCenter: { textAlign: 'center', marginTop: spacing.xs },
+  simMicWrap: { alignItems: 'center', justifyContent: 'center', height: 96, marginTop: spacing.xs },
+  simPulseRing: { position: 'absolute', width: 76, height: 76, borderRadius: 38, backgroundColor: colors.peach },
+  simMicCircle: { width: 72, height: 72, borderRadius: 36, backgroundColor: colors.peachDeep, alignItems: 'center', justifyContent: 'center' },
+  simMicCircleOk: { backgroundColor: colors.sage },
   simBtn: { marginTop: spacing.lg, backgroundColor: colors.peach, borderRadius: radius.lg, paddingVertical: spacing.md, alignItems: 'center' },
   simBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
+  simBtnFlex: { flex: 1 },
+  simBtnGhost: { flex: 1, backgroundColor: colors.creamDeep },
+  simBtnTextGhost: { color: colors.textSecondary },
+  simRowBtns: { flexDirection: 'row', gap: spacing.sm },
+  simCancel: { marginTop: spacing.md, alignItems: 'center', paddingVertical: spacing.sm },
+  simCancelText: { fontFamily: fontFamilies.poppinsMedium, fontSize: 14, color: colors.textSecondary },
 });

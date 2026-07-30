@@ -8,7 +8,7 @@ you get help quickly in an emergency by alerting people you trust and people
 near you. This policy explains what we collect, why, who can see it, and your
 choices. We've tried to keep it plain.
 
-**Contact:** jaykumar2470f@gmail.com
+**Contact:** orbiisafety@gmail.com
 
 ---
 
@@ -128,7 +128,7 @@ No method is 100% secure, but we work to protect your information.
   features) if you decline.
 - **Access / correction / deletion:** you can edit your profile and contacts in
   the app, and you can request deletion of your account and associated data by
-  emailing **jaykumar2470f@gmail.com**. We comply with applicable laws,
+  emailing **orbiisafety@gmail.com**. We comply with applicable laws,
   including India's Digital Personal Data Protection Act, 2023.
 
 ---
@@ -153,4 +153,4 @@ We may update this policy. We'll post the new version with a new "Last updated"
 date, and notify you in-app for significant changes.
 
 ## 12. Contact
-Questions or requests: **jaykumar2470f@gmail.com**
+Questions or requests: **orbiisafety@gmail.com**

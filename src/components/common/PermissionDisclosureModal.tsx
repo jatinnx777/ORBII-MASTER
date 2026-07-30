@@ -85,7 +85,7 @@ export function PermissionDisclosureModal() {
 
           <Pressable
             onPress={() =>
-              Linking.openURL('https://orbii.app/privacy').catch(() => undefined)
+              Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
             }
             hitSlop={8}
           >

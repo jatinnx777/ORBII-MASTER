@@ -94,7 +94,7 @@ export function PrivacyPolicyModal({ visible, onAccept, onDecline }: Props) {
             <Text style={styles.body}>
               You can delete your account from Profile → Settings at any time.
               Deletion removes your profile, contacts, and local history. You
-              can also contact support@orbii.app to request export or
+              can also contact orbiisafety@gmail.com to request export or
               erasure.
             </Text>
 

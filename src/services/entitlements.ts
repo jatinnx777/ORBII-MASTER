@@ -40,10 +40,16 @@ const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
 // Free tier: up to 3 emergency contacts.
 export const FREE_CONTACT_LIMIT = 3;
 
+// During early access, everything is unlocked and free (no in-app billing yet,
+// which also keeps us clear of Google Play's billing policy). Flip this to false
+// when paid subscriptions go live via Google Play Billing.
+export const EARLY_ACCESS_UNLOCK = true;
+
 export function canUse(
   feature: Feature,
   ctx: { isPremium: boolean } = { isPremium: false },
 ): boolean {
+  if (EARLY_ACCESS_UNLOCK) return true;
   return PREMIUM_FEATURES.has(feature) ? ctx.isPremium : true;
 }
 
@@ -54,5 +60,5 @@ export function useEntitlement(feature: Feature): boolean {
 
 /** True when the signed-in user is on ORBII Plus. */
 export function useIsPremium(): boolean {
-  return useAppSelector((s) => s.user.profile?.isPremium ?? false);
+  return useAppSelector((s) => EARLY_ACCESS_UNLOCK || (s.user.profile?.isPremium ?? false));
 }

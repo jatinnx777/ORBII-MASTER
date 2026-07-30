@@ -55,16 +55,16 @@ export function AboutScreen() {
           <Text style={styles.sectionTitle}>Reach us</Text>
           <Pressable
             onPress={() =>
-              Linking.openURL('mailto:hello@orbii.app').catch(() => undefined)
+              Linking.openURL('mailto:orbiisafety@gmail.com').catch(() => undefined)
             }
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
           >
             <Ionicons name="mail" size={18} color={colors.brandDeep} />
-            <Text style={styles.linkText}>hello@orbii.app</Text>
+            <Text style={styles.linkText}>orbiisafety@gmail.com</Text>
           </Pressable>
           <Pressable
             onPress={() =>
-              Linking.openURL('https://orbii.app/privacy').catch(() => undefined)
+              Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
             }
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
           >
@@ -73,7 +73,7 @@ export function AboutScreen() {
           </Pressable>
           <Pressable
             onPress={() =>
-              Linking.openURL('https://orbii.app/terms').catch(() => undefined)
+              Linking.openURL('https://orbii.in/terms-of-service').catch(() => undefined)
             }
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
           >

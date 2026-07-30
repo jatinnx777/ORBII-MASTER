@@ -64,7 +64,7 @@ account you create in Supabase and give those credentials here instead.)
 **Does your app collect or share user data?** → **Yes.**
 **Is all data encrypted in transit?** → **Yes.**
 **Do you provide a way to request data deletion?** → **Yes** (in-app: Profile →
-Delete account; and email privacy@orbii.in). Deletion URL:
+Delete account; and email orbiisafety@gmail.com). Deletion URL:
 `https://orbii.in/privacy-policy`.
 
 **Data collected (mark each: Collected = Yes, Shared = No, Processed

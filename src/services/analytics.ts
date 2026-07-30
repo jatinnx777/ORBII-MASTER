@@ -15,6 +15,7 @@ type EventName =
   | 'login_completed'
   | 'sos_triggered'
   | 'sos_instant_long_press'
+  | 'sos_from_fab'
   | 'sos_cancelled'
   | 'sos_resolved'
   | 'helper_accepted'

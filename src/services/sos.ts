@@ -79,10 +79,12 @@ export async function createSOS(
     .map((f) => f.uid)
     .filter((uid): uid is string => !!uid);
 
-  // Premium gate: helper/responder dispatch (reaching nearby strangers) is a
-  // Premium feature. Free users' SOS is shared ONLY with their family/circle
-  // in real time — never broadcast to the wider community pool.
-  const circleOnly = !user.isPremium;
+  // Every SOS now reaches nearby ORBII users in real time, free or paid — a
+  // free user can still be helped by whoever is close and willing (they may or
+  // may not come). The paid tier's real advantage is the VERIFIED helper
+  // dispatch, decided server-side in notify-sos, not whether the alert reaches
+  // the community at all.
+  const circleOnly = false;
 
   const broadcast: AlertBroadcast = {
     id: record.id,
@@ -159,10 +161,11 @@ async function persistSOS(
         kind: record.kind ?? 'real',
         user_name: user.name,
         user_photo: user.photoUri,
-        // Free tier → circle-only. Keeps the row out of the nearby-strangers
-        // RPC (sos_events_nearby filters circle_only), so a free user's live
-        // location is never served to people outside their circle.
-        circle_only: !user.isPremium,
+        // Every active SOS is visible to nearby users while it's live (the RPC
+        // still bounds this to a radius + the last 15 minutes + active only),
+        // so a free user can be reached by whoever is close. The paid perk —
+        // verified-helper dispatch — is gated separately, server-side.
+        circle_only: false,
       },
       { onConflict: 'id' },
     );

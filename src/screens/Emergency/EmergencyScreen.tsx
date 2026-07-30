@@ -34,6 +34,7 @@ import { useIsPremium } from '@/services/entitlements';
 import { trackEvent } from '@/services/analytics';
 import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
+import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
@@ -45,6 +46,7 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 export function EmergencyScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
+  const onTabScroll = useTabBarScroll();
   const dispatch = useAppDispatch();
   const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
   const ghost = useAppSelector((s) => s.safetyModes.ghost);
@@ -110,6 +112,8 @@ export function EmergencyScreen() {
         <ScrollView
           contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 110 }]}
           showsVerticalScrollIndicator={false}
+          onScroll={onTabScroll}
+          scrollEventThrottle={16}
         >
           <View style={styles.header}>
             <Text style={styles.title}>Emergency</Text>
@@ -353,7 +357,15 @@ function RecTile({
       <Text style={styles.recLabel} numberOfLines={1}>
         {label}
       </Text>
-      {!live ? <Text style={styles.recSoon}>Soon</Text> : null}
+      {live ? (
+        <View style={[styles.badge, styles.badgeLive]}>
+          <Text style={[styles.badgeText, { color: colors.sageDeep }]}>Active</Text>
+        </View>
+      ) : (
+        <View style={[styles.badge, styles.badgeSoon]}>
+          <Text style={[styles.badgeText, { color: colors.textMuted }]}>Soon</Text>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -388,13 +400,13 @@ function ModeRow({
         <Text style={styles.rowBody}>{body}</Text>
       </View>
       {locked ? (
-        <View style={styles.lockPill}>
-          <Ionicons name="sparkles" size={11} color={colors.goldDeep} />
-          <Text style={styles.lockText}>Plus</Text>
+        <View style={[styles.badge, styles.badgePlus]}>
+          <Ionicons name="sparkles" size={10} color={colors.goldDeep} />
+          <Text style={[styles.badgeText, { color: colors.goldDeep }]}>Plus</Text>
         </View>
       ) : soon ? (
-        <View style={styles.soonPill}>
-          <Text style={styles.soonText}>Soon</Text>
+        <View style={[styles.badge, styles.badgeSoon]}>
+          <Text style={[styles.badgeText, { color: colors.textMuted }]}>Soon</Text>
         </View>
       ) : (
         <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
@@ -452,15 +464,23 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
-  topRow: { flexDirection: 'row', gap: spacing.md },
+  topRow: { flexDirection: 'row', gap: spacing.md, alignItems: 'stretch' },
   sosBtn: {
-    flex: 1,
+    // The ultimate panic action: wider than Call 112 and glowing red so it
+    // reads as the single most important button on the screen.
+    flex: 1.35,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     backgroundColor: colors.coral,
     borderRadius: radius.xl,
-    padding: spacing.md,
+    paddingVertical: 15,
+    paddingHorizontal: spacing.md,
+    shadowColor: colors.coral,
+    shadowOpacity: 0.42,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
   sosBtnIcon: {
     width: 38,
@@ -535,33 +555,24 @@ const styles = StyleSheet.create({
     lineHeight: 16,
   },
   divider: { height: 1, backgroundColor: colors.divider, marginLeft: 66 },
-  lockPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.goldSoft,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  lockText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, color: colors.goldDeep },
 
-  soonPill: {
-    backgroundColor: colors.creamDeep,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: radius.pill,
-  },
-  soonText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, color: colors.textMuted },
+  // One unified chip used for every status badge (Plus / Soon / Active).
+  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 4, borderRadius: radius.pill },
+  badgeText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5 },
+  badgePlus: { backgroundColor: colors.goldSoft },
+  badgeSoon: { backgroundColor: colors.creamDeep },
+  badgeLive: { backgroundColor: '#E6F4EC' },
 
   recRow: { flexDirection: 'row', gap: spacing.sm },
   recTile: {
     flex: 1,
+    minHeight: 104,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    gap: 7,
     ...shadows.card,
   },
   recIcon: {
@@ -577,7 +588,6 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     color: colors.textPrimary,
   },
-  recSoon: { ...typography.caption, fontSize: 9.5, color: colors.textMuted },
 
   noteCard: {
     flexDirection: 'row',

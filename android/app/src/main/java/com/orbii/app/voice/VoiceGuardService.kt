@@ -319,6 +319,9 @@ class VoiceGuardService : Service() {
     VoiceMetrics.running = true
     var speechStart = 0L
     try {
+      // Pin the phone's own mic BEFORE we start, so earphones can never make
+      // Voice SOS deaf.
+      preferBuiltInMic(record)
       record.startRecording()
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
@@ -425,6 +428,48 @@ class VoiceGuardService : Service() {
       else MediaRecorder.AudioSource.VOICE_RECOGNITION
     } catch (e: Exception) {
       MediaRecorder.AudioSource.VOICE_RECOGNITION
+    }
+  }
+
+  // Force capture from the phone's OWN microphone. When earphones are plugged in
+  // (especially mic-less music buds, or a Bluetooth headset that hasn't opened
+  // an SCO link) Android reroutes recording to the headset, and Voice SOS goes
+  // deaf — the exact moment she still expects the phone to hear her shout. The
+  // environment mic must always be the one listening, so we pin it and re-pin it
+  // if the OS ever moves the route (headset connected/disconnected mid-session).
+  private fun preferBuiltInMic(record: AudioRecord) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return
+    try {
+      val am = getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+      val builtIn = am.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)
+        .firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC }
+      if (builtIn != null) {
+        val ok = record.setPreferredDevice(builtIn)
+        Log.i(TAG, "pin built-in mic ok=$ok (guards against headset routing)")
+      } else {
+        Log.w(TAG, "no built-in mic device found to pin")
+      }
+      // Re-assert the built-in mic whenever the routing actually changes, so
+      // plugging earphones in AFTER arming can't silently steal the input.
+      val listener = object : android.media.AudioRouting.OnRoutingChangedListener {
+        override fun onRoutingChanged(router: android.media.AudioRouting) {
+          try {
+            if (record.routedDevice?.type != android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC) {
+              val mic = am.getDevices(android.media.AudioManager.GET_DEVICES_INPUTS)
+                .firstOrNull { it.type == android.media.AudioDeviceInfo.TYPE_BUILTIN_MIC }
+              if (mic != null) {
+                record.setPreferredDevice(mic)
+                Log.i(TAG, "re-pinned built-in mic after route change")
+              }
+            }
+          } catch (e: Exception) {
+            Log.w(TAG, "routing re-pin failed", e)
+          }
+        }
+      }
+      record.addOnRoutingChangedListener(listener, null)
+    } catch (e: Exception) {
+      Log.w(TAG, "could not pin built-in mic", e)
     }
   }
 

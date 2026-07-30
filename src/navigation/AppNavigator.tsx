@@ -10,6 +10,8 @@ import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadiness
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { RecordingsScreen } from '@/screens/Recordings/RecordingsScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
+import { CommunityProfileSetupScreen } from '@/screens/Community/CommunityProfileSetupScreen';
+import { CommunityUserProfileScreen } from '@/screens/Community/CommunityUserProfileScreen';
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
@@ -118,6 +120,16 @@ export function AppNavigator() {
       <Stack.Screen
         name="CommunityFeed"
         component={CommunityFeedScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CommunityProfileSetup"
+        component={CommunityProfileSetupScreen}
+        options={withHeader('Community profile')}
+      />
+      <Stack.Screen
+        name="CommunityUserProfile"
+        component={CommunityUserProfileScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

@@ -121,9 +121,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    // 1. The SOS row. `circle_only` is the premium flag (true = free user, who
-    // must never reach strangers; false = premium, whose SOS may reach the
-    // verified-helper pool).
+    // 1. The SOS row.
     const { data: sos } = await admin
       .from('sos_events')
       .select('id, user_id, user_name, lat, lng, circle_only')
@@ -133,6 +131,20 @@ Deno.serve(async (req) => {
 
     const victim: string = sos.user_id;
     const recipients = new Set<string>();
+
+    // Verified-helper dispatch is the PAID tier's advantage. We check the
+    // victim's entitlement SERVER-SIDE (never a client flag) — active + premium.
+    // Free users still reach nearby community members via the realtime broadcast
+    // and the nearby-SOS query; they just don't summon the vetted helper pool.
+    let victimIsPremium = false;
+    {
+      const { data: ent } = await admin
+        .from('entitlements')
+        .select('premium_enabled, status')
+        .eq('user_id', victim)
+        .maybeSingle();
+      victimIsPremium = ent?.premium_enabled === true && ent?.status === 'active';
+    }
 
     // 2. Everyone in the victim's circles.
     const { data: myCircles } = await admin
@@ -189,13 +201,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 5. VERIFIED HELPERS — only for a PREMIUM victim (circle_only === false)
-    // with a known location. Staged: 2 km now, widen to 5 km after 40 s only if
-    // nobody has accepted and the SOS is still live. Circle members are excluded
-    // so nobody is double-pushed, and stage 2 skips whoever stage 1 already got.
+    // 5. VERIFIED HELPERS — only for a PREMIUM victim with a known location.
+    // Staged: 2 km now, widen to 5 km after 40 s only if nobody has accepted and
+    // the SOS is still live. Circle members are excluded so nobody is
+    // double-pushed, and stage 2 skips whoever stage 1 already got.
     let stage1Helpers = 0;
     const canDispatchHelpers =
-      sos.circle_only === false && sos.lat != null && sos.lng != null;
+      victimIsPremium && sos.lat != null && sos.lng != null;
     if (canDispatchHelpers) {
       const sosLite = {
         id: sos.id,
@@ -232,10 +244,49 @@ Deno.serve(async (req) => {
       }
     }
 
+    // 6. COMMUNITY RESPONDERS — for a FREE victim. Nearby NON-verified helpers
+    // (ordinary users who turned on helper mode) get the alert too, so a free
+    // user can still be reached by whoever is close. They may or may not come;
+    // that's the free tier. A single 5 km push, no staged escalation — the
+    // reliable, escalating pool is the paid perk above.
+    let communitySent = 0;
+    if (!victimIsPremium && sos.lat != null && sos.lng != null) {
+      const { data: comm } = await admin.rpc('dispatch_community_helpers', {
+        p_lat: sos.lat,
+        p_lng: sos.lng,
+        p_radius_km: STAGE2_KM,
+        p_exclude: victim,
+      });
+      const ids: string[] = (comm ?? [])
+        .map((h: { user_id: string }) => h.user_id)
+        .filter((id: string) => !recipients.has(id));
+      if (ids.length > 0) {
+        const { data: ctoks } = await admin
+          .from('push_tokens')
+          .select('token')
+          .in('user_id', ids);
+        const tokens: string[] = (ctoks ?? [])
+          .map((t: { token: string }) => t.token)
+          .filter((t: string) => !!t && t.startsWith('ExponentPushToken'));
+        communitySent = await sendExpo(
+          tokens.map((to) => ({
+            to,
+            title: '🆘 Someone nearby needs help',
+            body: `${name} is in danger near you. Tap if you can help.`,
+            sound: 'default',
+            priority: 'high',
+            channelId: 'incoming_sos',
+            data: { kind: 'incoming_sos', sosId: sos.id, lat: sos.lat, lng: sos.lng, name },
+          })),
+        );
+      }
+    }
+
     return json({
-      sent: circleSent + stage1Helpers,
+      sent: circleSent + stage1Helpers + communitySent,
       circle: circleSent,
       stage1Helpers,
+      communitySent,
       escalating: canDispatchHelpers,
     });
   } catch (e) {

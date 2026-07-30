@@ -19,8 +19,9 @@ export type AuthScreenProps<T extends keyof AuthStackParamList> =
 export type TabParamList = {
   Home: undefined;
   Community: undefined;
+  // The safety toolbox. Shown as the "Safety" side tab; the centre SOS button
+  // is a raised action, not a tab.
   Emergency: undefined;
-  Plus: undefined;
   // Responder-only tab (rendered only when role is responder/admin).
   Missions: undefined;
   Profile: undefined;
@@ -62,6 +63,8 @@ export type AppStackParamList = {
   Geofences: undefined;
   Recordings: undefined;
   CommunityFeed: undefined;
+  CommunityProfileSetup: undefined;
+  CommunityUserProfile: { profileId: string };
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;
