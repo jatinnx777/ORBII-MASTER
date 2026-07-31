@@ -131,6 +131,15 @@ export function CommunityUserProfileScreen() {
                 <View style={styles.stat}><Text style={styles.statNum}>{profile.followers}</Text><Text style={styles.statLbl}>Followers</Text></View>
                 <View style={styles.statSep} />
                 <View style={styles.stat}><Text style={styles.statNum}>{profile.following}</Text><Text style={styles.statLbl}>Following</Text></View>
+                {profile.helped > 0 ? (
+                  <>
+                    <View style={styles.statSep} />
+                    <View style={styles.stat}>
+                      <Text style={[styles.statNum, { color: colors.sageDeep }]}>{profile.helped}</Text>
+                      <Text style={styles.statLbl}>Helped</Text>
+                    </View>
+                  </>
+                ) : null}
               </View>
 
               <Pressable onPress={toggleFollow} style={[styles.followBtn, profile.isFollowing && styles.followingBtn]}>

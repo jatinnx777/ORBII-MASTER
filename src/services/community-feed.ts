@@ -230,6 +230,7 @@ export type PublicProfile = {
   following: number;
   isFollowing: boolean;
   isBlocked: boolean;
+  helped: number;
 };
 
 export async function getUserProfile(profileId: string): Promise<PublicProfile | null> {
@@ -247,6 +248,7 @@ export async function getUserProfile(profileId: string): Promise<PublicProfile |
     following: Number(r.following ?? 0),
     isFollowing: Boolean(r.is_following),
     isBlocked: Boolean(r.is_blocked),
+    helped: Number(r.helped ?? 0),
   };
 }
 

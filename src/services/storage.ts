@@ -19,8 +19,6 @@ const KEYS = {
   voiceUsage: 'orbii:voice-usage',
   bgVoice: 'orbii:bg-voice',
   voiceSessionId: 'orbii:voice-session-id',
-  moodAskedAt: 'orbii:mood-asked-at',
-  moodHistory: 'orbii:mood-history',
   voiceLang: 'orbii:voice-lang',
   fsiAsked: 'orbii:fsi-asked',
   disclosureAck: 'orbii:disclosure-ack',

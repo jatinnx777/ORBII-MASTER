@@ -17,6 +17,11 @@
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
   <uses-permission android:name="android.permission.WAKE_LOCK"/>
   <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>
+  <!-- Helper SOS overlay: pop the "someone needs help" alert over whatever app
+       the helper is using (Instagram, reels, etc.) with an alarm siren and
+       I'll help / I'm busy buttons. Opt-in; requested at runtime from Settings.
+       Play treats this as sensitive and needs a Permissions Declaration Form. -->
+  <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
   <!-- Background Voice SOS: a microphone foreground service listens for the
        user's secret phrase on-device while the app is backgrounded. Opt-in. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>

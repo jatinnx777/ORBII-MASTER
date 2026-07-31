@@ -32,7 +32,7 @@ import {
 } from '@/components/common';
 import { HelplinesCard } from '@/components/common';
 import { PinPrompt } from '@/components/common';
-import { verifyRescueCode } from '@/services/rescue-code';
+import { submitArrivalCode } from '@/services/arrival-codes';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { startTracking, type TrackingSnapshot, type TrackingHandle, type AccuracyLevel } from '@/services/tracking';
@@ -308,12 +308,10 @@ export function HelperNavigationScreen() {
   };
 
   const submitCode = async (code: string) => {
-    const eventId = rewardEventId.current;
-    if (!eventId) {
-      setCodeError('This rescue is not registered on the server yet.');
-      return;
-    }
-    const res = await verifyRescueCode(eventId, code);
+    // Submit YOUR code (verified helpers each have their own; everyone else
+    // shares one) with your name. The victim's screen ticks you off, and the
+    // SOS auto-closes once every helper's code is in.
+    const res = await submitArrivalCode(sosId, code, profile?.name ?? 'A helper');
     if (res.ok) {
       setCodeOpen(false);
       setCodeError(null);
@@ -329,7 +327,7 @@ export function HelperNavigationScreen() {
     }
     setCodeError(
       res.wrong
-        ? 'That code is wrong. Ask her to read it out again.'
+        ? 'That code is wrong. Ask them to read out your code again.'
         : res.error,
     );
   };

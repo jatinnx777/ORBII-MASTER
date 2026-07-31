@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
 import { EmptyState, ScreenContainer } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import {
@@ -16,32 +17,63 @@ import {
   markAllRead,
   type NotificationEntry,
 } from '@/services/notification-inbox';
+import {
+  loadCommunityNotifications,
+  markCommunityNotificationsRead,
+  describeCommunityNotification,
+  type CommunityNotification,
+} from '@/services/community-notifications';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { acceptInvite, declineInvite, type CircleInvite } from '@/services/circles';
 import { inviteResolved } from '@/redux/slices/circlesSlice';
 import { refreshCircles, setActiveCircle } from '@/services/circles-bootstrap';
 
+// One row model the list renders, whether the source is the local device inbox
+// (SOS / helper / system) or a server-side Community activity notification.
+type DisplayItem = {
+  id: string;
+  title: string;
+  body: string;
+  createdAt: number;
+  icon: { name: keyof typeof Ionicons.glyphMap; color: string; bg: string };
+  onPress?: () => void;
+};
+
 export function NotificationsScreen() {
   const dispatch = useAppDispatch();
+  const navigation = useNavigation();
   const invites = useAppSelector((s) => s.circles.incomingInvites);
-  const [items, setItems] = useState<NotificationEntry[]>([]);
+  const [items, setItems] = useState<DisplayItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const list = await listNotifications();
-    setItems(list);
+    const [local, community] = await Promise.all([
+      listNotifications(),
+      loadCommunityNotifications(),
+    ]);
+    const merged: DisplayItem[] = [
+      ...local.map(localToDisplay),
+      ...community.map((n) => communityToDisplay(n, navigation)),
+    ].sort((a, b) => b.createdAt - a.createdAt);
+    setItems(merged);
     setLoading(false);
-  }, []);
+  }, [navigation]);
 
   useEffect(() => {
     load();
+    // Opening the screen clears the unread badge on both inboxes.
     markAllRead().catch(() => undefined);
+    markCommunityNotificationsRead().catch(() => undefined);
   }, [load]);
 
+  const hasLocal = items.some((i) => !i.id.startsWith('cn_'));
+
   const handleClear = async () => {
+    // Only the local device inbox is clearable; Community activity is server
+    // history, so those rows stay.
     await clearNotifications();
-    setItems([]);
+    setItems((cur) => cur.filter((i) => i.id.startsWith('cn_')));
   };
 
   const handleAccept = async (invite: CircleInvite) => {
@@ -97,7 +129,7 @@ export function NotificationsScreen() {
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
-        {items.length > 0 ? (
+        {hasLocal ? (
           <Pressable onPress={handleClear} hitSlop={8}>
             <Text style={styles.clear}>Clear all</Text>
           </Pressable>
@@ -119,7 +151,7 @@ export function NotificationsScreen() {
           refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
           contentContainerStyle={styles.listContent}
           ListHeaderComponent={InvitesHeader}
-          renderItem={({ item }) => <Row entry={item} />}
+          renderItem={({ item }) => <Row item={item} />}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
       )}
@@ -127,27 +159,31 @@ export function NotificationsScreen() {
   );
 }
 
-function Row({ entry }: { entry: NotificationEntry }) {
-  const icon = iconForKind(entry.kind);
-  return (
+function Row({ item }: { item: DisplayItem }) {
+  const inner = (
     <View style={styles.row}>
-      <View style={[styles.iconWrap, { backgroundColor: icon.bg }]}>
-        <Ionicons name={icon.name} size={18} color={icon.color} />
+      <View style={[styles.iconWrap, { backgroundColor: item.icon.bg }]}>
+        <Ionicons name={item.icon.name} size={18} color={item.icon.color} />
       </View>
       <View style={styles.body}>
-        <Text style={styles.rowTitle}>{entry.title}</Text>
-        <Text style={styles.rowBody}>{entry.body}</Text>
-        <Text style={styles.rowMeta}>{relativeTime(entry.createdAt)}</Text>
+        <Text style={styles.rowTitle}>{item.title}</Text>
+        <Text style={styles.rowBody} numberOfLines={2}>{item.body}</Text>
+        <Text style={styles.rowMeta}>{relativeTime(item.createdAt)}</Text>
       </View>
+      {item.onPress ? (
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ alignSelf: 'center' }} />
+      ) : null}
     </View>
+  );
+  if (!item.onPress) return inner;
+  return (
+    <Pressable onPress={item.onPress} style={({ pressed }) => (pressed ? { opacity: 0.6 } : null)}>
+      {inner}
+    </Pressable>
   );
 }
 
-function iconForKind(kind: NotificationEntry['kind']): {
-  name: keyof typeof Ionicons.glyphMap;
-  color: string;
-  bg: string;
-} {
+function iconForKind(kind: NotificationEntry['kind']): DisplayItem['icon'] {
   switch (kind) {
     case 'sos':
       return { name: 'alert-circle', color: colors.coral, bg: colors.coralSoft };
@@ -156,6 +192,36 @@ function iconForKind(kind: NotificationEntry['kind']): {
     default:
       return { name: 'notifications', color: colors.textSecondary, bg: colors.cream };
   }
+}
+
+function communityIcon(type: CommunityNotification['type']): DisplayItem['icon'] {
+  switch (type) {
+    case 'like':
+      return { name: 'heart', color: colors.coral, bg: colors.coralSoft };
+    case 'reply':
+      return { name: 'arrow-undo', color: colors.lavenderDeep, bg: colors.lavenderSoft };
+    default:
+      return { name: 'chatbubble-ellipses', color: colors.lavenderDeep, bg: colors.lavenderSoft };
+  }
+}
+
+function localToDisplay(e: NotificationEntry): DisplayItem {
+  return { id: e.id, title: e.title, body: e.body, createdAt: e.createdAt, icon: iconForKind(e.kind) };
+}
+
+function communityToDisplay(
+  n: CommunityNotification,
+  navigation: ReturnType<typeof useNavigation>,
+): DisplayItem {
+  const { title, body } = describeCommunityNotification(n);
+  return {
+    id: `cn_${n.id}`,
+    title,
+    body,
+    createdAt: n.createdAt,
+    icon: communityIcon(n.type),
+    onPress: () => (navigation as unknown as { navigate: (r: string) => void }).navigate('CommunityFeed'),
+  };
 }
 
 function relativeTime(ts: number): string {

@@ -17,6 +17,7 @@ import expo.modules.ApplicationLifecycleDispatcher
 import expo.modules.ReactNativeHostWrapper
 
 import com.orbii.app.voice.VoiceGuardPackage
+import com.orbii.app.overlay.HelperOverlayPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -27,6 +28,8 @@ class MainApplication : Application(), ReactApplication {
             PackageList(this).packages.apply {
               // Background Voice SOS (on-device Vosk + foreground service).
               add(VoiceGuardPackage())
+              // "Display over other apps" helper SOS overlay.
+              add(HelperOverlayPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

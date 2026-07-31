@@ -154,8 +154,17 @@ export function HelperAlertScreen() {
           <View style={styles.warnBadge}>
             <Ionicons name="warning" size={22} color={colors.coral} />
           </View>
-          <Text style={styles.title}>Nearby User{'\n'}Needs Help</Text>
-          <Text style={styles.subtitle}>A verified ORBII member may need assistance.</Text>
+          <Text style={styles.title}>
+            {alert.victim.name && alert.victim.name !== 'Someone nearby'
+              ? alert.victim.name
+              : 'Someone nearby'}
+            {'\n'}needs help now
+          </Text>
+          <Text style={styles.subtitle}>
+            {alert.distanceMeters >= 0
+              ? `They're ${formatDistance(alert.distanceMeters)} from you. Can you get to them?`
+              : 'Someone close to you needs help. Can you get to them?'}
+          </Text>
 
           <View style={styles.statsRow}>
             <Stat icon="location" tint="sage" value={formatDistance(alert.distanceMeters)} label="Distance" />

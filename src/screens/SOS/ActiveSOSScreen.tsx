@@ -58,7 +58,7 @@ import {
   stopVictimLocationUpdates,
 } from '@/services/sos-location-task';
 import { RewardService } from '@/services/rewards';
-import { ensureSosCode } from '@/services/rescue-code';
+import { mintArrivalCodes, type ArrivalCode } from '@/services/arrival-codes';
 import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
@@ -69,13 +69,13 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 const ARRIVAL_RADIUS_M = 40;
 const STALE_PING_MS = 45_000;
 const NO_HELPER_WARN_MS = 120_000;
-// Sender expands the alert radius from 2 km → 5 km if no responder pings
-// the live-location channel within this window.
-// Progressive search ring. Start at 2 km; if fewer than HELPER_TARGET helpers
-// have responded, widen to 5 km, then 10 km.
+// Progressive search ring. Start tight at 500 m (handled by the receiver gate
+// in App.tsx) for the fastest possible response, then widen fast: 1 km, 2 km,
+// 3 km, one step every 10 s, until at least HELPER_TARGET helpers are on the
+// way. Every second counts, so the escalation is aggressive.
 const HELPER_TARGET = 4;
-const EXPAND_TO_5KM_MS = 30_000;
-const EXPAND_TO_10KM_MS = 75_000;
+const EXPAND_RINGS_KM = [1, 2, 3];
+const EXPAND_STEP_MS = 10_000;
 
 type LiveResponder = {
   id: string;
@@ -126,19 +126,36 @@ export function ActiveSOSScreen() {
 
   // Mint the 4-digit completion code as soon as the SOS is live, so it's on
   // screen before any helper arrives.
-  const [rescueCode, setRescueCode] = useState<string | null>(null);
-  // Kept hidden by default. If someone takes her phone mid-SOS, a code sitting
-  // in plain sight tells him help is coming. She reveals it deliberately, at
+  // One code per verified helper, plus a single shared code for everyone else.
+  // Minted + polled so the "arrived" ticks appear as helpers check in, and the
+  // SOS auto-resolves once every code has been entered.
+  const [codes, setCodes] = useState<ArrivalCode[]>([]);
+  // Kept hidden by default. If someone takes her phone mid-SOS, codes sitting
+  // in plain sight tell him help is coming. She reveals them deliberately, at
   // the moment her helper is in front of her.
   const [codeShown, setCodeShown] = useState(false);
+  const allDoneRef = useRef(false);
   useEffect(() => {
     if (!activeSOS?.id || activeSOS.kind === 'test') return;
     let alive = true;
-    void ensureSosCode(activeSOS.id).then((c) => {
-      if (alive) setRescueCode(c);
-    });
+    const sid = activeSOS.id;
+    const refresh = async () => {
+      if (resolvedRef.current) return;
+      const list = await mintArrivalCodes(sid);
+      if (!alive) return;
+      setCodes(list);
+      // Every code entered = every helper on record physically confirmed. Close.
+      if (list.length > 0 && list.every((c) => c.entered) && !allDoneRef.current) {
+        allDoneRef.current = true;
+        setResolved(true);
+      }
+    };
+    void refresh();
+    // The 4s poll re-mints, so newly-arrived helpers get their code slot too.
+    const iv = setInterval(refresh, 4000);
     return () => {
       alive = false;
+      clearInterval(iv);
     };
   }, [activeSOS?.id, activeSOS?.kind]);
 
@@ -341,20 +358,16 @@ export function ActiveSOSScreen() {
   useEffect(() => {
     if (resolved || !activeSOS?.id) return;
     const sosId = activeSOS.id;
-    const t5 = setTimeout(() => {
-      if (responderCountRef.current < HELPER_TARGET) {
-        broadcastExpandRadius(sosId, 5).catch(() => undefined);
-      }
-    }, EXPAND_TO_5KM_MS);
-    const t10 = setTimeout(() => {
-      if (responderCountRef.current < HELPER_TARGET) {
-        broadcastExpandRadius(sosId, 10).catch(() => undefined);
-      }
-    }, EXPAND_TO_10KM_MS);
-    return () => {
-      clearTimeout(t5);
-      clearTimeout(t10);
-    };
+    // Widen the ring one step every 10 s (1 km, 2 km, 3 km) until enough
+    // helpers are on the way. Each step only fires if we still need people.
+    const timers = EXPAND_RINGS_KM.map((radiusKm, i) =>
+      setTimeout(() => {
+        if (responderCountRef.current < HELPER_TARGET) {
+          broadcastExpandRadius(sosId, radiusKm).catch(() => undefined);
+        }
+      }, EXPAND_STEP_MS * (i + 1)),
+    );
+    return () => timers.forEach(clearTimeout);
   }, [resolved, activeSOS?.id]);
 
   const helperSummaries = useMemo<HelperSummary[]>(
@@ -679,21 +692,37 @@ export function ActiveSOSScreen() {
             once he's physically in front of her, and only then does his app
             let him close the rescue. Nobody can complete a rescue they never
             attended. */}
-        {!resolved && rescueCode ? (
+        {!resolved && codes.length > 0 ? (
           <Pressable
             style={styles.codeCard}
             onPress={() => setCodeShown((v) => !v)}
             accessibilityRole="button"
-            accessibilityLabel={codeShown ? 'Hide rescue code' : 'Reveal rescue code'}
+            accessibilityLabel={codeShown ? 'Hide helper codes' : 'Reveal helper codes'}
           >
             <Text style={styles.codeLabel}>
-              {codeShown ? 'READ THIS OUT TO YOUR HELPER' : 'YOUR HELPER CODE'}
+              {codeShown ? 'SHOW EACH HELPER THEIR CODE' : 'YOUR HELPER CODES'}
             </Text>
-            <Text style={styles.codeValue}>{codeShown ? rescueCode : '••••'}</Text>
+            {codes.map((c, i) => {
+              const who = c.entered
+                ? `${c.enteredName ?? 'A helper'} arrived`
+                : c.kind === 'shared'
+                  ? 'Other helpers'
+                  : c.assigneeName ?? 'Verified helper';
+              return (
+                <View key={`${c.kind}-${c.assigneeId ?? 'shared'}-${i}`} style={styles.codeRow}>
+                  <Text style={[styles.codeWho, c.entered && styles.codeWhoDone]} numberOfLines={1}>
+                    {who}
+                  </Text>
+                  <Text style={[styles.codeValueSm, c.entered && styles.codeValueDone]}>
+                    {c.entered ? '✓' : codeShown ? c.code : '••••'}
+                  </Text>
+                </View>
+              );
+            })}
             <Text style={styles.codeHint}>
               {codeShown
-                ? 'Tap to hide. Only say it once they are standing with you.'
-                : 'Tap to reveal. Keep it hidden until your helper is with you.'}
+                ? 'Tap to hide. Show a code only once that helper is standing with you.'
+                : 'Tap to reveal. Keep them hidden until your helper is with you.'}
             </Text>
           </Pressable>
         ) : null}
@@ -1228,6 +1257,29 @@ const styles = StyleSheet.create({
     marginLeft: 12, // optical: letterSpacing pads the right of the last glyph
     fontVariant: ['tabular-nums'],
   },
+  codeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignSelf: 'stretch',
+    marginTop: spacing.sm,
+  },
+  codeWho: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  codeWhoDone: { color: colors.sageDeep },
+  codeValueSm: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 24,
+    letterSpacing: 4,
+    color: colors.textPrimary,
+    fontVariant: ['tabular-nums'],
+  },
+  codeValueDone: { color: colors.sageDeep, letterSpacing: 0 },
   codeHint: {
     ...typography.caption,
     fontSize: 12,

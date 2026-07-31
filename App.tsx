@@ -40,11 +40,9 @@ import {
   AppDialogHost,
   appAlert,
   BrandSheetProvider,
-  MoodCheckIn,
   OfflineBanner,
   PermissionDisclosureModal,
 } from '@/components/common';
-import { shouldAskMood } from '@/services/mood';
 import { trackEvent } from '@/services/analytics';
 import {
   hidePinnedSOSShortcut,
@@ -58,7 +56,7 @@ import {
   subscribeToAlerts,
 } from '@/services/community';
 import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
-import { premiumTierResolved } from '@/redux/slices/userSlice';
+import { premiumTierResolved, signedOut } from '@/redux/slices/userSlice';
 import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue } from '@/services/sos-queue';
@@ -81,7 +79,17 @@ import {
 import { acceptInviteByToken } from '@/services/circles';
 import { circlesReset } from '@/redux/slices/circlesSlice';
 import { safeJourneyEnded, safeJourneyStarted } from '@/redux/slices/appSlice';
-import { isPinSet } from '@/services/safety-pin';
+import { isPinSet, clearPin } from '@/services/safety-pin';
+import { signOutFromGoogle } from '@/services/auth';
+import { useDeviceEvictionGuard } from '@/services/session-guard';
+import {
+  showHelperOverlay,
+  dismissHelperOverlay,
+  formatOverlayDistance,
+  hasOverlayPermission,
+  requestOverlayPermission,
+  overlayAvailable,
+} from '@/services/helper-overlay';
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
@@ -99,6 +107,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 
 function RootNavigator() {
   const status = useAppSelector((s) => s.user.status);
+  const uid = useAppSelector((s) => s.user.profile?.uid ?? null);
   const onboarded = useAppSelector((s) => s.app.onboarded);
   const hydrated = useAppSelector((s) => s.app.hydrated);
 
@@ -106,7 +115,6 @@ function RootNavigator() {
   // after sign-in; null = still loading the flag from storage.
   const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [pinReady, setPinReady] = useState<boolean | null>(null);
-  const [moodOpen, setMoodOpen] = useState(false);
   useEffect(() => {
     getItem<boolean>(storageKeys.guidedSetup).then((v) => setSetupDone(!!v));
     void isPinSet()
@@ -145,6 +153,31 @@ function RootNavigator() {
       };
     }
     void stopHelperMode();
+  }, [status, helperMode]);
+
+  // One-time nudge: a helper needs "display over other apps" so an SOS can pop
+  // over whatever app they're using. Asked once, never nags again.
+  useEffect(() => {
+    if (status !== 'authenticated' || !helperMode || !overlayAvailable()) return;
+    let cancelled = false;
+    (async () => {
+      const granted = await hasOverlayPermission();
+      if (cancelled || granted) return;
+      const seen = await getItem<boolean>('orbii:overlay-prompt-seen');
+      if (seen) return;
+      await setItem('orbii:overlay-prompt-seen', true);
+      appAlert(
+        'Let alerts reach you over any app',
+        'So an SOS can pop over apps like Instagram and you never miss someone nearby who needs help, ORBII needs "display over other apps" permission.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Enable', onPress: () => { void requestOverlayPermission(); } },
+        ],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [status, helperMode]);
 
   // Circles bootstrap. Hydrate the cached active-circle id immediately so
@@ -223,15 +256,25 @@ function RootNavigator() {
     void reconcileExpiredVoiceSessions();
   }, [status]);
 
-  // Wellbeing check-in every 12h. A gentle emotional touch, on-device only.
+  // Single active device. Claim this device when signed in and listen for
+  // another device taking the account over; if that happens, sign out here and
+  // tell the user. No push involved — the eviction is handled entirely in-app.
+  const evictedRef = useRef(false);
   useEffect(() => {
-    if (status !== 'authenticated') return;
-    shouldAskMood()
-      .then((ask) => {
-        if (ask) setMoodOpen(true);
-      })
-      .catch(() => undefined);
+    if (status === 'authenticated') evictedRef.current = false;
   }, [status]);
+  const handleEvicted = useCallback(async () => {
+    if (evictedRef.current) return;
+    evictedRef.current = true;
+    await signOutFromGoogle().catch(() => undefined);
+    await clearPin().catch(() => undefined);
+    store.dispatch(signedOut());
+    appAlert(
+      'Signed out on this device',
+      'Your ORBII account was just opened on another device. For your safety, only one device can be signed in at a time.',
+    );
+  }, []);
+  useDeviceEvictionGuard(status === 'authenticated', uid, handleEvicted);
 
   // Re-arm safe-zone monitoring. The OS holds the geofences, but it forgets
   // them on reinstall/update, so we re-register whatever zones are set on us
@@ -277,6 +320,18 @@ function RootNavigator() {
 
     const handleUrl = async (url: string | null) => {
       if (!url) return;
+      // "I'll help" tapped on the over-other-apps overlay: bring ORBII forward
+      // and open the helper alert for that SOS.
+      if (url.startsWith('orbii://helper-respond')) {
+        const m = url.match(/[?&]alertId=([^&]+)/);
+        const alertId = m ? decodeURIComponent(m[1]) : undefined;
+        void dismissHelperOverlay();
+        if (alertId && navigationRef.isReady()) {
+          // @ts-expect-error HelperAlert lives in the AppStack only.
+          navigationRef.navigate('HelperAlert', { alertId });
+        }
+        return;
+      }
       // Voice trigger from the on-device VoiceGuard engine — open the real SOS
       // countdown screen (5s, cancellable) which then dispatches + shows the
       // live ActiveSOS map. VoiceGuardService launches us over the lock screen
@@ -425,7 +480,6 @@ function RootNavigator() {
         <AppNavigator />
         {/* Play "prominent disclosure" — shown once before any permission ask. */}
         <PermissionDisclosureModal />
-        <MoodCheckIn visible={moodOpen} onClose={() => setMoodOpen(false)} />
       </>
     );
   }
@@ -586,17 +640,35 @@ export default function App() {
   // (the on-device VoiceGuard engine fires `orbii://voice-sos` directly), so
   // there's no JS keyword subscription to wire up here anymore.
 
-  // Global SOS broadcast receiver. Two-stage radius: alerts within 2 km of
-  // the receiver fire immediately. Alerts 2-5 km away are cached pending
-  // the sender's "expand-radius" pulse (sent if no responder accepts in
-  // 60 s). Anything beyond 5 km is dropped silently — keeps a Bangalore
-  // alert from buzzing phones in Mumbai.
+  // Global SOS broadcast receiver. Tight-first radius: alerts within 500 m of
+  // the receiver fire immediately for the fastest response. Alerts out to 3 km
+  // are cached pending the sender's "expand-radius" pulses (1 km, 2 km, 3 km,
+  // one step every 10 s). Anything beyond 3 km is dropped silently — keeps a
+  // Bangalore alert from buzzing phones in Mumbai.
   useEffect(() => {
     const seen = new Set<string>();
     const pending = new Map<
       string,
       { broadcast: ReturnType<typeof Object>; alert: ReturnType<typeof Object>; distance: number }
     >();
+
+    // Show the alert where the helper will actually see it: the in-app
+    // full-screen screen when ORBII is open, or the native overlay-over-other-
+    // apps popup (with siren) when they're using another app.
+    const presentAlert = (a: { id: string; victim: { name: string }; distanceMeters: number }) => {
+      if (AppState.currentState === 'active') {
+        if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== 'HelperAlert') {
+          // @ts-expect-error HelperAlert lives in the AppStack only.
+          navigationRef.navigate('HelperAlert', { alertId: a.id });
+        }
+      } else {
+        void showHelperOverlay({
+          alertId: a.id,
+          name: a.victim.name,
+          distance: formatOverlayDistance(a.distanceMeters),
+        });
+      }
+    };
 
     const handleAlert = (broadcastPayload: Parameters<typeof alertFromBroadcast>[0]) => {
       const state = store.getState();
@@ -606,11 +678,12 @@ export default function App() {
       if (!alert) return;
       if (seen.has(alert.id)) return;
       const distance = alert.distanceMeters;
-      // Search starts at 2 km; the victim escalates the ring to 5 km then
-      // 10 km if not enough helpers respond. Helpers up to 10 km are held
-      // pending and revealed when the ring reaches them.
-      const within2km = distance < 0 || distance <= 2000;
-      const within10km = distance < 0 || distance <= 10000;
+      // Search starts tight at 500 m for the fastest possible response; the
+      // victim widens the ring to 1 km, 2 km, then 3 km (one step every 10s)
+      // if not enough helpers respond. Helpers out to 3 km are held pending
+      // and revealed the moment the ring reaches them.
+      const withinInitial = distance < 0 || distance <= 500;
+      const withinMax = distance < 0 || distance <= 3000;
       // Friends in the victim's circle get the alert regardless of distance,
       // with a stronger vibration. The receiver still sees an accurate
       // distance/ETA in the alert card.
@@ -622,7 +695,7 @@ export default function App() {
       // circle. If we're not in their circle, drop it — strangers never get
       // a free user's alert. Premium victims reach the full nearby pool.
       if (broadcastPayload.circleOnly && !isFriend) return;
-      if (within2km || isFriend) {
+      if (withinInitial || isFriend) {
         seen.add(alert.id);
         store.dispatch(alertReceived(alert));
         if (state.app.alertVibration) {
@@ -634,19 +707,10 @@ export default function App() {
             : [0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600];
           Vibration.vibrate(pattern);
         }
-        // Phase 3: launch the full-screen emergency alert so a nearby helper
-        // can't miss it (works while the app is open). Over-lockscreen
-        // delivery needs an FCM full-screen intent — native follow-up.
-        if (
-          navigationRef.isReady() &&
-          navigationRef.getCurrentRoute()?.name !== 'HelperAlert'
-        ) {
-          // @ts-expect-error HelperAlert lives in the AppStack only.
-          navigationRef.navigate('HelperAlert', { alertId: alert.id });
-        }
+        presentAlert(alert);
         return;
       }
-      if (within10km) {
+      if (withinMax) {
         pending.set(alert.id, { broadcast: broadcastPayload, alert, distance });
       }
       // else: silently drop, this user is too far to help
@@ -669,6 +733,7 @@ export default function App() {
         );
         Vibration.vibrate([0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600]);
       }
+      presentAlert(cached.alert as { id: string; victim: { name: string }; distanceMeters: number });
     };
 
     const handleResolved = (sosId: string) => {
@@ -677,6 +742,8 @@ export default function App() {
       seen.delete(sosId);
       pending.delete(sosId);
       store.dispatch(alertDismissed(sosId));
+      // Tear down the over-other-apps overlay if it's showing this SOS.
+      void dismissHelperOverlay();
       // If a helper is staring at the full-screen alert for this SOS, kick
       // them back to the app — the emergency is over.
       if (

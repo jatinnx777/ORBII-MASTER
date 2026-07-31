@@ -10,6 +10,7 @@ import { loadEmergencyContacts } from './emergency-contacts';
 import { mergeCachedProfile } from './profile-cache';
 import { fetchSOSHistory } from './sos-history';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
+import { claimThisDevice } from './session-guard';
 
 // Custom URL scheme registered in app.json. Redirect URI must be hard-coded
 // so it stays stable across Expo Go vs production builds (where
@@ -194,6 +195,10 @@ async function bootstrapProfile(
   user: { id: string; email?: string | null; user_metadata?: Record<string, unknown> },
   opts: { fallbackPhone?: string } = {},
 ): Promise<SignInResult> {
+  // This is a fresh sign-in with a live session: claim this device as the
+  // account's one active device, evicting whatever device was signed in before.
+  void claimThisDevice();
+
   let { data: row } = await supabase
     .from('profiles')
     .select(
