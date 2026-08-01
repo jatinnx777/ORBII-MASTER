@@ -155,14 +155,15 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
       pointerEvents="box-none"
       style={[styles.wrap, { bottom, opacity: barOpacity, transform: [{ translateY }] }]}
     >
-      {/* Raised centre: SOS — tap for options, hold to send now. */}
+      {/* Raised centre: tap opens the Disaster / emergency hub, hold fires an
+          instant SOS (that critical gesture stays). */}
       <Pressable
-        onPress={openSheet}
+        onPress={() => navigation.navigate('DisasterMode' as never)}
         onLongPress={fireSOS}
         delayLongPress={550}
         style={styles.fabWrap}
         accessibilityRole="button"
-        accessibilityLabel="SOS. Tap for options, hold to send an alert now."
+        accessibilityLabel="Emergency. Tap for disaster mode and helplines, hold to send an SOS now."
       >
         <LinearGradient
           colors={[colors.coral, colors.coralDeep]}

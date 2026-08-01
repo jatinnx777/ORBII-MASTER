@@ -99,6 +99,42 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Listen-only: this phone scans for nearby SOS beacons and bridges/relays
+   * them, without advertising an SOS of its own. Makes every open ORBII a
+   * potential relay, which is what the mesh needs to actually work.
+   */
+  @ReactMethod
+  fun startListening(bridgeUrl: String, bearer: String, promise: Promise) {
+    try {
+      val intent = android.content.Intent(ctx, OrbiiMeshService::class.java).apply {
+        action = OrbiiMeshService.ACTION_LISTEN
+        putExtra(OrbiiMeshService.EXTRA_BRIDGE_URL, bridgeUrl)
+        putExtra(OrbiiMeshService.EXTRA_BEARER, bearer)
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(intent)
+      else ctx.startService(intent)
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("mesh_listen_failed", e)
+    }
+  }
+
+  /** Stop advertising my own SOS, but keep listening/relaying for others. */
+  @ReactMethod
+  fun stopSosRelay(promise: Promise) {
+    try {
+      ctx.startService(
+        android.content.Intent(ctx, OrbiiMeshService::class.java).apply {
+          action = OrbiiMeshService.ACTION_STOP_SOS
+        },
+      )
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
   @ReactMethod
   fun disarm(promise: Promise) {
     try {

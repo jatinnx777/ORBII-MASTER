@@ -32,7 +32,12 @@ import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
 import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
-import { reportMeshCapabilitiesOnce, requestMeshPermissions } from '@/services/mesh';
+import {
+  reportMeshCapabilitiesOnce,
+  requestMeshPermissions,
+  startMeshListening,
+  disarmMesh,
+} from '@/services/mesh';
 import { syncZoneMonitoring } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
@@ -185,6 +190,8 @@ function RootNavigator() {
               void (async () => {
                 await requestSmsPermission();
                 await requestMeshPermissions();
+                // Start relaying now that Bluetooth is granted.
+                void startMeshListening();
               })();
             },
           },
@@ -298,6 +305,12 @@ function RootNavigator() {
     // Offline mesh Phase 0: report this phone's mesh-radio capabilities once,
     // so we learn the real fleet's readiness before building the mesh.
     void reportMeshCapabilitiesOnce();
+    // Become a relay: listen for nearby offline SOS beacons and bridge them.
+    // No-op until Bluetooth permission is granted. Full-stop on sign-out.
+    void startMeshListening();
+    return () => {
+      void disarmMesh();
+    };
   }, [status]);
 
   // Single active device. Claim this device when signed in and listen for

@@ -25,7 +25,7 @@ import {
   type MLRoute,
 } from '@/components/common';
 import { broadcastExpandRadius, broadcastResolved } from '@/services/community';
-import { disarmMesh } from '@/services/mesh';
+import { stopMeshSos } from '@/services/mesh';
 import { openSMSComposer } from '@/services/sms';
 import { buildSOSMessage } from '@/services/whatsapp-sos';
 import { fetchRoute, formatEta } from '@/services/osrm';
@@ -184,8 +184,9 @@ export function ActiveSOSScreen() {
   const resolvedRef = useRef(false);
   useEffect(() => {
     resolvedRef.current = resolved;
-    // SOS is over: stop relaying it over the offline mesh.
-    if (resolved) void disarmMesh();
+    // SOS is over: stop advertising my SOS, but keep the phone listening so it
+    // can still relay other people's alerts.
+    if (resolved) void stopMeshSos();
   }, [resolved]);
   const lastPromptRef = useRef(0);
 

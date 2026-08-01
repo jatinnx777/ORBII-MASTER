@@ -34,6 +34,8 @@ const { OrbiiMesh } = NativeModules as {
       bridgeUrl: string,
       bearer: string,
     ): Promise<boolean>;
+    startListening(bridgeUrl: string, bearer: string): Promise<boolean>;
+    stopSosRelay(): Promise<boolean>;
     disarm(): Promise<boolean>;
   };
 };
@@ -68,6 +70,32 @@ export async function disarmMesh(): Promise<void> {
   if (!available) return;
   try {
     await OrbiiMesh!.disarm();
+  } catch {
+    // ignore
+  }
+}
+
+/**
+ * Start listen-only relay: this phone scans for nearby SOS beacons and bridges
+ * them to the server. This is what makes the mesh work, every open ORBII becomes
+ * a potential relay for someone offline nearby. Best-effort; needs BT permission.
+ */
+export async function startMeshListening(): Promise<boolean> {
+  if (!available) return false;
+  try {
+    if (!(await hasMeshPermissions())) return false;
+    const bridgeUrl = `${SUPABASE_URL}/functions/v1/mesh-bridge`;
+    return await OrbiiMesh!.startListening(bridgeUrl, SUPABASE_ANON_KEY);
+  } catch {
+    return false;
+  }
+}
+
+/** Stop advertising my own SOS when it resolves, but keep listening for others. */
+export async function stopMeshSos(): Promise<void> {
+  if (!available) return;
+  try {
+    await OrbiiMesh!.stopSosRelay();
   } catch {
     // ignore
   }

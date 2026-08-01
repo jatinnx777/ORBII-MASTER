@@ -52,6 +52,8 @@ class OrbiiMeshService : Service() {
 
   companion object {
     const val ACTION_ARM = "com.orbii.app.mesh.ARM"
+    const val ACTION_LISTEN = "com.orbii.app.mesh.LISTEN"
+    const val ACTION_STOP_SOS = "com.orbii.app.mesh.STOP_SOS"
     const val ACTION_DISARM = "com.orbii.app.mesh.DISARM"
     const val EXTRA_MSG_ID = "msgId" // 8 hex chars (4 bytes)
     const val EXTRA_TTL = "ttl"
@@ -105,8 +107,31 @@ class OrbiiMeshService : Service() {
         startForegroundSafely()
         start()
       }
+      // Listen-only: a bystander phone scans for nearby SOS beacons and bridges
+      // / relays them, WITHOUT advertising an SOS of its own. This is what makes
+      // the mesh actually work: relays have to be listening.
+      ACTION_LISTEN -> {
+        bridgeUrl = intent.getStringExtra(EXTRA_BRIDGE_URL)
+        bearer = intent.getStringExtra(EXTRA_BEARER)
+        startForegroundSafely()
+        start() // curMsgId is null → advertises nothing, just scans + GATT server
+      }
+      // My SOS resolved: stop advertising it, but keep listening/relaying for
+      // others (don't tear the whole service down).
+      ACTION_STOP_SOS -> {
+        stopOwnAdvertising()
+        curMsgId = null; curTtl = 0; curBlob = ByteArray(0)
+      }
     }
     return START_STICKY
+  }
+
+  @SuppressLint("MissingPermission")
+  private fun stopOwnAdvertising() {
+    try { advertiser?.stopAdvertising(advCb) } catch (e: Exception) {}
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try { advertiser?.stopAdvertisingSet(extAdvCb) } catch (e: Exception) {}
+    }
   }
 
   private fun startForegroundSafely() {
@@ -116,9 +141,13 @@ class OrbiiMeshService : Service() {
         NotificationChannel(CHANNEL, "Offline relay", NotificationManager.IMPORTANCE_LOW),
       )
     }
+    val relaying = curMsgId != null
     val notif: Notification = Notification.Builder(this, CHANNEL)
-      .setContentTitle("ORBII is relaying an SOS")
-      .setContentText("Passing an emergency alert to nearby phones, offline.")
+      .setContentTitle(if (relaying) "ORBII is relaying an SOS" else "ORBII offline safety net")
+      .setContentText(
+        if (relaying) "Passing an emergency alert to nearby phones, offline."
+        else "Listening for nearby SOS that need a relay to the internet.",
+      )
       .setSmallIcon(applicationInfo.icon)
       .setOngoing(true)
       .build()
