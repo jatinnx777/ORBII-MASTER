@@ -4,6 +4,7 @@ import { broadcastAlert, type AlertBroadcast } from './community';
 import { checkRateLimit, rateLimitMessage } from './rate-limit';
 import { enqueueSOS } from './sos-queue';
 import { addBreadcrumb, reportError } from './error-reporting';
+import { armOfflineSos } from './mesh';
 import { store } from '@/redux/store';
 import { sosDeliveryUpdated } from '@/redux/slices/sosSlice';
 
@@ -117,6 +118,11 @@ export async function createSOS(
   // path, so an online SOS is never double-sent.
   if (!store.getState().app.isOnline) {
     void enqueueSOS(record, user);
+    // Also relay over the Bluetooth mesh: a nearby ORBII phone that DOES have
+    // signal can catch this and bridge it to the server. Sealed end-to-end.
+    if (location) {
+      void armOfflineSos(user.uid, location.latitude, location.longitude, record.timestamp);
+    }
   }
 
   // Server-side push fan-out so the victim's circle + emergency contacts are

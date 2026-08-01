@@ -1,6 +1,8 @@
-import { NativeModules, Platform } from 'react-native';
+import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
 import { getItem, setItem } from './storage';
 import { trackEvent } from './analytics';
+import { sealSosForMesh } from './mesh-crypto';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 
 // Offline mesh, Phase 0: read what mesh radios each phone can offer, and report
 // it once per install so we learn the real fleet's readiness (how many budget
@@ -68,6 +70,45 @@ export async function disarmMesh(): Promise<void> {
     await OrbiiMesh!.disarm();
   } catch {
     // ignore
+  }
+}
+
+// Android 12+ needs the new Bluetooth runtime permissions to advertise/scan.
+async function ensureMeshPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android') return false;
+  if (typeof Platform.Version === 'number' && Platform.Version < 31) return true;
+  try {
+    const perms = [
+      'android.permission.BLUETOOTH_ADVERTISE',
+      'android.permission.BLUETOOTH_SCAN',
+      'android.permission.BLUETOOTH_CONNECT',
+    ] as never;
+    const res = await PermissionsAndroid.requestMultiple(perms);
+    return Object.values(res).every((v) => v === PermissionsAndroid.RESULTS.GRANTED);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Offline resilience: seal this SOS and relay it over the Bluetooth mesh, so a
+ * nearby ORBII phone that has signal can bridge it to the server. Call this when
+ * an SOS fires with no internet. Best-effort; never blocks the SOS.
+ */
+export async function armOfflineSos(
+  uid: string,
+  lat: number,
+  lng: number,
+  ts: number,
+): Promise<boolean> {
+  if (!available) return false;
+  try {
+    if (!(await ensureMeshPermissions())) return false;
+    const { msgId, sealed } = sealSosForMesh({ v: 1, uid, lat, lng, ts });
+    const bridgeUrl = `${SUPABASE_URL}/functions/v1/mesh-bridge`;
+    return await armMeshSos(msgId, sealed, bridgeUrl, SUPABASE_ANON_KEY);
+  } catch {
+    return false;
   }
 }
 

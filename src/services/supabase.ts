@@ -2,8 +2,8 @@ import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 import { secureStorage } from './secure-store';
 
-const SUPABASE_URL = 'https://henbkyjefhzmxqozlczd.supabase.co';
-const SUPABASE_ANON_KEY =
+export const SUPABASE_URL = 'https://henbkyjefhzmxqozlczd.supabase.co';
+export const SUPABASE_ANON_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlbmJreWplZmh6bXhxb3psY3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NDkzNjksImV4cCI6MjA5MjEyNTM2OX0.JpNZwyzD75f75C8FNztE8_GMDAJKI-UKJMps6larhcA';
 
 export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 2 weeks
