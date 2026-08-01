@@ -644,11 +644,10 @@ export default function App() {
   // (the on-device VoiceGuard engine fires `orbii://voice-sos` directly), so
   // there's no JS keyword subscription to wire up here anymore.
 
-  // Global SOS broadcast receiver. Tight-first radius: alerts within 500 m of
-  // the receiver fire immediately for the fastest response. Alerts out to 3 km
-  // are cached pending the sender's "expand-radius" pulses (1 km, 2 km, 3 km,
-  // one step every 10 s). Anything beyond 3 km is dropped silently — keeps a
-  // Bangalore alert from buzzing phones in Mumbai.
+  // Global SOS broadcast receiver. Early access: deliver every alert to nearby
+  // ORBII users (density is low, so a distance ring would just hide alerts).
+  // The pending/expand plumbing is kept but idle; it returns to a real ring
+  // gate once there are enough users for that to matter.
   useEffect(() => {
     const seen = new Set<string>();
     const pending = new Map<
@@ -660,12 +659,15 @@ export default function App() {
     // full-screen screen when ORBII is open, or the native overlay-over-other-
     // apps popup (with siren) when they're using another app.
     const presentAlert = (a: { id: string; victim: { name: string }; distanceMeters: number }) => {
-      if (AppState.currentState === 'active') {
-        if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== 'HelperAlert') {
-          // @ts-expect-error HelperAlert lives in the AppStack only.
-          navigationRef.navigate('HelperAlert', { alertId: a.id });
-        }
-      } else {
+      // Always route to the full-screen alert: it shows now when ORBII is open,
+      // and is queued so it appears the moment they next open the app. When
+      // they're in another app, ALSO try the over-apps overlay (a bonus, only if
+      // the "display over other apps" permission has been granted).
+      if (navigationRef.isReady() && navigationRef.getCurrentRoute()?.name !== 'HelperAlert') {
+        // @ts-expect-error HelperAlert lives in the AppStack only.
+        navigationRef.navigate('HelperAlert', { alertId: a.id });
+      }
+      if (AppState.currentState !== 'active') {
         void showHelperOverlay({
           alertId: a.id,
           name: a.victim.name,
@@ -681,43 +683,29 @@ export default function App() {
       const alert = alertFromBroadcast(broadcastPayload, here, me);
       if (!alert) return;
       if (seen.has(alert.id)) return;
-      const distance = alert.distanceMeters;
-      // Search starts tight at 500 m for the fastest possible response; the
-      // victim widens the ring to 1 km, 2 km, then 3 km (one step every 10s)
-      // if not enough helpers respond. Helpers out to 3 km are held pending
-      // and revealed the moment the ring reaches them.
-      const withinInitial = distance < 0 || distance <= 500;
-      const withinMax = distance < 0 || distance <= 3000;
-      // Friends in the victim's circle get the alert regardless of distance,
-      // with a stronger vibration. The receiver still sees an accurate
-      // distance/ETA in the alert card.
       const isFriend =
         !!me &&
         Array.isArray(broadcastPayload.friendUids) &&
         broadcastPayload.friendUids.includes(me);
-      // Premium gate: a free user's SOS (circleOnly) reaches ONLY their
-      // circle. If we're not in their circle, drop it — strangers never get
-      // a free user's alert. Premium victims reach the full nearby pool.
+      // Premium gate: a free user's SOS (circleOnly) reaches ONLY their circle.
       if (broadcastPayload.circleOnly && !isFriend) return;
-      if (withinInitial || isFriend) {
-        seen.add(alert.id);
-        store.dispatch(alertReceived(alert));
-        if (state.app.alertVibration) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-            () => undefined,
-          );
-          const pattern = isFriend
-            ? [0, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800]
-            : [0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600];
-          Vibration.vibrate(pattern);
-        }
-        presentAlert(alert);
-        return;
+      // Early access / low density: deliver EVERY alert so nearby ORBII users
+      // actually see it. The old distance ring (fire only within 500 m, drop
+      // past 3 km) was silently swallowing alerts for anyone not a few metres
+      // apart, which is why testers saw nothing. The ring gate comes back once
+      // there are enough users that "everyone sees everything" gets noisy.
+      seen.add(alert.id);
+      store.dispatch(alertReceived(alert));
+      if (state.app.alertVibration) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+          () => undefined,
+        );
+        const pattern = isFriend
+          ? [0, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800, 200, 800]
+          : [0, 600, 200, 600, 200, 600, 200, 600, 200, 600, 200, 600];
+        Vibration.vibrate(pattern);
       }
-      if (withinMax) {
-        pending.set(alert.id, { broadcast: broadcastPayload, alert, distance });
-      }
-      // else: silently drop, this user is too far to help
+      presentAlert(alert);
     };
 
     const handleExpand = (sosId: string, radiusKm: number) => {

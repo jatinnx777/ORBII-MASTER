@@ -102,10 +102,9 @@ export function CommunityAlertsScreen() {
         if (broadcast.circleOnly && !isFriend) return;
         const alert = alertFromBroadcast(broadcast, viewerRef.current, me);
         if (!alert) return;
-        // CommunityAlerts is the dedicated "all nearby alerts" screen, so
-        // we show alerts up to 5 km even before the expand pulse fires.
-        // Anything past 5 km is filtered out.
-        if (alert.distanceMeters > 5000) return;
+        // Early access: show every alert here regardless of distance, so testers
+        // and the first users actually see each other. A distance filter returns
+        // once there are enough users for it to matter.
         dispatch(alertReceived(alert));
         if (!knownIdsRef.current.has(alert.id)) {
           knownIdsRef.current.add(alert.id);

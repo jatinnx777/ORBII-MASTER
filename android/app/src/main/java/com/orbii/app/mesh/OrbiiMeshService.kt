@@ -13,9 +13,14 @@ import android.bluetooth.BluetoothGattServerCallback
 import android.bluetooth.BluetoothGattService
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.AdvertiseCallback
 import android.bluetooth.le.AdvertiseData
 import android.bluetooth.le.AdvertiseSettings
+import android.bluetooth.le.AdvertisingSet
+import android.bluetooth.le.AdvertisingSetCallback
+import android.bluetooth.le.AdvertisingSetParameters
 import android.bluetooth.le.BluetoothLeAdvertiser
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
@@ -62,9 +67,16 @@ class OrbiiMeshService : Service() {
     private const val NOTIF_ID = 4120
   }
 
+  private var adapter: BluetoothAdapter? = null
   private var advertiser: BluetoothLeAdvertiser? = null
   private var scanner: BluetoothLeScanner? = null
   private var gattServer: BluetoothGattServer? = null
+  private var extAdvertisingSet: AdvertisingSet? = null
+  // Phase 2: does this phone support the long-range boost (Coded PHY + extended
+  // advertising)? Detected at start; capable phones ALSO run the boosted advert
+  // (which carries the full sealed blob inline, no GATT), while every phone keeps
+  // the legacy beacon so budget phones stay in the mesh.
+  private var boostCapable = false
 
   // The packet this phone is currently relaying (its own SOS, or one it caught).
   @Volatile private var curMsgId: String? = null
@@ -113,12 +125,20 @@ class OrbiiMeshService : Service() {
   @SuppressLint("MissingPermission")
   private fun start() {
     val bm = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-    val adapter = bm?.adapter ?: run { stopSelf(); return }
-    advertiser = adapter.bluetoothLeAdvertiser
-    scanner = adapter.bluetoothLeScanner
+    val a = bm?.adapter ?: run { stopSelf(); return }
+    adapter = a
+    advertiser = a.bluetoothLeAdvertiser
+    scanner = a.bluetoothLeScanner
+    boostCapable = try {
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+        a.isLeExtendedAdvertisingSupported && a.isLeCodedPhySupported
+    } catch (e: Exception) {
+      false
+    }
 
     startGattServer(bm)
     startAdvertising()
+    if (boostCapable) startExtendedAdvertising()
     startScanning()
   }
 
@@ -186,15 +206,65 @@ class OrbiiMeshService : Service() {
 
   private val advCb = object : AdvertiseCallback() {}
 
+  // Phase 2 boost: an extended advertisement over Coded PHY that carries the
+  // FULL sealed blob inline (no GATT connect needed) and reaches much further.
+  // Only capable phones run this, in addition to the legacy beacon above, so
+  // budget phones still see the mesh via the beacon + GATT.
+  @SuppressLint("MissingPermission")
+  private fun startExtendedAdvertising() {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val msgId = curMsgId ?: return
+    val adv = advertiser ?: return
+    val blob = curBlob
+    if (blob.isEmpty()) return
+    val idBytes = hexToBytes(msgId)
+    val serviceData = idBytes.copyOf(4) + byteArrayOf(curTtl.toByte()) + blob
+    val maxLen = try { adapter?.leMaximumAdvertisingDataLength ?: 0 } catch (e: Exception) { 0 }
+    if (maxLen in 1..(serviceData.size + 24)) return // won't fit on this device
+    val params = AdvertisingSetParameters.Builder()
+      .setLegacyMode(false)
+      .setConnectable(false)
+      .setScannable(false)
+      .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+      .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+      .setPrimaryPhy(BluetoothDevice.PHY_LE_CODED)
+      .setSecondaryPhy(BluetoothDevice.PHY_LE_CODED)
+      .build()
+    val data = AdvertiseData.Builder()
+      .setIncludeDeviceName(false)
+      .addServiceUuid(ParcelUuid(SERVICE_UUID))
+      .addServiceData(ParcelUuid(SERVICE_UUID), serviceData)
+      .build()
+    try {
+      adv.stopAdvertisingSet(extAdvCb)
+      adv.startAdvertisingSet(params, data, null, null, null, extAdvCb)
+    } catch (e: Exception) {
+      // boost failed; the legacy beacon still carries the mesh
+    }
+  }
+
+  private val extAdvCb = object : AdvertisingSetCallback() {
+    override fun onAdvertisingSetStarted(set: AdvertisingSet?, txPower: Int, status: Int) {
+      extAdvertisingSet = set
+    }
+  }
+
   @SuppressLint("MissingPermission")
   private fun startScanning() {
     val sc = scanner ?: return
     val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
-    val settings = ScanSettings.Builder()
-      .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-      .build()
+    val builder = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+    // Capable phones scan for BOTH legacy and extended (Coded PHY) adverts.
+    if (boostCapable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try {
+        builder.setLegacy(false)
+        builder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
+      } catch (e: Exception) {
+        // fall back to legacy scan settings
+      }
+    }
     try {
-      sc.startScan(listOf(filter), settings, scanCb)
+      sc.startScan(listOf(filter), builder.build(), scanCb)
     } catch (e: Exception) {
       // scanning unsupported/failed
     }
@@ -209,7 +279,13 @@ class OrbiiMeshService : Service() {
       val msgId = bytesToHex(sd.copyOf(4))
       val ttl = sd[4].toInt() and 0xFF
       if (seen.contains(msgId)) return
-      // New packet: connect and read the full sealed blob, then relay/bridge.
+      // Boosted (extended) advert carries the full sealed blob inline: use it
+      // directly, no GATT round-trip.
+      if (sd.size > 5) {
+        handleIncoming(msgId, ttl, sd.copyOfRange(5, sd.size))
+        return
+      }
+      // Legacy beacon (5 bytes): connect and read the blob over GATT.
       val device = result.device ?: return
       try {
         device.connectGatt(this@OrbiiMeshService, false, gattClientCbFor(msgId, ttl))
@@ -258,7 +334,8 @@ class OrbiiMeshService : Service() {
       curMsgId = msgId
       curTtl = nextTtl
       curBlob = blob
-      startAdvertising() // re-broadcast the beacon with decremented TTL
+      startAdvertising() // re-broadcast the beacon (all phones)
+      if (boostCapable) startExtendedAdvertising() // + the long-range boost
     }
   }
 
@@ -286,9 +363,12 @@ class OrbiiMeshService : Service() {
   @SuppressLint("MissingPermission")
   private fun teardown() {
     try { advertiser?.stopAdvertising(advCb) } catch (e: Exception) {}
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      try { advertiser?.stopAdvertisingSet(extAdvCb) } catch (e: Exception) {}
+    }
     try { scanner?.stopScan(scanCb) } catch (e: Exception) {}
     try { gattServer?.close() } catch (e: Exception) {}
-    advertiser = null; scanner = null; gattServer = null
+    advertiser = null; scanner = null; gattServer = null; extAdvertisingSet = null; adapter = null
     seen.clear()
   }
 
