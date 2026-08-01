@@ -99,3 +99,23 @@ global reach.
   never "guaranteed 500m offline".
 - Mesh reach = user density × per-hop range. Zero neighbours = no mesh; only
   cell/satellite covers the empty-road case. Never imply otherwise.
+
+## Future phase: Acoustic SOS (data-over-sound, experimental)
+Ultimate fallback when cellular, data, AND Bluetooth are all dead: emit the
+sealed SOS as an audio chirp (ggwave, MIT, by Georgi Gerganov) that a nearby
+phone's mic decodes. Same-room / very-short range only (a few metres, degrades
+fast with distance and noise). Treat as RESEARCH, not a reliability layer.
+
+Honest constraints before building:
+- Range is tiny (metres, same room/building). It is a last-ditch "someone right
+  next to me" channel, not a mesh replacement.
+- Continuous mic listening on every phone = battery + privacy cost + Android
+  background-mic restrictions (needs a foreground service, mic FGS type). We
+  already fight this for Voice SOS.
+- Audible chirps are conspicuous (a stalker hears them); ultrasonic is quieter
+  but phone speakers/mics have poor ultrasonic response, cutting range further.
+- Payload is tiny (tens of bytes) — fine for a sealed GPS+flag packet.
+Design: Tx = ggwave.encode(sealedBlob) -> AudioTrack burst at high volume;
+Rx = AudioRecord foreground service -> ggwave.decode loop -> on valid packet,
+hand the blob to the same bridge/queue the BLE mesh uses. Reuses the sealed
+crypto, so the acoustic layer is just another transport for the same packet.

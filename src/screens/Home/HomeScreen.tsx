@@ -526,7 +526,7 @@ export function HomeScreen() {
 
           {/* 2x2 grid */}
           <View style={styles.grid}>
-            <GridTile icon="call-outline" title="Fake call" sub="Escape a moment" onPress={() => comingSoon('Fake call')} />
+            <GridTile icon="warning-outline" title="Disaster mode" sub="Reach people offline" onPress={() => navigation.navigate('DisasterMode')} />
             <GridTile icon="chatbubbles-outline" title="Community" sub="Share & support" onPress={() => navigation.navigate('CommunityFeed')} />
             <GridTile icon="navigate-outline" title="Location sharing" sub="Send your spot" onPress={onShare} />
             <GridTile icon="recording-outline" title="Record evidence" sub="Your recordings" onPress={() => navigation.navigate('Recordings')} />

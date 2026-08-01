@@ -62,6 +62,7 @@ export type AppStackParamList = {
   SafetyReadiness: undefined;
   Geofences: undefined;
   Recordings: undefined;
+  DisasterMode: undefined;
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;
   CommunityUserProfile: { profileId: string };

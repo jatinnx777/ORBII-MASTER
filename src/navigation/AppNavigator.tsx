@@ -9,6 +9,7 @@ import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScre
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { RecordingsScreen } from '@/screens/Recordings/RecordingsScreen';
+import { DisasterModeScreen } from '@/screens/Disaster/DisasterModeScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
 import { CommunityProfileSetupScreen } from '@/screens/Community/CommunityProfileSetupScreen';
 import { CommunityUserProfileScreen } from '@/screens/Community/CommunityUserProfileScreen';
@@ -110,6 +111,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="Geofences"
         component={GeofencesScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DisasterMode"
+        component={DisasterModeScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
