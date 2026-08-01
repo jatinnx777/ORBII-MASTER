@@ -29,6 +29,7 @@ import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
 import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
+import { reportMeshCapabilitiesOnce } from '@/services/mesh';
 import { syncZoneMonitoring } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
@@ -254,6 +255,9 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void reconcileExpiredVoiceSessions();
+    // Offline mesh Phase 0: report this phone's mesh-radio capabilities once,
+    // so we learn the real fleet's readiness before building the mesh.
+    void reportMeshCapabilitiesOnce();
   }, [status]);
 
   // Single active device. Claim this device when signed in and listen for

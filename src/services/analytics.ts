@@ -48,6 +48,7 @@ type EventName =
   | 'sos_dialed_112'
   | 'setup_protection_activated'
   | 'setup_completed'
+  | 'mesh_capability_probe'
   | 'screen_viewed';
 
 // Fire-and-forget. Never throws, never blocks a caller — several of these sit

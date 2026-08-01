@@ -18,6 +18,7 @@ import expo.modules.ReactNativeHostWrapper
 
 import com.orbii.app.voice.VoiceGuardPackage
 import com.orbii.app.overlay.HelperOverlayPackage
+import com.orbii.app.mesh.OrbiiMeshPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -30,6 +31,8 @@ class MainApplication : Application(), ReactApplication {
               add(VoiceGuardPackage())
               // "Display over other apps" helper SOS overlay.
               add(HelperOverlayPackage())
+              // Offline mesh, phase 0: device capability probe.
+              add(OrbiiMeshPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"
