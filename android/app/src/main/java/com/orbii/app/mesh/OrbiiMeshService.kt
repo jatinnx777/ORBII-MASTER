@@ -86,6 +86,9 @@ class OrbiiMeshService : Service() {
   private var bearer: String? = null
 
   private val seen = ConcurrentHashMap.newKeySet<String>()
+  // msgIds we're mid-GATT-connect for, so a LOW_LATENCY scan's repeated
+  // callbacks don't spawn a storm of duplicate connections for the same beacon.
+  private val connecting = ConcurrentHashMap.newKeySet<String>()
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -285,11 +288,14 @@ class OrbiiMeshService : Service() {
         handleIncoming(msgId, ttl, sd.copyOfRange(5, sd.size))
         return
       }
-      // Legacy beacon (5 bytes): connect and read the blob over GATT.
-      val device = result.device ?: return
+      // Legacy beacon (5 bytes): connect and read the blob over GATT. Guard so
+      // repeated scan callbacks for the same beacon don't stack connections.
+      if (!connecting.add(msgId)) return
+      val device = result.device ?: run { connecting.remove(msgId); return }
       try {
         device.connectGatt(this@OrbiiMeshService, false, gattClientCbFor(msgId, ttl))
       } catch (e: Exception) {
+        connecting.remove(msgId)
         // could not connect; another relay may still carry it
       }
     }
@@ -301,6 +307,7 @@ class OrbiiMeshService : Service() {
       if (newState == BluetoothProfile.STATE_CONNECTED) {
         try { gatt?.discoverServices() } catch (e: Exception) {}
       } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
+        connecting.remove(msgId)
         try { gatt?.close() } catch (e: Exception) {}
       }
     }
@@ -370,6 +377,7 @@ class OrbiiMeshService : Service() {
     try { gattServer?.close() } catch (e: Exception) {}
     advertiser = null; scanner = null; gattServer = null; extAdvertisingSet = null; adapter = null
     seen.clear()
+    connecting.clear()
   }
 
   override fun onDestroy() {

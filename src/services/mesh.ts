@@ -73,17 +73,32 @@ export async function disarmMesh(): Promise<void> {
   }
 }
 
-// Android 12+ needs the new Bluetooth runtime permissions to advertise/scan.
-async function ensureMeshPermissions(): Promise<boolean> {
-  if (Platform.OS !== 'android') return false;
+const BT_PERMS = [
+  'android.permission.BLUETOOTH_ADVERTISE',
+  'android.permission.BLUETOOTH_SCAN',
+  'android.permission.BLUETOOTH_CONNECT',
+];
+
+// CHECK only (no popup). Used at SOS time so we never throw a permission dialog
+// in the middle of an emergency. Grant them ahead with requestMeshPermissions.
+export async function hasMeshPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !available) return false;
   if (typeof Platform.Version === 'number' && Platform.Version < 31) return true;
   try {
-    const perms = [
-      'android.permission.BLUETOOTH_ADVERTISE',
-      'android.permission.BLUETOOTH_SCAN',
-      'android.permission.BLUETOOTH_CONNECT',
-    ] as never;
-    const res = await PermissionsAndroid.requestMultiple(perms);
+    const checks = await Promise.all(BT_PERMS.map((p) => PermissionsAndroid.check(p as never)));
+    return checks.every(Boolean);
+  } catch {
+    return false;
+  }
+}
+
+// Ask for the Bluetooth permissions ahead of time (Android 12+). Called from a
+// one-time setup prompt, never during an SOS.
+export async function requestMeshPermissions(): Promise<boolean> {
+  if (Platform.OS !== 'android' || !available) return false;
+  if (typeof Platform.Version === 'number' && Platform.Version < 31) return true;
+  try {
+    const res = await PermissionsAndroid.requestMultiple(BT_PERMS as never);
     return Object.values(res).every((v) => v === PermissionsAndroid.RESULTS.GRANTED);
   } catch {
     return false;
@@ -103,7 +118,9 @@ export async function armOfflineSos(
 ): Promise<boolean> {
   if (!available) return false;
   try {
-    if (!(await ensureMeshPermissions())) return false;
+    // Check only, never prompt mid-SOS. If not pre-granted, the mesh just does
+    // not arm (SMS + queue still cover the offline SOS).
+    if (!(await hasMeshPermissions())) return false;
     const { msgId, sealed } = sealSosForMesh({ v: 1, uid, lat, lng, ts });
     const bridgeUrl = `${SUPABASE_URL}/functions/v1/mesh-bridge`;
     return await armMeshSos(msgId, sealed, bridgeUrl, SUPABASE_ANON_KEY);

@@ -1,3 +1,6 @@
+// MUST be first: polyfills global crypto.getRandomValues so tweetnacl (used by
+// the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
+import 'react-native-get-random-values';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Image, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -29,7 +32,7 @@ import { hydrateStore } from '@/redux/persist';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
 import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
-import { reportMeshCapabilitiesOnce } from '@/services/mesh';
+import { reportMeshCapabilitiesOnce, requestMeshPermissions } from '@/services/mesh';
 import { syncZoneMonitoring } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
@@ -171,10 +174,20 @@ function RootNavigator() {
       await setItem('orbii:sms-prompt-seen', true);
       appAlert(
         'Send an SOS even with no internet',
-        'Let ORBII text your emergency contacts with your location automatically when your data is down. SMS works on plain cell signal, even on 2G.',
+        'Let ORBII text your emergency contacts with your location automatically when your data is down, and relay your SOS phone-to-phone over Bluetooth. Both work with no data.',
         [
           { text: 'Not now', style: 'cancel' },
-          { text: 'Enable', onPress: () => { void requestSmsPermission(); } },
+          {
+            text: 'Enable',
+            onPress: () => {
+              // Pre-grant both offline permissions here so neither ever pops up
+              // in the middle of an emergency.
+              void (async () => {
+                await requestSmsPermission();
+                await requestMeshPermissions();
+              })();
+            },
+          },
         ],
       );
     })();
