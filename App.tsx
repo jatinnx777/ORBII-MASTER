@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Image, Linking, StyleSheet, Vibration, View } from 'react-native';
+import { Animated, AppState, Easing, Image, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -83,6 +83,7 @@ import { safeJourneyEnded, safeJourneyStarted } from '@/redux/slices/appSlice';
 import { isPinSet, clearPin } from '@/services/safety-pin';
 import { signOutFromGoogle } from '@/services/auth';
 import { useDeviceEvictionGuard } from '@/services/session-guard';
+import { hasSmsPermission, requestSmsPermission } from '@/services/sms';
 import {
   showHelperOverlay,
   dismissHelperOverlay,
@@ -155,6 +156,32 @@ function RootNavigator() {
     }
     void stopHelperMode();
   }, [status, helperMode]);
+
+  // One-time: offer to let ORBII text emergency contacts automatically when
+  // there's no internet. Granting SEND_SMS ahead of time keeps the offline SOS
+  // silent and hands-free instead of prompting mid-emergency.
+  useEffect(() => {
+    if (status !== 'authenticated' || Platform.OS !== 'android') return;
+    if ((store.getState().user.profile?.emergencyContacts?.length ?? 0) === 0) return;
+    let cancelled = false;
+    (async () => {
+      if (await hasSmsPermission()) return;
+      const seen = await getItem<boolean>('orbii:sms-prompt-seen');
+      if (cancelled || seen) return;
+      await setItem('orbii:sms-prompt-seen', true);
+      appAlert(
+        'Send an SOS even with no internet',
+        'Let ORBII text your emergency contacts with your location automatically when your data is down. SMS works on plain cell signal, even on 2G.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Enable', onPress: () => { void requestSmsPermission(); } },
+        ],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
 
   // One-time nudge: a helper needs "display over other apps" so an SOS can pop
   // over whatever app they're using. Asked once, never nags again.

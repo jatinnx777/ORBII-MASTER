@@ -5,6 +5,8 @@ import { checkRateLimit, rateLimitMessage } from './rate-limit';
 import { enqueueSOS } from './sos-queue';
 import { addBreadcrumb, reportError } from './error-reporting';
 import { armOfflineSos } from './mesh';
+import { sendSosSmsDirect } from './sms';
+import { buildSOSMessage } from './whatsapp-sos';
 import { store } from '@/redux/store';
 import { sosDeliveryUpdated } from '@/redux/slices/sosSlice';
 
@@ -123,6 +125,11 @@ export async function createSOS(
     if (location) {
       void armOfflineSos(user.uid, location.latitude, location.longitude, record.timestamp);
     }
+    // SMS lifeline: text emergency contacts directly with the SOS + location.
+    // SMS rides the cell signal, so it works even with mobile data fully off.
+    // Silent if SEND_SMS was granted ahead of time; the ActiveSOS screen still
+    // offers the one-tap composer as a fallback.
+    void sendSosSmsDirect(user.emergencyContacts, buildSOSMessage({ user, location }));
   }
 
   // Server-side push fan-out so the victim's circle + emergency contacts are

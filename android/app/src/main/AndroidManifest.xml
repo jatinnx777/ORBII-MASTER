@@ -32,6 +32,12 @@
   <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
   <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+  <!-- SMS lifeline: text the SOS + live location to emergency contacts when
+       there is no internet (SMS rides the cell signal, works with data off).
+       Opt-in; requested at runtime. Play NOTE: SEND_SMS is restricted; for a
+       Play release this needs the safety-SOS exception or the composer
+       fallback (services/sms.ts). -->
+  <uses-permission android:name="android.permission.SEND_SMS"/>
   <!-- Background Voice SOS: a microphone foreground service listens for the
        user's secret phrase on-device while the app is backgrounded. Opt-in. -->
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
