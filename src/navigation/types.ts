@@ -63,6 +63,7 @@ export type AppStackParamList = {
   Geofences: undefined;
   Recordings: undefined;
   DisasterMode: undefined;
+  BluetoothChat: undefined;
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;
   CommunityUserProfile: { profileId: string };

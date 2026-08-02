@@ -171,9 +171,8 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           end={{ x: 1, y: 1 }}
           style={styles.fab}
         >
-          <Ionicons name="alert" size={28} color={colors.textInverse} />
+          <Ionicons name="warning" size={28} color={colors.textInverse} />
         </LinearGradient>
-        <Text style={styles.fabLabel}>Hold for SOS</Text>
       </Pressable>
 
       <BlurView intensity={40} tint="light" style={styles.bar}>

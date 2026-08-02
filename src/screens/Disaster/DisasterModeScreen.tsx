@@ -169,15 +169,10 @@ export function DisasterModeScreen() {
               <Text style={styles.miniSub}>Reassure your circle</Text>
             </Pressable>
             <Pressable
-              onPress={() =>
-                appAlert(
-                  'Offline chat is coming',
-                  'Soon you will be able to message the people around you and your circle phone-to-phone over Bluetooth, with no internet. It is in development.',
-                )
-              }
+              onPress={() => navigation.navigate('BluetoothChat' as never)}
               style={({ pressed }) => [styles.miniCard, styles.chatCard, pressed && styles.pressed]}
             >
-              <View style={styles.soonBadge}><Text style={styles.soonText}>SOON</Text></View>
+              <View style={styles.betaBadge}><Text style={styles.soonText}>BETA</Text></View>
               <Ionicons name="bluetooth" size={24} color={colors.lavenderDeep} />
               <Text style={styles.miniTitle}>Bluetooth chat</Text>
               <Text style={styles.miniSub}>Message with no signal</Text>
@@ -331,7 +326,7 @@ const styles = StyleSheet.create({
   chatCard: { backgroundColor: colors.lavenderSoft, borderColor: colors.lavender },
   miniTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
   miniSub: { fontFamily: fontFamilies.poppinsMedium, fontSize: 11.5, color: colors.textSecondary },
-  soonBadge: {
+  betaBadge: {
     position: 'absolute',
     top: spacing.sm,
     right: spacing.sm,

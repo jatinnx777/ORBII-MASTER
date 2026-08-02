@@ -54,19 +54,31 @@ class OrbiiMeshService : Service() {
     const val ACTION_ARM = "com.orbii.app.mesh.ARM"
     const val ACTION_LISTEN = "com.orbii.app.mesh.LISTEN"
     const val ACTION_STOP_SOS = "com.orbii.app.mesh.STOP_SOS"
+    const val ACTION_CHAT = "com.orbii.app.mesh.CHAT"
     const val ACTION_DISARM = "com.orbii.app.mesh.DISARM"
     const val EXTRA_MSG_ID = "msgId" // 8 hex chars (4 bytes)
     const val EXTRA_TTL = "ttl"
     const val EXTRA_SEALED = "sealed" // base64, opaque
     const val EXTRA_BRIDGE_URL = "bridgeUrl"
     const val EXTRA_BEARER = "bearer"
+    const val EXTRA_CHAT_TEXT = "chatText"
+    const val EXTRA_CHAT_SENDER = "chatSender"
+
+    // A received chat message is delivered to the RN module via this in-app
+    // broadcast, which re-emits it to JS.
+    const val CHAT_RX_ACTION = "com.orbii.app.mesh.CHAT_RX"
 
     // Fixed ORBII mesh identifiers (valid hex UUIDs).
     val SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000500")
     val PAYLOAD_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000501")
+    // Separate channel for offline Bluetooth chat, so it never disturbs the SOS
+    // mesh. Short text messages, broadcast over extended advertising.
+    val CHAT_SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000510")
 
     private const val CHANNEL = "orbii_mesh"
     private const val NOTIF_ID = 4120
+    // Chat messages hop a few times, like the SOS mesh.
+    const val CHAT_TTL = 4
   }
 
   private var adapter: BluetoothAdapter? = null
@@ -74,6 +86,7 @@ class OrbiiMeshService : Service() {
   private var scanner: BluetoothLeScanner? = null
   private var gattServer: BluetoothGattServer? = null
   private var extAdvertisingSet: AdvertisingSet? = null
+  private var chatAdvertisingSet: AdvertisingSet? = null
   // Phase 2: does this phone support the long-range boost (Coded PHY + extended
   // advertising)? Detected at start; capable phones ALSO run the boosted advert
   // (which carries the full sealed blob inline, no GATT), while every phone keeps
@@ -91,6 +104,8 @@ class OrbiiMeshService : Service() {
   // msgIds we're mid-GATT-connect for, so a LOW_LATENCY scan's repeated
   // callbacks don't spawn a storm of duplicate connections for the same beacon.
   private val connecting = ConcurrentHashMap.newKeySet<String>()
+  // Separate dedup set for chat messages (their own channel).
+  private val seenChat = ConcurrentHashMap.newKeySet<String>()
 
   override fun onBind(intent: Intent?): IBinder? = null
 
@@ -122,8 +137,30 @@ class OrbiiMeshService : Service() {
         stopOwnAdvertising()
         curMsgId = null; curTtl = 0; curBlob = ByteArray(0)
       }
+      // Offline Bluetooth chat: broadcast a short text message to nearby phones
+      // on the chat channel. Others catch it while listening and re-flood it.
+      ACTION_CHAT -> {
+        intent.getStringExtra(EXTRA_BRIDGE_URL)?.let { bridgeUrl = it }
+        intent.getStringExtra(EXTRA_BEARER)?.let { bearer = it }
+        ensureStarted()
+        val text = intent.getStringExtra(EXTRA_CHAT_TEXT) ?: ""
+        val sender = intent.getStringExtra(EXTRA_CHAT_SENDER) ?: "ORBII"
+        val msgId = randomChatId()
+        seenChat.add(msgId)
+        broadcastChat(msgId, CHAT_TTL, sender, text)
+      }
     }
     return START_STICKY
+  }
+
+  // Bring the radio up if the service was cold-started straight into chat
+  // (normally LISTEN mode has already run on every authenticated phone).
+  @SuppressLint("MissingPermission")
+  private fun ensureStarted() {
+    if (adapter == null) {
+      startForegroundSafely()
+      start()
+    }
   }
 
   @SuppressLint("MissingPermission")
@@ -281,13 +318,100 @@ class OrbiiMeshService : Service() {
     }
   }
 
+  // ---- Offline Bluetooth chat (bitchat-style) ----------------------------
+  // A chat message is a single extended advertisement on the CHAT channel:
+  //   [ msgId(4) | ttl(1) | senderLen(1) | senderBytes | textBytes ]
+  // Nearby phones catch it while scanning, hand it to JS, and re-flood it until
+  // TTL runs out. One advertising slot: the newest message replaces the last.
+  @SuppressLint("MissingPermission")
+  private fun broadcastChat(msgId: String, ttl: Int, sender: String, text: String) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
+    val adv = advertiser ?: return
+    val extSupported = try { adapter?.isLeExtendedAdvertisingSupported ?: false } catch (e: Exception) { false }
+    if (!extSupported) return // chat needs extended advertising; not on this phone
+    val idBytes = hexToBytes(msgId).copyOf(4)
+    val senderBytes = sender.toByteArray(Charsets.UTF_8).let { if (it.size > 20) it.copyOf(20) else it }
+    val textBytes = text.toByteArray(Charsets.UTF_8)
+    val maxLen = try { adapter?.leMaximumAdvertisingDataLength ?: 0 } catch (e: Exception) { 0 }
+    val budget = (if (maxLen > 0) maxLen else 200) - 24 // leave room for UUID + headers
+    val keepText = (budget - 6 - senderBytes.size).coerceAtLeast(0)
+    val text2 = if (textBytes.size > keepText) textBytes.copyOf(keepText) else textBytes
+    val payload = idBytes + byteArrayOf(ttl.toByte(), senderBytes.size.toByte()) + senderBytes + text2
+    val phy = if (boostCapable) BluetoothDevice.PHY_LE_CODED else BluetoothDevice.PHY_LE_1M
+    val params = AdvertisingSetParameters.Builder()
+      .setLegacyMode(false)
+      .setConnectable(false)
+      .setScannable(false)
+      .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
+      .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
+      .setPrimaryPhy(phy)
+      .setSecondaryPhy(phy)
+      .build()
+    val data = AdvertiseData.Builder()
+      .setIncludeDeviceName(false)
+      .addServiceUuid(ParcelUuid(CHAT_SERVICE_UUID))
+      .addServiceData(ParcelUuid(CHAT_SERVICE_UUID), payload)
+      .build()
+    try {
+      adv.stopAdvertisingSet(chatAdvCb)
+      adv.startAdvertisingSet(params, data, null, null, null, chatAdvCb)
+    } catch (e: Exception) {
+      // chat advertise failed; SOS mesh is unaffected
+    }
+  }
+
+  private val chatAdvCb = object : AdvertisingSetCallback() {
+    override fun onAdvertisingSetStarted(set: AdvertisingSet?, txPower: Int, status: Int) {
+      chatAdvertisingSet = set
+    }
+  }
+
+  private fun handleChat(sd: ByteArray) {
+    if (sd.size < 6) return
+    val msgId = bytesToHex(sd.copyOf(4))
+    if (!seenChat.add(msgId)) return
+    val ttl = sd[4].toInt() and 0xFF
+    val senderLen = sd[5].toInt() and 0xFF
+    if (6 + senderLen > sd.size) return
+    val sender = String(sd.copyOfRange(6, 6 + senderLen), Charsets.UTF_8)
+    val text = String(sd.copyOfRange(6 + senderLen, sd.size), Charsets.UTF_8)
+    // Hand the message to the RN module (app-internal broadcast) → JS event.
+    try {
+      val i = Intent(CHAT_RX_ACTION)
+        .setPackage(packageName)
+        .putExtra(EXTRA_CHAT_SENDER, sender)
+        .putExtra(EXTRA_CHAT_TEXT, text)
+      sendBroadcast(i)
+    } catch (e: Exception) {}
+    // Flood onward if there are hops left.
+    val nextTtl = ttl - 1
+    if (nextTtl > 0) broadcastChat(msgId, nextTtl, sender, text)
+  }
+
+  private fun randomChatId(): String {
+    val b = ByteArray(4)
+    java.security.SecureRandom().nextBytes(b)
+    return bytesToHex(b)
+  }
+
   @SuppressLint("MissingPermission")
   private fun startScanning() {
     val sc = scanner ?: return
-    val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build()
+    // Two channels: SOS beacons and offline chat.
+    val filters = listOf(
+      ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build(),
+      ScanFilter.Builder().setServiceUuid(ParcelUuid(CHAT_SERVICE_UUID)).build(),
+    )
     val builder = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
-    // Capable phones scan for BOTH legacy and extended (Coded PHY) adverts.
-    if (boostCapable && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+    // Any phone that supports extended advertising scans for BOTH legacy and
+    // extended adverts (setLegacy(false) reports both). Chat rides extended
+    // advertising, so this is what lets non-Coded-PHY phones receive chat too.
+    val extScanCapable = try {
+      Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && (adapter?.isLeExtendedAdvertisingSupported ?: false)
+    } catch (e: Exception) {
+      false
+    }
+    if (extScanCapable) {
       try {
         builder.setLegacy(false)
         builder.setPhy(ScanSettings.PHY_LE_ALL_SUPPORTED)
@@ -296,7 +420,7 @@ class OrbiiMeshService : Service() {
       }
     }
     try {
-      sc.startScan(listOf(filter), builder.build(), scanCb)
+      sc.startScan(filters, builder.build(), scanCb)
     } catch (e: Exception) {
       // scanning unsupported/failed
     }
@@ -306,6 +430,8 @@ class OrbiiMeshService : Service() {
     @SuppressLint("MissingPermission")
     override fun onScanResult(callbackType: Int, result: ScanResult?) {
       val rec = result?.scanRecord ?: return
+      // Chat channel first (its own service UUID).
+      rec.getServiceData(ParcelUuid(CHAT_SERVICE_UUID))?.let { handleChat(it); return }
       val sd = rec.getServiceData(ParcelUuid(SERVICE_UUID)) ?: return
       if (sd.size < 5) return
       val msgId = bytesToHex(sd.copyOf(4))
@@ -401,12 +527,15 @@ class OrbiiMeshService : Service() {
     try { advertiser?.stopAdvertising(advCb) } catch (e: Exception) {}
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       try { advertiser?.stopAdvertisingSet(extAdvCb) } catch (e: Exception) {}
+      try { advertiser?.stopAdvertisingSet(chatAdvCb) } catch (e: Exception) {}
     }
     try { scanner?.stopScan(scanCb) } catch (e: Exception) {}
     try { gattServer?.close() } catch (e: Exception) {}
-    advertiser = null; scanner = null; gattServer = null; extAdvertisingSet = null; adapter = null
+    advertiser = null; scanner = null; gattServer = null
+    extAdvertisingSet = null; chatAdvertisingSet = null; adapter = null
     seen.clear()
     connecting.clear()
+    seenChat.clear()
   }
 
   override fun onDestroy() {
