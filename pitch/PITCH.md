@@ -111,6 +111,28 @@ the one place energy should rise.]
 
 ---
 
+## 5b. The part with no competition — no signal, still works
+
+> "Now the part that genuinely has no competitor. Every app I've described, even
+> the big ones, is dead the moment there's no internet. A network shutdown. A
+> flood. A dead zone on a highway at 2am. Which is exactly when she's most alone.
+>
+> ORBII is built to keep going. If there's no signal, the alert hops phone to
+> phone over Bluetooth to any ORBII nearby until it reaches one that has signal,
+> and it goes out as a plain SMS on the cell network at the same time. And when
+> even that is gone, a nearby ORBII phone can guide a helper to her by Bluetooth
+> signal alone, her exact location never leaving her phone.
+>
+> India has among the highest rates of internet shutdowns in the world. We're
+> building for the country as it actually is, not as the brochure pretends."
+
+[This is your frontier line, and India-specific, so it lands with an Indian room.
+Deliver it honestly: this is BUILT and in testing, not battle-proven. If a judge
+asks "does it work today," you say "it's built, we're field-testing it now," and
+that honesty is itself part of why they trust you. Never claim it's live.]
+
+---
+
 ## 6. The line nobody else can draw — consent
 
 > "And the whole time, she is in control of who sees her. ORBII shows her, always,
@@ -195,8 +217,9 @@ Real and small beats big and fake, and any investor will check.]
 >
 > I'm building the layer that changes what a phone does when the person holding it
 > can't. Today it's 'help.' Tomorrow it's a fall, a crash, a child's voice, a word
-> in any language. The phone stops being a thing she has to reach for and becomes
-> the thing that reaches for her.
+> in any language. And it holds even off the grid, phones handing help to each
+> other when the whole network is down. The phone stops being a thing she has to
+> reach for and becomes the thing that reaches for her.
 >
 > Every woman in India first. Then everyone who's ever been alone and afraid. That's
 > the whole market, and it's the whole point."
@@ -240,13 +263,15 @@ down.]
 > the one moment she can't. ORBII gets rid of the button. It listens for the word
 > 'help,' entirely on the device so her audio is never uploaded or sold, and the
 > second she says it, her circle and nearby ORBII members get her live location
-> hands-free. Free for every woman; a paid verified-responder network on top. I'm
+> hands-free. It even works with no internet, the alert hops phone to phone over
+> Bluetooth. Free for every woman; a paid verified-responder network on top. I'm
 > nineteen, I built the whole thing, and I want it in every hand in India."
 
-**Three things they must remember when you sit down:**
+**The things they must remember when you sit down:**
 1. ORBII got rid of the button. It listens.
 2. On-device. Nothing is sold. The opposite of Life360.
-3. Free safety for everyone, paid guaranteed response on top.
+3. It works even with no internet, the alert hops phone to phone over Bluetooth. No competitor does this.
+4. Free safety for everyone, paid guaranteed response on top.
 
 ---
 
@@ -301,6 +326,13 @@ first, scale second.
 - **The one-liner if they probe compliance:** "We built privacy-first on purpose.
   The audio never leaves the phone, and we never sell location. That's not just
   ethics, it's our legal moat and the opposite of why people distrust Life360."
+- **If they ask about the offline / Bluetooth features:** be straight. "They're
+  built and in the app, and I'm field-testing them now on real phones. The offline
+  relay hops the SOS phone to phone over Bluetooth, and everything passed between
+  phones is sealed end to end, so a relaying phone is a blind courier that can't
+  read it. I'm not going to tell you it's battle-proven yet, because it isn't, and
+  on a safety product I'd rather under-claim than get caught over-claiming." That
+  answer wins more trust than a confident overclaim ever would.
 
 ---
 
