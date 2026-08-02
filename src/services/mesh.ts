@@ -37,6 +37,8 @@ const { OrbiiMesh } = NativeModules as {
     startListening(bridgeUrl: string, bearer: string): Promise<boolean>;
     stopSosRelay(): Promise<boolean>;
     sendChat(text: string, sender: string): Promise<boolean>;
+    armHelperPing(alertId: string, ttl: number): Promise<boolean>;
+    stopHelperPing(): Promise<boolean>;
     disarm(): Promise<boolean>;
   };
 };

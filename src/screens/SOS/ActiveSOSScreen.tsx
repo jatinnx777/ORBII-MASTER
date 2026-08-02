@@ -26,6 +26,7 @@ import {
 } from '@/components/common';
 import { broadcastExpandRadius, broadcastResolved } from '@/services/community';
 import { stopMeshSos } from '@/services/mesh';
+import { stopHelperPing } from '@/services/mesh-helper-alert';
 import { openSMSComposer } from '@/services/sms';
 import { buildSOSMessage } from '@/services/whatsapp-sos';
 import { fetchRoute, formatEta } from '@/services/osrm';
@@ -186,7 +187,10 @@ export function ActiveSOSScreen() {
     resolvedRef.current = resolved;
     // SOS is over: stop advertising my SOS, but keep the phone listening so it
     // can still relay other people's alerts.
-    if (resolved) void stopMeshSos();
+    if (resolved) {
+      void stopMeshSos();
+      void stopHelperPing();
+    }
   }, [resolved]);
   const lastPromptRef = useRef(0);
 

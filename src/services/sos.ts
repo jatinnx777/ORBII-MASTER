@@ -5,6 +5,7 @@ import { checkRateLimit, rateLimitMessage } from './rate-limit';
 import { enqueueSOS } from './sos-queue';
 import { addBreadcrumb, reportError } from './error-reporting';
 import { armOfflineSos } from './mesh';
+import { armHelperPing } from './mesh-helper-alert';
 import { sendSosSmsDirect } from './sms';
 import { buildSOSMessage } from './whatsapp-sos';
 import { store } from '@/redux/store';
@@ -124,6 +125,14 @@ export async function createSOS(
     // signal can catch this and bridge it to the server. Sealed end-to-end.
     if (location) {
       void armOfflineSos(user.uid, location.latitude, location.longitude, record.timestamp);
+    }
+    // Offline helper alert (Premium): also broadcast a location-free "someone
+    // near me needs help" ping so nearby ORBII helpers can home in by signal
+    // strength when there's no internet at all. Carries no coordinates. Helper
+    // dispatch is a Premium perk, so this is too; free users still get the SMS +
+    // circle-mesh bridge above.
+    if (user.isPremium) {
+      void armHelperPing();
     }
     // SMS lifeline: text emergency contacts directly with the SOS + location.
     // SMS rides the cell signal, so it works even with mobile data fully off.

@@ -66,6 +66,7 @@ export type AppStackParamList = {
   BluetoothChat: undefined;
   NearbyPeople: undefined;
   DmThread: { peerPublicB64: string; peerNick: string };
+  OfflineHelperAlert: { alertId: string };
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;
   CommunityUserProfile: { profileId: string };

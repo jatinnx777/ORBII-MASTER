@@ -38,6 +38,7 @@ import {
   startMeshListening,
   disarmMesh,
 } from '@/services/mesh';
+import { subscribeHelperPings } from '@/services/mesh-helper-alert';
 import { syncZoneMonitoring } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
@@ -103,6 +104,10 @@ import {
 import { colors } from '@/theme';
 
 const navigationRef = createNavigationContainerRef();
+
+// Offline helper-alert pings stream continuously; remember when each alert was
+// last surfaced so we don't re-open the homing screen on every sighting.
+const surfacedAlerts = new Map<string, number>();
 
 // ORBII is a light-only app. Pin the navigator's background to cream so a
 // half-faded screen never reveals anything darker behind it.
@@ -308,8 +313,26 @@ function RootNavigator() {
     // Become a relay: listen for nearby offline SOS beacons and bridge them.
     // No-op until Bluetooth permission is granted. Full-stop on sign-out.
     void startMeshListening();
+    // Offline helper alert: if a nearby phone with no internet broadcasts a
+    // location-free "someone near me needs help" ping, surface the homing
+    // screen. Pings stream continuously, so only surface each alert once per
+    // couple of minutes.
+    const unsubHelperPing = subscribeHelperPings((p) => {
+      const now = Date.now();
+      if (now - (surfacedAlerts.get(p.alertId) ?? 0) < 120000) return;
+      surfacedAlerts.set(p.alertId, now);
+      if (
+        navigationRef.isReady() &&
+        navigationRef.getCurrentRoute()?.name !== 'OfflineHelperAlert'
+      ) {
+        // @ts-expect-error OfflineHelperAlert lives in the AppStack only.
+        navigationRef.navigate('OfflineHelperAlert', { alertId: p.alertId });
+        if (AppState.currentState !== 'active') Vibration.vibrate([0, 400, 200, 400]);
+      }
+    });
     return () => {
       void disarmMesh();
+      unsubHelperPing();
     };
   }, [status]);
 

@@ -13,6 +13,7 @@ import { DisasterModeScreen } from '@/screens/Disaster/DisasterModeScreen';
 import { BluetoothChatScreen } from '@/screens/Disaster/BluetoothChatScreen';
 import { NearbyPeopleScreen } from '@/screens/Disaster/NearbyPeopleScreen';
 import { DmThreadScreen } from '@/screens/Disaster/DmThreadScreen';
+import { OfflineHelperAlertScreen } from '@/screens/Disaster/OfflineHelperAlertScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
 import { CommunityProfileSetupScreen } from '@/screens/Community/CommunityProfileSetupScreen';
 import { CommunityUserProfileScreen } from '@/screens/Community/CommunityUserProfileScreen';
@@ -135,6 +136,11 @@ export function AppNavigator() {
         name="DmThread"
         component={DmThreadScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="OfflineHelperAlert"
+        component={OfflineHelperAlertScreen}
+        options={{ headerShown: false, animation: 'fade', presentation: 'fullScreenModal' }}
       />
       <Stack.Screen
         name="Recordings"

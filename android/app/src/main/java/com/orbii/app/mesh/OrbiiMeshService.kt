@@ -55,6 +55,10 @@ class OrbiiMeshService : Service() {
     const val ACTION_LISTEN = "com.orbii.app.mesh.LISTEN"
     const val ACTION_STOP_SOS = "com.orbii.app.mesh.STOP_SOS"
     const val ACTION_CHAT = "com.orbii.app.mesh.CHAT"
+    // Offline helper alert: broadcast a location-free "someone near me needs
+    // help" ping; nearby helpers home in by signal strength.
+    const val ACTION_HELPER_PING = "com.orbii.app.mesh.HELPER_PING"
+    const val ACTION_STOP_HELPER_PING = "com.orbii.app.mesh.STOP_HELPER_PING"
     const val ACTION_DISARM = "com.orbii.app.mesh.DISARM"
     const val EXTRA_MSG_ID = "msgId" // 8 hex chars (4 bytes)
     const val EXTRA_TTL = "ttl"
@@ -63,10 +67,15 @@ class OrbiiMeshService : Service() {
     const val EXTRA_BEARER = "bearer"
     const val EXTRA_CHAT_TEXT = "chatText"
     const val EXTRA_CHAT_SENDER = "chatSender"
+    const val EXTRA_ALERT_ID = "alertId"
+    const val EXTRA_ALERT_RSSI = "alertRssi"
 
     // A received chat message is delivered to the RN module via this in-app
     // broadcast, which re-emits it to JS.
     const val CHAT_RX_ACTION = "com.orbii.app.mesh.CHAT_RX"
+    // A caught helper-alert ping (with live signal strength) is delivered the
+    // same way, so the helper's UI can show a warmer/colder homing meter.
+    const val HELPER_PING_RX_ACTION = "com.orbii.app.mesh.HELPER_PING_RX"
 
     // Fixed ORBII mesh identifiers (valid hex UUIDs).
     val SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000500")
@@ -74,6 +83,10 @@ class OrbiiMeshService : Service() {
     // Separate channel for offline Bluetooth chat, so it never disturbs the SOS
     // mesh. Short text messages, broadcast over extended advertising.
     val CHAT_SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000510")
+    // Offline helper-alert channel. A tiny legacy beacon (fits any BLE phone) so
+    // the "someone near me needs help" ping reaches every nearby ORBII, not just
+    // long-range-capable ones. Carries NO location, only a random alert id.
+    val ALERT_SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000520")
 
     private const val CHANNEL = "orbii_mesh"
     private const val NOTIF_ID = 4120
@@ -87,6 +100,11 @@ class OrbiiMeshService : Service() {
   private var gattServer: BluetoothGattServer? = null
   private var extAdvertisingSet: AdvertisingSet? = null
   private var chatAdvertisingSet: AdvertisingSet? = null
+  // Long-range tuning: if a Coded-PHY (long range) advertising set fails to
+  // start on this phone, we fall back to a 1M-PHY extended advert (still carries
+  // the full blob inline, better than nothing) instead of silently dropping the
+  // boost. This flag flips after the first Coded-PHY failure.
+  private var extUsedFallback = false
   // Phase 2: does this phone support the long-range boost (Coded PHY + extended
   // advertising)? Detected at start; capable phones ALSO run the boosted advert
   // (which carries the full sealed blob inline, no GATT), while every phone keeps
@@ -97,6 +115,9 @@ class OrbiiMeshService : Service() {
   @Volatile private var curMsgId: String? = null
   @Volatile private var curTtl: Int = 0
   @Volatile private var curBlob: ByteArray = ByteArray(0)
+  // The helper-alert ping this phone is currently broadcasting (victim side).
+  @Volatile private var curAlertId: String? = null
+  @Volatile private var curAlertTtl: Int = 0
   private var bridgeUrl: String? = null
   private var bearer: String? = null
 
@@ -148,6 +169,19 @@ class OrbiiMeshService : Service() {
         val msgId = randomChatId()
         seenChat.add(msgId)
         broadcastChat(msgId, CHAT_TTL, sender, text)
+      }
+      // Victim: broadcast a location-free helper ping so nearby helpers can find
+      // her by signal strength. Single hop by design (proximity homing only
+      // makes sense within direct radio range).
+      ACTION_HELPER_PING -> {
+        curAlertId = intent.getStringExtra(EXTRA_ALERT_ID)
+        curAlertTtl = intent.getIntExtra(EXTRA_TTL, 1)
+        ensureStarted()
+        startAlertAdvertising()
+      }
+      ACTION_STOP_HELPER_PING -> {
+        stopAlertAdvertising()
+        curAlertId = null; curAlertTtl = 0
       }
     }
     return START_STICKY
@@ -204,6 +238,7 @@ class OrbiiMeshService : Service() {
     } catch (e: Exception) {
       false
     }
+    extUsedFallback = false // give Coded PHY a fresh try each session
 
     startGattServer(bm)
     startAdvertising()
@@ -290,14 +325,17 @@ class OrbiiMeshService : Service() {
     val serviceData = idBytes.copyOf(4) + byteArrayOf(curTtl.toByte()) + blob
     val maxLen = try { adapter?.leMaximumAdvertisingDataLength ?: 0 } catch (e: Exception) { 0 }
     if (maxLen in 1..(serviceData.size + 24)) return // won't fit on this device
+    // Prefer Coded PHY (long range); after a Coded-PHY start failure on this
+    // phone, fall back to 1M PHY extended so we still get the inline-blob advert.
+    val phy = if (extUsedFallback) BluetoothDevice.PHY_LE_1M else BluetoothDevice.PHY_LE_CODED
     val params = AdvertisingSetParameters.Builder()
       .setLegacyMode(false)
       .setConnectable(false)
       .setScannable(false)
       .setInterval(AdvertisingSetParameters.INTERVAL_LOW)
       .setTxPowerLevel(AdvertisingSetParameters.TX_POWER_HIGH)
-      .setPrimaryPhy(BluetoothDevice.PHY_LE_CODED)
-      .setSecondaryPhy(BluetoothDevice.PHY_LE_CODED)
+      .setPrimaryPhy(phy)
+      .setSecondaryPhy(phy)
       .build()
     val data = AdvertiseData.Builder()
       .setIncludeDeviceName(false)
@@ -314,7 +352,13 @@ class OrbiiMeshService : Service() {
 
   private val extAdvCb = object : AdvertisingSetCallback() {
     override fun onAdvertisingSetStarted(set: AdvertisingSet?, txPower: Int, status: Int) {
-      extAdvertisingSet = set
+      if (status == AdvertisingSetCallback.ADVERTISE_SUCCESS) {
+        extAdvertisingSet = set
+      } else if (!extUsedFallback) {
+        // Coded PHY refused on this phone; retry once on 1M PHY extended.
+        extUsedFallback = true
+        startExtendedAdvertising()
+      }
     }
   }
 
@@ -394,13 +438,63 @@ class OrbiiMeshService : Service() {
     return bytesToHex(b)
   }
 
+  // ---- Offline helper alert ----------------------------------------------
+  // Victim broadcasts a tiny legacy beacon on the ALERT channel:
+  //   [ alertId(4) | ttl(1) ]   (NO location, ever)
+  // Nearby helper phones catch it while scanning and stream its signal strength
+  // to the app so the helper can walk warmer/colder toward her.
+  @SuppressLint("MissingPermission")
+  private fun startAlertAdvertising() {
+    val alertId = curAlertId ?: return
+    val adv = advertiser ?: return
+    val idBytes = hexToBytes(alertId).copyOf(4)
+    val serviceData = idBytes + byteArrayOf(curAlertTtl.toByte())
+    val data = AdvertiseData.Builder()
+      .setIncludeDeviceName(false)
+      .addServiceUuid(ParcelUuid(ALERT_SERVICE_UUID))
+      .addServiceData(ParcelUuid(ALERT_SERVICE_UUID), serviceData)
+      .build()
+    val settings = AdvertiseSettings.Builder()
+      .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_LOW_LATENCY)
+      .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
+      .setConnectable(false)
+      .build()
+    try {
+      adv.stopAdvertising(alertAdvCb)
+      adv.startAdvertising(settings, data, alertAdvCb)
+    } catch (e: Exception) {
+      // alert advertising failed; SMS + circle mesh still cover the SOS
+    }
+  }
+
+  private val alertAdvCb = object : AdvertiseCallback() {}
+
+  @SuppressLint("MissingPermission")
+  private fun stopAlertAdvertising() {
+    try { advertiser?.stopAdvertising(alertAdvCb) } catch (e: Exception) {}
+  }
+
+  private fun handleAlertPing(result: ScanResult, sd: ByteArray) {
+    val alertId = bytesToHex(sd.copyOf(4))
+    if (alertId == curAlertId) return // don't alert on my own ping
+    // Stream every sighting (with signal strength) to the app for homing.
+    try {
+      val i = Intent(HELPER_PING_RX_ACTION)
+        .setPackage(packageName)
+        .putExtra(EXTRA_ALERT_ID, alertId)
+        .putExtra(EXTRA_ALERT_RSSI, result.rssi)
+      sendBroadcast(i)
+    } catch (e: Exception) {}
+  }
+
   @SuppressLint("MissingPermission")
   private fun startScanning() {
     val sc = scanner ?: return
-    // Two channels: SOS beacons and offline chat.
+    // Three channels: SOS beacons, offline chat, and helper-alert pings.
     val filters = listOf(
       ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE_UUID)).build(),
       ScanFilter.Builder().setServiceUuid(ParcelUuid(CHAT_SERVICE_UUID)).build(),
+      ScanFilter.Builder().setServiceUuid(ParcelUuid(ALERT_SERVICE_UUID)).build(),
     )
     val builder = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
     // Any phone that supports extended advertising scans for BOTH legacy and
@@ -432,6 +526,11 @@ class OrbiiMeshService : Service() {
       val rec = result?.scanRecord ?: return
       // Chat channel first (its own service UUID).
       rec.getServiceData(ParcelUuid(CHAT_SERVICE_UUID))?.let { handleChat(it); return }
+      // Helper-alert ping channel (stream signal strength for homing).
+      rec.getServiceData(ParcelUuid(ALERT_SERVICE_UUID))?.let {
+        if (it.size >= 5) handleAlertPing(result, it)
+        return
+      }
       val sd = rec.getServiceData(ParcelUuid(SERVICE_UUID)) ?: return
       if (sd.size < 5) return
       val msgId = bytesToHex(sd.copyOf(4))
@@ -525,6 +624,7 @@ class OrbiiMeshService : Service() {
   @SuppressLint("MissingPermission")
   private fun teardown() {
     try { advertiser?.stopAdvertising(advCb) } catch (e: Exception) {}
+    try { advertiser?.stopAdvertising(alertAdvCb) } catch (e: Exception) {}
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       try { advertiser?.stopAdvertisingSet(extAdvCb) } catch (e: Exception) {}
       try { advertiser?.stopAdvertisingSet(chatAdvCb) } catch (e: Exception) {}
@@ -533,6 +633,7 @@ class OrbiiMeshService : Service() {
     try { gattServer?.close() } catch (e: Exception) {}
     advertiser = null; scanner = null; gattServer = null
     extAdvertisingSet = null; chatAdvertisingSet = null; adapter = null
+    curAlertId = null; curAlertTtl = 0
     seen.clear()
     connecting.clear()
     seenChat.clear()

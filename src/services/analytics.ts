@@ -49,6 +49,7 @@ type EventName =
   | 'setup_protection_activated'
   | 'setup_completed'
   | 'mesh_capability_probe'
+  | 'offline_helper_accept'
   | 'screen_viewed';
 
 // Fire-and-forget. Never throws, never blocks a caller — several of these sit

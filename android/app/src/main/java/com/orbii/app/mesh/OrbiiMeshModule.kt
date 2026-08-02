@@ -27,31 +27,45 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
 
   override fun getName() = "OrbiiMesh"
 
-  // Receives chat messages the service caught over Bluetooth and re-emits them
-  // to JS as an "OrbiiMeshChat" event.
-  private val chatRx = object : BroadcastReceiver() {
+  // Receives chat messages AND helper-alert pings the service caught over
+  // Bluetooth, and re-emits them to JS as events.
+  private val meshRx = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
-      if (intent?.action != OrbiiMeshService.CHAT_RX_ACTION) return
       try {
-        val m = Arguments.createMap()
-        m.putString("sender", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_SENDER) ?: "")
-        m.putString("text", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_TEXT) ?: "")
-        m.putDouble("at", System.currentTimeMillis().toDouble())
-        ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-          .emit("OrbiiMeshChat", m)
+        when (intent?.action) {
+          OrbiiMeshService.CHAT_RX_ACTION -> {
+            val m = Arguments.createMap()
+            m.putString("sender", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_SENDER) ?: "")
+            m.putString("text", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_TEXT) ?: "")
+            m.putDouble("at", System.currentTimeMillis().toDouble())
+            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+              .emit("OrbiiMeshChat", m)
+          }
+          OrbiiMeshService.HELPER_PING_RX_ACTION -> {
+            val m = Arguments.createMap()
+            m.putString("alertId", intent.getStringExtra(OrbiiMeshService.EXTRA_ALERT_ID) ?: "")
+            m.putInt("rssi", intent.getIntExtra(OrbiiMeshService.EXTRA_ALERT_RSSI, -127))
+            m.putDouble("at", System.currentTimeMillis().toDouble())
+            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+              .emit("OrbiiHelperPing", m)
+          }
+        }
       } catch (e: Exception) {
-        // JS bridge not ready; drop the message
+        // JS bridge not ready; drop the event
       }
     }
   }
 
   init {
     try {
-      val filter = IntentFilter(OrbiiMeshService.CHAT_RX_ACTION)
+      val filter = IntentFilter().apply {
+        addAction(OrbiiMeshService.CHAT_RX_ACTION)
+        addAction(OrbiiMeshService.HELPER_PING_RX_ACTION)
+      }
       if (Build.VERSION.SDK_INT >= 33) {
-        ctx.registerReceiver(chatRx, filter, Context.RECEIVER_NOT_EXPORTED)
+        ctx.registerReceiver(meshRx, filter, Context.RECEIVER_NOT_EXPORTED)
       } else {
-        ctx.registerReceiver(chatRx, filter)
+        ctx.registerReceiver(meshRx, filter)
       }
     } catch (e: Exception) {
       // receiver already registered / context unavailable
@@ -59,7 +73,7 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
   }
 
   override fun invalidate() {
-    try { ctx.unregisterReceiver(chatRx) } catch (e: Exception) {}
+    try { ctx.unregisterReceiver(meshRx) } catch (e: Exception) {}
     super.invalidate()
   }
 
@@ -198,6 +212,38 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
       ctx.startService(
         android.content.Intent(ctx, OrbiiMeshService::class.java).apply {
           action = OrbiiMeshService.ACTION_DISARM
+        },
+      )
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
+  /** Victim: start broadcasting a location-free helper-alert ping. */
+  @ReactMethod
+  fun armHelperPing(alertId: String, ttl: Double, promise: Promise) {
+    try {
+      val intent = Intent(ctx, OrbiiMeshService::class.java).apply {
+        action = OrbiiMeshService.ACTION_HELPER_PING
+        putExtra(OrbiiMeshService.EXTRA_ALERT_ID, alertId)
+        putExtra(OrbiiMeshService.EXTRA_TTL, ttl.toInt())
+      }
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(intent)
+      else ctx.startService(intent)
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("mesh_helper_ping_failed", e)
+    }
+  }
+
+  /** Victim: stop the helper-alert ping (SOS resolved / cancelled). */
+  @ReactMethod
+  fun stopHelperPing(promise: Promise) {
+    try {
+      ctx.startService(
+        Intent(ctx, OrbiiMeshService::class.java).apply {
+          action = OrbiiMeshService.ACTION_STOP_HELPER_PING
         },
       )
       promise.resolve(true)
