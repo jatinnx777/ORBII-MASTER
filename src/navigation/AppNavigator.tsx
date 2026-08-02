@@ -11,6 +11,8 @@ import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { RecordingsScreen } from '@/screens/Recordings/RecordingsScreen';
 import { DisasterModeScreen } from '@/screens/Disaster/DisasterModeScreen';
 import { BluetoothChatScreen } from '@/screens/Disaster/BluetoothChatScreen';
+import { NearbyPeopleScreen } from '@/screens/Disaster/NearbyPeopleScreen';
+import { DmThreadScreen } from '@/screens/Disaster/DmThreadScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
 import { CommunityProfileSetupScreen } from '@/screens/Community/CommunityProfileSetupScreen';
 import { CommunityUserProfileScreen } from '@/screens/Community/CommunityUserProfileScreen';
@@ -122,6 +124,16 @@ export function AppNavigator() {
       <Stack.Screen
         name="BluetoothChat"
         component={BluetoothChatScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="NearbyPeople"
+        component={NearbyPeopleScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="DmThread"
+        component={DmThreadScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

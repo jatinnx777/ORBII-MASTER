@@ -20,7 +20,7 @@ const SERVER_PUBLIC_KEY_B64 = 'H5G8s3SmWB6EMcvpVMr6Dtnrr9XvF3Q/eQIjEm61hEY=';
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-function bytesToB64(bytes: Uint8Array): string {
+export function bytesToB64(bytes: Uint8Array): string {
   let out = '';
   for (let i = 0; i < bytes.length; i += 3) {
     const b0 = bytes[i];
@@ -34,7 +34,7 @@ function bytesToB64(bytes: Uint8Array): string {
   return out;
 }
 
-function b64ToBytes(b64: string): Uint8Array {
+export function b64ToBytes(b64: string): Uint8Array {
   const clean = b64.replace(/=+$/, '');
   const out = new Uint8Array(Math.floor((clean.length * 6) / 8));
   let bits = 0;
@@ -51,7 +51,7 @@ function b64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-function utf8ToBytes(str: string): Uint8Array {
+export function utf8ToBytes(str: string): Uint8Array {
   const out: number[] = [];
   for (let i = 0; i < str.length; i++) {
     const c = str.charCodeAt(i);
@@ -60,6 +60,24 @@ function utf8ToBytes(str: string): Uint8Array {
     else out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
   }
   return Uint8Array.from(out);
+}
+
+export function bytesToUtf8(bytes: Uint8Array): string {
+  let out = '';
+  let i = 0;
+  while (i < bytes.length) {
+    const c = bytes[i++];
+    if (c < 0x80) {
+      out += String.fromCharCode(c);
+    } else if (c >= 0xc0 && c < 0xe0) {
+      out += String.fromCharCode(((c & 0x1f) << 6) | (bytes[i++] & 0x3f));
+    } else if (c >= 0xe0) {
+      out += String.fromCharCode(
+        ((c & 0x0f) << 12) | ((bytes[i++] & 0x3f) << 6) | (bytes[i++] & 0x3f),
+      );
+    }
+  }
+  return out;
 }
 
 export type MeshSosPayload = {

@@ -16,17 +16,17 @@ import { ScreenContainer, appAlert } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getItem, setItem } from '@/services/storage';
+import { MAX_CHAT_LEN, MAX_NAME_LEN } from '@/services/mesh-chat';
 import {
-  chatAvailable,
-  ensureChatReady,
-  subscribeChatMessages,
-  sendChatMessage,
-  MAX_CHAT_LEN,
-  MAX_NAME_LEN,
-  type MeshChatMessage,
-} from '@/services/mesh-chat';
+  nearbyAvailable,
+  startNearby,
+  stopNearby,
+  setNearbyNick,
+  onPublicMessage,
+  sendPublicMessage,
+} from '@/services/mesh-nearby';
 
-type Row = MeshChatMessage & { id: string; mine: boolean };
+type Row = { sender: string; text: string; at: number; id: string; mine: boolean };
 
 const NAME_KEY = 'orbii:mesh-chat-name';
 
@@ -50,33 +50,38 @@ export function BluetoothChatScreen() {
   const [denied, setDenied] = useState(false);
   const listRef = useRef<FlatList<Row>>(null);
 
-  // Load a saved display name, then bring Bluetooth up and start listening.
+  // Load a saved display name, then bring the nearby layer up (Bluetooth on,
+  // listening, broadcasting presence so people can find you to DM).
   useEffect(() => {
     let alive = true;
+    let started = false;
     (async () => {
       const saved = await getItem<string>(NAME_KEY);
-      if (alive && saved) setName(saved.slice(0, MAX_NAME_LEN));
-      if (!chatAvailable) {
+      const startName = saved ? saved.slice(0, MAX_NAME_LEN) : defaultName;
+      if (alive && saved) setName(startName);
+      if (!nearbyAvailable) {
         if (alive) setDenied(true);
         return;
       }
-      const ok = await ensureChatReady();
+      const ok = await startNearby(startName);
+      started = true;
       if (!alive) return;
       setReady(ok);
       setDenied(!ok);
     })();
     return () => {
       alive = false;
+      if (started) stopNearby();
     };
-  }, []);
+  }, [defaultName]);
 
-  // Receive messages from nearby phones.
+  // Receive public messages from nearby phones (presence / DM frames are
+  // filtered out by the nearby layer).
   useEffect(() => {
-    if (!chatAvailable) return;
-    const unsub = subscribeChatMessages((m) => {
+    if (!nearbyAvailable) return;
+    return onPublicMessage((m) => {
       setRows((prev) => [...prev, { ...m, id: rowId(), mine: false }]);
     });
-    return unsub;
   }, []);
 
   useEffect(() => {
@@ -86,6 +91,7 @@ export function BluetoothChatScreen() {
   const saveName = async () => {
     const clean = name.trim().slice(0, MAX_NAME_LEN) || defaultName;
     setName(clean);
+    setNearbyNick(clean);
     setEditingName(false);
     await setItem(NAME_KEY, clean);
   };
@@ -103,7 +109,7 @@ export function BluetoothChatScreen() {
     setText('');
     // Show it immediately; the radio broadcasts in the background.
     setRows((prev) => [...prev, { sender: name, text: body, at: Date.now(), id: rowId(), mine: true }]);
-    const ok = await sendChatMessage(body, name);
+    const ok = await sendPublicMessage(body);
     if (!ok) {
       setRows((prev) => [
         ...prev,
@@ -142,9 +148,18 @@ export function BluetoothChatScreen() {
               <Text style={styles.statusText}>{ready ? 'Bluetooth on · offline' : 'Bluetooth off'}</Text>
             </View>
           </View>
-          <Pressable onPress={() => setEditingName(true)} hitSlop={10} style={styles.back}>
-            <Ionicons name="person-circle-outline" size={24} color={colors.textPrimary} />
-          </Pressable>
+          <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => navigation.navigate('NearbyPeople' as never)}
+              hitSlop={8}
+              style={styles.hBtn}
+            >
+              <Ionicons name="people-outline" size={22} color={colors.textPrimary} />
+            </Pressable>
+            <Pressable onPress={() => setEditingName(true)} hitSlop={8} style={styles.hBtn}>
+              <Ionicons name="person-circle-outline" size={24} color={colors.textPrimary} />
+            </Pressable>
+          </View>
         </View>
 
         {/* Name editor */}
@@ -178,8 +193,8 @@ export function BluetoothChatScreen() {
               a few hops beyond. No signal, no data, no accounts needed.
             </Text>
             <Text style={styles.emptyWarn}>
-              This is a shout to everyone nearby, not a private message. Don't share anything private.
-              First release, still being tested.
+              This room is a shout to everyone nearby. For a private, end-to-end encrypted chat with
+              one person, tap the people icon above. First release, still being tested.
             </Text>
           </View>
         ) : (
@@ -197,7 +212,7 @@ export function BluetoothChatScreen() {
           <View style={styles.deniedBar}>
             <Ionicons name="alert-circle" size={16} color={colors.coralDeep} />
             <Text style={styles.deniedText}>
-              {chatAvailable
+              {nearbyAvailable
                 ? 'Turn on Bluetooth and allow it for ORBII to chat nearby.'
                 : "This phone can't broadcast Bluetooth chat."}
             </Text>
@@ -246,6 +261,8 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   back: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerRight: { flexDirection: 'row', alignItems: 'center' },
+  hBtn: { width: 34, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerCenter: { alignItems: 'center' },
   headerTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textPrimary },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 1 },

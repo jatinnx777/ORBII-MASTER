@@ -64,6 +64,8 @@ export type AppStackParamList = {
   Recordings: undefined;
   DisasterMode: undefined;
   BluetoothChat: undefined;
+  NearbyPeople: undefined;
+  DmThread: { peerPublicB64: string; peerNick: string };
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;
   CommunityUserProfile: { profileId: string };
