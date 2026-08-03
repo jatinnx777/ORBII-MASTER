@@ -238,6 +238,12 @@ export function ProfileScreen() {
                   label="Earnings & payouts"
                   onPress={() => navigation.navigate('ResponderEarnings')}
                 />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="server-outline"
+                  label="ORBII coins"
+                  onPress={() => navigation.navigate('CoinsWallet')}
+                />
               </>
             ) : (
               <SettingRow

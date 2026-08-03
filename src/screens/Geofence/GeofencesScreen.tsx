@@ -22,9 +22,13 @@ import {
   loadZoneEvents,
   loadZonesISet,
   loadMyZones,
+  loadMyPendingLeaves,
+  authorizeGeofenceEvent,
+  escalateGeofenceEvent,
   syncZoneMonitoring,
   type Geofence,
   type ZoneEvent,
+  type PendingLeave,
 } from '@/services/geofence';
 
 // Safe zones — set a zone around someone you love, and know if they leave it.
@@ -45,6 +49,7 @@ export function GeofencesScreen() {
   const [mine, setMine] = useState<Geofence[]>([]); // zones I set on others
   const [onMe, setOnMe] = useState<Geofence[]>([]); // zones others set on me
   const [events, setEvents] = useState<ZoneEvent[]>([]);
+  const [pending, setPending] = useState<PendingLeave[]>([]); // "did you leave?" prompts for me
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -57,14 +62,16 @@ export function GeofencesScreen() {
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
-    const [a, b, e] = await Promise.all([
+    const [a, b, e, p] = await Promise.all([
       loadZonesISet(profile.uid),
       loadMyZones(profile.uid),
       loadZoneEvents(profile.uid),
+      loadMyPendingLeaves(),
     ]);
     setMine(a);
     setOnMe(b);
     setEvents(e);
+    setPending(p);
     setLoading(false);
 
     // Everyone I share a circle with — the only people I'm allowed to fence.
@@ -127,6 +134,18 @@ export function GeofencesScreen() {
     }
   };
 
+  const resolveLeave = async (ev: PendingLeave, authorized: boolean) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (authorized) await authorizeGeofenceEvent(ev.eventId);
+      else await escalateGeofenceEvent(ev.eventId, ev.geofenceId);
+      await refresh();
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const removeZone = (z: Geofence) => {
     sheet.confirm({
       title: `Delete "${z.label}"?`,
@@ -160,10 +179,41 @@ export function GeofencesScreen() {
             </View>
             <Text style={styles.heroTitle}>Know when someone leaves</Text>
             <Text style={styles.heroBody}>
-              Draw a zone around a place that matters, like home or college. If
-              it's crossed, the people who set it are told, and it's saved here.
+              Draw a zone around a place that matters, like home or college. If the person leaves,
+              they're asked first, and if they don't confirm it was on purpose, the circle is told.
             </Text>
           </View>
+
+          {/* ── Did you mean to leave? (prompts for me, if a notification was missed) ── */}
+          {pending.length > 0 ? (
+            <>
+              <Text style={styles.sectionLabel}>DID YOU MEAN TO LEAVE?</Text>
+              {pending.map((p) => (
+                <View key={p.eventId} style={[styles.card, styles.pendingCard]}>
+                  <Text style={styles.pendingTitle}>You left {p.label}</Text>
+                  <Text style={styles.pendingSub}>
+                    Confirm you left on purpose, or alert the circle member who set this zone.
+                  </Text>
+                  <View style={styles.pendingRow}>
+                    <Pressable
+                      onPress={() => resolveLeave(p, true)}
+                      disabled={busy}
+                      style={[styles.pendBtn, styles.pendYes]}
+                    >
+                      <Text style={styles.pendYesText}>Yes, I meant to</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => resolveLeave(p, false)}
+                      disabled={busy}
+                      style={[styles.pendBtn, styles.pendNo]}
+                    >
+                      <Text style={styles.pendNoText}>Alert my circle</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              ))}
+            </>
+          ) : null}
 
           {/* ── Create ── */}
           <Text style={styles.sectionLabel}>NEW ZONE AT MY LOCATION</Text>
@@ -337,6 +387,9 @@ export function GeofencesScreen() {
                         </Text>
                         <Text style={styles.zoneSub}>
                           {new Date(e.createdAt).toLocaleString('en-IN')}
+                          {e.kind === 'exit' && e.authorized === true ? ' · you confirmed' : ''}
+                          {e.kind === 'exit' && e.authorized === false ? ' · circle alerted' : ''}
+                          {e.kind === 'exit' && e.authorized === null ? ' · awaiting your answer' : ''}
                         </Text>
                       </View>
                     </View>
@@ -477,6 +530,16 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.textInverse,
   },
+
+  pendingCard: { borderWidth: 1.5, borderColor: colors.coral },
+  pendingTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+  pendingSub: { ...typography.caption, fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
+  pendingRow: { flexDirection: 'row', gap: spacing.sm, marginTop: 4 },
+  pendBtn: { flex: 1, paddingVertical: 11, borderRadius: radius.pill, alignItems: 'center' },
+  pendYes: { backgroundColor: colors.sageSoft },
+  pendNo: { backgroundColor: colors.coral },
+  pendYesText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.sageDeep },
+  pendNoText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textInverse },
 
   zoneRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 6 },
   zoneIcon: {

@@ -39,7 +39,7 @@ import {
   disarmMesh,
 } from '@/services/mesh';
 import { subscribeHelperPings } from '@/services/mesh-helper-alert';
-import { syncZoneMonitoring } from '@/services/geofence';
+import { syncZoneMonitoring, authorizeGeofenceEvent, escalateGeofenceEvent } from '@/services/geofence';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -642,6 +642,26 @@ export default function App() {
       if (data.kind === 'geofence' && navigationRef.isReady()) {
         // @ts-expect-error - Geofences is in the AppStack only.
         navigationRef.navigate('Geofences');
+        return;
+      }
+      // "You left <zone>" prompt for the fenced person. Confirm it was
+      // intentional (clears it, nobody alerted) or flag it (her circle is told).
+      if (data.kind === 'geofence_leave') {
+        const eventId = typeof data.eventId === 'string' ? data.eventId : null;
+        const geofenceId = typeof data.geofenceId === 'string' ? data.geofenceId : undefined;
+        if (eventId && actionId === 'gf-authorized') {
+          void authorizeGeofenceEvent(eventId);
+        } else if (eventId && actionId === 'gf-alert') {
+          void escalateGeofenceEvent(eventId, geofenceId);
+          if (navigationRef.isReady()) {
+            // @ts-expect-error - Geofences is in the AppStack only.
+            navigationRef.navigate('Geofences');
+          }
+        } else if (navigationRef.isReady()) {
+          // Plain tap: open the zone list so she can resolve it there.
+          // @ts-expect-error - Geofences is in the AppStack only.
+          navigationRef.navigate('Geofences');
+        }
         return;
       }
       if (data.kind === 'community_alert' && navigationRef.isReady()) {

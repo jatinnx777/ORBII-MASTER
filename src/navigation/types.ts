@@ -114,6 +114,7 @@ export type AppStackParamList = {
   ResponderVerification: undefined;
   ResponderRecognition: undefined;
   ResponderEarnings: undefined;
+  CoinsWallet: undefined;
   WalkWithMe: undefined;
 };
 

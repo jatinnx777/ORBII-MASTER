@@ -205,9 +205,20 @@ Deno.serve(async (req) => {
     // Staged: 2 km now, widen to 5 km after 40 s only if nobody has accepted and
     // the SOS is still live. Circle members are excluded so nobody is
     // double-pushed, and stage 2 skips whoever stage 1 already got.
+    // NEW MODEL: verified-helper dispatch is FREE for everyone. Premium is
+    // unlimited; a free victim gets 2 per calendar month. try_consume_free_dispatch
+    // (sql/56) enforces the monthly cap server-side and consumes a slot for free
+    // users. Beyond the cap, the free victim still gets nearby community
+    // responders below (section 6), which always run for non-premium victims.
     let stage1Helpers = 0;
-    const canDispatchHelpers =
-      victimIsPremium && sos.lat != null && sos.lng != null;
+    let canDispatchHelpers = false;
+    if (sos.lat != null && sos.lng != null) {
+      const { data: gate } = await admin.rpc('try_consume_free_dispatch', {
+        p_uid: victim,
+        p_is_premium: victimIsPremium,
+      });
+      canDispatchHelpers = (gate as { allowed?: boolean } | null)?.allowed === true;
+    }
     if (canDispatchHelpers) {
       const sosLite = {
         id: sos.id,

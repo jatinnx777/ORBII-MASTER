@@ -9,6 +9,7 @@ const LISTENING_BADGE_ID = 'orbii-voice-listening';
 const VOICE_WAKE_ID = 'orbii-voice-wake';
 const SAFE_JOURNEY_ID = 'orbii-safe-journey';
 const SAFE_JOURNEY_CATEGORY = 'orbii-safe-journey';
+const GEOFENCE_LEAVE_CATEGORY = 'orbii-geofence-leave';
 
 function configure() {
   if (configured) return;
@@ -45,6 +46,21 @@ function configure() {
       vibrationPattern: [0, 250],
       enableVibrate: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      sound: 'default',
+    }).catch(() => undefined);
+    // YOU left a zone someone set for you. Aimed at the fenced person, not the
+    // watcher: a deliberately DIFFERENT, unmistakable buzz (long-short-long) so
+    // it doesn't feel like a normal safe-zone ping, because she needs to answer
+    // "did I mean to leave?" MAX importance + DND bypass so the prompt lands.
+    Notifications.setNotificationChannelAsync('geofence-leave', {
+      name: 'You left a zone',
+      description: 'When you leave a zone someone set for you, so you can confirm it was intentional.',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 600, 300, 200, 300, 600],
+      enableVibrate: true,
+      bypassDnd: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      lightColor: '#8672CE',
       sound: 'default',
     }).catch(() => undefined);
     // Incoming help request for a VERIFIED HELPER — someone nearby needs them
@@ -101,6 +117,20 @@ function configure() {
     {
       identifier: 'im-safe',
       buttonTitle: "I'm safe",
+      options: { opensAppToForeground: true },
+    },
+  ]).catch(() => undefined);
+  // Actions on the "you left a zone" prompt: confirm it was intentional (clears
+  // the alert), or flag it so the person who set the zone is told.
+  Notifications.setNotificationCategoryAsync(GEOFENCE_LEAVE_CATEGORY, [
+    {
+      identifier: 'gf-authorized',
+      buttonTitle: 'Yes, I meant to',
+      options: { opensAppToForeground: false },
+    },
+    {
+      identifier: 'gf-alert',
+      buttonTitle: 'Alert my circle',
       options: { opensAppToForeground: true },
     },
   ]).catch(() => undefined);
@@ -330,5 +360,44 @@ export async function fireVoiceWakeNotification(keyword: string): Promise<void> 
     });
   } catch (err) {
     console.warn('[notifications] voice wake failed', err);
+  }
+}
+
+// "You left <zone>" prompt for the fenced person, with a very different buzz and
+// two actions (I meant to / alert my circle). Fired from the geofence exit
+// handler. Carries the event id so the response can authorize or escalate it.
+export async function presentGeofenceLeavePrompt(
+  eventId: string,
+  label: string,
+  geofenceId: string,
+): Promise<void> {
+  configure();
+  try {
+    await Notifications.scheduleNotificationAsync({
+      identifier: `orbii-gf-leave-${eventId}`,
+      content: {
+        title: `You left ${label}`,
+        body: 'Did you mean to? Tap "Yes, I meant to" or alert your circle.',
+        data: { kind: 'geofence_leave', eventId, label, geofenceId },
+        sound: 'default',
+        categoryIdentifier: GEOFENCE_LEAVE_CATEGORY,
+        ...(Platform.OS === 'android'
+          ? { priority: Notifications.AndroidNotificationPriority.MAX, color: '#8672CE' }
+          : {}),
+      },
+      trigger: Platform.OS === 'android'
+        ? ({ channelId: 'geofence-leave' } as Notifications.NotificationTriggerInput)
+        : null,
+    });
+  } catch (err) {
+    console.warn('[notifications] geofence leave prompt failed', err);
+  }
+}
+
+export async function dismissGeofenceLeavePrompt(eventId: string): Promise<void> {
+  try {
+    await Notifications.dismissNotificationAsync(`orbii-gf-leave-${eventId}`);
+  } catch {
+    // ignore
   }
 }

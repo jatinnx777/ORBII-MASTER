@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { supabase } from './supabase';
 import { addBreadcrumb, reportError } from './error-reporting';
+import { presentGeofenceLeavePrompt, dismissGeofenceLeavePrompt } from './notifications';
 
 // Safe zones (geofences).
 //
@@ -129,24 +130,33 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
     const kind =
       eventType === Location.GeofencingEventType.Exit ? 'exit' : 'enter';
 
-    // Store the event. The DB trigger side (notify) is handled server-side by
-    // whoever watches this table; storing it is what gives the family a history.
-    await supabase.from('geofence_events').insert({
-      geofence_id: zoneId,
-      member_id: uid,
-      kind,
-      lat: region.latitude,
-      lng: region.longitude,
-    });
+    // Store the event (this is the family's history), and capture its id.
+    const { data: inserted } = await supabase
+      .from('geofence_events')
+      .insert({
+        geofence_id: zoneId,
+        member_id: uid,
+        kind,
+        lat: region.latitude,
+        lng: region.longitude,
+      })
+      .select('id')
+      .single();
 
-    // Push the watchers. Best-effort: a failed push must never throw here or
-    // Android may stop delivering geofence events to us.
-    try {
-      await supabase.functions.invoke('notify-geofence', {
-        body: { geofenceId: zoneId, kind },
-      });
-    } catch {
-      // ignore
+    // NEW FLOW: on EXIT we ask the fenced person first instead of alerting the
+    // watchers straight away. She gets a distinct-sound prompt, "did you mean to
+    // leave?" If she confirms, nobody is bothered; if she denies or ignores it,
+    // her circle is told (deny action / a scheduled sweep). This kills false
+    // alarms (leaving on purpose) without losing the real ones. ENTER is just
+    // recorded for history.
+    if (kind === 'exit' && inserted?.id) {
+      const { data: g } = await supabase
+        .from('geofences')
+        .select('label')
+        .eq('id', zoneId)
+        .maybeSingle();
+      const label = (g as { label?: string } | null)?.label ?? 'a safe zone';
+      await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
     }
   } catch (err) {
     reportError(err, { category: 'geofence', message: 'geofence event failed' });
@@ -209,18 +219,61 @@ export async function stopZoneMonitoring(): Promise<void> {
   }
 }
 
+// The fenced person confirms an exit was intentional. Clears the prompt; the
+// crossing stays in history. Watchers are NOT alerted.
+export async function authorizeGeofenceEvent(eventId: string): Promise<boolean> {
+  try {
+    await dismissGeofenceLeavePrompt(eventId);
+    const { data, error } = await supabase.rpc('authorize_geofence_event', { p_event: eventId });
+    return !error && data === true;
+  } catch {
+    return false;
+  }
+}
+
+// The fenced person says the exit was NOT intentional (or is escalating). Marks
+// it and alerts whoever set the zone via notify-geofence.
+export async function escalateGeofenceEvent(eventId: string, geofenceId?: string): Promise<boolean> {
+  try {
+    await dismissGeofenceLeavePrompt(eventId);
+    await supabase.rpc('deny_geofence_event', { p_event: eventId });
+    await supabase.functions.invoke('notify-geofence', {
+      body: { geofenceId, kind: 'exit', eventId, unauthorized: true },
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** My own unanswered "did you leave?" prompts, for when a notification was missed. */
+export type PendingLeave = { eventId: string; geofenceId: string; label: string; createdAt: string };
+
+export async function loadMyPendingLeaves(): Promise<PendingLeave[]> {
+  const { data, error } = await supabase.rpc('my_pending_geofence_leaves');
+  if (error || !data) return [];
+  return (data as { event_id: string; geofence_id: string; label: string; created_at: string }[]).map((r) => ({
+    eventId: r.event_id,
+    geofenceId: r.geofence_id,
+    label: r.label,
+    createdAt: r.created_at,
+  }));
+}
+
 /** Stored history of zone crossings, newest first. */
 export type ZoneEvent = {
   id: string;
   kind: 'exit' | 'enter';
   createdAt: string;
   label: string;
+  // For exits: true = confirmed intentional, false = flagged/escalated, null = pending.
+  authorized: boolean | null;
 };
 
 export async function loadZoneEvents(uid: string): Promise<ZoneEvent[]> {
   const { data, error } = await supabase
     .from('geofence_events')
-    .select('id, kind, created_at, geofences(label)')
+    .select('id, kind, created_at, authorized, geofences(label)')
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) return [];
@@ -229,6 +282,7 @@ export async function loadZoneEvents(uid: string): Promise<ZoneEvent[]> {
       id: string;
       kind: 'exit' | 'enter';
       created_at: string;
+      authorized: boolean | null;
       geofences?: { label?: string } | { label?: string }[] | null;
     };
     const g = Array.isArray(row.geofences) ? row.geofences[0] : row.geofences;
@@ -237,6 +291,7 @@ export async function loadZoneEvents(uid: string): Promise<ZoneEvent[]> {
       kind: row.kind,
       createdAt: row.created_at,
       label: g?.label ?? 'Safe zone',
+      authorized: row.authorized ?? null,
     };
   });
 }
