@@ -114,6 +114,7 @@ export type AppStackParamList = {
   AdminResponders: undefined;
   // Responder dashboard (moved off the tab bar; reached from Profile).
   Missions: undefined;
+  CommunityGuardian: undefined;
   WalkWithMe: undefined;
 };
 

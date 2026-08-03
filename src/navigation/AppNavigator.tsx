@@ -49,6 +49,7 @@ import { ResponderRecognitionScreen } from '@/responder/ResponderRecognitionScre
 import { ResponderEarningsScreen } from '@/responder/ResponderEarningsScreen';
 import { CoinsWalletScreen } from '@/screens/Responder/CoinsWalletScreen';
 import { AdminRespondersScreen } from '@/screens/Admin/AdminRespondersScreen';
+import { CommunityGuardianScreen } from '@/screens/Guardian/CommunityGuardianScreen';
 import { WalkWithMeScreen } from '@/screens/Safety/WalkWithMeScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
@@ -344,6 +345,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="Missions"
         component={MissionsScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CommunityGuardian"
+        component={CommunityGuardianScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

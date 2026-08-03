@@ -273,6 +273,21 @@ export function CirclesScreen() {
           ListHeaderComponent={
             <View style={styles.invitesWrap}>
               <CircleExplainer />
+              <Pressable
+                onPress={() => navigation.navigate('Geofences')}
+                style={({ pressed }) => [styles.zonesRow, pressed && styles.pressedScale]}
+                accessibilityRole="button"
+                accessibilityLabel="Safe zones"
+              >
+                <View style={styles.zonesIcon}>
+                  <Ionicons name="locate" size={18} color={colors.goldDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.zonesTitle}>Safe zones</Text>
+                  <Text style={styles.zonesSub}>Get told if someone leaves home, campus or a hostel.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
               {incomingInvites.length > 0 ? (
                 <>
                   <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>
@@ -664,6 +679,27 @@ const styles = StyleSheet.create({
   invitesWrap: {
     paddingBottom: spacing.sm,
   },
+  zonesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    marginTop: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  zonesIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.goldSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  zonesTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
+  zonesSub: { ...typography.caption, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

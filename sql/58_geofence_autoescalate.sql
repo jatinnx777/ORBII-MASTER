@@ -12,7 +12,8 @@
 -- for now, skip this whole file; the explicit "Alert my circle" button still
 -- works without it.
 --
--- BEFORE RUNNING: replace the two placeholders marked <<< ... >>>.
+-- The project URL + anon key are already filled in below (the anon key is public
+-- and ships in the app), so this file is ready to run as-is.
 -- ============================================================================
 
 -- 1. Enable the extensions (safe to run if already enabled).
@@ -41,12 +42,13 @@ begin
     -- Mark it escalated so we don't push it twice.
     update geofence_events set authorized = false, resolved_at = now() where id = r.event_id;
 
-    -- Tell the watchers. Replace the URL + anon key with your project's values.
+    -- Tell the watchers via the notify-geofence edge function. The anon key is
+    -- public (it already ships in the app), so it's safe to embed here.
     perform net.http_post(
-      url := '<<< https://YOUR-PROJECT-REF.supabase.co/functions/v1/notify-geofence >>>',
+      url := 'https://henbkyjefhzmxqozlczd.supabase.co/functions/v1/notify-geofence',
       headers := jsonb_build_object(
         'Content-Type', 'application/json',
-        'Authorization', 'Bearer <<< YOUR-SUPABASE-ANON-KEY >>>'
+        'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlbmJreWplZmh6bXhxb3psY3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NDkzNjksImV4cCI6MjA5MjEyNTM2OX0.JpNZwyzD75f75C8FNztE8_GMDAJKI-UKJMps6larhcA'
       ),
       body := jsonb_build_object(
         'geofenceId', r.geofence_id,

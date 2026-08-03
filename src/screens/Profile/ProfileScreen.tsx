@@ -260,11 +260,19 @@ export function ProfileScreen() {
                 />
               </>
             ) : (
-              <SettingRow
-                icon="shield-checkmark-outline"
-                label="Become an ORBII Responder"
-                onPress={() => navigation.navigate('ResponderApplication')}
-              />
+              <>
+                <SettingRow
+                  icon="people-outline"
+                  label="Community Guardian — help people nearby"
+                  onPress={() => navigation.navigate('CommunityGuardian')}
+                />
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="shield-checkmark-outline"
+                  label="Become an ORBII Responder"
+                  onPress={() => navigation.navigate('ResponderApplication')}
+                />
+              </>
             )}
           </View>
 

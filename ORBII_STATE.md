@@ -72,8 +72,21 @@ A circle member sets a zone on another member. On EXIT the fenced person is aske
 first (distinct notification channel `geofence-leave` + action buttons). Confirm =
 cleared, kept in history. Deny / (optional cron) no-answer = the circle is alerted
 via notify-geofence. Files: geofence.ts, notifications.ts, GeofencesScreen,
-App.tsx handler. SQL: 57 (authorize/deny/pending), 58 (OPTIONAL cron auto-escalate,
-needs pg_cron + pg_net + URL/key filled in).
+App.tsx handler. SQL: 57 (authorize/deny/pending), 58 (cron auto-escalate — DONE,
+URL+anon key filled in, ready to run; needs pg_cron + pg_net extensions).
+
+**Community Guardian (Path B, built Aug 4):** any user can opt into a
+consent-gated "help people nearby" mode (no KYC), reusing helper-mode →
+helpers_live as non-verified, so free users' SOS (dispatch_community_helpers)
+reaches them. CommunityGuardianScreen + a Profile row for non-responders. No SQL
+(set_helper_location is SECURITY DEFINER). Guardrails: explicit consent + code of
+conduct + honest note that alerts to unverified guardians carry a location.
+
+**Mesh Phase 2 (Coded PHY long-range) is DONE** in OrbiiMeshService.kt:
+boostCapable detection, startExtendedAdvertising on PHY_LE_CODED with a 1M-PHY
+fallback, extended scanning. Nothing to build; needs the 2-phone range test. The
+mesh FRONTIER (Wi-Fi Aware, helper-sealed exact location) is bigger + crypto-
+sensitive and waits until the base mesh is validated on real phones.
 
 ## Key file map
 - SOS: src/services/sos.ts, src/screens/SOS/*

@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAppSelector } from '@/redux/store';
 import { inviteByPhone, inviteByUsername } from '@/services/circles';
-import { findUserByPhone, type PublicUser } from '@/services/users-public';
+import { findUserByPhone, searchUsers, type PublicUser } from '@/services/users-public';
 import { isValidIndianPhone, toE164India } from '@/utils/validation';
 import {
   colors,
@@ -62,6 +62,13 @@ export function CircleInviteScreen({
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState<'match' | 'share' | null>(null);
 
+  // Directory search by name / username, so people who signed up with EMAIL
+  // (no phone) can still be found and added.
+  const [nameQuery, setNameQuery] = useState('');
+  const [results, setResults] = useState<PublicUser[]>([]);
+  const [searchingName, setSearchingName] = useState(false);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
   const phoneValid = isValidIndianPhone(phoneDigits);
@@ -85,25 +92,52 @@ export function CircleInviteScreen({
     };
   }, [phoneDigits, phoneValid, myUid]);
 
-  const inviteRegistered = useCallback(async () => {
-    if (!match || !match.username || submitting) return;
-    setSubmitting('match');
-    try {
-      await inviteByUsername(circleId, match.username);
-      appAlert(
-        'Invite sent',
-        `${match.name?.trim() || `@${match.username}`} will see your invite the next time they open ORBII. They'll start sharing their location with the circle as soon as they accept.`,
-        [{ text: 'Done', onPress: () => navigation.goBack() }],
-      );
-    } catch (err) {
-      appAlert(
-        'Could not send invite',
-        err instanceof Error ? err.message : 'Try again.',
-      );
-    } finally {
-      setSubmitting(null);
+  // Debounced directory search by name or username.
+  useEffect(() => {
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    const q = nameQuery.trim();
+    if (!myUid || q.length < 2) {
+      setResults([]);
+      setSearchingName(false);
+      return;
     }
-  }, [match, submitting, circleId, navigation]);
+    setSearchingName(true);
+    nameDebounceRef.current = setTimeout(async () => {
+      const r = await searchUsers({ query: q, excludeUid: myUid });
+      setResults(r);
+      setSearchingName(false);
+    }, DEBOUNCE_MS);
+    return () => {
+      if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    };
+  }, [nameQuery, myUid]);
+
+  const inviteUser = useCallback(
+    async (user: PublicUser) => {
+      if (!user.username || submitting) return;
+      setSubmitting('match');
+      try {
+        await inviteByUsername(circleId, user.username);
+        appAlert(
+          'Invite sent',
+          `${user.name?.trim() || `@${user.username}`} will see your invite the next time they open ORBII. They'll start sharing their location with the circle as soon as they accept.`,
+          [{ text: 'Done', onPress: () => navigation.goBack() }],
+        );
+      } catch (err) {
+        appAlert(
+          'Could not send invite',
+          err instanceof Error ? err.message : 'Try again.',
+        );
+      } finally {
+        setSubmitting(null);
+      }
+    },
+    [submitting, circleId, navigation],
+  );
+
+  const inviteRegistered = useCallback(() => {
+    if (match) void inviteUser(match);
+  }, [match, inviteUser]);
 
   const sharePhoneLink = useCallback(async () => {
     if (!phoneValid || submitting) return;
@@ -162,8 +196,69 @@ export function CircleInviteScreen({
               </Text>
             ) : null}
 
+            {/* Search the ORBII directory — finds email signups too. */}
             <View style={styles.card}>
-              <Text style={styles.sectionLabel}>Their phone number</Text>
+              <Text style={styles.sectionLabel}>Search people on ORBII</Text>
+              <Text style={styles.hint}>
+                Find anyone on ORBII by name or username, including friends who signed up with email.
+              </Text>
+              <View style={styles.inputRow}>
+                <Ionicons name="search" size={16} color={colors.brandDeep} />
+                <TextInput
+                  value={nameQuery}
+                  onChangeText={setNameQuery}
+                  placeholder="Name or @username"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  style={styles.input}
+                />
+                {searchingName ? (
+                  <ActivityIndicator size="small" color={colors.brandDeep} />
+                ) : null}
+              </View>
+              {results.map((u) => (
+                <View key={u.id} style={styles.matchCard}>
+                  <View style={styles.matchAvatar}>
+                    {u.photoUri ? (
+                      <Image source={{ uri: u.photoUri }} style={styles.matchAvatarImg} />
+                    ) : (
+                      <Text style={styles.matchAvatarInitial}>
+                        {(u.name?.charAt(0) ?? u.username.charAt(0)).toUpperCase()}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.matchName} numberOfLines={1}>
+                      {u.name?.trim() || `@${u.username}`}
+                    </Text>
+                    <Text style={styles.matchHandle} numberOfLines={1}>@{u.username}</Text>
+                  </View>
+                  <Pressable
+                    onPress={() => inviteUser(u)}
+                    disabled={submitting !== null}
+                    style={({ pressed }) => [
+                      styles.matchInviteBtn,
+                      submitting !== null && { opacity: 0.7 },
+                      pressed && styles.pressedScale,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Invite ${u.name ?? u.username}`}
+                  >
+                    <Ionicons name="person-add" size={14} color={colors.textInverse} />
+                    <Text style={styles.matchInviteText}>Invite</Text>
+                  </Pressable>
+                </View>
+              ))}
+              {nameQuery.trim().length >= 2 && !searchingName && results.length === 0 ? (
+                <Text style={styles.emptyHint}>
+                  No one found. Try their exact @username, or invite by phone below.
+                </Text>
+              ) : null}
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionLabel}>Or invite by phone number</Text>
               <Text style={styles.hint}>
                 The person you invite must have an ORBII account. Once they
                 accept, their live location starts sharing with the circle.
