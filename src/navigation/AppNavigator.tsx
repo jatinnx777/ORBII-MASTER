@@ -8,6 +8,9 @@ import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
+import { MissionsScreen } from '@/responder/MissionsScreen';
+import { useEntitlement } from '@/services/entitlements';
+import { PremiumLock } from '@/components/common';
 import { RecordingsScreen } from '@/screens/Recordings/RecordingsScreen';
 import { DisasterModeScreen } from '@/screens/Disaster/DisasterModeScreen';
 import { OfflineHelperAlertScreen } from '@/screens/Disaster/OfflineHelperAlertScreen';
@@ -17,6 +20,7 @@ import { CommunityUserProfileScreen } from '@/screens/Community/CommunityUserPro
 import { ContactFormScreen } from '@/screens/Profile/ContactFormScreen';
 import { EditProfileScreen } from '@/screens/Profile/EditProfileScreen';
 import { PremiumUpgradeScreen } from '@/screens/Premium/PremiumUpgradeScreen';
+import { CheckoutScreen } from '@/screens/Premium/CheckoutScreen';
 import { NotificationsScreen } from '@/screens/Notifications/NotificationsScreen';
 import { SafeJourneyStartScreen } from '@/screens/SafeMode/SafeJourneyStartScreen';
 import { SafeJourneyActiveScreen } from '@/screens/SafeMode/SafeJourneyActiveScreen';
@@ -50,6 +54,21 @@ import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<AppStackParamList>();
+
+// Safe zones are a circle EXTRA (basic circles stay free), so they're Plus-only.
+function GatedGeofences() {
+  const ok = useEntitlement('circle_geofencing');
+  if (!ok) {
+    return (
+      <PremiumLock
+        feature="Safe zones"
+        icon="locate"
+        blurb="Draw a zone around home, college or a hostel and get a gentle heads-up if someone in your circle leaves it. A circle extra, unlocked with ORBII Plus."
+      />
+    );
+  }
+  return <GeofencesScreen />;
+}
 
 const withHeader = (title: string) => ({
   headerShown: true,
@@ -113,7 +132,7 @@ export function AppNavigator() {
       />
       <Stack.Screen
         name="Geofences"
-        component={GeofencesScreen}
+        component={GatedGeofences}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
@@ -160,6 +179,11 @@ export function AppNavigator() {
         name="PremiumUpgrade"
         component={PremiumUpgradeScreen}
         options={withHeader('ORBII Premium')}
+      />
+      <Stack.Screen
+        name="Checkout"
+        component={CheckoutScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="Notifications"
@@ -315,6 +339,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="AdminResponders"
         component={AdminRespondersScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="Missions"
+        component={MissionsScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

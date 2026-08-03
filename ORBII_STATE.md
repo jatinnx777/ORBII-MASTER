@@ -21,6 +21,18 @@ privacy stance). Free for safety; paid for guaranteed verified response.
 - **Helpers are paid in ORBII coins, never cash from the user.** 10 coins = ₹1.
   200 coins (₹20) per CONFIRMED arrival (tied to arrival-code handshake so it
   can't be farmed). Redeem at 500+ coins (₹50). sql/56.
+- **Plus-only features (gated NOW, even in early access):** Disaster mode, ORBII
+  Community, and circle safe-zones/geofencing (a circle EXTRA; basic circles stay
+  free). Enforced by an ALWAYS_GATED set in entitlements.ts, gated screens render
+  `<PremiumLock>`. Everything else stays free during early access.
+- **Coupon unlock:** in-app card billing isn't wired, so Plus is unlocked via a
+  COUPON at checkout. PremiumUpgrade > "Get ORBII Plus" > CheckoutScreen (coupon
+  field). redeem_coupon RPC (sql/59) writes the entitlement server-side. Seed code
+  'ORBIIPLUS'. Add codes: `insert into coupons (code, plan_type) values (...)`.
+- **Nav:** Missions tab REMOVED from the bottom bar (now 4 tabs: Home, Community,
+  Safety, Profile). Responder Missions is a golden row on Profile (below the plan
+  card). Missions dashboard shows ORBII coins + the rate (10 coins = ₹1), never
+  rupee amounts.
 - **University B2B:** college adopts ORBII for every student at ₹200/student/year,
   bundled into the fee like insurance, so it costs the college nothing out of
   pocket. NOTE: the old "10% back to college" giveback was DROPPED, revenue is

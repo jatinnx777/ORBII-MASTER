@@ -245,7 +245,7 @@ export function SettingsScreen() {
               tint="sage"
             label="Verified helper"
               value="You're an ORBII responder. Open your Missions dashboard."
-              onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
+              onPress={() => navigation.navigate('Missions')}
             />
           ) : (
             <Row

@@ -22,8 +22,6 @@ export type TabParamList = {
   // The safety toolbox. Shown as the "Safety" side tab; the centre SOS button
   // is a raised action, not a tab.
   Emergency: undefined;
-  // Responder-only tab (rendered only when role is responder/admin).
-  Missions: undefined;
   Profile: undefined;
 };
 
@@ -70,6 +68,7 @@ export type AppStackParamList = {
   ContactForm: { contactId?: string };
   EditProfile: undefined;
   PremiumUpgrade: undefined;
+  Checkout: undefined;
   Notifications: undefined;
   SafeJourneyStart: undefined;
   // requirePinToEnd: surface the PIN prompt the moment this screen
@@ -113,6 +112,8 @@ export type AppStackParamList = {
   ResponderEarnings: undefined;
   CoinsWallet: undefined;
   AdminResponders: undefined;
+  // Responder dashboard (moved off the tab bar; reached from Profile).
+  Missions: undefined;
   WalkWithMe: undefined;
 };
 

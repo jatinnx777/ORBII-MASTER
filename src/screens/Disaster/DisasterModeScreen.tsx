@@ -3,9 +3,10 @@ import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-na
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ScreenContainer, appAlert } from '@/components/common';
+import { ScreenContainer, appAlert, PremiumLock } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
+import { useEntitlement } from '@/services/entitlements';
 import {
   broadcastDisasterStatus,
   openDisasterComposer,
@@ -88,6 +89,17 @@ export function DisasterModeScreen() {
   const location = useAppSelector((s) => s.sos.currentLocation);
   const [busy, setBusy] = useState<DisasterStatus | null>(null);
   const [openCard, setOpenCard] = useState<string | null>(null);
+  const canUseDisaster = useEntitlement('disaster_mode');
+
+  if (!canUseDisaster) {
+    return (
+      <PremiumLock
+        feature="Disaster mode"
+        icon="warning"
+        blurb="Reach your people over SMS with no internet, every Indian emergency helpline in one place, and step-by-step tips for floods, quakes and more. Unlock it with ORBII Plus."
+      />
+    );
+  }
 
   const dial = (num: string) => {
     Linking.openURL(`tel:${num}`).catch(() => undefined);

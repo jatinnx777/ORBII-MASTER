@@ -19,9 +19,8 @@ import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { EmergencyScreen } from '@/screens/Emergency/EmergencyScreen';
 import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
-import { MissionsScreen } from '@/responder/MissionsScreen';
-import { useIsResponder } from '@/services/roles';
-import { appAlert } from '@/components/common';
+import { useEntitlement } from '@/services/entitlements';
+import { appAlert, PremiumLock } from '@/components/common';
 import { shareMyLocation } from '@/services/location-share';
 import { trackEvent } from '@/services/analytics';
 import { colors, fontFamilies } from '@/theme';
@@ -42,12 +41,27 @@ const ICONS: Partial<Record<
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
   Community: { active: 'chatbubbles', inactive: 'chatbubbles-outline', label: 'Community' },
   Emergency: { active: 'shield', inactive: 'shield-outline', label: 'Safety' },
-  Missions: { active: 'flash', inactive: 'flash-outline', label: 'Missions' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
 
+// ORBII Community is a Plus feature: a free user sees the unlock screen on the tab.
+function GatedCommunity() {
+  const ok = useEntitlement('community');
+  if (!ok) {
+    return (
+      <PremiumLock
+        feature="ORBII Community"
+        icon="chatbubbles"
+        blurb="A moderated, anonymous space to share safety experiences, ask for advice, and look out for each other. Unlock it with ORBII Plus."
+      />
+    );
+  }
+  return <CommunityFeedScreen />;
+}
+
 export function TabNavigator() {
-  const showMissions = useIsResponder();
+  // Responder Missions moved to Profile, so the bar is a clean 4 tabs (Home,
+  // Community, Safety, Profile) around the centre SOS button.
   return (
     <TabBarVisibilityProvider>
       <Tab.Navigator
@@ -60,9 +74,8 @@ export function TabNavigator() {
         }}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Community" component={CommunityFeedScreen} />
+        <Tab.Screen name="Community" component={GatedCommunity} />
         <Tab.Screen name="Emergency" component={EmergencyScreen} />
-        {showMissions ? <Tab.Screen name="Missions" component={MissionsScreen} /> : null}
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>
     </TabBarVisibilityProvider>

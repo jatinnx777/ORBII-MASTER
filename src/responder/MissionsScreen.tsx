@@ -27,11 +27,8 @@ import {
   startHelperMode,
   stopHelperMode,
 } from '@/services/helper-mode';
-import {
-  loadHelperStats,
-  formatRupees,
-  type HelperStats,
-} from '@/services/helper-economy';
+import { loadHelperStats, type HelperStats } from '@/services/helper-economy';
+import { getCoinWallet, type CoinWallet } from '@/services/coins';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -51,18 +48,21 @@ export function MissionsScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const [hp, setHp] = useState<HelperProfile | null>(null);
   const [stats, setStats] = useState<HelperStats | null>(null);
+  const [wallet, setWallet] = useState<CoinWallet | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(isHelperModeRunning());
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
-    const [p, s] = await Promise.all([
+    const [p, s, w] = await Promise.all([
       loadHelperProfileSafe(profile.uid),
       loadHelperStats(),
+      getCoinWallet(),
     ]);
     setHp(p);
     setStats(s);
+    setWallet(w);
     setLoading(false);
   }, [profile?.uid]);
 
@@ -231,24 +231,24 @@ export function MissionsScreen() {
                 </View>
               </View>
 
-              {/* earnings + cash out */}
+              {/* ORBII coins — no money shown here, just coins + the rate */}
               <Pressable
                 style={styles.earnCard}
-                onPress={() => navigation.navigate('ResponderEarnings')}
+                onPress={() => navigation.navigate('CoinsWallet')}
               >
                 <View style={styles.earnHeadRow}>
-                  <Text style={styles.earnLabel}>WALLET BALANCE</Text>
-                  <Ionicons name="wallet" size={18} color={colors.sageDeep} />
+                  <Text style={styles.earnLabel}>ORBII COINS</Text>
+                  <Ionicons name="server" size={18} color={colors.sageDeep} />
                 </View>
                 <Text style={styles.earnBalance}>
-                  {formatRupees(stats?.balancePaise ?? 0)}
+                  {(wallet?.balance ?? 0).toLocaleString()}
                 </Text>
                 <View style={styles.earnMetaRow}>
                   <Text style={styles.earnMeta}>
-                    {formatRupees(stats?.earnedPaise ?? 0)} earned in total
+                    10 coins = ₹1 · earn 200 per confirmed help
                   </Text>
                   <View style={styles.cashOutBtn}>
-                    <Text style={styles.cashOutText}>Cash out</Text>
+                    <Text style={styles.cashOutText}>View coins</Text>
                     <Ionicons name="arrow-forward" size={14} color={colors.surface} />
                   </View>
                 </View>

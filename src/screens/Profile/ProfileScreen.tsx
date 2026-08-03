@@ -173,6 +173,25 @@ export function ProfileScreen() {
             )}
           </Pressable>
 
+          {/* ── Responder Missions (golden, just below the plan; responders only) ── */}
+          {isResponder ? (
+            <Pressable
+              onPress={() => navigation.navigate('Missions')}
+              style={({ pressed }) => [styles.missionsCard, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Open your responder Missions dashboard"
+            >
+              <View style={styles.missionsIcon}>
+                <Ionicons name="flash" size={18} color={colors.goldDeep} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.planTitle}>Responder Missions</Text>
+                <Text style={styles.planSub}>Go online, take missions, earn ORBII coins.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
+            </Pressable>
+          ) : null}
+
           {/* ── Grid ── */}
           <View style={styles.grid}>
             <GridItem
@@ -222,12 +241,6 @@ export function ProfileScreen() {
           <View style={styles.card}>
             {isResponder ? (
               <>
-                <SettingRow
-                  icon="flash-outline"
-                  label="Missions dashboard"
-                  onPress={() => navigation.navigate('Tabs', { screen: 'Missions' })}
-                />
-                <View style={styles.divider} />
                 <SettingRow
                   icon="trophy-outline"
                   label="Recognition & Guardian level"
@@ -451,6 +464,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   planUpgradeText: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, color: colors.textPrimary },
+  missionsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.goldSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    marginTop: spacing.sm,
+  },
+  missionsIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   grid: {
     flexDirection: 'row',

@@ -24,6 +24,7 @@ export {
 export { Input } from './Input';
 export { OfflineBanner } from './OfflineBanner';
 export { PinPrompt } from './PinPrompt';
+export { PremiumLock } from './PremiumLock';
 export { PrivacyPolicyModal } from './PrivacyPolicyModal';
 export { PermissionDisclosureModal } from './PermissionDisclosureModal';
 export { Row } from './Row';

@@ -2,9 +2,11 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Mascot } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { trackEvent } from '@/services/analytics';
+import type { AppStackParamList } from '@/navigation/types';
 
 // New model: real help (a verified responder dispatched to you) is FREE for
 // everyone, capped at 2 dispatches a month on the free plan. ORBII Plus lifts the
@@ -31,7 +33,7 @@ const PLUS: Feature[] = [
 ];
 
 export function PremiumUpgradeScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
 
   React.useEffect(() => {
     trackEvent('premium_viewed');
@@ -101,7 +103,7 @@ export function PremiumUpgradeScreen() {
         </Text>
       </View>
 
-      <Button label="Continue" onPress={() => navigation.goBack()} />
+      <Button label="Get ORBII Plus" onPress={() => navigation.navigate('Checkout')} />
     </ScrollView>
   );
 }
