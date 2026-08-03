@@ -63,9 +63,6 @@ export type AppStackParamList = {
   Geofences: undefined;
   Recordings: undefined;
   DisasterMode: undefined;
-  BluetoothChat: undefined;
-  NearbyPeople: undefined;
-  DmThread: { peerPublicB64: string; peerNick: string };
   OfflineHelperAlert: { alertId: string };
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;

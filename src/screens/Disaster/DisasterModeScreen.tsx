@@ -166,16 +166,7 @@ export function DisasterModeScreen() {
             >
               <Ionicons name="checkmark-circle" size={24} color={colors.sageDeep} />
               <Text style={styles.miniTitle}>I'm safe</Text>
-              <Text style={styles.miniSub}>Reassure your circle</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => navigation.navigate('BluetoothChat' as never)}
-              style={({ pressed }) => [styles.miniCard, styles.chatCard, pressed && styles.pressed]}
-            >
-              <View style={styles.betaBadge}><Text style={styles.soonText}>BETA</Text></View>
-              <Ionicons name="bluetooth" size={24} color={colors.lavenderDeep} />
-              <Text style={styles.miniTitle}>Bluetooth chat</Text>
-              <Text style={styles.miniSub}>Message with no signal</Text>
+              <Text style={styles.miniSub}>Reassure your circle with one tap, over SMS</Text>
             </Pressable>
           </View>
 

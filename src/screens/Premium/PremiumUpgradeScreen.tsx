@@ -27,7 +27,6 @@ const FREE: Feature[] = [
 const PLUS: Feature[] = [
   { icon: 'infinite', text: 'Unlimited verified-helper dispatches' },
   { icon: 'navigate', text: 'Offline helper alert: reach nearby helpers with no internet' },
-  { icon: 'lock-closed', text: 'Private end-to-end encrypted messages' },
   { icon: 'flash', text: 'Priority helper matching + live ETA' },
 ];
 

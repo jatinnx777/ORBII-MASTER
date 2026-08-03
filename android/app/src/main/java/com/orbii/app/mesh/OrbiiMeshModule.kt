@@ -27,20 +27,12 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
 
   override fun getName() = "OrbiiMesh"
 
-  // Receives chat messages AND helper-alert pings the service caught over
-  // Bluetooth, and re-emits them to JS as events.
+  // Receives helper-alert pings the service caught over Bluetooth, and re-emits
+  // them to JS as events.
   private val meshRx = object : BroadcastReceiver() {
     override fun onReceive(context: Context?, intent: Intent?) {
       try {
         when (intent?.action) {
-          OrbiiMeshService.CHAT_RX_ACTION -> {
-            val m = Arguments.createMap()
-            m.putString("sender", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_SENDER) ?: "")
-            m.putString("text", intent.getStringExtra(OrbiiMeshService.EXTRA_CHAT_TEXT) ?: "")
-            m.putDouble("at", System.currentTimeMillis().toDouble())
-            ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
-              .emit("OrbiiMeshChat", m)
-          }
           OrbiiMeshService.HELPER_PING_RX_ACTION -> {
             val m = Arguments.createMap()
             m.putString("alertId", intent.getStringExtra(OrbiiMeshService.EXTRA_ALERT_ID) ?: "")
@@ -59,7 +51,6 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
   init {
     try {
       val filter = IntentFilter().apply {
-        addAction(OrbiiMeshService.CHAT_RX_ACTION)
         addAction(OrbiiMeshService.HELPER_PING_RX_ACTION)
       }
       if (Build.VERSION.SDK_INT >= 33) {
@@ -75,23 +66,6 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
   override fun invalidate() {
     try { ctx.unregisterReceiver(meshRx) } catch (e: Exception) {}
     super.invalidate()
-  }
-
-  /** Send a short offline chat message to nearby phones over Bluetooth. */
-  @ReactMethod
-  fun sendChat(text: String, sender: String, promise: Promise) {
-    try {
-      val intent = Intent(ctx, OrbiiMeshService::class.java).apply {
-        action = OrbiiMeshService.ACTION_CHAT
-        putExtra(OrbiiMeshService.EXTRA_CHAT_TEXT, text)
-        putExtra(OrbiiMeshService.EXTRA_CHAT_SENDER, sender)
-      }
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) ctx.startForegroundService(intent)
-      else ctx.startService(intent)
-      promise.resolve(true)
-    } catch (e: Exception) {
-      promise.reject("mesh_chat_failed", e)
-    }
   }
 
   @ReactMethod
