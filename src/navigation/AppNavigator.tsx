@@ -44,6 +44,7 @@ import { ResponderVerificationScreen } from '@/responder/ResponderVerificationSc
 import { ResponderRecognitionScreen } from '@/responder/ResponderRecognitionScreen';
 import { ResponderEarningsScreen } from '@/responder/ResponderEarningsScreen';
 import { CoinsWalletScreen } from '@/screens/Responder/CoinsWalletScreen';
+import { AdminRespondersScreen } from '@/screens/Admin/AdminRespondersScreen';
 import { WalkWithMeScreen } from '@/screens/Safety/WalkWithMeScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
@@ -309,6 +310,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="CoinsWallet"
         component={CoinsWalletScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="AdminResponders"
+        component={AdminRespondersScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

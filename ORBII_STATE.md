@@ -77,9 +77,19 @@ needs pg_cron + pg_net + URL/key filled in).
 ## Open action items (founder's side)
 1. LOGIN: custom SMTP (Brevo) in Supabase so email OTP arrives + Magic Link
    template must use `{{ .Token }}` (a code, not a link). See top priority.
-2. Recruit + verify first responders (Path A): they apply in-app, then run
-   `update profiles set is_verified=true, role='responder' where id='<uid>';
-    update helper_profiles set verification_status='verified' where user_id='<uid>';`
+2. Seed verified responders (the correct flow, Aug 3):
+   a. ONE-TIME make yourself admin (Supabase SQL editor, runs as superuser):
+      `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
+      (Requires sql/27_admin_portal.sql to have been run.)
+   b. Your first responders tap Profile > "Become an ORBII Responder" > Apply.
+   c. You (admin) open Profile > ADMIN > "Responder approvals" and tap Approve.
+      That calls admin_approve_responder, which sets ALL three flags at once
+      (role='responder', is_verified=true, helper_profiles.verification_status=
+      'verified') so a responder is never left half-verified. AdminRespondersScreen
+      + src/services/admin.ts. Do NOT hand-edit the flags in SQL anymore.
+   d. The approved responder opens the Missions tab and goes online to be
+      dispatchable. Their role now refreshes on app launch/resume (refreshUserRole
+      wired in App.tsx), no re-login needed.
 3. Patent: file a provisional patent early to protect the hands-free + on-device +
    offline-mesh idea before showing it widely. (In the ₹2.5L funds line.)
 4. Deploy notify-sos (`supabase functions deploy notify-sos`) once responders

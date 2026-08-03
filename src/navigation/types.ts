@@ -112,6 +112,7 @@ export type AppStackParamList = {
   ResponderRecognition: undefined;
   ResponderEarnings: undefined;
   CoinsWallet: undefined;
+  AdminResponders: undefined;
   WalkWithMe: undefined;
 };
 

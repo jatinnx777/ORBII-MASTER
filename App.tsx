@@ -255,7 +255,12 @@ function RootNavigator() {
       if (AppState.currentState === 'active') void refreshCircles();
     }, 60_000);
     const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') void refreshCircles();
+      if (next === 'active') {
+        void refreshCircles();
+        // Also re-pull the role, so a responder approved while their app was open
+        // gets the Missions tab on return without needing to sign out and back in.
+        void refreshUserRole();
+      }
     });
     return () => {
       clearInterval(poll);
@@ -307,6 +312,9 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     void reconcileExpiredVoiceSessions();
+    // Pull the authoritative role on launch, so an approved responder / admin
+    // sees their tabs without a fresh sign-in.
+    void refreshUserRole();
     // Offline mesh Phase 0: report this phone's mesh-radio capabilities once,
     // so we learn the real fleet's readiness before building the mesh.
     void reportMeshCapabilitiesOnce();

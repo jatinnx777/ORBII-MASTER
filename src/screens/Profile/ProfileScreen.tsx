@@ -22,7 +22,7 @@ import { signOutFromGoogle, deleteAccount } from '@/services/auth';
 import { clearCachedContacts } from '@/services/emergency-contacts';
 import { clearCachedProfile } from '@/services/profile-cache';
 import { clearPin } from '@/services/safety-pin';
-import { useIsResponder } from '@/services/roles';
+import { useIsResponder, useIsAdmin } from '@/services/roles';
 import { comingSoon } from '@/services/coming-soon';
 import type { AppStackParamList } from '@/navigation/types';
 import { useTabBarScroll } from '@/navigation/tabBarVisibility';
@@ -37,6 +37,7 @@ export function ProfileScreen() {
   const sheet = useBrandSheet();
   const profile = useAppSelector((s) => s.user.profile);
   const isResponder = useIsResponder();
+  const isAdmin = useIsAdmin();
 
   if (!profile) return null;
 
@@ -253,6 +254,20 @@ export function ProfileScreen() {
               />
             )}
           </View>
+
+          {/* ── Admin (only for admins) ── */}
+          {isAdmin ? (
+            <>
+              <Text style={styles.sectionLabel}>ADMIN</Text>
+              <View style={styles.card}>
+                <SettingRow
+                  icon="shield-checkmark-outline"
+                  label="Responder approvals"
+                  onPress={() => navigation.navigate('AdminResponders')}
+                />
+              </View>
+            </>
+          ) : null}
 
           {/* ── Settings ── */}
           <Text style={styles.sectionLabel}>SETTINGS</Text>
