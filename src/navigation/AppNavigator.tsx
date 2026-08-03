@@ -8,6 +8,7 @@ import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
+import { ZoneEditorScreen } from '@/screens/Geofence/ZoneEditorScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useEntitlement } from '@/services/entitlements';
 import { PremiumLock } from '@/components/common';
@@ -69,6 +70,20 @@ function GatedGeofences() {
     );
   }
   return <GeofencesScreen />;
+}
+
+function GatedZoneEditor() {
+  const ok = useEntitlement('circle_geofencing');
+  if (!ok) {
+    return (
+      <PremiumLock
+        feature="Geofencing"
+        icon="locate"
+        blurb="Draw an area on the map around home, college or a hostel and get a gentle heads-up if someone in your circle leaves it. A circle extra, unlocked with ORBII Plus."
+      />
+    );
+  }
+  return <ZoneEditorScreen />;
 }
 
 const withHeader = (title: string) => ({
@@ -134,6 +149,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="Geofences"
         component={GatedGeofences}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="ZoneEditor"
+        component={GatedZoneEditor}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

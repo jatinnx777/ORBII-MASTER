@@ -168,7 +168,7 @@ export function GeofencesScreen() {
           <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.back}>
             <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
           </Pressable>
-          <Text style={styles.headerTitle}>Safe zones</Text>
+          <Text style={styles.headerTitle}>Geofencing</Text>
           <View style={{ width: 40 }} />
         </View>
 
@@ -215,85 +215,22 @@ export function GeofencesScreen() {
             </>
           ) : null}
 
-          {/* ── Create ── */}
-          <Text style={styles.sectionLabel}>NEW ZONE AT MY LOCATION</Text>
-          <View style={styles.card}>
-            <Text style={styles.fieldLabel}>Who is this zone for?</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.peopleRow}
-            >
-              <Pressable
-                onPress={() => setTarget(null)}
-                style={[styles.person, target === null && styles.personOn]}
-              >
-                <Text style={[styles.personText, target === null && styles.personTextOn]}>
-                  Me
-                </Text>
-              </Pressable>
-              {people.map((p) => {
-                const on = target?.userId === p.userId;
-                return (
-                  <Pressable
-                    key={p.userId}
-                    onPress={() => setTarget(p)}
-                    style={[styles.person, on && styles.personOn]}
-                  >
-                    <Text style={[styles.personText, on && styles.personTextOn]} numberOfLines={1}>
-                      {p.name || p.username || 'Circle member'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {people.length === 0 ? (
-              <Text style={styles.pickerHint}>
-                Only people in your circle can be given a zone. Add someone to
-                your circle first.
-              </Text>
-            ) : target ? (
-              <Text style={styles.pickerHint}>
-                {target.name || 'They'} will see this zone and can remove it.
-                ORBII never tracks anyone secretly.
-              </Text>
-            ) : null}
-
-            <TextInput
-              value={label}
-              onChangeText={setLabel}
-              placeholder="Name it (Home, College, Hostel)"
-              placeholderTextColor={colors.textMuted}
-              style={styles.input}
-              maxLength={40}
-            />
-            <View style={styles.radiiRow}>
-              {RADII.map((r) => (
-                <Pressable
-                  key={r}
-                  onPress={() => setRadius(r)}
-                  style={[styles.radChip, radius === r && styles.radChipOn]}
-                >
-                  <Text style={[styles.radText, radius === r && styles.radTextOn]}>
-                    {r >= 1000 ? `${r / 1000} km` : `${r} m`}
-                  </Text>
-                </Pressable>
-              ))}
+          {/* ── Create: draw an area on the map ── */}
+          <Pressable
+            onPress={() => navigation.navigate('ZoneEditor' as never)}
+            style={({ pressed }) => [styles.drawCta, pressed && styles.pressed]}
+          >
+            <View style={styles.drawIcon}>
+              <Ionicons name="map" size={22} color={colors.brandDeep} />
             </View>
-            <Pressable
-              onPress={addZoneHere}
-              disabled={busy}
-              style={({ pressed }) => [styles.cta, busy && { opacity: 0.6 }, pressed && styles.pressed]}
-            >
-              <Text style={styles.ctaText}>
-                {busy
-                  ? 'Creating…'
-                  : target
-                    ? `Create zone for ${target.name || 'them'}`
-                    : 'Create zone here'}
+            <View style={{ flex: 1 }}>
+              <Text style={styles.drawTitle}>Draw an area on the map</Text>
+              <Text style={styles.drawSub}>
+                Drop corner pins around a place like their college or hostel, and know if they leave it.
               </Text>
-            </Pressable>
-          </View>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
+          </Pressable>
 
           {/* ── Zones I set ── */}
           <Text style={styles.sectionLabel}>ZONES YOU SET</Text>
@@ -530,6 +467,26 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.textInverse,
   },
+
+  drawCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.brand,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.card,
+  },
+  drawIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  drawTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15.5, color: colors.textInverse },
+  drawSub: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textInverse, opacity: 0.9, marginTop: 2, lineHeight: 16 },
 
   pendingCard: { borderWidth: 1.5, borderColor: colors.coral },
   pendingTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },

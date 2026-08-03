@@ -15,6 +15,8 @@ import { presentGeofenceLeavePrompt, dismissGeofenceLeavePrompt } from './notifi
 
 export const GEOFENCE_TASK = 'ORBII_GEOFENCE';
 
+export type Corner = { lat: number; lng: number };
+
 export type Geofence = {
   id: string;
   ownerId: string;
@@ -24,6 +26,8 @@ export type Geofence = {
   lng: number;
   radiusM: number;
   active: boolean;
+  // The 4 corners the parent drew on the map (null for old radius-only zones).
+  corners: Corner[] | null;
 };
 
 type Row = {
@@ -35,6 +39,7 @@ type Row = {
   lng: number;
   radius_m: number;
   active: boolean;
+  corners: Corner[] | null;
 };
 
 function fromRow(r: Row): Geofence {
@@ -47,7 +52,32 @@ function fromRow(r: Row): Geofence {
     lng: r.lng,
     radiusM: r.radius_m,
     active: r.active,
+    corners: Array.isArray(r.corners) ? r.corners : null,
   };
+}
+
+// Metres between two lat/lng points (haversine).
+function distanceM(a: Corner, b: Corner): number {
+  const R = 6371000;
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const s =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+// Turn the drawn corners into the circle the OS will actually monitor: the
+// centroid, and a radius that covers the farthest corner (clamped 100..5000 m).
+export function circleFromCorners(corners: Corner[]): { lat: number; lng: number; radiusM: number } {
+  const lat = corners.reduce((s, c) => s + c.lat, 0) / corners.length;
+  const lng = corners.reduce((s, c) => s + c.lng, 0) / corners.length;
+  const center = { lat, lng };
+  const far = Math.max(...corners.map((c) => distanceM(center, c)));
+  const radiusM = Math.max(100, Math.min(5000, Math.round(far + 25)));
+  return { lat, lng, radiusM };
 }
 
 /** Zones set ON me — the ones this device must actually monitor. */
@@ -95,6 +125,38 @@ export async function createZone(input: {
       ok: false,
       error: /row-level security|policy/i.test(error.message)
         ? 'You can only set a safe zone for someone in your circle.'
+        : error.message,
+    };
+  }
+  return { ok: true };
+}
+
+// Create a zone from the 4 corners the parent drew on the map. Stores the
+// corners AND the covering circle the OS actually monitors.
+export async function createPolygonZone(input: {
+  ownerId: string;
+  memberId: string;
+  label: string;
+  corners: Corner[];
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (input.corners.length < 3) {
+    return { ok: false, error: 'Place at least 3 corners to draw an area.' };
+  }
+  const circle = circleFromCorners(input.corners);
+  const { error } = await supabase.from('geofences').insert({
+    owner_id: input.ownerId,
+    member_id: input.memberId,
+    label: input.label,
+    lat: circle.lat,
+    lng: circle.lng,
+    radius_m: circle.radiusM,
+    corners: input.corners,
+  });
+  if (error) {
+    return {
+      ok: false,
+      error: /row-level security|policy/i.test(error.message)
+        ? 'You can only set a zone for someone in your circle.'
         : error.message,
     };
   }

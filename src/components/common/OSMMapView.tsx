@@ -41,6 +41,9 @@ type Props = {
   // value; pass false to hide them while keeping pinch-zoom available.
   showZoomControls?: boolean;
   onMarkerPress?: (id: string) => void;
+  // Fires when the user taps the map, with the tapped coordinate. Used to drop
+  // pins (e.g. the geofence corner editor).
+  onMapPress?: (coord: GeoPoint) => void;
 };
 
 const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
@@ -266,6 +269,7 @@ export function OSMMapView({
   interactive = true,
   showZoomControls,
   onMarkerPress,
+  onMapPress,
 }: Props) {
   const zoomControls = showZoomControls ?? interactive;
   const webviewRef = useRef<WebView>(null);
@@ -319,6 +323,8 @@ export function OSMMapView({
         pushUpdate(markers, polylines, fitAll);
       } else if (msg.type === 'marker' && onMarkerPress) {
         onMarkerPress(msg.id);
+      } else if (msg.type === 'click' && onMapPress) {
+        onMapPress({ latitude: msg.lat, longitude: msg.lng });
       }
     } catch {
       // ignore

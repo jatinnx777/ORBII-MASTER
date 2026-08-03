@@ -223,8 +223,8 @@ export function EmergencyScreen() {
             <View style={styles.divider} />
             <ModeRow
               icon="locate"
-              title="Safe zones"
-              body="Get told when someone you love leaves a safe area."
+              title="Geofencing"
+              body="Draw an area on the map and get told if someone leaves it."
               onPress={() => navigation.navigate('Geofences')}
             />
           </View>

@@ -283,8 +283,8 @@ export function CirclesScreen() {
                   <Ionicons name="locate" size={18} color={colors.goldDeep} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.zonesTitle}>Safe zones</Text>
-                  <Text style={styles.zonesSub}>Get told if someone leaves home, campus or a hostel.</Text>
+                  <Text style={styles.zonesTitle}>Geofencing</Text>
+                  <Text style={styles.zonesSub}>Draw an area and get told if someone leaves it.</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
