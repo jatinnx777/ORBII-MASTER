@@ -34,12 +34,23 @@ export type OSMPolyline = {
   fillOpacity?: number;
 };
 
+// A circle in METRES (e.g. a GPS accuracy ring around a member).
+export type OSMCircle = {
+  id: string;
+  center: GeoPoint;
+  radiusM: number;
+  color?: string;
+  fillColor?: string;
+  fillOpacity?: number;
+};
+
 type Props = {
   center: GeoPoint;
   zoom?: number;
   style?: StyleProp<ViewStyle>;
   markers?: OSMMarker[];
   polylines?: OSMPolyline[];
+  circles?: OSMCircle[];
   fitAll?: boolean;
   interactive?: boolean;
   // Show Leaflet's default +/- zoom buttons. Defaults to `interactive`'s
@@ -88,6 +99,18 @@ function serializePolylines(polylines: OSMPolyline[]) {
     fill: !!p.fill,
     fillColor: p.fillColor ?? p.color ?? '#FF0000',
     fillOpacity: p.fillOpacity == null ? 0.16 : p.fillOpacity,
+  }));
+}
+
+function serializeCircles(circles: OSMCircle[]) {
+  return circles.map((c) => ({
+    id: c.id,
+    lat: c.center.latitude,
+    lng: c.center.longitude,
+    radius: c.radiusM,
+    color: c.color ?? '#8672CE',
+    fillColor: c.fillColor ?? c.color ?? '#8672CE',
+    fillOpacity: c.fillOpacity == null ? 0.12 : c.fillOpacity,
   }));
 }
 
@@ -159,6 +182,25 @@ function buildHtml(
 
   var markerLayers = {};
   var polylineLayers = {};
+  var circleLayers = {};
+
+  function upsertCircle(c){
+    var existing = circleLayers[c.id];
+    if (existing) {
+      existing.setLatLng([c.lat, c.lng]);
+      existing.setRadius(c.radius);
+      return;
+    }
+    var circle = L.circle([c.lat, c.lng], {
+      radius: c.radius,
+      color: c.color,
+      weight: 1,
+      opacity: 0.6,
+      fillColor: c.fillColor,
+      fillOpacity: c.fillOpacity,
+    }).addTo(map);
+    circleLayers[c.id] = circle;
+  }
 
   function buildIcon(m){
     var html = m.pulse
@@ -244,8 +286,9 @@ function buildHtml(
   }
 
   window.__orbiiMap = {
-    update: function(markers, polylines, fitAll){
+    update: function(markers, polylines, circles, fitAll){
       try {
+        circles = circles || [];
         var markerIds = markers.map(function(m){ return m.id; });
         removeMissing(markerLayers, markerIds, function(m){ map.removeLayer(m); });
         markers.forEach(upsertMarker);
@@ -256,6 +299,10 @@ function buildHtml(
           map.removeLayer(p.line);
         });
         polylines.forEach(upsertPolyline);
+
+        var circleIds = circles.map(function(c){ return c.id; });
+        removeMissing(circleLayers, circleIds, function(c){ map.removeLayer(c); });
+        circles.forEach(upsertCircle);
 
         if (fitAll) {
           var bounds = [];
@@ -292,6 +339,7 @@ export function OSMMapView({
   style,
   markers = [],
   polylines = [],
+  circles = [],
   fitAll = false,
   interactive = true,
   showZoomControls,
@@ -313,10 +361,12 @@ export function OSMMapView({
   );
 
   const pushUpdate = useCallback(
-    (m: OSMMarker[], p: OSMPolyline[], fit: boolean) => {
+    (m: OSMMarker[], p: OSMPolyline[], c: OSMCircle[], fit: boolean) => {
       const payload = `window.__orbiiMap && window.__orbiiMap.update(${JSON.stringify(
         serializeMarkers(m),
-      )}, ${JSON.stringify(serializePolylines(p))}, ${fit ? 'true' : 'false'}); true;`;
+      )}, ${JSON.stringify(serializePolylines(p))}, ${JSON.stringify(
+        serializeCircles(c),
+      )}, ${fit ? 'true' : 'false'}); true;`;
       if (isReadyRef.current && webviewRef.current) {
         webviewRef.current.injectJavaScript(payload);
       } else {
@@ -329,11 +379,12 @@ export function OSMMapView({
   // Serialize deps so effect only fires on real change.
   const markersKey = useMemo(() => JSON.stringify(serializeMarkers(markers)), [markers]);
   const polylinesKey = useMemo(() => JSON.stringify(serializePolylines(polylines)), [polylines]);
+  const circlesKey = useMemo(() => JSON.stringify(serializeCircles(circles)), [circles]);
 
   useEffect(() => {
-    pushUpdate(markers, polylines, fitAll);
+    pushUpdate(markers, polylines, circles, fitAll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [markersKey, polylinesKey, fitAll, pushUpdate]);
+  }, [markersKey, polylinesKey, circlesKey, fitAll, pushUpdate]);
 
   // Recenter when the `center` prop changes (e.g. a place-search result), without
   // rebuilding the whole map.
@@ -359,7 +410,7 @@ export function OSMMapView({
           pendingUpdateRef.current = null;
         }
         // also push the current props (first render)
-        pushUpdate(markers, polylines, fitAll);
+        pushUpdate(markers, polylines, circles, fitAll);
       } else if (msg.type === 'marker' && onMarkerPress) {
         onMarkerPress(msg.id);
       } else if (msg.type === 'click' && onMapPress) {

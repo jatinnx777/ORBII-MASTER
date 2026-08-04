@@ -13,7 +13,7 @@ export { MascotLoader } from './MascotLoader';
 export { EmptyState } from './EmptyState';
 export { HelplinesCard } from './HelplinesCard';
 export { Skeleton, SkeletonRow, SkeletonList } from './Skeleton';
-export { OSMMapView, type OSMMarker, type OSMPolyline } from './OSMMapView';
+export { OSMMapView, type OSMMarker, type OSMPolyline, type OSMCircle } from './OSMMapView';
 export {
   MLMapView,
   type MLMapViewHandle,

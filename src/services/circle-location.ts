@@ -21,7 +21,10 @@ export type MemberLocation = {
   lng: number;
   updatedAt: string;
   battery: number | null;
+  accuracyM: number | null;
 };
+
+export type TrailPoint = { lat: number; lng: number; at: string };
 
 // Background task: push the latest fix to the server.
 TaskManager.defineTask(CIRCLE_LOCATION_TASK, async ({ data, error }) => {
@@ -123,5 +126,17 @@ export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
     lng: r.lng as number,
     updatedAt: r.updated_at as string,
     battery: (r.battery as number) ?? null,
+    accuracyM: (r.accuracy_m as number) ?? null,
+  }));
+}
+
+/** A member's recent breadcrumb trail (newest first) for the history view. */
+export async function loadMemberTrail(userId: string, hours = 12): Promise<TrailPoint[]> {
+  const { data, error } = await supabase.rpc('circle_member_trail', { p_uid: userId, p_hours: hours });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    lat: r.lat as number,
+    lng: r.lng as number,
+    at: r.at as string,
   }));
 }

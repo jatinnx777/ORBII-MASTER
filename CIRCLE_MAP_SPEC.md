@@ -20,45 +20,29 @@ mesh; build it best-in-class.
 - **Privacy-first**: strictly opt-in, only visible to your own circles, pausable,
   RLS-enforced (`shares_circle_with`).
 
-## Roadmap to make it best-in-class (research-backed)
-Ordered by value. The starred items are what turns this into a paid campus product.
+## The ONLY two things we build here (founder decision, Aug 2026)
+Everything else on the old roadmap is cut. Just these two, done really well:
 
-1. **Location history UI (breadcrumbs).** "Where was she at 9:40?" Life360's most-
-   loved premium feature. Data is already stored; add a timeline + trail on the
-   map (`circle_member_trail` is ready). Free = today only; Plus = 7–30 days.
-2. **★ Campus control-room (web dashboard).** The B2B money-maker: a browser
-   dashboard for the college safety office — opted-in students on a campus map,
-   live SOS feed, who has left a campus geofence, incident log, one-click call.
-   Colleges buy the dashboard + bulk student licences (₹200/student). Build on the
-   same `circle_locations` + `sos_events` + geofence data; gate to a campus-admin
-   role.
-3. **★ Safe Walk / Follow Me.** A single trip you share live with your circle OR
-   campus security, auto-expiring at arrival (extends the existing Safe Journey).
-   The #1 campus-safety feature across every competitor.
-4. **Places + arrive alerts.** We alert on leave; add "Arrived at College" too,
-   and show saved places (geofences) on the Circle map as labelled areas.
-5. **Battery + reliability.** Adaptive cadence (slow when still, fast when moving),
-   significant-change updates, a persistent foreground-service notification, and
-   surfacing a member's low battery ("Priya · 12% · updated 4m ago"). Battery is
-   the #1 reason people uninstall Life360 — win here.
-6. **Precision & freshness.** Draw the accuracy circle, hard "updated Xs ago",
-   grey out stale pins, and a "request an update" nudge. Campus buyers ask for
-   "accurate to ~10 m."
-7. **Consent & control.** Per-circle sharing (share with family, not classmates),
-   a pause/ghost mode with a clear "you're paused" banner, and an always-visible
-   "who can see me" list. Trust is the moat vs Life360's privacy backlash.
-8. **Driving / fall / crash detection (later).** Life360's upsell tier; big build,
-   post-launch.
+1. **Location history UI (breadcrumbs).** "Where was she at 9:40?" Tap a member on
+   the Circle map to see their recent trail drawn on the map + a simple timeline.
+   Data is already stored; `circle_member_trail` is ready.
+2. **Precision & freshness.** Draw each member's accuracy circle, a hard
+   "updated Xs ago" with a green/amber/grey freshness dot, and grey out stale
+   pins so you always know how fresh and how precise a position is.
 
-## Monetization
-- **Plus (students/families):** unlimited history, all zones, the Circle map.
-- **★ Campus B2B:** ₹200/student/year bundled, unlocks the control-room dashboard
-  for the safety office. That dashboard is the thing a college signs a cheque for.
+## HARD PRIVACY PRINCIPLE (non-negotiable)
+**ORBII never hands a user's location or data to a college, an institution, or any
+third party. We never sell ORBII's data. Ever.** The campus/B2B model is only ever
+"the college pays so its students HAVE ORBII" — a bulk licence. The college gets
+NO dashboard, NO student locations, NO data access. A student's position is visible
+only to the people in her own circle, whom she chose, enforced by RLS. There is no
+control-room, no admin data feed, and there never will be. This is the whole point
+of a trustworthy safety app, and it is the line we do not cross.
 
-## Honesty guardrails
+## Guardrails
 - Sharing is opt-in and pausable; never on by default.
-- Only your own circles ever see you (RLS).
-- Say plainly what's live vs in testing. Location sharing is a v1 first cut until
-  proven on real phones (background reliability + battery vary by OEM).
+- Only your own circle ever sees you (RLS via `shares_circle_with`).
+- Location sharing is a v1 first cut until proven on real phones (background
+  reliability + battery vary by OEM).
 
 Related: geofencing (sql/41/57/62), Safe Journey, [[project_orbii]].

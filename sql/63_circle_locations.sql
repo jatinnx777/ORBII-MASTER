@@ -74,10 +74,11 @@ grant execute on function public.clear_circle_location() to authenticated;
 create or replace function public.circle_members_locations()
 returns table (
   user_id uuid, name text, photo_url text,
-  lat double precision, lng double precision, updated_at timestamptz, battery int
+  lat double precision, lng double precision, updated_at timestamptz,
+  battery int, accuracy_m double precision
 )
 language sql security definer set search_path = public as $$
-  select l.user_id, u.name, u.photo_url, l.lat, l.lng, l.updated_at, l.battery
+  select l.user_id, u.name, u.photo_url, l.lat, l.lng, l.updated_at, l.battery, l.accuracy_m
   from circle_locations l
   join users_public u on u.id = l.user_id
   where l.user_id <> auth.uid()
