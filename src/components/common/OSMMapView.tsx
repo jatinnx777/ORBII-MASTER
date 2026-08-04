@@ -27,6 +27,10 @@ export type OSMPolyline = {
   color?: string;
   width?: number;
   dashed?: boolean;
+  // When true, render a filled polygon (a closed area) instead of a line.
+  fill?: boolean;
+  fillColor?: string;
+  fillOpacity?: number;
 };
 
 type Props = {
@@ -46,8 +50,10 @@ type Props = {
   onMapPress?: (coord: GeoPoint) => void;
 };
 
-const TILE_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const TILE_ATTRIBUTION = '© OpenStreetMap';
+// CARTO "Voyager": a clean, modern, high-DPI basemap (looks like a premium app,
+// not the dated raw-OSM tiles). {r} + detectRetina serve @2x tiles on good screens.
+const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+const TILE_ATTRIBUTION = '© OpenStreetMap © CARTO';
 
 function defaultIconHtml(kind: OSMMarker['kind'] = 'helper'): string {
   switch (kind) {
@@ -78,6 +84,9 @@ function serializePolylines(polylines: OSMPolyline[]) {
     color: p.color ?? '#FF0000',
     width: p.width ?? 5,
     dashed: !!p.dashed,
+    fill: !!p.fill,
+    fillColor: p.fillColor ?? p.color ?? '#FF0000',
+    fillOpacity: p.fillOpacity == null ? 0.16 : p.fillOpacity,
   }));
 }
 
@@ -134,7 +143,11 @@ function buildHtml(
   }).setView([${center.latitude}, ${center.longitude}], ${zoom});
 
   L.tileLayer('${TILE_URL}', {
-    maxZoom: 19,
+    maxZoom: 20,
+    subdomains: 'abcd',
+    detectRetina: true,
+    updateWhenIdle: false,
+    keepBuffer: 4,
     attribution: '${TILE_ATTRIBUTION}',
     crossOrigin: true,
   }).addTo(map);
@@ -187,6 +200,19 @@ function buildHtml(
     if (existing) {
       existing.halo.setLatLngs(p.coords);
       existing.line.setLatLngs(p.coords);
+      return;
+    }
+    // Filled area (geofence square): one soft-filled polygon, no halo.
+    if (p.fill) {
+      var poly = L.polygon(p.coords, {
+        color: p.color,
+        weight: p.width,
+        opacity: 0.95,
+        fillColor: p.fillColor,
+        fillOpacity: p.fillOpacity,
+        lineJoin: 'round',
+      }).addTo(map);
+      polylineLayers[p.id] = { halo: poly, line: poly };
       return;
     }
     var halo = L.polyline(p.coords, {

@@ -84,6 +84,9 @@ end $$;
 revoke all on function public.redeem_coupon(text) from public, anon;
 grant execute on function public.redeem_coupon(text) to authenticated;
 
--- A starter code so you can test the flow immediately. Change/remove as you like.
+-- Starter codes. 'ORBII' unlocks Plus for free (the public promo). Change/remove
+-- as you like. (Re-run just these inserts to add them to an existing DB.)
 insert into coupons (code, plan_type) values ('ORBIIPLUS', 'plus')
+  on conflict (code) do nothing;
+insert into coupons (code, plan_type) values ('ORBII', 'plus')
   on conflict (code) do nothing;

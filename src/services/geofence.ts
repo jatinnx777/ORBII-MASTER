@@ -205,19 +205,24 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
       .select('id')
       .single();
 
-    // NEW FLOW: on EXIT we ask the fenced person first instead of alerting the
-    // watchers straight away. She gets a distinct-sound prompt, "did you mean to
-    // leave?" If she confirms, nobody is bothered; if she denies or ignores it,
-    // her circle is told (deny action / a scheduled sweep). This kills false
-    // alarms (leaving on purpose) without losing the real ones. ENTER is just
+    // On EXIT: alert the WHOLE circle immediately (notify-geofence figures out
+    // who left, where, and when, and pushes everyone in their circle). The fenced
+    // person also gets a heads-up that their circle was told. ENTER is just
     // recorded for history.
     if (kind === 'exit' && inserted?.id) {
+      // Fire-and-forget: alert everyone in the circle right away.
+      supabase.functions
+        .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
+        .catch(() => {
+          // Best-effort — a failed push must never throw here or Android may
+          // stop delivering geofence events to us.
+        });
       const { data: g } = await supabase
         .from('geofences')
         .select('label')
         .eq('id', zoneId)
         .maybeSingle();
-      const label = (g as { label?: string } | null)?.label ?? 'a safe zone';
+      const label = (g as { label?: string } | null)?.label ?? 'an area';
       await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
     }
   } catch (err) {

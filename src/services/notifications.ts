@@ -40,12 +40,15 @@ function configure() {
     // bypass — a safety app that buzzes like an SOS for routine events trains
     // people to ignore the real one.
     Notifications.setNotificationChannelAsync('safe-zone', {
-      name: 'Safe zone alerts',
-      description: 'When someone in your circle leaves or enters a safe zone.',
-      importance: Notifications.AndroidImportance.DEFAULT,
-      vibrationPattern: [0, 250],
+      name: 'Geofence alerts',
+      description: 'When someone in your circle leaves a geofenced area.',
+      // HIGH so a "left the area" alert heads-up over whatever they're doing,
+      // for everyone in the circle, not just a silent tray entry.
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 350, 150, 350],
       enableVibrate: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      lightColor: '#8672CE',
       sound: 'default',
     }).catch(() => undefined);
     // YOU left a zone someone set for you. Aimed at the fenced person, not the
