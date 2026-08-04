@@ -62,6 +62,7 @@ export type AppStackParamList = {
   Recordings: undefined;
   DisasterMode: undefined;
   ZoneEditor: undefined;
+  CircleMap: undefined;
   OfflineHelperAlert: { alertId: string };
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;

@@ -526,6 +526,7 @@ export function HomeScreen() {
 
           {/* quick grid */}
           <View style={styles.grid}>
+            <GridTile icon="map-outline" title="Circle map" sub="See your people live" onPress={() => navigation.navigate('CircleMap')} />
             <GridTile icon="locate-outline" title="Geofencing" sub="Alert if they leave an area" onPress={() => navigation.navigate('ZoneEditor')} />
             <GridTile icon="warning-outline" title="Disaster mode" sub="Reach people offline" onPress={() => navigation.navigate('DisasterMode')} />
             <GridTile icon="chatbubbles-outline" title="Community" sub="Share & support" onPress={() => navigation.navigate('CommunityFeed')} />

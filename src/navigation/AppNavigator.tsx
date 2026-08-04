@@ -9,6 +9,7 @@ import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScre
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { ZoneEditorScreen } from '@/screens/Geofence/ZoneEditorScreen';
+import { CircleMapScreen } from '@/screens/Circles/CircleMapScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useEntitlement } from '@/services/entitlements';
 import { PremiumLock } from '@/components/common';
@@ -86,6 +87,20 @@ function GatedZoneEditor() {
   return <ZoneEditorScreen />;
 }
 
+function GatedCircleMap() {
+  const ok = useEntitlement('circle_geofencing');
+  if (!ok) {
+    return (
+      <PremiumLock
+        feature="Circle map"
+        icon="people"
+        blurb="See everyone in your circle live on one map, and know the moment someone leaves a safe area. A circle extra, unlocked with ORBII Plus."
+      />
+    );
+  }
+  return <CircleMapScreen />;
+}
+
 const withHeader = (title: string) => ({
   headerShown: true,
   title,
@@ -154,6 +169,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="ZoneEditor"
         component={GatedZoneEditor}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="CircleMap"
+        component={GatedCircleMap}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
