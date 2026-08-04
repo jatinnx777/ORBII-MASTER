@@ -54,6 +54,9 @@ type Props = {
   circles?: OSMCircle[];
   fitAll?: boolean;
   interactive?: boolean;
+  // Which base layer to show first. Geofencing defaults to 'satellite' so you
+  // can see the actual buildings; most other maps use 'street'.
+  defaultLayer?: 'street' | 'satellite';
   // Show Leaflet's default +/- zoom buttons. Defaults to `interactive`'s
   // value; pass false to hide them while keeping pinch-zoom available.
   showZoomControls?: boolean;
@@ -120,6 +123,7 @@ function buildHtml(
   zoom: number,
   interactive: boolean,
   showZoomControls: boolean,
+  defaultLayer: 'street' | 'satellite',
 ): string {
   return `<!DOCTYPE html>
 <html>
@@ -184,7 +188,7 @@ function buildHtml(
     esri('Reference/World_Boundaries_and_Places'),
   ]);
   var baseLayers = { street: streetLayer, satellite: satelliteLayer };
-  var currentBase = streetLayer.addTo(map);
+  var currentBase = ${defaultLayer === 'satellite' ? 'satelliteLayer' : 'streetLayer'}.addTo(map);
 
   map.on('click', function(e){
     post({ type: 'click', lat: e.latlng.lat, lng: e.latlng.lng });
@@ -261,6 +265,7 @@ function buildHtml(
         color: p.color,
         weight: p.width,
         opacity: 0.95,
+        dashArray: p.dashed ? '6,9' : null,
         fillColor: p.fillColor,
         fillOpacity: p.fillOpacity,
         lineJoin: 'round',
@@ -362,6 +367,7 @@ export function OSMMapView({
   showZoomControls,
   onMarkerPress,
   onMapPress,
+  defaultLayer = 'street',
 }: Props) {
   const zoomControls = showZoomControls ?? interactive;
   const webviewRef = useRef<WebView>(null);
@@ -372,7 +378,7 @@ export function OSMMapView({
   // all updates flow through injectJavaScript. This is what keeps the map
   // from flickering when markers move.
   const initialHtml = useMemo(
-    () => buildHtml(center, zoom, interactive, zoomControls),
+    () => buildHtml(center, zoom, interactive, zoomControls, defaultLayer),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
@@ -438,7 +444,7 @@ export function OSMMapView({
     }
   };
 
-  const [layer, setLayer] = useState<'street' | 'satellite'>('street');
+  const [layer, setLayer] = useState<'street' | 'satellite'>(defaultLayer);
   const toggleLayer = () => {
     const next = layer === 'street' ? 'satellite' : 'street';
     setLayer(next);

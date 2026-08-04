@@ -17,8 +17,12 @@ import type { GeoPoint } from '@/types';
 // seconds) the tiles finish loading, so the "draw" step feels instant.
 
 type Step = 'circle' | 'member' | 'map';
-const MAX_CORNERS = 4;
-const PIN = `<div style="width:16px;height:16px;border-radius:50%;background:${colors.brandDeep};border:3px solid #ffffff;box-shadow:0 3px 9px rgba(0,0,0,0.4)"></div>`;
+// Draw an area with as many corners as the place needs (a sane upper bound so a
+// stray tap-storm can't create a 500-point polygon).
+const MAX_CORNERS = 20;
+function pinHtml(n: number): string {
+  return `<div style="width:24px;height:24px;border-radius:50%;background:${colors.brandDeep};border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:12px">${n}</div>`;
+}
 
 export function ZoneEditorScreen() {
   const navigation = useNavigation();
@@ -115,7 +119,7 @@ export function ZoneEditorScreen() {
 
   const markers: OSMMarker[] =
     step === 'map'
-      ? corners.map((c, i) => ({ id: `corner-${i}`, coordinate: { latitude: c.lat, longitude: c.lng }, html: PIN }))
+      ? corners.map((c, i) => ({ id: `corner-${i}`, coordinate: { latitude: c.lat, longitude: c.lng }, html: pinHtml(i + 1) }))
       : [];
   const polylines: OSMPolyline[] =
     step === 'map' && corners.length >= 2
@@ -123,11 +127,12 @@ export function ZoneEditorScreen() {
           {
             id: 'area',
             coordinates: [...corners, corners[0]].map((c) => ({ latitude: c.lat, longitude: c.lng })),
-            color: colors.brandDeep,
+            color: '#ffffff',
             width: 2.5,
+            dashed: true,
             fill: corners.length >= 3,
             fillColor: colors.brand,
-            fillOpacity: 0.18,
+            fillOpacity: 0.22,
           },
         ]
       : [];
@@ -173,6 +178,7 @@ export function ZoneEditorScreen() {
           style={StyleSheet.absoluteFill}
           center={center}
           zoom={16}
+          defaultLayer="satellite"
           onMapPress={step === 'map' ? onMapPress : undefined}
           markers={markers}
           polylines={polylines}
@@ -194,10 +200,8 @@ export function ZoneEditorScreen() {
               <Ionicons name="hand-left" size={13} color={colors.textInverse} />
               <Text style={styles.hintText}>
                 {corners.length === 0
-                  ? `Tap to fence ${target?.name || 'them'} in`
-                  : corners.length < MAX_CORNERS
-                    ? `${corners.length}/${MAX_CORNERS} corners`
-                    : 'Area set'}
+                  ? `Tap the corners to fence ${target?.name || 'them'} in`
+                  : `${corners.length} corner${corners.length === 1 ? '' : 's'} · tap to add more`}
               </Text>
             </View>
           ) : (
