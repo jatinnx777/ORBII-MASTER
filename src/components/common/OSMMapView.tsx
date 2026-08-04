@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { GeoPoint } from '@/types';
 import { LEAFLET_JS, LEAFLET_CSS } from './leaflet-src';
@@ -166,15 +167,24 @@ function buildHtml(
     attributionControl: false,
   }).setView([${center.latitude}, ${center.longitude}], ${zoom});
 
-  L.tileLayer('${TILE_URL}', {
-    maxZoom: 20,
-    subdomains: 'abcd',
-    detectRetina: true,
-    updateWhenIdle: false,
-    keepBuffer: 4,
+  // Two base layers: a clean street map, and a detailed SATELLITE + labels
+  // (Esri, free, no key) so you can literally see a building/college and place
+  // pins on it even when the map's search or labels miss it.
+  var streetLayer = L.tileLayer('${TILE_URL}', {
+    maxZoom: 20, subdomains: 'abcd', detectRetina: true,
+    updateWhenIdle: false, keepBuffer: 4, crossOrigin: true,
     attribution: '${TILE_ATTRIBUTION}',
-    crossOrigin: true,
-  }).addTo(map);
+  });
+  var esri = function(svc){
+    return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/' + svc + '/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20, crossOrigin: true });
+  };
+  var satelliteLayer = L.layerGroup([
+    esri('World_Imagery'),
+    esri('Reference/World_Transportation'),
+    esri('Reference/World_Boundaries_and_Places'),
+  ]);
+  var baseLayers = { street: streetLayer, satellite: satelliteLayer };
+  var currentBase = streetLayer.addTo(map);
 
   map.on('click', function(e){
     post({ type: 'click', lat: e.latlng.lat, lng: e.latlng.lng });
@@ -323,6 +333,13 @@ function buildHtml(
     setView: function(lat, lng, z){
       map.setView([lat, lng], z == null ? map.getZoom() : z, { animate: true });
     },
+    setLayer: function(name){
+      var next = baseLayers[name];
+      if (!next || next === currentBase) return;
+      map.removeLayer(currentBase);
+      next.addTo(map);
+      currentBase = next;
+    },
   };
 
   post({ type: 'ready' });
@@ -421,6 +438,15 @@ export function OSMMapView({
     }
   };
 
+  const [layer, setLayer] = useState<'street' | 'satellite'>('street');
+  const toggleLayer = () => {
+    const next = layer === 'street' ? 'satellite' : 'street';
+    setLayer(next);
+    if (isReadyRef.current && webviewRef.current) {
+      webviewRef.current.injectJavaScript(`window.__orbiiMap && window.__orbiiMap.setLayer('${next}'); true;`);
+    }
+  };
+
   return (
     <View style={[styles.wrap, style]}>
       <WebView
@@ -436,6 +462,11 @@ export function OSMMapView({
         bounces={false}
         automaticallyAdjustContentInsets={false}
       />
+      {interactive ? (
+        <Pressable onPress={toggleLayer} style={styles.layerBtn} accessibilityRole="button" accessibilityLabel="Toggle satellite">
+          <Text style={styles.layerBtnText}>{layer === 'street' ? 'Satellite' : 'Map'}</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -450,4 +481,19 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'transparent',
   },
+  layerBtn: {
+    position: 'absolute',
+    left: 12,
+    bottom: 12,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  layerBtnText: { fontFamily: 'System', fontSize: 12.5, fontWeight: '700', color: '#211C16' },
 });

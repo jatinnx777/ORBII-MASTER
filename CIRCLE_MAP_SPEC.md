@@ -39,6 +39,15 @@ only to the people in her own circle, whom she chose, enforced by RLS. There is 
 control-room, no admin data feed, and there never will be. This is the whole point
 of a trustworthy safety app, and it is the line we do not cross.
 
+## Cost / scale (survives ₹200/student)
+The write-heavy risk is `circle_location_history`, not `circle_locations` (one
+upserted row per user, bounded). Fixed in sql/64:
+- **Movement-gated breadcrumbs:** `set_circle_location` only appends history when
+  the user moved >50 m or 5 min passed, so a stationary phone writes ~nothing.
+- **Prune cron:** pg_cron wipes breadcrumbs older than 48h hourly, so history can
+  never grow unbounded. (Later: cheaper archive + longer retention for Plus.)
+- Client posts ~every 60 s / 40 m; can be relaxed to 90–120 s if writes bite.
+
 ## Guardrails
 - Sharing is opt-in and pausable; never on by default.
 - Only your own circle ever sees you (RLS via `shares_circle_with`).

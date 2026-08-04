@@ -52,7 +52,7 @@ export function ZoneEditorScreen() {
     }
     setSearching(true);
     searchTimer.current = setTimeout(async () => {
-      setResults(await searchPlaces(q));
+      setResults(await searchPlaces(q, center ? { lat: center.latitude, lng: center.longitude } : undefined));
       setSearching(false);
     }, 350);
     return () => {
