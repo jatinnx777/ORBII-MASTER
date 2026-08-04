@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import type { GeoPoint } from '@/types';
+import { LEAFLET_JS, LEAFLET_CSS } from './leaflet-src';
 
 // OpenStreetMap-based map. Uses Leaflet (MIT) inside a WebView with OSM tiles.
 // Completely free — no Google Maps / Mapbox API key required.
@@ -101,7 +102,7 @@ function buildHtml(
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+<style>${LEAFLET_CSS}</style>
 <style>
   html,body,#map{margin:0;padding:0;height:100%;width:100%;background:#f4f4f4;}
   .leaflet-container{background:#f4f4f4;font-family:-apple-system,Roboto,sans-serif;}
@@ -122,7 +123,7 @@ function buildHtml(
 </head>
 <body>
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+<script>${LEAFLET_JS}</script>
 <script>
 (function(){
   function post(payload){
@@ -333,6 +334,18 @@ export function OSMMapView({
     pushUpdate(markers, polylines, fitAll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [markersKey, polylinesKey, fitAll, pushUpdate]);
+
+  // Recenter when the `center` prop changes (e.g. a place-search result), without
+  // rebuilding the whole map.
+  const centerKey = `${center.latitude},${center.longitude}`;
+  useEffect(() => {
+    if (isReadyRef.current && webviewRef.current) {
+      webviewRef.current.injectJavaScript(
+        `window.__orbiiMap && window.__orbiiMap.setView(${center.latitude}, ${center.longitude}, 16); true;`,
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [centerKey]);
 
   const onMessage = (e: WebViewMessageEvent) => {
     try {

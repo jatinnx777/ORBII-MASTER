@@ -9,6 +9,7 @@ import { useAppSelector } from '@/redux/store';
 import { getCurrentLocation } from '@/services/location';
 import { listCircleMembers, listCircles, type Circle, type CircleMember } from '@/services/circles';
 import { createPolygonZone, syncZoneMonitoring, type Corner } from '@/services/geofence';
+import { searchPlaces, type Place } from '@/services/geocode';
 import type { GeoPoint } from '@/types';
 
 // Full-bleed map with the wizard as floating sheets over it. The map mounts the
@@ -34,6 +35,36 @@ export function ZoneEditorScreen() {
   const [corners, setCorners] = useState<Corner[]>([]);
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Place search (hospital / college / etc.)
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Place[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = query.trim();
+    if (q.length < 3) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimer.current = setTimeout(async () => {
+      setResults(await searchPlaces(q));
+      setSearching(false);
+    }, 350);
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [query]);
+
+  const pickPlace = (p: Place) => {
+    setQuery('');
+    setResults([]);
+    setCenter({ latitude: p.lat, longitude: p.lng });
+  };
 
   // Warm the map + load circles immediately, in parallel.
   useEffect(() => {
@@ -181,6 +212,39 @@ export function ZoneEditorScreen() {
           )}
         </View>
 
+        {step === 'map' ? (
+          <View style={styles.searchWrap} pointerEvents="box-none">
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={18} color={colors.textMuted} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search a place (hospital, college…)"
+                placeholderTextColor={colors.textMuted}
+                style={styles.searchInput}
+                autoCorrect={false}
+              />
+              {searching ? (
+                <ActivityIndicator size="small" color={colors.brandDeep} />
+              ) : query ? (
+                <Pressable onPress={() => { setQuery(''); setResults([]); }} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+            {results.length > 0 ? (
+              <View style={styles.searchResults}>
+                {results.map((p, i) => (
+                  <Pressable key={i} onPress={() => pickPlace(p)} style={({ pressed }) => [styles.searchRow, pressed && styles.pressed]}>
+                    <Ionicons name="location" size={16} color={colors.brandDeep} />
+                    <Text style={styles.searchRowText} numberOfLines={2}>{p.name}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={{ flex: 1 }} pointerEvents="box-none" />
 
         {/* Floating bottom sheet */}
@@ -280,6 +344,28 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
   },
   hintText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textInverse },
+
+  searchWrap: { paddingHorizontal: spacing.md, marginTop: spacing.sm },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.96)',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 11,
+    ...shadows.card,
+  },
+  searchInput: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 14.5, color: colors.textPrimary, paddingVertical: 0 },
+  searchResults: {
+    marginTop: spacing.xs,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    ...shadows.card,
+  },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  searchRowText: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 13.5, color: colors.textPrimary, lineHeight: 18 },
 
   sheet: {
     backgroundColor: colors.surface,
