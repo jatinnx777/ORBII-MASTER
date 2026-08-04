@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -15,8 +14,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Haptics from 'expo-haptics';
 import { appAlert } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
-import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { shakeSOSToggled } from '@/redux/slices/appSlice';
+import { useAppSelector } from '@/redux/store';
 import {
   isListening,
   startListening,
@@ -47,8 +45,6 @@ export function EmergencyScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
   const onTabScroll = useTabBarScroll();
-  const dispatch = useAppDispatch();
-  const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
   const ghost = useAppSelector((s) => s.safetyModes.ghost);
   const deadman = useAppSelector((s) => s.safetyModes.deadman);
   const safeJourney = useAppSelector((s) => s.app.safeJourney);
@@ -187,14 +183,6 @@ export function EmergencyScreen() {
           {/* ── Triggers ── */}
           <Text style={styles.sectionLabel}>MORE TRIGGERS</Text>
           <View style={styles.card}>
-            <ToggleRow
-              icon="phone-portrait"
-              title="Shake to alert"
-              body="Shake your phone hard to start an SOS."
-              value={shakeSOS}
-              onValueChange={(v) => dispatch(shakeSOSToggled(v))}
-            />
-            <View style={styles.divider} />
             <ModeRow
               icon="power"
               title="Button press"
@@ -294,41 +282,6 @@ export function EmergencyScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
-    </View>
-  );
-}
-
-function ToggleRow({
-  icon,
-  title,
-  body,
-  value,
-  disabled,
-  onValueChange,
-}: {
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  title: string;
-  body: string;
-  value: boolean;
-  disabled?: boolean;
-  onValueChange: (v: boolean) => void;
-}) {
-  return (
-    <View style={styles.row}>
-      <View style={[styles.rowIcon, value && styles.rowIconOn]}>
-        <Ionicons name={icon} size={18} color={value ? colors.textInverse : colors.brandDeep} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowBody}>{body}</Text>
-      </View>
-      <Switch
-        value={value}
-        disabled={disabled}
-        onValueChange={onValueChange}
-        trackColor={{ true: colors.brandSoft, false: colors.border }}
-        thumbColor={value ? colors.brand : colors.surface}
-      />
     </View>
   );
 }

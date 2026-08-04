@@ -135,11 +135,13 @@ that honesty is itself part of why they trust you. Never claim it's live.]
 
 ## 6. The line nobody else can draw — consent
 
-> "And the whole time, she is in control of who sees her. ORBII shows her, always,
-> exactly who can see her location, and lets her change it in one tap.
+> "And the whole time, she is in control of who sees her. There's a live map of her
+> own circle, she sees exactly who can see her, and she turns any of it off in one
+> tap. If she wants an alert when someone she loves leaves a safe area, she draws it
+> herself, and only her circle is told.
 >
-> Life360 hides the watching. We put it on the screen. That's not a feature. That's
-> the entire difference between safety and surveillance."
+> Life360 hides the watching. We put it on the screen and hand her the switch. That's
+> not a feature. That's the entire difference between safety and surveillance."
 
 ---
 
@@ -158,7 +160,14 @@ charity. Deliver it confidently, no apology.]
 > get a professional who is guaranteed to come.
 >
 > The free tier is how we protect every woman. The paid tier is how we pay the
-> people who show up. One funds the other."
+> people who show up. One funds the other.
+>
+> And there's a third engine, the one that scales this fastest: campuses. A college
+> pays a flat licence, two hundred and ninety-nine rupees a student, so every student
+> simply has ORBII. Here's the part no competitor will copy: the college gets nothing
+> back. No dashboard, no student locations, no data, ever. They pay so their students
+> are safe, not so they can watch them. That's how we sell to an institution without
+> becoming the surveillance tool we exist to replace."
 
 [If asked about scams/abuse: verified responders are paid, so they're only ever
 dispatched for paying members, which means fake SOS can't farm payouts. Firing is
@@ -271,7 +280,8 @@ down.]
 1. ORBII got rid of the button. It listens.
 2. On-device. Nothing is sold. The opposite of Life360.
 3. It works even with no internet, the alert hops phone to phone over Bluetooth. No competitor does this.
-4. Free safety for everyone, paid guaranteed response on top.
+4. Free safety for everyone, paid guaranteed response on top, and colleges licence it per student.
+5. We sell campuses safety, never surveillance: the college gets zero student data.
 
 ---
 
@@ -319,10 +329,17 @@ first, scale second.
 - **Why not cheaper options:** a sole proprietorship gives zero liability
   protection (dangerous for an app people trust with their safety); an LLP is
   cheaper but investors prefer Pvt Ltd.
-- **Data law:** because we handle location and audio, the DPDP Act 2023 applies.
-  Our posture already fits it: audio is processed on-device and never uploaded, and
-  the user always sees and controls who can see her. The legal spend gets the
-  privacy policy and terms lawyer-reviewed so we're covered.
+- **Data law:** because we handle location and audio, the DPDP Act 2023 applies, and
+  we've already built to it, not just planned for it. Consent is captured up front
+  with a clear notice and an 18-plus gate, a woman can delete every byte we hold in
+  one tap from Settings, location history auto-deletes after 48 hours, and we've
+  named a grievance officer in the app. Audio is processed on-device and never
+  uploaded. The legal spend gets the privacy policy and terms lawyer-reviewed so a
+  professional signs off on what we've built.
+- **Selling to colleges without the data trap:** the campus licence is deliberately
+  "students HAVE ORBII," never "the college can see students." No admin dashboard, no
+  location feed, no data handover, by design and in writing. It's what lets an
+  institution buy safety from us without us becoming Life360.
 - **The one-liner if they probe compliance:** "We built privacy-first on purpose.
   The audio never leaves the phone, and we never sell location. That's not just
   ethics, it's our legal moat and the opposite of why people distrust Life360."

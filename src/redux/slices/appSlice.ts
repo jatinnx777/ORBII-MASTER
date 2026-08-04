@@ -24,11 +24,6 @@ type AppState = {
   // Buzz the phone when an SOS broadcast lands within 2 km. On by default.
   alertVibration: boolean;
   pushEnabled: boolean;
-  // Shake-to-SOS: 3 hard shakes in 1.5 s fires the SOS countdown.
-  // Works while ORBII is in the foreground / lock-screen-on. Background
-  // shake needs a foreground service (planned). On by default — it's the
-  // most reliable hands-free trigger we have.
-  shakeSOS: boolean;
   // Helper Mode: the user volunteers as a nearby helper. Their location is
   // periodically uploaded to helpers_live so others' SOS can find them.
   // Off by default — opt-in only.
@@ -46,7 +41,6 @@ const initialState: AppState = {
   isOnline: true,
   alertVibration: true,
   pushEnabled: false,
-  shakeSOS: true,
   helperMode: false,
   hydrated: false,
   safeJourney: null,
@@ -74,9 +68,6 @@ const appSlice = createSlice({
     },
     pushEnabledSet(state, action: PayloadAction<boolean>) {
       state.pushEnabled = action.payload;
-    },
-    shakeSOSToggled(state, action: PayloadAction<boolean>) {
-      state.shakeSOS = action.payload;
     },
     helperModeSet(state, action: PayloadAction<boolean>) {
       state.helperMode = action.payload;
@@ -113,7 +104,6 @@ export const {
   connectionChanged,
   alertVibrationToggled,
   pushEnabledSet,
-  shakeSOSToggled,
   helperModeSet,
   safeJourneyStarted,
   safeJourneyEnded,

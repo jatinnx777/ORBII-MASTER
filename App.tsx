@@ -75,7 +75,6 @@ import { flushPendingSosAudio } from '@/services/sos-audio';
 // so a headless invocation (app killed mid-SOS) can still find it.
 import { reconcileVictimLocationTask } from '@/services/sos-location-task';
 import { refreshUserRole } from '@/services/roles';
-import { startShakeDetector } from '@/services/shake-detection';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus } from '@/services/voice-limits';
 import { consumeVoiceTestFire } from '@/services/voice-test';
@@ -136,7 +135,6 @@ function RootNavigator() {
       .then(setPinReady)
       .catch(() => setPinReady(false));
   }, []);
-  const shakeSOS = useAppSelector((s) => s.app.shakeSOS);
   const helperMode = useAppSelector((s) => s.app.helperMode);
 
   // Show / hide the persistent lock-screen SOS shortcut as the user
@@ -509,40 +507,6 @@ function RootNavigator() {
     const id = setInterval(post, 60_000);
     return () => clearInterval(id);
   }, [status, safeJourney]);
-
-  // Shake-to-SOS. Three hard shakes in 1.5 s → countdown. Runs while
-  // ORBII is foregrounded; background shake needs a foreground service
-  // we haven't built yet. Default ON because it's the single most
-  // intuitive panic gesture (and the cheapest hands-free trigger we have
-  // now that the wake-word stack is cut).
-  useEffect(() => {
-    // Shake-to-SOS removed for now (declutter). Re-enable by restoring the
-    // status/shakeSOS guard below.
-    if (true) return;
-    if (status !== 'authenticated' || !shakeSOS) return;
-    let handle: { stop: () => void } | null = null;
-    let cancelled = false;
-    (async () => {
-      const h = await startShakeDetector(() => {
-        Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Warning,
-        ).catch(() => undefined);
-        if (navigationRef.isReady()) {
-          // @ts-expect-error - SOSCountdown is in the AppStack only.
-          navigationRef.navigate('SOSCountdown');
-        }
-      });
-      if (cancelled) {
-        h?.stop();
-        return;
-      }
-      handle = h;
-    })();
-    return () => {
-      cancelled = true;
-      handle?.stop();
-    };
-  }, [status, shakeSOS]);
 
   if (!hydrated) return null;
   if (!onboarded) return <OnboardingScreen />;

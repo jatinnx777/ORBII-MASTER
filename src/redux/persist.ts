@@ -19,7 +19,6 @@ type PersistedApp = {
   onboarded?: boolean;
   alertVibration?: boolean;
   pushEnabled?: boolean;
-  shakeSOS?: boolean;
   helperMode?: boolean;
   policyAcceptedAt?: number | null;
 };
@@ -77,7 +76,6 @@ function subscribePersist() {
       next.app.onboarded !== prev.app.onboarded ||
       next.app.alertVibration !== prev.app.alertVibration ||
       next.app.pushEnabled !== prev.app.pushEnabled ||
-      next.app.shakeSOS !== prev.app.shakeSOS ||
       next.app.helperMode !== prev.app.helperMode ||
       next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
     ) {
@@ -85,7 +83,6 @@ function subscribePersist() {
         onboarded: next.app.onboarded,
         alertVibration: next.app.alertVibration,
         pushEnabled: next.app.pushEnabled,
-        shakeSOS: next.app.shakeSOS,
         helperMode: next.app.helperMode,
         policyAcceptedAt: next.app.policyAcceptedAt,
       });
