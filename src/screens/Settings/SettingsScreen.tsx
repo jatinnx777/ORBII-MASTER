@@ -27,6 +27,7 @@ import {
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { deleteMyData } from '@/services/consent';
 import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
@@ -87,6 +88,32 @@ export function SettingsScreen() {
       await ContactMatchService.setEnabled(false);
       setContactMatch(false);
     }
+  };
+
+  // Right to erasure (DPDP Section 12). Hard-deletes everything this user owns,
+  // then signs them out.
+  const handleDeleteData = () => {
+    sheet.confirm({
+      title: 'Delete your account & data?',
+      body: 'This permanently erases your profile, circles, contacts, and all location history from ORBII. It cannot be undone.',
+      destructive: true,
+      confirmLabel: 'Delete everything',
+      icon: 'trash',
+      onConfirm: async () => {
+        const ok = await deleteMyData();
+        if (!ok) {
+          sheet.notify({
+            title: 'Could not delete',
+            body: 'Something went wrong. Please try again, or email privacy@orbii.in and we will erase your data.',
+            tone: 'warning',
+          });
+          return;
+        }
+        await signOutFromGoogle();
+        await clearPin().catch(() => undefined);
+        dispatch(signedOut());
+      },
+    });
   };
 
   const handleSignOut = () => {
@@ -280,6 +307,39 @@ export function SettingsScreen() {
           />
         </Card>
 
+        <SectionHeader title="Data & privacy" />
+        <Card style={styles.rowsCard}>
+          <Row
+            icon="document-text-outline"
+            tint="neutral"
+            label="Privacy Policy"
+            value="What we collect, why, and your rights under the DPDP Act"
+            onPress={() =>
+              Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
+            }
+          />
+          <Divider />
+          <Row
+            icon="shield-checkmark-outline"
+            tint="sage"
+            label="Grievance Officer"
+            value="Questions or complaints about your data? privacy@orbii.in"
+            onPress={() =>
+              Linking.openURL(
+                'mailto:privacy@orbii.in?subject=ORBII%20data%20request',
+              ).catch(() => undefined)
+            }
+          />
+          <Divider />
+          <Row
+            icon="trash-outline"
+            label="Delete my account & data"
+            value="Permanently erase everything ORBII holds about you"
+            destructive
+            onPress={handleDeleteData}
+          />
+        </Card>
+
         <SectionHeader title="Account" />
         <Card style={styles.rowsCard}>
           <Row
@@ -293,6 +353,9 @@ export function SettingsScreen() {
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version {APP_VERSION}</Text>
           <Text style={styles.copyrightText}>{COPYRIGHT_LINE}</Text>
+          <Text style={styles.copyrightText}>
+            Data Protection / Grievance Officer · privacy@orbii.in
+          </Text>
         </View>
       </ScrollView>
     </ScreenContainer>

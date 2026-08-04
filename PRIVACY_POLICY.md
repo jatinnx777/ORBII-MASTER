@@ -1,7 +1,7 @@
 # ORBII — Privacy Policy
 
 **Effective date:** 26 June 2026
-**Last updated:** 26 June 2026
+**Last updated:** 4 August 2026
 
 ORBII ("ORBII", "we", "us", "our") is a personal-safety application that helps
 you get help quickly in an emergency by alerting people you trust and people
@@ -9,6 +9,11 @@ near you. This policy explains what we collect, why, who can see it, and your
 choices. We've tried to keep it plain.
 
 **Contact:** orbiisafety@gmail.com
+**Data Protection / Grievance Officer (DPDP Act, 2023):** privacy@orbii.in
+
+We act as a **Data Fiduciary** under India's Digital Personal Data Protection
+Act, 2023 (the "DPDP Act"). Our lawful basis for processing is your **consent**,
+which we ask for clearly during sign-up and which you can withdraw at any time.
 
 ---
 
@@ -90,8 +95,19 @@ We do **not** collect your contacts list, browsing history, or device files.
 - **Razorpay** — processing payments.
 - Your mobile carrier — if an emergency SMS is sent to your contacts.
 
+**Colleges and institutions:** where a college or organisation pays for ORBII
+licences for its students or members, that only means those people *have* ORBII.
+The institution gets **no dashboard, no student locations, no history, and no
+data access of any kind**. Your location is visible only to the circle you
+choose. We do not build control-room or admin data feeds, and we never hand your
+data to an institution.
+
 We do **not** sell your personal information, and we do **not** share it with
 advertisers.
+
+**Where your data is stored:** our database and authentication are hosted by
+Supabase. We do not transfer your personal data to any country or territory
+restricted by the Government of India under the DPDP Act.
 
 ---
 
@@ -108,8 +124,12 @@ Standard carrier charges may apply.
   account.
 - SOS records (location/time): retained as your safety history; active alerts
   are limited to a short window for nearby users.
+- **Live-location history (circle breadcrumbs): automatically deleted after 48
+  hours.** We do not keep a long-term trail of where you have been.
 - On-device audio: stays on your device until you delete it or uninstall.
 - Diagnostics: kept for a limited period to fix issues.
+- When you delete your account (Settings → Delete my account & data), your
+  personal data is erased without undue delay.
 
 ---
 
@@ -122,20 +142,37 @@ No method is 100% secure, but we work to protect your information.
 
 ---
 
-## 8. Your choices and rights
+## 8. Your rights under the DPDP Act
+As a Data Principal you have the right to:
+- **Access** a summary of the personal data we process about you.
+- **Correction / completion / update** of your data — edit your profile and
+  contacts directly in the app.
+- **Erasure:** delete your account and all associated data yourself in the app
+  (**Settings → Delete my account & data**), or by emailing
+  **privacy@orbii.in**. This erases your profile, circles, contacts, and
+  location history.
+- **Withdraw consent** at any time (turn off location sharing, revoke
+  permissions, or delete your account). Withdrawing does not affect processing
+  already carried out.
+- **Grievance redressal:** contact our Grievance Officer at **privacy@orbii.in**.
+  We aim to respond within the timelines set by the DPDP Act.
+- **Nominate** another individual to exercise your rights in the event of death
+  or incapacity — email us to register a nominee.
 - **Permissions:** you control location, microphone, notifications, and SMS
   permissions in your device settings; the app still works (with reduced
   features) if you decline.
-- **Access / correction / deletion:** you can edit your profile and contacts in
-  the app, and you can request deletion of your account and associated data by
-  emailing **orbiisafety@gmail.com**. We comply with applicable laws,
-  including India's Digital Personal Data Protection Act, 2023.
+
+You may also lodge a complaint with the Data Protection Board of India.
 
 ---
 
-## 9. Children
-ORBII is intended for users aged 16 and above and is not directed at children
-under 13. We do not knowingly collect data from children under 13.
+## 9. Age and children
+ORBII is intended for users **aged 18 and above**. You must confirm you are 18
+or older when you create an account. We do not knowingly let a person under 18
+create an account on their own. Where the law permits a minor to use ORBII (for
+example, for their safety), we require **verifiable consent of a parent or
+lawful guardian** before processing the minor's data, and we do not track or
+profile children or serve them advertising.
 
 ---
 

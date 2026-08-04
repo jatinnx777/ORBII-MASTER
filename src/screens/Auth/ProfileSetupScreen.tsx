@@ -5,6 +5,7 @@ import {
   Easing,
   Image,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   StyleSheet,
@@ -26,6 +27,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, profileUpdated } from '@/redux/slices/userSlice';
 import { updateProfile } from '@/services/auth';
+import { recordConsent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { isUsernameAvailable } from '@/services/users-public';
 import {
@@ -67,6 +69,9 @@ export function ProfileSetupScreen() {
   const [phoneConfirm, setPhoneConfirm] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // DPDP consent gate. Must be accepted (18+ and privacy notice) before the
+  // user can enter any setup, so we never process data without a lawful basis.
+  const [consented, setConsented] = useState(false);
 
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
   const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
@@ -183,6 +188,19 @@ export function ProfileSetupScreen() {
     }
   };
 
+  if (!consented) {
+    return (
+      <ScreenContainer scroll>
+        <ConsentGate
+          onAccept={async () => {
+            await recordConsent('en');
+            setConsented(true);
+          }}
+        />
+      </ScreenContainer>
+    );
+  }
+
   return (
     <ScreenContainer scroll>
       <KeyboardAvoidingView
@@ -258,6 +276,112 @@ export function ProfileSetupScreen() {
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
+  );
+}
+
+// DPDP Act 2023, Section 5/6 — a clear, itemised notice with a free, specific,
+// unambiguous, *unticked* opt-in. Both boxes must be checked to continue, and we
+// log the consent (version + language + 18+) before any setup begins.
+function ConsentGate({ onAccept }: { onAccept: () => Promise<void> }) {
+  const [adult, setAdult] = useState(false);
+  const [agree, setAgree] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const ready = adult && agree;
+
+  const points: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
+    { icon: 'mic-off-outline', text: 'Your voice is checked only on your phone. No audio ever leaves your device or reaches our servers.' },
+    { icon: 'location-outline', text: 'Location is shared only when you turn it on, and only with the circle you choose. You can pause it any time.' },
+    { icon: 'time-outline', text: 'Location history is auto-deleted after 48 hours.' },
+    { icon: 'lock-closed-outline', text: 'We never sell your data, and never give it to your college or any third party.' },
+  ];
+
+  return (
+    <View style={styles.body}>
+      <View style={styles.titleBlock}>
+        <Mascot pose="wave" size={110} style={styles.stepMascot} />
+        <Text style={styles.eyebrow}>BEFORE WE BEGIN</Text>
+        <Text style={styles.h1}>Your privacy, in plain words</Text>
+        <Text style={styles.sub}>
+          ORBII is built to protect you. Here is exactly what we do with your data.
+        </Text>
+      </View>
+
+      <View style={styles.consentCard}>
+        {points.map((p) => (
+          <View key={p.text} style={styles.consentPoint}>
+            <Ionicons name={p.icon} size={18} color={colors.brandDeep} style={{ marginTop: 1 }} />
+            <Text style={styles.consentPointText}>{p.text}</Text>
+          </View>
+        ))}
+      </View>
+
+      <ConsentCheck
+        checked={adult}
+        onToggle={() => setAdult((v) => !v)}
+        label="I am 18 years of age or older."
+      />
+      <ConsentCheck
+        checked={agree}
+        onToggle={() => setAgree((v) => !v)}
+        label="I have read and agree to the Privacy Policy and Terms."
+        linkLabel="Read the Privacy Policy"
+        onLink={() => Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)}
+      />
+
+      <View style={styles.footer}>
+        <Button
+          label="Agree & continue"
+          disabled={!ready || busy}
+          loading={busy}
+          onPress={async () => {
+            setBusy(true);
+            try {
+              await onAccept();
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+        <Text style={[styles.muted, { textAlign: 'center' }]}>
+          You can delete all your data any time from Settings.
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function ConsentCheck({
+  checked,
+  onToggle,
+  label,
+  linkLabel,
+  onLink,
+}: {
+  checked: boolean;
+  onToggle: () => void;
+  label: string;
+  linkLabel?: string;
+  onLink?: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onToggle}
+      style={styles.checkRow}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked }}
+    >
+      <View style={[styles.checkbox, checked && styles.checkboxOn]}>
+        {checked ? <Ionicons name="checkmark" size={15} color="#fff" /> : null}
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.checkLabel}>{label}</Text>
+        {linkLabel ? (
+          <Pressable onPress={onLink} hitSlop={8}>
+            <Text style={styles.linkText}>{linkLabel}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -624,6 +748,53 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 12.5,
     color: colors.error,
+  },
+  consentCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.md,
+    marginBottom: spacing.lg,
+  },
+  consentPoint: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+  },
+  consentPointText: {
+    flex: 1,
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary,
+  },
+  checkRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    alignItems: 'flex-start',
+    marginBottom: spacing.md,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: colors.brandMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxOn: {
+    backgroundColor: colors.brandDeep,
+    borderColor: colors.brandDeep,
+  },
+  checkLabel: {
+    fontFamily: fontFamilies.interMedium,
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: colors.textPrimary,
   },
   footer: {
     marginTop: spacing.lg,
