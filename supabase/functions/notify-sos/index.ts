@@ -201,24 +201,18 @@ Deno.serve(async (req) => {
       );
     }
 
-    // 5. VERIFIED HELPERS — only for a PREMIUM victim with a known location.
+    // 5. VERIFIED HELPERS — a PAID-ONLY feature (anti-abuse model).
     // Staged: 2 km now, widen to 5 km after 40 s only if nobody has accepted and
     // the SOS is still live. Circle members are excluded so nobody is
     // double-pushed, and stage 2 skips whoever stage 1 already got.
-    // NEW MODEL: verified-helper dispatch is FREE for everyone. Premium is
-    // unlimited; a free victim gets 2 per calendar month. try_consume_free_dispatch
-    // (sql/56) enforces the monthly cap server-side and consumes a slot for free
-    // users. Beyond the cap, the free victim still gets nearby community
-    // responders below (section 6), which always run for non-premium victims.
+    // MODEL: verified-helper dispatch is for PREMIUM victims only. A free victim
+    // gets 0 verified dispatches — they still reach their own circle (section 4)
+    // and nearby community responders (section 6). Gating the vetted, paid pool
+    // to real subscribers removes the incentive to farm free help and keeps
+    // helper payouts tied to paying users.
     let stage1Helpers = 0;
-    let canDispatchHelpers = false;
-    if (sos.lat != null && sos.lng != null) {
-      const { data: gate } = await admin.rpc('try_consume_free_dispatch', {
-        p_uid: victim,
-        p_is_premium: victimIsPremium,
-      });
-      canDispatchHelpers = (gate as { allowed?: boolean } | null)?.allowed === true;
-    }
+    const canDispatchHelpers =
+      victimIsPremium && sos.lat != null && sos.lng != null;
     if (canDispatchHelpers) {
       const sosLite = {
         id: sos.id,

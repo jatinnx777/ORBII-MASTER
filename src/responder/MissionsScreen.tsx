@@ -33,6 +33,10 @@ import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
+// Monthly help quota (helper_help_status RPC, sql/66). cap >= 9999 means Elite
+// (effectively unlimited).
+type HelpQuota = { cap: number; used: number; remaining: number };
+
 const LEVEL_TINT: Record<GuardianLevel, { bg: string; fg: string }> = {
   Bronze: { bg: '#F3E7D6', fg: '#A9743B' },
   Silver: { bg: '#E9ECEF', fg: '#6B7280' },
@@ -49,20 +53,30 @@ export function MissionsScreen() {
   const [hp, setHp] = useState<HelperProfile | null>(null);
   const [stats, setStats] = useState<HelperStats | null>(null);
   const [wallet, setWallet] = useState<CoinWallet | null>(null);
+  const [quota, setQuota] = useState<HelpQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [online, setOnline] = useState(isHelperModeRunning());
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
-    const [p, s, w] = await Promise.all([
+    const [p, s, w, q] = await Promise.all([
       loadHelperProfileSafe(profile.uid),
       loadHelperStats(),
       getCoinWallet(),
+      (async () => {
+        try {
+          const r = await supabase.rpc('helper_help_status');
+          return (r.data as HelpQuota | null) ?? null;
+        } catch {
+          return null;
+        }
+      })(),
     ]);
     setHp(p);
     setStats(s);
     setWallet(w);
+    setQuota(q);
     setLoading(false);
   }, [profile?.uid]);
 
@@ -231,6 +245,41 @@ export function MissionsScreen() {
                 </View>
               </View>
 
+              {/* Monthly help quota — scales with Guardian level (sql/66). */}
+              {verified && quota ? (
+                <View style={styles.quotaCard}>
+                  <View style={styles.quotaHead}>
+                    <Text style={styles.sectionLabel}>HELPS THIS MONTH</Text>
+                    <Text style={styles.quotaCount}>
+                      {quota.used}
+                      <Text style={styles.quotaCap}>
+                        {' / '}
+                        {quota.cap >= 9999 ? '∞' : quota.cap}
+                      </Text>
+                    </Text>
+                  </View>
+                  <View style={styles.quotaTrack}>
+                    <View
+                      style={[
+                        styles.quotaFill,
+                        {
+                          width: `${
+                            quota.cap >= 9999
+                              ? 12
+                              : Math.min(100, Math.round((quota.used / quota.cap) * 100))
+                          }%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.quotaSub}>
+                    {quota.cap >= 9999
+                      ? 'Elite level · unlimited helps.'
+                      : `${quota.remaining} left · resets on the 1st · level up to raise your limit`}
+                  </Text>
+                </View>
+              ) : null}
+
               {/* ORBII coins — no money shown here, just coins + the rate */}
               <Pressable
                 style={styles.earnCard}
@@ -259,7 +308,7 @@ export function MissionsScreen() {
                 <View style={styles.statsRow}>
                   <Stat value={stats?.helped ?? hp?.lifetimeResponses ?? 0} label="People assisted" />
                   <View style={styles.statDivider} />
-                  <Stat value={0} label="Missions today" />
+                  <Stat value={quota?.used ?? 0} label="This month" />
                 </View>
               </View>
 
@@ -369,6 +418,13 @@ const styles = StyleSheet.create({
   levelText: { fontFamily: fontFamilies.poppinsBold, fontSize: 13 },
   trustNum: { fontFamily: fontFamilies.poppinsBold, fontSize: 26, color: colors.sageDeep },
   miniLabel: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
+  quotaCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.sm, ...shadows.card },
+  quotaHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  quotaCount: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary },
+  quotaCap: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textMuted },
+  quotaTrack: { height: 8, borderRadius: 4, backgroundColor: colors.divider, overflow: 'hidden' },
+  quotaFill: { height: '100%', borderRadius: 4, backgroundColor: colors.sage },
+  quotaSub: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
   earnCard: {
     backgroundColor: colors.sageSoft,
     borderRadius: radius.xxl,

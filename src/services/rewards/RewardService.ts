@@ -24,14 +24,19 @@ export type RewardRow = {
 };
 
 export const RewardService = {
-  /** Helper accepted an SOS → open a server rescue event. Returns event id. */
+  /**
+   * Helper accepted an SOS → open a server rescue event.
+   * `limitReached` is true when the helper has hit their monthly help cap
+   * (enforced in rescue_accept, sql/66) so the UI can explain why nothing
+   * happened instead of failing silently.
+   */
   async accept(input: {
     sosId: string;
     victimId: string;
     sosCreatedIso?: string | null;
     deviceId: string;
     mockLocation: boolean;
-  }): Promise<string | null> {
+  }): Promise<{ id: string | null; limitReached: boolean }> {
     const { data, error } = await supabase.rpc('rescue_accept', {
       p_sos: input.sosId,
       p_victim: input.victimId,
@@ -39,8 +44,13 @@ export const RewardService = {
       p_device: input.deviceId,
       p_mock: input.mockLocation,
     });
-    if (error) return null;
-    return (data as string) ?? null;
+    if (error) {
+      const limitReached = /monthly_help_limit_reached/i.test(
+        `${error.message} ${error.hint ?? ''}`,
+      );
+      return { id: null, limitReached };
+    }
+    return { id: (data as string) ?? null, limitReached: false };
   },
 
   async reportMovement(eventId: string, roadMeters: number, mock: boolean): Promise<void> {

@@ -32,6 +32,7 @@ import {
 } from '@/components/common';
 import { HelplinesCard } from '@/components/common';
 import { PinPrompt } from '@/components/common';
+import { appAlert } from '@/components/common';
 import { submitArrivalCode } from '@/services/arrival-codes';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
@@ -194,14 +195,23 @@ export function HelperNavigationScreen() {
     let alive = true;
     (async () => {
       const deviceId = await FraudDetectionService.getDeviceId();
-      const eventId = await RewardService.accept({
+      const { id: eventId, limitReached } = await RewardService.accept({
         sosId,
         victimId,
         sosCreatedIso: sosCreatedMs ? new Date(sosCreatedMs).toISOString() : null,
         deviceId,
         mockLocation: false,
       });
-      if (!alive || !eventId) return;
+      if (!alive) return;
+      if (limitReached) {
+        appAlert(
+          'Monthly help limit reached',
+          "You've reached your help limit for this month. It resets on the 1st, and your limit grows as your Guardian level goes up.",
+          [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+        return;
+      }
+      if (!eventId) return;
       rewardEventId.current = eventId;
       geofence.current = createGeofence(victim, {
         onArrived: () => {

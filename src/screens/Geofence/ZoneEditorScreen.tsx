@@ -105,6 +105,8 @@ export function ZoneEditorScreen() {
     setStep('map');
   };
 
+  const stepIndex = step === 'circle' ? 1 : step === 'member' ? 2 : 3;
+
   const goBackStep = () => {
     if (step === 'map') setStep('member');
     else if (step === 'member') setStep('circle');
@@ -254,9 +256,34 @@ export function ZoneEditorScreen() {
         {/* Floating bottom sheet */}
         <View style={styles.sheet}>
           <View style={styles.handle} />
+
+          <View style={styles.stepBar}>
+            {['Circle', 'Member', 'Area'].map((s, i) => {
+              const n = i + 1;
+              const active = n === stepIndex;
+              const done = n < stepIndex;
+              return (
+                <React.Fragment key={s}>
+                  <View style={styles.stepItem}>
+                    <View style={[styles.stepDot, active && styles.stepDotActive, done && styles.stepDotDone]}>
+                      {done ? (
+                        <Ionicons name="checkmark" size={12} color={colors.textInverse} />
+                      ) : (
+                        <Text style={[styles.stepNum, active && styles.stepNumActive]}>{n}</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.stepLabel, active && styles.stepLabelActive]}>{s}</Text>
+                  </View>
+                  {i < 2 ? <View style={[styles.stepLine, done && styles.stepLineDone]} /> : null}
+                </React.Fragment>
+              );
+            })}
+          </View>
+
           {step === 'circle' ? (
             <>
               <Text style={styles.sheetTitle}>Choose a circle</Text>
+              <Text style={styles.sheetSub}>Pick the group this safe zone belongs to.</Text>
               {loading ? (
                 <ActivityIndicator color={colors.brand} style={{ marginVertical: spacing.lg }} />
               ) : circles.length === 0 ? (
@@ -276,6 +303,7 @@ export function ZoneEditorScreen() {
           ) : step === 'member' ? (
             <>
               <Text style={styles.sheetTitle}>Who do you want to fence?</Text>
+              <Text style={styles.sheetSub}>Your circle is alerted the moment they leave the area.</Text>
               {loadingMembers ? (
                 <ActivityIndicator color={colors.brand} style={{ marginVertical: spacing.lg }} />
               ) : members.length === 0 ? (
@@ -294,20 +322,50 @@ export function ZoneEditorScreen() {
             </>
           ) : (
             <>
-              <TextInput
-                value={label}
-                onChangeText={setLabel}
-                placeholder="Name the area (College, Home, Hostel)"
-                placeholderTextColor={colors.textMuted}
-                style={styles.input}
-                maxLength={40}
-              />
+              <View style={styles.fenceChip}>
+                <View style={styles.chipAvatar}>
+                  <Text style={styles.chipAvatarText}>
+                    {(target?.name || target?.username || '?').slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.chipText} numberOfLines={1}>
+                  Fencing <Text style={styles.chipName}>{target?.name || target?.username || 'them'}</Text>
+                </Text>
+                <View style={[styles.cornerTag, corners.length >= 3 && styles.cornerTagOk]}>
+                  <Ionicons
+                    name={corners.length >= 3 ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={13}
+                    color={corners.length >= 3 ? colors.sageDeep : colors.textMuted}
+                  />
+                  <Text style={[styles.cornerTagText, corners.length >= 3 && styles.cornerTagTextOk]}>
+                    {corners.length}/3+ corners
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.inputWrap}>
+                <Ionicons name="pricetag-outline" size={17} color={colors.textMuted} />
+                <TextInput
+                  value={label}
+                  onChangeText={setLabel}
+                  placeholder="Name the area (College, Home, Hostel)"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.inputField}
+                  maxLength={40}
+                />
+              </View>
               <Pressable
                 onPress={save}
                 disabled={busy || corners.length < 3}
                 style={({ pressed }) => [styles.cta, (busy || corners.length < 3) && styles.ctaDim, pressed && styles.pressed]}
               >
-                <Text style={styles.ctaText}>{busy ? 'Saving…' : `Save area for ${target?.name || 'them'}`}</Text>
+                {busy ? (
+                  <ActivityIndicator color={colors.textInverse} />
+                ) : (
+                  <>
+                    <Ionicons name="shield-checkmark" size={18} color={colors.textInverse} />
+                    <Text style={styles.ctaText}>Save area for {target?.name || 'them'}</Text>
+                  </>
+                )}
               </Pressable>
             </>
           )}
@@ -385,8 +443,46 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 16,
   },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.xs },
-  sheetTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textPrimary, marginBottom: spacing.xs },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.sm },
+
+  stepBar: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md },
+  stepItem: { alignItems: 'center', gap: 4 },
+  stepDot: {
+    width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surfaceMuted, borderWidth: 1.5, borderColor: colors.border,
+  },
+  stepDotActive: { backgroundColor: colors.brandSoft, borderColor: colors.brandDeep },
+  stepDotDone: { backgroundColor: colors.brandDeep, borderColor: colors.brandDeep },
+  stepNum: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, color: colors.textMuted },
+  stepNumActive: { color: colors.brandDeep },
+  stepLabel: { fontFamily: fontFamilies.interMedium, fontSize: 11, color: colors.textMuted },
+  stepLabelActive: { color: colors.textPrimary, fontFamily: fontFamilies.poppinsSemiBold },
+  stepLine: { flex: 1, height: 1.5, backgroundColor: colors.border, marginHorizontal: 6, marginBottom: 16 },
+  stepLineDone: { backgroundColor: colors.brandDeep },
+
+  sheetTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textPrimary },
+  sheetSub: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textSecondary, marginTop: 2, marginBottom: spacing.xs },
+
+  fenceChip: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.surfaceMuted, borderRadius: radius.lg,
+    paddingHorizontal: spacing.sm, paddingVertical: spacing.sm, marginBottom: spacing.sm,
+  },
+  chipAvatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  chipAvatarText: { fontFamily: fontFamilies.poppinsBold, fontSize: 13, color: colors.brandDeep },
+  chipText: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 13.5, color: colors.textSecondary },
+  chipName: { fontFamily: fontFamilies.poppinsSemiBold, color: colors.textPrimary },
+  cornerTag: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  cornerTagOk: { backgroundColor: colors.sageSoft },
+  cornerTagText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, color: colors.textMuted },
+  cornerTagTextOk: { color: colors.sageDeep },
+
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    backgroundColor: colors.surfaceMuted, borderRadius: radius.lg,
+    paddingHorizontal: spacing.md, paddingVertical: 2,
+  },
+  inputField: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 15, color: colors.textPrimary, paddingVertical: 14 },
   sheetScroll: { maxHeight: 260 },
   empty: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.lg },
 
@@ -405,7 +501,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
-  cta: { backgroundColor: colors.brand, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center', marginTop: spacing.xs },
+  cta: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.brand, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
   ctaDim: { opacity: 0.5 },
   ctaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textInverse },
   pressed: { opacity: 0.85 },

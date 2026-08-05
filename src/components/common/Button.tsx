@@ -69,8 +69,9 @@ export function Button({
       <Pressable
         testID={testID}
         onPress={onPress}
-        onPressIn={() => !isDisabled && animateTo(0.97)}
+        onPressIn={() => !isDisabled && animateTo(0.96)}
         onPressOut={() => animateTo(1)}
+        android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
         disabled={isDisabled}
         accessibilityRole="button"
         accessibilityState={{ disabled: isDisabled, busy: loading }}
@@ -97,12 +98,13 @@ export function Button({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 58,
+    minHeight: 56,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
   },
   content: {
     flexDirection: 'row',
@@ -118,18 +120,18 @@ const styles = StyleSheet.create({
   primary: {
     backgroundColor: colors.peach,
     shadowColor: colors.peachDeep,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    elevation: 3,
   },
   danger: {
     backgroundColor: colors.coral,
     shadowColor: colors.coral,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.26,
+    shadowRadius: 18,
+    elevation: 3,
   },
   secondary: {
     backgroundColor: colors.surface,

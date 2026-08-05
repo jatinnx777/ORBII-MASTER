@@ -50,3 +50,6 @@ serviceAccountKey.json
 # Release APK: 130MB+, exceeds GitHub's 100MB file limit.
 # Distributed as a GitHub release asset, not a repo file.
 ORBII-latest.apk
+
+# Co-founder ML repo, cloned for review (has its own git history)
+ORBII-DATASHEET/
