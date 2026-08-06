@@ -1,4 +1,4 @@
--- 69_responder_slots.sql — Uber-style responder matching + no-show recovery.
+-- 69_responder_slots.sql --- Uber-style responder matching + no-show recovery.
 --
 -- PROBLEM this fixes:
 --   1) Everyone who accepts an SOS used to get in (50 helpers -> a mob, and you
@@ -236,7 +236,7 @@ begin
       open_slots := open_slots - 1;
     end loop;
 
-    -- (c) Starved (nobody assigned, nobody on standby) → re-broadcast, throttled.
+    -- (c) Starved (nobody assigned, nobody on standby) --- re-broadcast, throttled.
     if not exists (select 1 from public.rescue_events where sos_id = sos.id and status = 'assigned')
        and not exists (select 1 from public.rescue_events where sos_id = sos.id and status = 'standby')
        and (sos.last_rebroadcast_at is null or sos.last_rebroadcast_at < now() - interval '90 seconds')
@@ -248,7 +248,7 @@ begin
         url := 'https://henbkyjefhzmxqozlczd.supabase.co/functions/v1/notify-sos',
         headers := jsonb_build_object(
           'Content-Type', 'application/json',
-          'Authorization', 'Bearer PASTE_SAME_ANON_KEY_AS_sql_58'
+          'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhlbmJreWplZmh6bXhxb3psY3pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1NDkzNjksImV4cCI6MjA5MjEyNTM2OX0.JpNZwyzD75f75C8FNztE8_GMDAJKI-UKJMps6larhcA'
         ),
         body := jsonb_build_object('sosId', sos.id)
       );
