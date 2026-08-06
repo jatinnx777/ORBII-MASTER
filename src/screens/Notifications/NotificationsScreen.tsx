@@ -188,9 +188,14 @@ export function NotificationsScreen() {
                   {groupByTime(activity).map((g) => (
                     <View key={g.label}>
                       <Text style={styles.timeLabel}>{g.label}</Text>
-                      {g.items.map((item) => (
-                        <ActivityRow key={item.id} item={item} />
-                      ))}
+                      <View style={styles.groupCard}>
+                        {g.items.map((item, idx) => (
+                          <View key={item.id}>
+                            {idx > 0 ? <View style={styles.rowDivider} /> : null}
+                            <ActivityRow item={item} />
+                          </View>
+                        ))}
+                      </View>
                     </View>
                   ))}
                 </Section>
@@ -208,16 +213,20 @@ export function NotificationsScreen() {
             title="From the Community"
             hint="Likes and replies on your posts. Tap to open the thread."
           >
-            {community.map((n) => {
-              const { title, body } = describeCommunityNotification(n);
-              return (
-                <ActivityRow
-                  key={`cn_${n.id}`}
-                  item={{ id: `cn_${n.id}`, title, body, createdAt: n.createdAt, icon: communityIcon(n.type) }}
-                  onPress={() => navigation.navigate('CommunityFeed')}
-                />
-              );
-            })}
+            <View style={styles.groupCard}>
+              {community.map((n, idx) => {
+                const { title, body } = describeCommunityNotification(n);
+                return (
+                  <View key={`cn_${n.id}`}>
+                    {idx > 0 ? <View style={styles.rowDivider} /> : null}
+                    <ActivityRow
+                      item={{ id: `cn_${n.id}`, title, body, createdAt: n.createdAt, icon: communityIcon(n.type) }}
+                      onPress={() => navigation.navigate('CommunityFeed')}
+                    />
+                  </View>
+                );
+              })}
+            </View>
           </Section>
         )}
       </ScrollView>
@@ -417,7 +426,9 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   cardBtns: { flexDirection: 'row', justifyContent: 'flex-end', gap: spacing.sm },
 
-  row: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.sm, alignItems: 'center' },
+  groupCard: { backgroundColor: colors.surface, borderRadius: radius.lg, paddingHorizontal: spacing.md, ...shadows.card },
+  rowDivider: { height: 1, backgroundColor: colors.divider, marginLeft: 54 },
+  row: { flexDirection: 'row', gap: spacing.md, paddingVertical: spacing.md, alignItems: 'center' },
   rowBodyWrap: { flex: 1, gap: 2 },
   iconWrap: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },

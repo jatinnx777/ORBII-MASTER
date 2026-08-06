@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { appAlert, PinPrompt } from '@/components/common';
 import { isPinSet, verifyPin } from '@/services/safety-pin';
 import { uploadPreRoll } from '@/services/sos-audio';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import {
   Animated,
   AppState,
@@ -71,6 +72,41 @@ export function CountdownScreen() {
   const [triggering, setTriggering] = useState(false);
   const cancelledRef = useRef(false);
   const triggeredRef = useRef(false);
+
+  // Record from the INSTANT the countdown starts, so the 5 seconds before the
+  // alert (often the moment of the threat) aren't lost. It's saved as the SOS
+  // pre-roll — a SEPARATE clip from the main recording ActiveSOS makes, so the
+  // two never fight over the mic (this one is stopped before that one starts).
+  // Manual/button SOS only: voice triggers already keep their own pre-roll, and
+  // starting a second recorder there could clash with the voice detector's mic.
+  const countdownRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recActiveRef = useRef(false);
+  useEffect(() => {
+    if (isTest || isVoice || isInstant) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const perm = await AudioModule.requestRecordingPermissionsAsync();
+        if (!perm.granted || cancelled) return;
+        await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+        if (cancelled) return;
+        await countdownRecorder.prepareToRecordAsync();
+        countdownRecorder.record();
+        recActiveRef.current = true;
+      } catch {
+        // Best-effort — recording must NEVER block or fail the SOS.
+      }
+    })();
+    return () => {
+      cancelled = true;
+      // Cancelled countdown (or any unmount before trigger stopped it): drop it.
+      if (recActiveRef.current) {
+        recActiveRef.current = false;
+        void countdownRecorder.stop().catch(() => undefined);
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Duress guard state (voice triggers only, and only when a PIN exists).
   const [pinGuarded, setPinGuarded] = useState(false);
@@ -209,6 +245,18 @@ export function CountdownScreen() {
         location,
         isTest ? 'test' : 'real',
       );
+      // Stop the countdown recording and keep it as this SOS's pre-roll. Done
+      // BEFORE navigating so the mic is free when ActiveSOS starts the main clip.
+      if (recActiveRef.current) {
+        recActiveRef.current = false;
+        try {
+          await countdownRecorder.stop();
+          const uri = countdownRecorder.uri;
+          if (uri && !isTest) void uploadPreRoll(profile.uid, record.id, uri);
+        } catch {
+          // best-effort — never fail the SOS over a recording
+        }
+      }
       trackEvent('sos_triggered', {
         sosId: record.id,
         contacts: profile.emergencyContacts.length,

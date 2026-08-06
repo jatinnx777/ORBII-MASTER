@@ -409,8 +409,18 @@ export function HomeScreen() {
           <Text style={styles.sectionH}>{selectedCircleName}</Text>
           {members.length === 0 ? (
             <Pressable onPress={() => navigation.navigate('Circles')} style={({ pressed }) => [styles.emptyCircle, pressed && styles.pressed]}>
-              <Ionicons name="person-add" size={20} color={colors.brandDeep} />
-              <Text style={styles.emptyCircleText}>Add family to protect them</Text>
+              <View style={styles.emptyCircleIcon}>
+                <Ionicons name="people" size={22} color={colors.brandDeep} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyCircleTitle}>Build your safety circle</Text>
+                <Text style={styles.emptyCircleBody}>
+                  Add family or friends. The instant you fire an SOS, they all get your live location at once.
+                </Text>
+              </View>
+              <View style={styles.emptyCircleCta}>
+                <Ionicons name="add" size={20} color={colors.textInverse} />
+              </View>
             </Pressable>
           ) : (
             <View style={styles.card}>
@@ -721,8 +731,18 @@ const styles = StyleSheet.create({
 
   sectionH: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary, letterSpacing: -0.3 },
   emptyCircle: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.sm,
-    backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, borderWidth: 1, borderColor: colors.border, borderStyle: 'dashed',
+    flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+    backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md, ...shadows.card,
+  },
+  emptyCircleIcon: {
+    width: 46, height: 46, borderRadius: 23, backgroundColor: colors.brandSoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  emptyCircleTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
+  emptyCircleBody: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textSecondary, marginTop: 2, lineHeight: 17 },
+  emptyCircleCta: {
+    width: 34, height: 34, borderRadius: 17, backgroundColor: colors.brandDeep,
+    alignItems: 'center', justifyContent: 'center',
   },
   emptyCircleText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textSecondary },
   card: { backgroundColor: colors.surface, borderRadius: radius.xl, ...shadows.card, overflow: 'hidden' },

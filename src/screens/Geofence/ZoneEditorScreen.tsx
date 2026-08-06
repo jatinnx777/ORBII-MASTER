@@ -10,6 +10,7 @@ import { getCurrentLocation } from '@/services/location';
 import { listCircleMembers, listCircles, type Circle, type CircleMember } from '@/services/circles';
 import {
   createPolygonZone,
+  deleteZone,
   loadZonesForMember,
   syncZoneMonitoring,
   type Corner,
@@ -176,6 +177,20 @@ export function ZoneEditorScreen() {
         setSavedZones([]);
       }
     }
+  };
+
+  const removeSavedZone = (z: Geofence) => {
+    appAlert(`Delete "${z.label}"?`, 'This safe zone will be removed for good.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setSavedZones((cur) => cur.filter((x) => x.id !== z.id));
+          void deleteZone(z.id);
+        },
+      },
+    ]);
   };
 
   // Reuse a saved area: load its shape, name and hours so the user can just
@@ -418,15 +433,20 @@ export function ZoneEditorScreen() {
                     contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.md }}
                   >
                     {savedZones.map((z) => (
-                      <Pressable key={z.id} onPress={() => reuseZone(z)} style={styles.reuseChip}>
-                        <Ionicons name="bookmark" size={13} color={colors.brandDeep} />
-                        <Text style={styles.reuseChipText} numberOfLines={1}>{z.label}</Text>
-                        {z.activeFrom && z.activeTo ? (
-                          <Text style={styles.reuseChipTime}>
-                            {fmtTime(z.activeFrom)}–{fmtTime(z.activeTo)}
-                          </Text>
-                        ) : null}
-                      </Pressable>
+                      <View key={z.id} style={styles.reuseChip}>
+                        <Pressable onPress={() => reuseZone(z)} style={styles.reuseChipMain} hitSlop={4}>
+                          <Ionicons name="bookmark" size={13} color={colors.brandDeep} />
+                          <Text style={styles.reuseChipText} numberOfLines={1}>{z.label}</Text>
+                          {z.activeFrom && z.activeTo ? (
+                            <Text style={styles.reuseChipTime}>
+                              {fmtTime(z.activeFrom)}–{fmtTime(z.activeTo)}
+                            </Text>
+                          ) : null}
+                        </Pressable>
+                        <Pressable onPress={() => removeSavedZone(z)} hitSlop={6} style={styles.reuseChipDel}>
+                          <Ionicons name="close" size={14} color={colors.textMuted} />
+                        </Pressable>
+                      </View>
                     ))}
                   </ScrollView>
                   <Text style={styles.reuseHint}>or tap the map to draw a new one</Text>
@@ -619,10 +639,12 @@ const styles = StyleSheet.create({
   reuseWrap: { marginBottom: spacing.sm, gap: 6 },
   reuseLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, letterSpacing: 0.8, color: colors.textMuted },
   reuseChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
+    flexDirection: 'row', alignItems: 'center',
     backgroundColor: colors.brandSoft, borderRadius: radius.pill,
-    paddingHorizontal: spacing.md, paddingVertical: 9, maxWidth: 220,
+    paddingLeft: spacing.md, paddingRight: 6, paddingVertical: 5, maxWidth: 240,
   },
+  reuseChipMain: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 },
+  reuseChipDel: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginLeft: 4 },
   reuseChipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
   reuseChipTime: { fontFamily: fontFamilies.interMedium, fontSize: 11, color: colors.brandDeep },
   reuseHint: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.textMuted },

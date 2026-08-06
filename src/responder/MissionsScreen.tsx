@@ -189,7 +189,14 @@ export function MissionsScreen() {
               {/* availability — the centerpiece */}
               <View style={[styles.statusCard, online && styles.statusCardOn]}>
                 <View style={styles.statusRow}>
-                  <View>
+                  <View style={[styles.statusIcon, online && styles.statusIconOn]}>
+                    <Ionicons
+                      name={online ? 'shield-checkmark' : 'shield-outline'}
+                      size={22}
+                      color={online ? colors.sageDeep : colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
                     <Text style={[styles.statusLabel, online && { color: colors.sageDeep }]}>
                       {online ? "You're online" : "You're offline"}
                     </Text>
@@ -375,9 +382,14 @@ const styles = StyleSheet.create({
   },
   verifyTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
   verifyBody: { ...typography.caption, fontSize: 12, color: colors.textSecondary, marginTop: 1 },
-  statusCard: { backgroundColor: colors.surface, borderRadius: radius.xxl, padding: spacing.lg, ...shadows.card },
-  statusCardOn: { backgroundColor: colors.sageSoft },
-  statusRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  statusCard: { backgroundColor: colors.surface, borderRadius: radius.xxl, padding: spacing.lg, borderWidth: 1.5, borderColor: 'transparent', ...shadows.card },
+  statusCardOn: { backgroundColor: colors.sageSoft, borderColor: colors.sage },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  statusIcon: {
+    width: 46, height: 46, borderRadius: 23, backgroundColor: colors.cream,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  statusIconOn: { backgroundColor: colors.surface },
   statusLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary },
   statusSub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, marginTop: 2, maxWidth: 220 },
   livePill: {
