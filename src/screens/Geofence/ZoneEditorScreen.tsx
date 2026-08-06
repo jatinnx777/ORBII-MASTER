@@ -2,13 +2,19 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { appAlert, OSMMapView, type OSMMarker, type OSMPolyline } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getCurrentLocation } from '@/services/location';
 import { listCircleMembers, listCircles, type Circle, type CircleMember } from '@/services/circles';
-import { createPolygonZone, syncZoneMonitoring, type Corner } from '@/services/geofence';
+import {
+  createPolygonZone,
+  loadZonesForMember,
+  syncZoneMonitoring,
+  type Corner,
+  type Geofence,
+} from '@/services/geofence';
 import { searchPlaces, type Place } from '@/services/geocode';
 import type { GeoPoint } from '@/types';
 
@@ -24,8 +30,61 @@ function pinHtml(n: number): string {
   return `<div style="width:24px;height:24px;border-radius:50%;background:${colors.brandDeep};border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:12px">${n}</div>`;
 }
 
+// Scrollable time picker (30-min steps). 'HH:MM' 24h values, 12h labels.
+const WHEEL_ITEM_H = 38;
+const TIME_OPTS: { value: string; label: string }[] = (() => {
+  const out: { value: string; label: string }[] = [];
+  for (let h = 0; h < 24; h++) {
+    for (const m of [0, 30]) {
+      const value = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+      const hr = h % 12 === 0 ? 12 : h % 12;
+      const ap = h < 12 ? 'AM' : 'PM';
+      out.push({ value, label: `${hr}:${String(m).padStart(2, '0')} ${ap}` });
+    }
+  }
+  return out;
+})();
+function fmtTime(v: string): string {
+  return TIME_OPTS.find((t) => t.value === v)?.label ?? v;
+}
+
+function Wheel({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const ref = React.useRef<ScrollView>(null);
+  const startIndex = Math.max(0, TIME_OPTS.findIndex((o) => o.value === value));
+  React.useEffect(() => {
+    const t = setTimeout(() => ref.current?.scrollTo({ y: startIndex * WHEEL_ITEM_H, animated: false }), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <View style={styles.wheel}>
+      <View pointerEvents="none" style={styles.wheelHighlight} />
+      <ScrollView
+        ref={ref}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={WHEEL_ITEM_H}
+        decelerationRate="fast"
+        nestedScrollEnabled
+        contentContainerStyle={{ paddingVertical: WHEEL_ITEM_H }}
+        onMomentumScrollEnd={(e) => {
+          const i = Math.round(e.nativeEvent.contentOffset.y / WHEEL_ITEM_H);
+          const opt = TIME_OPTS[Math.min(TIME_OPTS.length - 1, Math.max(0, i))];
+          if (opt && opt.value !== value) onChange(opt.value);
+        }}
+      >
+        {TIME_OPTS.map((o) => (
+          <View key={o.value} style={styles.wheelItem}>
+            <Text style={[styles.wheelText, o.value === value && styles.wheelTextActive]}>{o.label}</Text>
+          </View>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 export function ZoneEditorScreen() {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const profile = useAppSelector((s) => s.user.profile);
 
   const [step, setStep] = useState<Step>('circle');
@@ -39,6 +98,12 @@ export function ZoneEditorScreen() {
   const [corners, setCorners] = useState<Corner[]>([]);
   const [label, setLabel] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Previously-saved zones for this person (so they can reuse, not redraw).
+  const [savedZones, setSavedZones] = useState<Geofence[]>([]);
+  // The hours the fenced person should be inside the zone (scrollable picker).
+  const [fromTime, setFromTime] = useState('09:00');
+  const [toTime, setToTime] = useState('17:00');
 
   // Place search (hospital / college / etc.)
   const [query, setQuery] = useState('');
@@ -98,11 +163,31 @@ export function ZoneEditorScreen() {
     }
   };
 
-  const pickMember = (m: CircleMember) => {
+  const pickMember = async (m: CircleMember) => {
     setTarget(m);
     setLabel('');
     setCorners([]);
+    setSavedZones([]);
     setStep('map');
+    if (profile?.uid) {
+      try {
+        setSavedZones(await loadZonesForMember(profile.uid, m.userId));
+      } catch {
+        setSavedZones([]);
+      }
+    }
+  };
+
+  // Reuse a saved area: load its shape, name and hours so the user can just
+  // confirm and save instead of drawing it all over again.
+  const reuseZone = (z: Geofence) => {
+    if (z.corners && z.corners.length >= 3) {
+      setCorners(z.corners);
+      setCenter({ latitude: z.lat, longitude: z.lng });
+    }
+    setLabel(z.label);
+    if (z.activeFrom) setFromTime(z.activeFrom);
+    if (z.activeTo) setToTime(z.activeTo);
   };
 
   const stepIndex = step === 'circle' ? 1 : step === 'member' ? 2 : 3;
@@ -156,6 +241,8 @@ export function ZoneEditorScreen() {
         memberId: target.userId,
         label: label.trim(),
         corners,
+        activeFrom: fromTime,
+        activeTo: toTime,
       });
       if (!res.ok) {
         appAlert("Couldn't save the area", res.error);
@@ -164,7 +251,7 @@ export function ZoneEditorScreen() {
       await syncZoneMonitoring(profile.uid);
       appAlert(
         'Area saved',
-        `Your circle will be alerted, with the time, if ${target.name || 'they'} leave "${label.trim()}".`,
+        `Your circle will be alerted, with the time, if ${target.name || 'they'} leave "${label.trim()}" between ${fmtTime(fromTime)} and ${fmtTime(toTime)}.`,
         [{ text: 'Done', onPress: () => navigation.goBack() }],
       );
     } finally {
@@ -191,7 +278,7 @@ export function ZoneEditorScreen() {
         </View>
       )}
 
-      <SafeAreaView style={StyleSheet.absoluteFill} edges={['top', 'bottom']} pointerEvents="box-none">
+      <SafeAreaView style={StyleSheet.absoluteFill} edges={['top']} pointerEvents="box-none">
         {/* Floating top bar */}
         <View style={styles.topBar} pointerEvents="box-none">
           <Pressable onPress={goBackStep} hitSlop={10} style={styles.glassBtn}>
@@ -253,8 +340,8 @@ export function ZoneEditorScreen() {
 
         <View style={{ flex: 1 }} pointerEvents="box-none" />
 
-        {/* Floating bottom sheet */}
-        <View style={styles.sheet}>
+        {/* Bottom sheet, anchored to the screen edge */}
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.md }]}>
           <View style={styles.handle} />
 
           <View style={styles.stepBar}>
@@ -322,6 +409,30 @@ export function ZoneEditorScreen() {
             </>
           ) : (
             <>
+              {savedZones.length > 0 && corners.length === 0 ? (
+                <View style={styles.reuseWrap}>
+                  <Text style={styles.reuseLabel}>REUSE A SAVED AREA</Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ gap: spacing.sm, paddingRight: spacing.md }}
+                  >
+                    {savedZones.map((z) => (
+                      <Pressable key={z.id} onPress={() => reuseZone(z)} style={styles.reuseChip}>
+                        <Ionicons name="bookmark" size={13} color={colors.brandDeep} />
+                        <Text style={styles.reuseChipText} numberOfLines={1}>{z.label}</Text>
+                        {z.activeFrom && z.activeTo ? (
+                          <Text style={styles.reuseChipTime}>
+                            {fmtTime(z.activeFrom)}–{fmtTime(z.activeTo)}
+                          </Text>
+                        ) : null}
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                  <Text style={styles.reuseHint}>or tap the map to draw a new one</Text>
+                </View>
+              ) : null}
+
               <View style={styles.fenceChip}>
                 <View style={styles.chipAvatar}>
                   <Text style={styles.chipAvatarText}>
@@ -353,6 +464,27 @@ export function ZoneEditorScreen() {
                   maxLength={40}
                 />
               </View>
+
+              {corners.length >= 3 ? (
+                <View style={styles.timeCard}>
+                  <Text style={styles.timeCardLabel}>
+                    <Ionicons name="time-outline" size={13} color={colors.textSecondary} />{' '}
+                    Hours they should be inside
+                  </Text>
+                  <View style={styles.timeRow}>
+                    <View style={styles.timeCol}>
+                      <Text style={styles.timeColLabel}>FROM</Text>
+                      <Wheel value={fromTime} onChange={setFromTime} />
+                    </View>
+                    <Text style={styles.timeDash}>–</Text>
+                    <View style={styles.timeCol}>
+                      <Text style={styles.timeColLabel}>TO</Text>
+                      <Wheel value={toTime} onChange={setToTime} />
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
               <Pressable
                 onPress={save}
                 disabled={busy || corners.length < 3}
@@ -483,6 +615,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: 2,
   },
   inputField: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 15, color: colors.textPrimary, paddingVertical: 14 },
+
+  reuseWrap: { marginBottom: spacing.sm, gap: 6 },
+  reuseLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, letterSpacing: 0.8, color: colors.textMuted },
+  reuseChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: colors.brandSoft, borderRadius: radius.pill,
+    paddingHorizontal: spacing.md, paddingVertical: 9, maxWidth: 220,
+  },
+  reuseChipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
+  reuseChipTime: { fontFamily: fontFamilies.interMedium, fontSize: 11, color: colors.brandDeep },
+  reuseHint: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.textMuted },
+
+  timeCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.md, marginTop: spacing.sm, gap: spacing.sm },
+  timeCardLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textSecondary },
+  timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  timeCol: { flex: 1, alignItems: 'center', gap: 4 },
+  timeColLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 10, letterSpacing: 1, color: colors.textMuted },
+  timeDash: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textMuted, paddingHorizontal: 6 },
+  wheel: { height: WHEEL_ITEM_H * 3, width: '100%', position: 'relative' },
+  wheelHighlight: { position: 'absolute', left: 8, right: 8, top: WHEEL_ITEM_H, height: WHEEL_ITEM_H, borderRadius: 10, backgroundColor: colors.brandSoft },
+  wheelItem: { height: WHEEL_ITEM_H, alignItems: 'center', justifyContent: 'center' },
+  wheelText: { fontFamily: fontFamilies.interMedium, fontSize: 14.5, color: colors.textMuted },
+  wheelTextActive: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textPrimary },
   sheetScroll: { maxHeight: 260 },
   empty: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.lg },
 

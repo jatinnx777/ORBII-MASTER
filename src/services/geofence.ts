@@ -26,8 +26,11 @@ export type Geofence = {
   lng: number;
   radiusM: number;
   active: boolean;
-  // The 4 corners the parent drew on the map (null for old radius-only zones).
+  // The corners the parent drew on the map (null for old radius-only zones).
   corners: Corner[] | null;
+  // Expected-inside window, 'HH:MM' 24h, null = all day (sql/67).
+  activeFrom: string | null;
+  activeTo: string | null;
 };
 
 type Row = {
@@ -40,6 +43,8 @@ type Row = {
   radius_m: number;
   active: boolean;
   corners: Corner[] | null;
+  active_from: string | null;
+  active_to: string | null;
 };
 
 function fromRow(r: Row): Geofence {
@@ -53,6 +58,8 @@ function fromRow(r: Row): Geofence {
     radiusM: r.radius_m,
     active: r.active,
     corners: Array.isArray(r.corners) ? r.corners : null,
+    activeFrom: r.active_from ?? null,
+    activeTo: r.active_to ?? null,
   };
 }
 
@@ -102,6 +109,18 @@ export async function loadZonesISet(uid: string): Promise<Geofence[]> {
   return (data ?? []).map((r) => fromRow(r as Row));
 }
 
+/** Zones I've already set on ONE person — so they can be reused, not redrawn. */
+export async function loadZonesForMember(ownerId: string, memberId: string): Promise<Geofence[]> {
+  const { data, error } = await supabase
+    .from('geofences')
+    .select('*')
+    .eq('owner_id', ownerId)
+    .eq('member_id', memberId)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  return (data ?? []).map((r) => fromRow(r as Row));
+}
+
 export async function createZone(input: {
   ownerId: string;
   memberId: string;
@@ -138,6 +157,8 @@ export async function createPolygonZone(input: {
   memberId: string;
   label: string;
   corners: Corner[];
+  activeFrom?: string | null;
+  activeTo?: string | null;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (input.corners.length < 3) {
     return { ok: false, error: 'Place at least 3 corners to draw an area.' };
@@ -151,6 +172,8 @@ export async function createPolygonZone(input: {
     lng: circle.lng,
     radius_m: circle.radiusM,
     corners: input.corners,
+    active_from: input.activeFrom ?? null,
+    active_to: input.activeTo ?? null,
   });
   if (error) {
     return {

@@ -145,7 +145,13 @@ function buildHtml(
     100%{transform:scale(3);opacity:0;}
   }
   .leaflet-marker-icon{transition:transform 0.6s linear;}
-  .leaflet-bar a, .leaflet-bar a:hover { background:#fff; color:#111; }
+  /* Zoom +/- : move off the top-left (it collided with app buttons) to a clean
+     mid-right position, and give it a modern rounded, floating look. */
+  .leaflet-top.leaflet-left{ top:42%; left:auto; right:12px; }
+  .leaflet-control-zoom{ margin:0; }
+  .leaflet-bar{ border:none; box-shadow:0 4px 14px rgba(0,0,0,0.28); border-radius:14px; overflow:hidden; }
+  .leaflet-bar a, .leaflet-bar a:hover{ width:42px; height:42px; line-height:42px; font-size:22px; font-weight:600; color:#14120F; background:rgba(255,255,255,0.97); }
+  .leaflet-bar a:first-child{ border-bottom:1px solid rgba(0,0,0,0.08); }
   .leaflet-control-attribution{font-size:9px;background:rgba(255,255,255,0.6);}
 </style>
 </head>
