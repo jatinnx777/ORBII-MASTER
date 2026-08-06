@@ -171,6 +171,18 @@ export async function getSOSLocationFix(): Promise<{
     return { point: toPoint(live), precise: (live.coords.accuracy ?? 9999) <= 100 };
   }
 
+  // 2.5. Coarse NETWORK/cell-tower fix — the "Find My Train" fallback. When GPS
+  // is dead (indoors, a basement, a moving train) this still returns a rough
+  // position from cell towers + Wi-Fi, as long as the phone's Location toggle is
+  // on. ~1 km, but a rough location beats none in an emergency.
+  const network = await withTimeout(
+    Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Lowest }),
+    3500,
+  );
+  if (network) {
+    return { point: toPoint(network), precise: false };
+  }
+
   // 3. Any last-known fix, however old — better than nothing for the map.
   try {
     const any = await Location.getLastKnownPositionAsync();

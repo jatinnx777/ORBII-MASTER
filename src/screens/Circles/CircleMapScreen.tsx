@@ -16,6 +16,7 @@ import {
   type TrailPoint,
 } from '@/services/circle-location';
 import type { GeoPoint } from '@/types';
+import { escapeHtml } from '@/utils/html';
 
 const DOT_COLORS = ['#8672CE', '#C6913A', '#6F7C61', '#BC5B3C', '#4F86C6', '#B0568C'];
 function colorFor(id: string): string {
@@ -24,7 +25,9 @@ function colorFor(id: string): string {
   return DOT_COLORS[h % DOT_COLORS.length];
 }
 function avatarHtml(name: string | null, color: string, stale: boolean): string {
-  const initial = (name || '?').slice(0, 1).toUpperCase();
+  // Escaped defensively: this string is rendered as raw HTML inside the map
+  // WebView, so any user-controlled character must be neutralised.
+  const initial = escapeHtml((name || '?').slice(0, 1).toUpperCase());
   const bg = stale ? '#9a958c' : color;
   const op = stale ? '0.6' : '1';
   return `<div style="opacity:${op};width:38px;height:38px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:15px">${initial}</div>`;
