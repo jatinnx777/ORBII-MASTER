@@ -53,3 +53,8 @@ ORBII-latest.apk
 
 # Co-founder ML repo, cloned for review (has its own git history)
 ORBII-DATASHEET/
+
+# Database backups — contain real user data, NEVER commit these.
+backups/
+*.dump
+.env.backup
