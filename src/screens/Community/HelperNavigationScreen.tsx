@@ -195,7 +195,7 @@ export function HelperNavigationScreen() {
     let alive = true;
     (async () => {
       const deviceId = await FraudDetectionService.getDeviceId();
-      const { id: eventId, limitReached } = await RewardService.accept({
+      const { id: eventId, status, limitReached } = await RewardService.accept({
         sosId,
         victimId,
         sosCreatedIso: sosCreatedMs ? new Date(sosCreatedMs).toISOString() : null,
@@ -208,6 +208,16 @@ export function HelperNavigationScreen() {
           'Monthly help limit reached',
           "You've reached your help limit for this month. It resets on the 1st, and your limit grows as your Guardian level goes up.",
           [{ text: 'OK', onPress: () => navigation.goBack() }],
+        );
+        return;
+      }
+      // Enough responders are already assigned — you're a backup. Don't head out
+      // unless we promote you (which happens automatically if one of them drops).
+      if (status === 'standby') {
+        appAlert(
+          "You're on standby",
+          'Enough responders are already on the way. Stay ready, ORBII will alert you the moment a slot opens up. Please do not head out yet.',
+          [{ text: 'Got it', onPress: () => navigation.goBack() }],
         );
         return;
       }

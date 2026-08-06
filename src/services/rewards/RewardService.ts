@@ -25,10 +25,10 @@ export type RewardRow = {
 
 export const RewardService = {
   /**
-   * Helper accepted an SOS → open a server rescue event.
-   * `limitReached` is true when the helper has hit their monthly help cap
-   * (enforced in rescue_accept, sql/66) so the UI can explain why nothing
-   * happened instead of failing silently.
+   * Helper accepted an SOS → claim one of the 3 responder slots (rescue_claim,
+   * sql/69). `status` is 'assigned' (you're one of the 3 going) or 'standby'
+   * (enough responders already; you're a backup and shouldn't head out yet).
+   * `limitReached` is true when the helper hit their monthly cap (sql/66).
    */
   async accept(input: {
     sosId: string;
@@ -36,8 +36,8 @@ export const RewardService = {
     sosCreatedIso?: string | null;
     deviceId: string;
     mockLocation: boolean;
-  }): Promise<{ id: string | null; limitReached: boolean }> {
-    const { data, error } = await supabase.rpc('rescue_accept', {
+  }): Promise<{ id: string | null; status: 'assigned' | 'standby' | null; limitReached: boolean }> {
+    const { data, error } = await supabase.rpc('rescue_claim', {
       p_sos: input.sosId,
       p_victim: input.victimId,
       p_sos_created: input.sosCreatedIso ?? null,
@@ -45,12 +45,33 @@ export const RewardService = {
       p_mock: input.mockLocation,
     });
     if (error) {
-      const limitReached = /monthly_help_limit_reached/i.test(
-        `${error.message} ${error.hint ?? ''}`,
-      );
-      return { id: null, limitReached };
+      const blob = `${error.message} ${error.hint ?? ''} ${error.code ?? ''}`;
+      if (/monthly_help_limit_reached/i.test(blob)) {
+        return { id: null, status: null, limitReached: true };
+      }
+      // Graceful fallback: if rescue_claim isn't deployed yet (sql/69 not run),
+      // fall back to the old single-accept path so helpers can still respond.
+      if (/PGRST202|does not exist|could not find|schema cache/i.test(blob)) {
+        const legacy = await supabase.rpc('rescue_accept', {
+          p_sos: input.sosId,
+          p_victim: input.victimId,
+          p_sos_created: input.sosCreatedIso ?? null,
+          p_device: input.deviceId,
+          p_mock: input.mockLocation,
+        });
+        if (legacy.error) {
+          const lim = /monthly_help_limit_reached/i.test(
+            `${legacy.error.message} ${legacy.error.hint ?? ''}`,
+          );
+          return { id: null, status: null, limitReached: lim };
+        }
+        return { id: (legacy.data as string) ?? null, status: 'assigned', limitReached: false };
+      }
+      return { id: null, status: null, limitReached: false };
     }
-    return { id: (data as string) ?? null, limitReached: false };
+    const d = data as { id?: string; status?: string; slot?: number } | null;
+    const status = d?.status === 'assigned' ? 'assigned' : d?.status === 'standby' ? 'standby' : null;
+    return { id: d?.id ?? null, status, limitReached: false };
   },
 
   async reportMovement(eventId: string, roadMeters: number, mock: boolean): Promise<void> {

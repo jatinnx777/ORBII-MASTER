@@ -92,12 +92,17 @@ async function pushVerifiedHelpers(
   return ids;
 }
 
-// Has any helper accepted this SOS yet? Acceptance opens a rescue_events row.
-async function anyoneResponded(admin: Admin, sosId: string): Promise<boolean> {
+// Is help ACTUALLY coming? Not "did someone tap accept" (they may ghost), but
+// "is an assigned responder actually moving toward the victim". Only then do we
+// stop widening the search. A bare accept with no movement no longer silences
+// escalation — that was the dangerous gap.
+async function someoneIsComing(admin: Admin, sosId: string): Promise<boolean> {
   const { count } = await admin
     .from('rescue_events')
     .select('id', { count: 'exact', head: true })
-    .eq('sos_id', sosId);
+    .eq('sos_id', sosId)
+    .eq('status', 'assigned')
+    .not('first_moved_at', 'is', null);
   return (count ?? 0) > 0;
 }
 
@@ -235,7 +240,7 @@ Deno.serve(async (req) => {
       const escalate = (async () => {
         await new Promise((r) => setTimeout(r, ESCALATE_MS));
         if (!(await sosStillActive(admin, sosId))) return;
-        if (await anyoneResponded(admin, sosId)) return;
+        if (await someoneIsComing(admin, sosId)) return;
         const exclude = new Set<string>([...recipients, ...stage1Ids]);
         await pushVerifiedHelpers(admin, sosLite, STAGE2_KM, exclude);
       })().catch(() => {
