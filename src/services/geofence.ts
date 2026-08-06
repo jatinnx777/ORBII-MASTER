@@ -229,6 +229,69 @@ export async function deleteZone(id: string): Promise<boolean> {
   return !error;
 }
 
+// --- Consent: zones set ON me that I haven't acknowledged yet (sql/68) -------
+export type ZoneRequest = {
+  id: string;
+  label: string;
+  ownerName: string | null;
+  activeFrom: string | null;
+  activeTo: string | null;
+};
+
+/** New safe zones someone set on me that I haven't kept or declined yet. */
+export async function loadZoneRequests(uid: string): Promise<ZoneRequest[]> {
+  const { data, error } = await supabase
+    .from('geofences')
+    .select('id, label, owner_id, active_from, active_to')
+    .eq('member_id', uid)
+    .eq('active', true)
+    .eq('member_ack', false)
+    .order('created_at', { ascending: false });
+  if (error) return [];
+  const rows = (data ?? []) as {
+    id: string;
+    label: string;
+    owner_id: string;
+    active_from: string | null;
+    active_to: string | null;
+  }[];
+  const ids = [...new Set(rows.map((r) => r.owner_id))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: people } = await supabase.from('users_public').select('id, name').in('id', ids);
+    for (const p of (people ?? []) as { id: string; name: string | null }[]) {
+      if (p.name) names.set(p.id, p.name);
+    }
+  }
+  return rows.map((r) => ({
+    id: r.id,
+    label: r.label,
+    ownerName: names.get(r.owner_id) ?? null,
+    activeFrom: r.active_from,
+    activeTo: r.active_to,
+  }));
+}
+
+/** I'm fine with this zone — keep it, just stop showing it as a request. */
+export async function acknowledgeZone(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('geofence_member_ack', { p_id: id });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
+/** I don't want this zone — deactivate it so it stops watching me. */
+export async function declineZoneOnMe(id: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.rpc('geofence_member_decline', { p_id: id });
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 // The OS hands us enter/exit events here, even with the app closed.
 TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
   if (error) {
