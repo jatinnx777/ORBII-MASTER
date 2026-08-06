@@ -320,7 +320,9 @@ export function GeofencesScreen() {
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.zoneName}>
-                          {e.kind === 'exit' ? 'Left' : 'Arrived at'} {e.label}
+                          <Text style={styles.eventWho}>{e.memberName ?? 'Someone'}</Text>
+                          {e.kind === 'exit' ? ' left ' : ' arrived at '}
+                          {e.label}
                         </Text>
                         <Text style={styles.zoneSub}>
                           {new Date(e.createdAt).toLocaleString('en-IN')}
@@ -508,6 +510,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   zoneName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  eventWho: { fontFamily: fontFamilies.poppinsBold, color: colors.brandDeep },
   zoneSub: { ...typography.caption, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
   divider: { height: 1, backgroundColor: colors.divider },
   empty: { alignItems: 'center', paddingVertical: spacing.lg },

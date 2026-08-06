@@ -63,6 +63,35 @@ function fromRow(r: Row): Geofence {
   };
 }
 
+// Current wall-clock minutes since midnight, in IST (the app's market). Used to
+// decide whether a zone's active window is in effect right now.
+function nowMinutesIST(): number {
+  const d = new Date();
+  const utcMin = d.getUTCHours() * 60 + d.getUTCMinutes();
+  return (utcMin + 330) % 1440; // UTC + 5:30
+}
+
+function parseHHMM(s: string | null): number | null {
+  if (!s) return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (!m) return null;
+  return Number(m[1]) * 60 + Number(m[2]);
+}
+
+// Is `nowMin` inside [from, to]? Null window = all day (always true). Handles
+// overnight windows (from > to), e.g. a hostel curfew 22:00 -> 06:00.
+export function isWithinActiveWindow(
+  from: string | null,
+  to: string | null,
+  nowMin: number,
+): boolean {
+  const f = parseHHMM(from);
+  const t = parseHHMM(to);
+  if (f == null || t == null) return true; // all day
+  if (f === t) return true; // degenerate → treat as all day
+  return f < t ? nowMin >= f && nowMin < t : nowMin >= f || nowMin < t;
+}
+
 // Metres between two lat/lng points (haversine).
 function distanceM(a: Corner, b: Corner): number {
   const R = 6371000;
@@ -164,6 +193,15 @@ export async function createPolygonZone(input: {
     return { ok: false, error: 'Place at least 3 corners to draw an area.' };
   }
   const circle = circleFromCorners(input.corners);
+  // Replace, don't duplicate: a zone with the same name for the same person is
+  // the same zone being updated (e.g. re-saving "College" with new hours), so
+  // clear the old one first instead of stacking duplicates that double-alert.
+  await supabase
+    .from('geofences')
+    .delete()
+    .eq('owner_id', input.ownerId)
+    .eq('member_id', input.memberId)
+    .eq('label', input.label);
   const { error } = await supabase.from('geofences').insert({
     owner_id: input.ownerId,
     member_id: input.memberId,
@@ -228,25 +266,29 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
       .select('id')
       .single();
 
-    // On EXIT: alert the WHOLE circle immediately (notify-geofence figures out
-    // who left, where, and when, and pushes everyone in their circle). The fenced
-    // person also gets a heads-up that their circle was told. ENTER is just
-    // recorded for history.
+    // On EXIT: alert the WHOLE circle — but ONLY during the zone's active hours.
+    // Leaving college at 6pm when they're only expected inside 9-5 is normal and
+    // must not fire an alarm. Outside the window the crossing is still recorded
+    // for history; it just doesn't alert anyone. ENTER is history-only.
     if (kind === 'exit' && inserted?.id) {
-      // Fire-and-forget: alert everyone in the circle right away.
-      supabase.functions
-        .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
-        .catch(() => {
-          // Best-effort — a failed push must never throw here or Android may
-          // stop delivering geofence events to us.
-        });
       const { data: g } = await supabase
         .from('geofences')
-        .select('label')
+        .select('label, active_from, active_to')
         .eq('id', zoneId)
         .maybeSingle();
-      const label = (g as { label?: string } | null)?.label ?? 'an area';
-      await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
+      const gg = g as { label?: string; active_from?: string | null; active_to?: string | null } | null;
+      const label = gg?.label ?? 'an area';
+      const withinHours = isWithinActiveWindow(gg?.active_from ?? null, gg?.active_to ?? null, nowMinutesIST());
+      if (withinHours) {
+        // Fire-and-forget: alert everyone in the circle right away.
+        supabase.functions
+          .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
+          .catch(() => {
+            // Best-effort — a failed push must never throw here or Android may
+            // stop delivering geofence events to us.
+          });
+        await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
+      }
     }
   } catch (err) {
     reportError(err, { category: 'geofence', message: 'geofence event failed' });
@@ -356,6 +398,9 @@ export type ZoneEvent = {
   kind: 'exit' | 'enter';
   createdAt: string;
   label: string;
+  // WHO crossed — a circle can hold many people, so "left Hostel" is useless
+  // without a name. Null only if the person can't be resolved.
+  memberName: string | null;
   // For exits: true = confirmed intentional, false = flagged/escalated, null = pending.
   authorized: boolean | null;
 };
@@ -363,24 +408,40 @@ export type ZoneEvent = {
 export async function loadZoneEvents(uid: string): Promise<ZoneEvent[]> {
   const { data, error } = await supabase
     .from('geofence_events')
-    .select('id, kind, created_at, authorized, geofences(label)')
+    .select('id, kind, created_at, authorized, member_id, geofences(label)')
     .order('created_at', { ascending: false })
     .limit(50);
   if (error) return [];
-  return (data ?? []).map((r) => {
-    const row = r as {
-      id: string;
-      kind: 'exit' | 'enter';
-      created_at: string;
-      authorized: boolean | null;
-      geofences?: { label?: string } | { label?: string }[] | null;
-    };
+  const rows = (data ?? []) as {
+    id: string;
+    kind: 'exit' | 'enter';
+    created_at: string;
+    authorized: boolean | null;
+    member_id: string;
+    geofences?: { label?: string } | { label?: string }[] | null;
+  }[];
+
+  // Resolve the crossers' names in one batch.
+  const ids = [...new Set(rows.map((r) => r.member_id).filter(Boolean))];
+  const names = new Map<string, string>();
+  if (ids.length > 0) {
+    const { data: people } = await supabase
+      .from('users_public')
+      .select('id, name')
+      .in('id', ids);
+    for (const p of (people ?? []) as { id: string; name: string | null }[]) {
+      if (p.name) names.set(p.id, p.name);
+    }
+  }
+
+  return rows.map((row) => {
     const g = Array.isArray(row.geofences) ? row.geofences[0] : row.geofences;
     return {
       id: row.id,
       kind: row.kind,
       createdAt: row.created_at,
       label: g?.label ?? 'Safe zone',
+      memberName: names.get(row.member_id) ?? null,
       authorized: row.authorized ?? null,
     };
   });

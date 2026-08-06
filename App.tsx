@@ -39,7 +39,8 @@ import {
   disarmMesh,
 } from '@/services/mesh';
 import { subscribeHelperPings } from '@/services/mesh-helper-alert';
-import { syncZoneMonitoring, authorizeGeofenceEvent, escalateGeofenceEvent } from '@/services/geofence';
+import { syncZoneMonitoring, authorizeGeofenceEvent, escalateGeofenceEvent, loadMyZones } from '@/services/geofence';
+import * as Location from 'expo-location';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
@@ -182,7 +183,7 @@ function RootNavigator() {
       await setItem('orbii:sms-prompt-seen', true);
       appAlert(
         'Send an SOS even with no internet',
-        'Let ORBII text your emergency contacts with your location automatically when your data is down, and relay your SOS phone-to-phone over Bluetooth. Both work with no data.',
+        'Let ORBII text your emergency contacts your location automatically when your data is down, and relay your SOS phone-to-phone over Bluetooth. Both work with no data.\n\nAndroid will then ask to allow SMS, that is expected. ORBII only uses it to text the contacts you chose during an SOS. It never reads your messages.',
         [
           { text: 'Not now', style: 'cancel' },
           {
@@ -198,6 +199,37 @@ function RootNavigator() {
               })();
             },
           },
+        ],
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [status]);
+
+  // One-time reliability nudge for the FENCED person: OS geofencing only fires
+  // with "Allow all the time" location AND battery optimization off. Without it,
+  // a zone set on this person silently never triggers when the app is closed.
+  // Asked once, and only if someone actually added them to a zone.
+  useEffect(() => {
+    if (status !== 'authenticated' || Platform.OS !== 'android') return;
+    const uid = store.getState().user.profile?.uid;
+    if (!uid) return;
+    let cancelled = false;
+    (async () => {
+      const zones = await loadMyZones(uid);
+      if (cancelled || zones.length === 0) return;
+      const bg = await Location.getBackgroundPermissionsAsync();
+      if (cancelled || bg.granted) return;
+      const seen = await getItem<boolean>('orbii:geofence-bg-seen');
+      if (seen) return;
+      await setItem('orbii:geofence-bg-seen', true);
+      appAlert(
+        'Turn on background location for safe zones',
+        'Someone added you to a safe zone. For ORBII to alert your circle if you leave it, set location to "Allow all the time" and turn off battery optimization for ORBII. Otherwise it can\'t watch the zone when the app is closed.',
+        [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Open settings', onPress: () => void Linking.openSettings().catch(() => undefined) },
         ],
       );
     })();
