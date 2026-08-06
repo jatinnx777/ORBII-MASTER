@@ -17,6 +17,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { appAlert } from '@/components/common';
 import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
+import { loadCircleMembersLocations, type MemberLocation } from '@/services/circle-location';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
@@ -74,6 +75,9 @@ export function HomeScreen() {
   const [circleMemberUids, setCircleMemberUids] = useState<Set<string>>(new Set());
   const [zoneEvents, setZoneEvents] = useState<ZoneEvent[]>([]);
   const [sharing, setSharing] = useState(false);
+  // Last-known location of circle members who share it — survives them going
+  // offline (from circle_locations), so the map isn't empty when nobody's live.
+  const [memberLocs, setMemberLocs] = useState<MemberLocation[]>([]);
   const [tab, setTab] = useState<'people' | 'fake' | 'journey'>('people');
   const [voiceStatus, setVoiceStatus] = useState<VoiceDetectionStatus>(
     isListening() ? 'listening' : 'idle',
@@ -136,6 +140,24 @@ export function HomeScreen() {
   }, [loadMe, profile?.uid]);
   useFocusEffect(useCallback(() => { void loadMe(); }, [loadMe]));
 
+  // Pull circle members' last-known locations (opt-in sharers) on focus + a slow
+  // poll, so offline members still appear on the map at their last position.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      const run = () =>
+        loadCircleMembersLocations()
+          .then((l) => alive && setMemberLocs(l))
+          .catch(() => undefined);
+      run();
+      const id = setInterval(run, 30_000);
+      return () => {
+        alive = false;
+        clearInterval(id);
+      };
+    }, []),
+  );
+
   // Members of the SELECTED circle only — so a user with several circles sees
   // one clean group on the map, not everyone at once.
   useEffect(() => {
@@ -177,14 +199,29 @@ export function HomeScreen() {
   // names or personal details on the front map.
   const avatars = useMemo<AvatarMarker[]>(() => {
     const list: AvatarMarker[] = [];
+    const shown = new Set<string>();
     if (me) list.push({ id: 'me', coordinate: me, photoUri: profile?.photoUri ?? null, name: 'You' });
+    // Live (online) members first — freshest position wins.
     for (const p of peers) {
       if (p.userId === profile?.uid || !p.location) continue;
       if (!circleMemberUids.has(p.userId)) continue;
       list.push({ id: p.userId, coordinate: p.location, photoUri: p.photoUri, name: p.name || '' });
+      shown.add(p.userId);
+    }
+    // Then last-known positions for members who are offline but share location.
+    for (const m of memberLocs) {
+      if (m.userId === profile?.uid || shown.has(m.userId)) continue;
+      if (!circleMemberUids.has(m.userId)) continue;
+      list.push({
+        id: m.userId,
+        coordinate: { latitude: m.lat, longitude: m.lng },
+        photoUri: m.photoUri,
+        name: m.name || '',
+      });
+      shown.add(m.userId);
     }
     return list;
-  }, [me, peers, circleMemberUids, profile?.uid, profile?.photoUri]);
+  }, [me, peers, memberLocs, circleMemberUids, profile?.uid, profile?.photoUri]);
 
   const activeAlerts = alerts?.length ?? 0;
   const setupDone = pct >= READINESS_CAP;
