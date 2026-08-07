@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  AppState,
   Linking,
   Modal,
   Pressable,
@@ -96,6 +97,28 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const hidden = useTabBarHiddenValue();
   const translateY = hidden.interpolate({ inputRange: [0, 1], outputRange: [0, 130] });
   const barOpacity = hidden.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+
+  // Keep the bar reachable. If it was retracted (scrolled down) when the app was
+  // sent to the background, it would come back still hidden off-screen and you
+  // couldn't reach it. Force it visible whenever the app resumes and whenever the
+  // active tab changes.
+  useEffect(() => {
+    const show = () => {
+      hidden.stopAnimation();
+      Animated.spring(hidden, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 18,
+        stiffness: 200,
+        mass: 0.6,
+      }).start();
+    };
+    show();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') show();
+    });
+    return () => sub.remove();
+  }, [hidden, state.index]);
 
   const items = state.routes
     .map((route, index) => ({ route, index, meta: ICONS[route.name as keyof TabParamList] }))

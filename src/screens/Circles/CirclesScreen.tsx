@@ -419,21 +419,26 @@ function CircleRow({
             <Ionicons name={meta.icon} size={20} color={circle.color} />
           )}
         </View>
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: 5 }}>
           <Text style={styles.rowTitle} numberOfLines={1}>
             {circle.name}
           </Text>
-          <Text style={styles.rowSubtitle} numberOfLines={1}>
-            {meta.label}
-            {circle.isDefault ? ' · Default' : ''}
-          </Text>
+          <View style={styles.rowMetaRow}>
+            <View style={[styles.kindPill, { backgroundColor: tint(circle.color, 0.14) }]}>
+              <Ionicons name={meta.icon} size={11} color={circle.color} />
+              <Text style={[styles.kindPillText, { color: circle.color }]}>{meta.label}</Text>
+            </View>
+            {circle.isDefault ? <Text style={styles.defaultText}>Default</Text> : null}
+          </View>
         </View>
         {isActive ? (
           <View style={styles.activeChip}>
+            <View style={styles.activeDot} />
             <Text style={styles.activeChipText}>Active</Text>
           </View>
-        ) : null}
-        <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        ) : (
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        )}
       </Pressable>
     </Animated.View>
   );
@@ -716,30 +721,48 @@ const styles = StyleSheet.create({
     backgroundColor: colors.brandSoft,
   },
   rowIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  rowEmoji: { fontSize: 20 },
+  rowEmoji: { fontSize: 22 },
   rowTitle: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 15,
+    fontSize: 15.5,
     color: colors.textPrimary,
     letterSpacing: -0.1,
   },
-  rowSubtitle: {
+  rowMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  kindPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+  },
+  kindPillText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 0.1,
+  },
+  defaultText: {
     fontFamily: fontFamilies.interMedium,
-    fontSize: 12,
-    color: colors.textSecondary,
+    fontSize: 11.5,
+    color: colors.textMuted,
   },
   activeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: radius.circle,
     backgroundColor: colors.brandDeep,
   },
+  activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.textInverse },
   activeChipText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 10,
