@@ -1,5 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -80,7 +81,12 @@ export function CoinsWalletScreen() {
           <View style={styles.card}>
             <Text style={styles.cardLabel}>Redeem at 500 coins (₹50)</Text>
             <View style={styles.track}>
-              <View style={[styles.fill, { width: `${progress * 100}%` }]} />
+              <LinearGradient
+                colors={[colors.gold, colors.peach]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.fill, { width: `${progress * 100}%` }]}
+              />
             </View>
             <Text style={styles.progressText}>
               {balance >= 500

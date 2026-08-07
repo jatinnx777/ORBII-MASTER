@@ -158,10 +158,13 @@ export function DisasterModeScreen() {
           <Pressable
             onPress={() => send('help')}
             disabled={!!busy}
-            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.helpBtn,
+              pressed && { opacity: 0.95, transform: [{ scale: 0.98 }] },
+            ]}
           >
             <View style={styles.helpIcon}>
-              <Ionicons name="hand-left" size={26} color={colors.coral} />
+              <Ionicons name="hand-left" size={26} color="#FF6E40" />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.helpTitle}>I need help</Text>
@@ -300,10 +303,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.coral,
+    backgroundColor: '#FF6E40',
     borderRadius: radius.xl,
     padding: spacing.lg,
-    ...shadows.card,
+    shadowColor: '#FF6E40',
+    shadowOpacity: 0.42,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 9,
   },
   helpIcon: {
     width: 48,
@@ -352,8 +359,8 @@ const styles = StyleSheet.create({
     ...shadows.icon,
   },
   lineIcon: { width: 34, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
-  lineNumber: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.textPrimary },
-  lineLabel: { fontFamily: fontFamilies.poppinsMedium, fontSize: 10.5, color: colors.textSecondary },
+  lineNumber: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary, letterSpacing: -0.3 },
+  lineLabel: { fontFamily: fontFamilies.poppinsMedium, fontSize: 10.5, color: colors.textSecondary, marginTop: 2, lineHeight: 14 },
 
   dCard: {
     backgroundColor: colors.surface,

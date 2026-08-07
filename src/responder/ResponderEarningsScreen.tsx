@@ -308,8 +308,8 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     ...shadows.card,
   },
-  heroLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 0.8, color: colors.sageDeep },
-  heroBalance: { fontFamily: fontFamilies.poppinsBold, fontSize: 42, color: colors.textPrimary, letterSpacing: -1 },
+  heroLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, letterSpacing: 1.4, color: colors.sageDeep, textTransform: 'uppercase' },
+  heroBalance: { fontFamily: fontFamilies.poppinsBold, fontSize: 46, color: colors.sageDeep, letterSpacing: -1.2 },
   cashBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 7,
     backgroundColor: colors.sageDeep, paddingHorizontal: spacing.xl, paddingVertical: spacing.md,

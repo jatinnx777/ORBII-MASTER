@@ -266,7 +266,7 @@ export function ZoneEditorScreen() {
       await syncZoneMonitoring(profile.uid);
       appAlert(
         'Area saved',
-        `Your circle will be alerted, with the time, if ${target.name || 'they'} leave "${label.trim()}" between ${fmtTime(fromTime)} and ${fmtTime(toTime)}.`,
+        `Your circle will be alerted if ${target.name || target.username || 'they'} ${target.name || target.username ? 'leaves' : 'leave'} "${label.trim()}" between ${fmtTime(fromTime)} and ${fmtTime(toTime)}.`,
         [{ text: 'Done', onPress: () => navigation.goBack() }],
       );
     } finally {
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
   sheetScroll: { maxHeight: 260 },
   empty: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted, textAlign: 'center', paddingVertical: spacing.lg },
 
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.md, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md, backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, marginBottom: spacing.sm },
   rowIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.brandDeep },
