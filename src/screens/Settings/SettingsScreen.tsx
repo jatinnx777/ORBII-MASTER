@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ContactMatchService } from '@/services/rewards';
 import {
+  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -148,16 +149,31 @@ export function SettingsScreen() {
           <Text style={styles.title}>Settings</Text>
         </View>
 
+        {/* Profile hero — a personal header, taps through to edit. */}
+        <Pressable
+          onPress={() => navigation.navigate('EditProfile')}
+          style={({ pressed }) => [styles.profileHero, pressed && { opacity: 0.9 }]}
+        >
+          <View style={styles.profileAvatar}>
+            {profile?.photoUri ? (
+              <Image source={{ uri: profile.photoUri }} style={styles.profileAvatarImg} />
+            ) : (
+              <Text style={styles.profileInitial}>
+                {(profile?.name || '?').charAt(0).toUpperCase()}
+              </Text>
+            )}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.profileName} numberOfLines={1}>{profile?.name || 'Your name'}</Text>
+            <Text style={styles.profileHandle} numberOfLines={1}>
+              {profile?.username ? `@${profile.username}` : 'Tap to finish your profile'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </Pressable>
+
         <SectionHeader title="Profile" />
         <Card style={styles.rowsCard}>
-          <Row
-            icon="person-circle"
-            tint="peach"
-            label="Edit profile"
-            value={profile?.username ? `@${profile.username}` : 'Set up your handle'}
-            onPress={() => navigation.navigate('EditProfile')}
-          />
-          <Divider />
           <Row
             icon="people"
             tint="coral"
@@ -394,6 +410,31 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     letterSpacing: -0.5,
   },
+  profileHero: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    ...shadows.card,
+  },
+  profileAvatar: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  profileAvatarImg: { width: '100%', height: '100%' },
+  profileInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 22, color: colors.brandDeep },
+  profileName: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.textPrimary },
+  profileHandle: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textSecondary, marginTop: 1 },
   soonPill: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,

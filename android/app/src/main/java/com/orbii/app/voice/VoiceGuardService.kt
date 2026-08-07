@@ -131,6 +131,18 @@ class VoiceGuardService : Service() {
     )
     private val BUILT_IN = EN_PHRASES + HI_PHRASES_DEVA + HI_PHRASES_ROMAN
 
+    // Keyword-grammar mode ("[unk]"-guarded) for MAXIMUM keyword accuracy.
+    // Restricting a recognizer's vocabulary to just the distress words makes it
+    // far more confident on a short, shouted "help"/"bachao"/"madad" than the
+    // free-form model, which is the whole reason a single shout sometimes didn't
+    // fire. Crucially we include "[unk]": all OTHER speech maps to unknown
+    // instead of being forced onto a trigger word (the false-positive trap a
+    // plain grammar falls into). This runs ALONGSIDE the free-form recognizer.
+    private const val EN_GRAMMAR =
+      "[\"help\", \"help help\", \"help me\", \"please help\", \"save me\", \"i need help\", \"[unk]\"]"
+    private const val HI_GRAMMAR =
+      "[\"बचाओ\", \"बचाओ बचाओ\", \"मदद\", \"मदद करो\", \"मुझे बचाओ\", \"[unk]\"]"
+
     // Single confident distress word. Requiring TWO shouts ("help help") to fire
     // roughly SQUARES the miss rate: if one "help" is caught ~80% of the time,
     // two-in-a-row is only ~64%. So a single distress word fires on its own IF
@@ -246,6 +258,11 @@ class VoiceGuardService : Service() {
       val enModel = Model(ensureBundledModel(MODEL_EN).absolutePath)
       models.add(enModel)
       recognizers.add(makeRecognizer(enModel))
+      // Plus a keyword-grammar recognizer for max confidence on the exact words.
+      makeGrammarRecognizer(enModel, EN_GRAMMAR)?.let {
+        recognizers.add(it)
+        VoiceMetrics.grammarMode = true
+      }
     } catch (e: Exception) {
       Log.e(TAG, "english model load failed", e)
     }
@@ -257,6 +274,7 @@ class VoiceGuardService : Service() {
         val hiModel = Model(hiDir.absolutePath)
         models.add(hiModel)
         recognizers.add(makeRecognizer(hiModel))
+        makeGrammarRecognizer(hiModel, HI_GRAMMAR)?.let { recognizers.add(it) }
       } catch (e: Exception) {
         Log.e(TAG, "hindi model load failed", e)
       }
@@ -411,6 +429,19 @@ class VoiceGuardService : Service() {
   // actual trigger words fire.
   private fun makeRecognizer(model: Model): Recognizer {
     return Recognizer(model, SAMPLE_RATE.toFloat()).apply { setWords(true) }
+  }
+
+  // A vocabulary-restricted recognizer: only the distress words + "[unk]". This
+  // is keyword-spotting mode, the highest-confidence path for the exact words we
+  // care about. Best-effort: if the grammar can't build (word not in the model's
+  // dictionary, etc.) the free-form recognizer still fully protects.
+  private fun makeGrammarRecognizer(model: Model, grammar: String): Recognizer? {
+    return try {
+      Recognizer(model, SAMPLE_RATE.toFloat(), grammar).apply { setWords(true) }
+    } catch (e: Exception) {
+      Log.w(TAG, "grammar recognizer unavailable", e)
+      null
+    }
   }
 
   // Pick the mic input best suited to far-field, muffled speech (bag/pocket).

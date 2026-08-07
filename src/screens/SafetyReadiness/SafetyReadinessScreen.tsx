@@ -123,7 +123,7 @@ export function SafetyReadinessScreen() {
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* big % + progress */}
-          <View style={[styles.heroCard, { backgroundColor: colors.brandSoft + '55' }]}>
+          <View style={styles.heroCard}>
             <Text style={[styles.pct, { color: colors.brandDeep }]}>{pct}%</Text>
             <Text style={styles.headline}>{headline}</Text>
             <View style={styles.barTrack}>
