@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -122,24 +123,35 @@ export function EmergencyScreen() {
           <Pressable
             onPress={() => toggleVoice(!voiceOn)}
             disabled={busy}
-            style={({ pressed }) => [
-              styles.voiceCard,
-              voiceOn && styles.voiceCardOn,
-              pressed && { transform: [{ scale: 0.98 }] },
-            ]}
+            style={({ pressed }) => [styles.voiceShadow, pressed && { transform: [{ scale: 0.98 }] }]}
             accessibilityRole="switch"
             accessibilityState={{ checked: voiceOn }}
             accessibilityLabel="Activate Voice SOS"
           >
-            <View style={styles.voiceBell}>
-              <Ionicons name={voiceOn ? 'mic' : 'mic-outline'} size={30} color={colors.textInverse} />
-            </View>
-            <Text style={styles.voiceTitle}>{voiceOn ? 'Voice SOS is ON' : 'Activate Voice SOS'}</Text>
-            <Text style={styles.voiceSub}>
-              {voiceOn
-                ? 'Listening for "help, help", even in the background.'
-                : 'Tap to protect yourself hands-free.'}
-            </Text>
+            <LinearGradient
+              colors={
+                voiceOn
+                  ? [colors.brandDeep, colors.lavenderDeep]
+                  : [colors.brand, colors.peachDeep]
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.voiceCard}
+            >
+              <View style={styles.aiBadge}>
+                <Ionicons name="sparkles" size={11} color={colors.textInverse} />
+                <Text style={styles.aiBadgeText}>SMART</Text>
+              </View>
+              <View style={styles.voiceBell}>
+                <Ionicons name={voiceOn ? 'mic' : 'mic-outline'} size={30} color={colors.textInverse} />
+              </View>
+              <Text style={styles.voiceTitle}>{voiceOn ? 'Voice SOS is ON' : 'Activate Voice SOS'}</Text>
+              <Text style={styles.voiceSub}>
+                {voiceOn
+                  ? 'Listening for "help, help", even in the background.'
+                  : 'Tap to protect yourself hands-free.'}
+              </Text>
+            </LinearGradient>
           </Pressable>
 
           {/* ── Manual SOS + helpline ── */}
@@ -311,13 +323,9 @@ function RecTile({
         {label}
       </Text>
       {live ? (
-        <View style={[styles.badge, styles.badgeLive]}>
-          <Text style={[styles.badgeText, { color: colors.sageDeep }]}>Active</Text>
-        </View>
+        <Text style={styles.recStatusLive}>● Active</Text>
       ) : (
-        <View style={[styles.badge, styles.badgeSoon]}>
-          <Text style={[styles.badgeText, { color: colors.textMuted }]}>Soon</Text>
-        </View>
+        <Text style={styles.recStatusSoon}>coming soon</Text>
       )}
     </Pressable>
   );
@@ -381,19 +389,39 @@ const styles = StyleSheet.create({
   },
   sub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, marginTop: 2 },
 
+  voiceShadow: {
+    borderRadius: radius.xxl,
+    shadowColor: colors.brand,
+    shadowOpacity: 0.34,
+    shadowRadius: 22,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 10,
+  },
   voiceCard: {
-    backgroundColor: colors.brand,
     borderRadius: radius.xxl,
     padding: spacing.lg,
     alignItems: 'center',
     gap: 6,
-    shadowColor: colors.brand,
-    shadowOpacity: 0.32,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 10 },
-    elevation: 9,
+    overflow: 'hidden',
   },
-  voiceCardOn: { backgroundColor: colors.brandDeep },
+  aiBadge: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: radius.pill,
+  },
+  aiBadgeText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 9.5,
+    color: colors.textInverse,
+    letterSpacing: 0.9,
+  },
   voiceBell: {
     width: 64,
     height: 64,
@@ -470,9 +498,10 @@ const styles = StyleSheet.create({
     ...typography.label,
     fontSize: 11,
     color: colors.textMuted,
-    letterSpacing: 1,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   card: {
     backgroundColor: colors.surface,
@@ -519,15 +548,17 @@ const styles = StyleSheet.create({
   recRow: { flexDirection: 'row', gap: spacing.sm },
   recTile: {
     flex: 1,
-    minHeight: 104,
+    minHeight: 96,
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
     paddingVertical: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 7,
+    gap: 6,
     ...shadows.card,
   },
+  recStatusLive: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, color: colors.sageDeep },
+  recStatusSoon: { fontFamily: fontFamilies.interMedium, fontSize: 10, color: colors.textMuted },
   recIcon: {
     width: 36,
     height: 36,

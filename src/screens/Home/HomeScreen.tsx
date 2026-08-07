@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -435,7 +436,12 @@ export function HomeScreen() {
               <Text style={styles.statusPct}>{pct}% safe</Text>
             </View>
             <View style={styles.bar}>
-              <View style={[styles.barFill, { width: `${Math.max(pct, 4)}%` }]} />
+              <LinearGradient
+                colors={[colors.brand, colors.peach]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={[styles.barFill, { width: `${Math.max(pct, 4)}%` }]}
+              />
             </View>
             <Text style={styles.statusHint}>
               {setupDone ? "You're fully set up and protected." : `${doneCount} of ${total} steps done. Tap to finish.`}
@@ -758,7 +764,17 @@ const styles = StyleSheet.create({
   voicePillText: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, color: colors.textMuted, letterSpacing: 0.5 },
   voicePillTextOn: { color: colors.textInverse },
 
-  statusCard: { backgroundColor: colors.brandSoft, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm },
+  statusCard: {
+    backgroundColor: colors.brandSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    shadowColor: '#2D2D3D',
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   statusTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   statusTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textSecondary },
   statusPct: { fontFamily: fontFamilies.poppinsBold, fontSize: 23, color: colors.brandDeep, letterSpacing: -0.5 },
