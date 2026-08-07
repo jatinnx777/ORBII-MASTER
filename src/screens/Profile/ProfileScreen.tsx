@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -177,18 +178,25 @@ export function ProfileScreen() {
           {isResponder ? (
             <Pressable
               onPress={() => navigation.navigate('Missions')}
-              style={({ pressed }) => [styles.missionsCard, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.missionsShadow, pressed && styles.pressed]}
               accessibilityRole="button"
               accessibilityLabel="Open your responder Missions dashboard"
             >
-              <View style={styles.missionsIcon}>
-                <Ionicons name="flash" size={18} color={colors.goldDeep} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.planTitle}>Responder Missions</Text>
-                <Text style={styles.planSub}>Go online, take missions, earn ORBII coins.</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
+              <LinearGradient
+                colors={[colors.goldSoft, '#F6E4BC']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.missionsCard}
+              >
+                <View style={styles.missionsIcon}>
+                  <Ionicons name="flash" size={18} color={colors.goldDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.planTitle}>Responder Missions</Text>
+                  <Text style={styles.planSub}>Go online, take missions, earn ORBII coins.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.goldDeep} />
+              </LinearGradient>
             </Pressable>
           ) : null}
 
@@ -472,16 +480,24 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   planUpgradeText: { fontFamily: fontFamilies.poppinsBold, fontSize: 12, color: colors.textPrimary },
+  missionsShadow: {
+    borderRadius: radius.xl,
+    marginTop: spacing.sm,
+    shadowColor: colors.goldDeep,
+    shadowOpacity: 0.28,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
   missionsCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    backgroundColor: colors.goldSoft,
     borderRadius: radius.xl,
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.gold,
-    marginTop: spacing.sm,
+    overflow: 'hidden',
   },
   missionsIcon: {
     width: 40,
@@ -510,10 +526,10 @@ const styles = StyleSheet.create({
     ...shadows.card,
   },
   gridIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.brandSoft,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: colors.lavenderSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -528,9 +544,10 @@ const styles = StyleSheet.create({
     ...typography.label,
     fontSize: 11,
     color: colors.textMuted,
-    letterSpacing: 1,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
+    letterSpacing: 1.4,
+    textTransform: 'uppercase',
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
   },
   card: {
     backgroundColor: colors.surface,
@@ -568,7 +585,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     paddingVertical: 14,
-    marginTop: spacing.md,
+    marginTop: spacing.xl,
     ...shadows.card,
   },
   logoutText: {
@@ -576,8 +593,8 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     color: colors.coralDeep,
   },
-  deleteBtn: { alignItems: 'center', paddingVertical: spacing.md },
-  deleteText: { ...typography.caption, fontSize: 12, color: colors.textMuted },
+  deleteBtn: { alignItems: 'center', paddingVertical: spacing.sm },
+  deleteText: { ...typography.caption, fontSize: 11.5, color: colors.textMuted, opacity: 0.85 },
   version: {
     ...typography.caption,
     fontSize: 11,

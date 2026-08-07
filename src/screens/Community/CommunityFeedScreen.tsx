@@ -333,11 +333,11 @@ export function CommunityFeedScreen() {
 
         <Pressable
           onPress={openCompose}
-          style={[styles.fab, { bottom: insets.bottom + 92 }]}
+          style={[styles.fab, { bottom: insets.bottom + 102 }]}
           accessibilityRole="button"
           accessibilityLabel="Create a post"
         >
-          <Ionicons name="create-outline" size={26} color={colors.textInverse} />
+          <Ionicons name="create-outline" size={24} color={colors.textInverse} />
         </Pressable>
       </SafeAreaView>
 
@@ -619,14 +619,12 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.md },
 
   banner: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingVertical: 9,
+    backgroundColor: colors.lavenderSoft,
+    borderRadius: radius.xl,
+    paddingVertical: 11,
     paddingHorizontal: spacing.md,
   },
-  bannerText: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.textSecondary, lineHeight: 16, textAlign: 'center' },
+  bannerText: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.lavenderDeep, lineHeight: 16, textAlign: 'center' },
 
   search: {
     flexDirection: 'row',
@@ -655,12 +653,12 @@ const styles = StyleSheet.create({
   emptyText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary, marginTop: spacing.sm },
   emptyHint: { ...typography.caption, fontSize: 12, color: colors.textMuted },
 
-  card: { backgroundColor: colors.surface, borderRadius: radius.xl, paddingVertical: 13, paddingHorizontal: 15, gap: 7, ...shadows.card },
+  card: { backgroundColor: colors.surface, borderRadius: radius.xl, paddingVertical: 16, paddingHorizontal: 16, gap: 9, ...shadows.card },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   authorTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   avatarEmoji: { fontSize: 20 },
-  name: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  name: { fontFamily: fontFamilies.poppinsBold, fontSize: 14, color: colors.textPrimary },
   handle: { fontFamily: fontFamilies.interRegular, fontSize: 11.5, color: colors.textMuted },
   metaRight: { alignItems: 'flex-end', gap: 2 },
   catPill: { backgroundColor: colors.creamDeep, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
@@ -670,8 +668,8 @@ const styles = StyleSheet.create({
   postTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textPrimary, letterSpacing: -0.2, lineHeight: 22 },
   body: { fontFamily: fontFamilies.interRegular, fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
 
-  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
-  actBtn: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
+  actBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.creamDeep },
   actCount: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
   followingTag: { marginLeft: 'auto', backgroundColor: colors.brandSoft, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
   followingText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, color: colors.brandDeep },
@@ -679,9 +677,9 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: spacing.lg,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
