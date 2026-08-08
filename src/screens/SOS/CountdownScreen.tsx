@@ -4,6 +4,7 @@ import { isPinSet, verifyPin } from '@/services/safety-pin';
 import { uploadPreRoll } from '@/services/sos-audio';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import {
+  AccessibilityInfo,
   Animated,
   AppState,
   Easing,
@@ -144,6 +145,16 @@ export function CountdownScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
       () => undefined,
     );
+    // Accessibility: a screen-reader user must HEAR what's happening on the most
+    // critical screen in the app, not just see the countdown.
+    AccessibilityInfo.announceForAccessibility(
+      isTest
+        ? 'Practice SOS starting. No real alerts will be sent.'
+        : isInstant
+          ? 'Sending your SOS now. Alerting your circle and nearby helpers.'
+          : `Emergency SOS. Sending in ${COUNTDOWN_SECONDS} seconds. To cancel, activate the I am safe button.`,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -228,6 +239,11 @@ export function CountdownScreen() {
       return;
     }
     setTriggering(true);
+    if (!isTest) {
+      AccessibilityInfo.announceForAccessibility(
+        'Sending your SOS now. Alerting your circle and nearby helpers.',
+      );
+    }
     dispatch(sosDispatchStarted());
     try {
       // Critical path: get a best-effort location fix WITHOUT ever failing the
@@ -381,7 +397,7 @@ export function CountdownScreen() {
             </View>
           </View>
 
-          <Text style={styles.caption}>
+          <Text style={styles.caption} accessibilityLiveRegion="polite">
             {triggering
               ? isTest
                 ? 'Test SOS recorded. No real alerts were sent.'

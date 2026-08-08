@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Linking,
   Pressable,
@@ -96,6 +97,16 @@ export function ActiveSOSScreen() {
   const delivery = useAppSelector((s) => s.sos.delivery);
   const profile = useAppSelector((s) => s.user.profile);
   const contactCount = profile?.emergencyContacts?.length ?? 0;
+
+  // Accessibility: a screen-reader user must HEAR that the SOS went out, not
+  // just see it. Announced once when the live SOS screen opens.
+  useEffect(() => {
+    if (!activeSOS || activeSOS.kind === 'test') return;
+    AccessibilityInfo.announceForAccessibility(
+      'S O S is active. Your circle and nearby helpers are being alerted with your live location. You can call 1 1 2 or share more from this screen.',
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // One-tap SMS to all emergency contacts (system composer, no permission).
   const textContacts = useCallback(() => {
