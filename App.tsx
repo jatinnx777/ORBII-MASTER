@@ -92,7 +92,6 @@ import { safeJourneyEnded, safeJourneyStarted } from '@/redux/slices/appSlice';
 import { isPinSet, clearPin } from '@/services/safety-pin';
 import { signOutFromGoogle } from '@/services/auth';
 import { useDeviceEvictionGuard } from '@/services/session-guard';
-import { hasSmsPermission, requestSmsPermission } from '@/services/sms';
 import {
   showHelperOverlay,
   dismissHelperOverlay,
@@ -177,24 +176,20 @@ function RootNavigator() {
     if ((store.getState().user.profile?.emergencyContacts?.length ?? 0) === 0) return;
     let cancelled = false;
     (async () => {
-      if (await hasSmsPermission()) return;
       const seen = await getItem<boolean>('orbii:sms-prompt-seen');
       if (cancelled || seen) return;
       await setItem('orbii:sms-prompt-seen', true);
       appAlert(
-        'Send an SOS even with no internet',
-        'Let ORBII text your emergency contacts your location automatically when your data is down, and relay your SOS phone-to-phone over Bluetooth. Both work with no data.\n\nAndroid will then ask to allow SMS, that is expected. ORBII only uses it to text the contacts you chose during an SOS. It never reads your messages.',
+        'Reach help even with no internet',
+        "Turn on ORBII's offline relay so an SOS can hop phone-to-phone over Bluetooth to someone who has signal when your data is down. Everything passed between phones is sealed end to end, so a relaying phone can't read it.",
         [
           { text: 'Not now', style: 'cancel' },
           {
             text: 'Enable',
             onPress: () => {
-              // Pre-grant both offline permissions here so neither ever pops up
-              // in the middle of an emergency.
+              // Pre-grant Bluetooth now so it never pops up mid-emergency.
               void (async () => {
-                await requestSmsPermission();
                 await requestMeshPermissions();
-                // Start relaying now that Bluetooth is granted.
                 void startMeshListening();
               })();
             },

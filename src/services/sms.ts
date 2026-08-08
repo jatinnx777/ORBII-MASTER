@@ -1,34 +1,27 @@
 import * as SMS from 'expo-sms';
-import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
+import { NativeModules, Platform } from 'react-native';
 import type { EmergencyContact } from '@/types';
 
 const { OrbiiSms } = NativeModules as {
   OrbiiSms?: { sendSms(numbers: string[], message: string): Promise<number> };
 };
-const SEND_SMS = 'android.permission.SEND_SMS' as never;
 
 function contactPhones(contacts: EmergencyContact[]): string[] {
   return contacts.map((c) => c.phone).filter((p) => !!p && p.trim().length >= 7);
 }
 
-/** Is the SEND_SMS permission already granted (no prompt)? */
+// SEND_SMS is intentionally NOT declared in the manifest (Play-restricted),
+// so hands-free auto-send is disabled and every SMS goes through the composer
+// (openSMSComposer) which needs no permission. These stay as no-ops so callers
+// never prompt for a permission the app doesn't hold.
+/** Always false: hands-free SMS is off for the Play build. */
 export async function hasSmsPermission(): Promise<boolean> {
-  if (Platform.OS !== 'android' || !OrbiiSms) return false;
-  try {
-    return await PermissionsAndroid.check(SEND_SMS);
-  } catch {
-    return false;
-  }
+  return false;
 }
 
-/** Ask for SEND_SMS (used once, ahead of time, so an offline SOS can auto-text). */
+/** No-op: we never request the restricted SEND_SMS permission. */
 export async function requestSmsPermission(): Promise<boolean> {
-  if (Platform.OS !== 'android' || !OrbiiSms) return false;
-  try {
-    return (await PermissionsAndroid.request(SEND_SMS)) === PermissionsAndroid.RESULTS.GRANTED;
-  } catch {
-    return false;
-  }
+  return false;
 }
 
 /**

@@ -65,9 +65,6 @@ function ensureBroadcastChannel() {
   });
   broadcastChannel.subscribe((status) => {
     broadcastChannelReady = status === 'SUBSCRIBED';
-    if (status === 'SUBSCRIBED') {
-      console.log('[community] broadcast channel ready');
-    }
   });
   return broadcastChannel;
 }
@@ -196,7 +193,6 @@ export async function broadcastAlert(alert: AlertBroadcast): Promise<void> {
         event: 'new-alert',
         payload: alert,
       });
-      console.log('[community] broadcastAlert sent fast', result);
       if (result === 'ok') return;
     } catch (err) {
       console.warn('[community] fast broadcast failed, falling back', err);
@@ -216,7 +212,6 @@ export async function broadcastAlert(alert: AlertBroadcast): Promise<void> {
         event: 'new-alert',
         payload: alert,
       });
-      console.log('[community] broadcastAlert sent', { attempt, result });
       if (result === 'ok') return;
     } catch (err) {
       console.warn('[community] broadcastAlert attempt failed', attempt, err);
@@ -271,7 +266,6 @@ export function subscribeToAlerts(handlers: {
     })
     .on('broadcast', { event: 'new-alert' }, (msg) => {
       const payload = msg.payload as AlertBroadcast | undefined;
-      console.log('[community] alert received', payload?.id);
       if (!payload || !payload.id || !payload.location) return;
       handlers.onAlert(payload);
     })
@@ -285,9 +279,7 @@ export function subscribeToAlerts(handlers: {
       if (!payload?.id) return;
       handlers.onResolved?.(payload.id);
     })
-    .subscribe((status) => {
-      console.log('[community] subscription status', status);
-    });
+    .subscribe();
 
   return {
     unsubscribe: () => {
