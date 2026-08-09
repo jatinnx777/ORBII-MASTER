@@ -287,26 +287,32 @@ export function MissionsScreen() {
                 </View>
               ) : null}
 
-              {/* ORBII coins — no money shown here, just coins + the rate */}
+              {/* ORBII coins wallet — payout-style card (balance up top, a clear
+                  full-width action below, so nothing floats). */}
               <Pressable
                 style={styles.earnCard}
                 onPress={() => navigation.navigate('CoinsWallet')}
               >
-                <View style={styles.earnHeadRow}>
-                  <Text style={styles.earnLabel}>ORBII COINS</Text>
-                  <Ionicons name="server" size={18} color={colors.sageDeep} />
-                </View>
-                <Text style={styles.earnBalance}>
-                  {(wallet?.balance ?? 0).toLocaleString()}
-                </Text>
-                <View style={styles.earnMetaRow}>
-                  <Text style={styles.earnMeta}>
-                    10 coins = ₹1 · earn 200 per confirmed help
-                  </Text>
-                  <View style={styles.cashOutBtn}>
-                    <Text style={styles.cashOutText}>View coins</Text>
-                    <Ionicons name="arrow-forward" size={14} color={colors.surface} />
+                <View style={styles.earnTop}>
+                  <View style={styles.earnIcon}>
+                    <Ionicons name="server" size={20} color={colors.sageDeep} />
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.earnLabel}>ORBII COINS</Text>
+                    <Text style={styles.earnBalance}>
+                      {(wallet?.balance ?? 0).toLocaleString()}
+                      <Text style={styles.earnUnit}> coins</Text>
+                    </Text>
+                  </View>
+                  <Text style={styles.earnRupees}>
+                    ≈ ₹{Math.floor((wallet?.balance ?? 0) / 10)}
+                  </Text>
+                </View>
+                <Text style={styles.earnMeta}>10 coins = ₹1 · earn 200 per confirmed help</Text>
+                <View style={styles.cashOutBtn}>
+                  <Ionicons name="wallet-outline" size={16} color={colors.surface} />
+                  <Text style={styles.cashOutText}>View wallet & redeem</Text>
+                  <Ionicons name="arrow-forward" size={15} color={colors.surface} style={{ marginLeft: 'auto' }} />
                 </View>
               </Pressable>
 
@@ -441,24 +447,33 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sageSoft,
     borderRadius: radius.xxl,
     padding: spacing.lg,
-    gap: 6,
+    gap: spacing.md,
     ...shadows.card,
   },
-  earnHeadRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  earnLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 0.8, color: colors.sageDeep },
-  earnBalance: { fontFamily: fontFamilies.poppinsBold, fontSize: 34, color: colors.textPrimary, letterSpacing: -0.5 },
-  earnMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-  earnMeta: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary },
+  earnTop: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  earnIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  earnLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 1, color: colors.sageDeep, textTransform: 'uppercase' },
+  earnBalance: { fontFamily: fontFamilies.poppinsBold, fontSize: 30, color: colors.textPrimary, letterSpacing: -0.5, marginTop: 1 },
+  earnUnit: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textMuted },
+  earnRupees: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.sageDeep },
+  earnMeta: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
   cashOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 8,
     backgroundColor: colors.sageDeep,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
+    paddingVertical: 13,
+    borderRadius: radius.lg,
   },
-  cashOutText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.surface },
+  cashOutText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.surface },
   statsCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, ...shadows.card },
   sectionLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, letterSpacing: 0.8, color: colors.textMuted, marginBottom: spacing.sm },
   statsRow: { flexDirection: 'row', alignItems: 'center' },
