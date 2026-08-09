@@ -44,6 +44,7 @@ import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
 import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
 import { SafetyPinScreen } from '@/screens/Settings/SafetyPinScreen';
 import { VoicePhrasesScreen } from '@/screens/Settings/VoicePhrasesScreen';
+import { VoiceReliabilityScreen } from '@/screens/Settings/VoiceReliabilityScreen';
 import { VoiceDebugScreen } from '@/screens/Debug/VoiceDebugScreen';
 import { ResponderApplicationScreen } from '@/responder/ResponderApplicationScreen';
 import { ResponderVerificationScreen } from '@/responder/ResponderVerificationScreen';
@@ -344,6 +345,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="VoicePhrases"
         component={VoicePhrasesScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="VoiceReliability"
+        component={VoiceReliabilityScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

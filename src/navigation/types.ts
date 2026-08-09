@@ -106,6 +106,7 @@ export type AppStackParamList = {
   CircleInvite: { circleId: string };
   SafetyPin: undefined;
   VoicePhrases: undefined;
+  VoiceReliability: undefined;
   VoiceDebug: undefined;
   // Responder onboarding (the Missions dashboard itself is a role-gated tab).
   ResponderApplication: undefined;

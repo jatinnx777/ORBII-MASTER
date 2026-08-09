@@ -191,6 +191,10 @@ class VoiceGuardService : Service() {
   /** When a weak (non-firing) distress sound was last heard — fusion input. */
   @Volatile private var lastWeakDangerAt = 0L
   @Volatile private var lastWeakLabel = ""
+  /** Liveness beacon. The loop stamps this into prefs every ~30s; if the OS
+   *  kills us (aggressive OEM battery managers), it goes stale, and the app can
+   *  detect the silent death on next foreground and re-arm. */
+  @Volatile private var lastHeartbeatMs = 0L
   private var wakeLock: PowerManager.WakeLock? = null
   private val main = Handler(Looper.getMainLooper())
 
@@ -344,6 +348,18 @@ class VoiceGuardService : Service() {
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
+        // Liveness beacon: stamp "still alive" every ~30s (cheap, throttled).
+        // Runs on every frame INCLUDING silence, so a quiet room never looks
+        // like a killed service. Aggressive OEM task-killers stop this loop, so
+        // a stale stamp is the app's proof the phone paused us.
+        val hbNow = System.currentTimeMillis()
+        if (hbNow - lastHeartbeatMs > 30_000L) {
+          lastHeartbeatMs = hbNow
+          try {
+            getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+              .edit().putLong("heartbeat", hbNow).apply()
+          } catch (_: Exception) {}
+        }
         // Keep EVERY frame, silence included, and keep it RAW (before the
         // denoiser/gain mutate the buffer). The seconds before she speaks are
         // the ones the old recording threw away, and evidence must stay real.

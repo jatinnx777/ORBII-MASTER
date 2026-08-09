@@ -184,6 +184,23 @@ export function VoicePhrasesScreen() {
             </View>
           ) : null}
 
+          {backgroundVoiceAvailable ? (
+            <Pressable
+              onPress={() => navigation.navigate('VoiceReliability' as never)}
+              style={({ pressed }) => [styles.reliabilityRow, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+            >
+              <IconBadge icon="battery-charging" tint="sage" size={36} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reliabilityTitle}>Keep it running on your phone</Text>
+                <Text style={styles.bgSub}>
+                  Stop your phone pausing Voice SOS in the background.
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+            </Pressable>
+          ) : null}
+
           <View style={styles.note}>
             <Ionicons name="shield-checkmark" size={16} color={colors.sageDeep} />
             <Text style={styles.noteText}>
@@ -362,6 +379,20 @@ const styles = StyleSheet.create({
   getText: { fontFamily: 'Poppins_600SemiBold', fontSize: 13, color: colors.textInverse },
   langBarTrack: { height: 7, borderRadius: 4, backgroundColor: colors.cream, overflow: 'hidden', marginTop: spacing.md },
   langBarFill: { height: '100%', borderRadius: 4, backgroundColor: colors.peachDeep },
+  reliabilityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    ...shadows.card,
+  },
+  reliabilityTitle: {
+    ...typography.bodyMedium,
+    fontFamily: 'Poppins_600SemiBold',
+    color: colors.textPrimary,
+  },
   bgHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   bgTitle: { ...typography.bodyMedium, fontFamily: 'Poppins_600SemiBold', color: colors.textPrimary },
   bgSub: { ...typography.caption, fontSize: 12.5, color: colors.textSecondary, lineHeight: 17, marginTop: 2 },

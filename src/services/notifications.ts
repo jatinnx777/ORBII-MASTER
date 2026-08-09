@@ -10,6 +10,15 @@ const VOICE_WAKE_ID = 'orbii-voice-wake';
 const SAFE_JOURNEY_ID = 'orbii-safe-journey';
 const SAFE_JOURNEY_CATEGORY = 'orbii-safe-journey';
 const GEOFENCE_LEAVE_CATEGORY = 'orbii-geofence-leave';
+const VOICE_EXPIRY_CATEGORY = 'orbii-voice-expiry';
+
+// Reminders fired before a time-boxed Voice SOS session ends, so protection
+// never lapses silently. Stable ids let us cancel/replace them on re-arm.
+const VOICE_EXPIRY_REMINDERS = [
+  { id: 'orbii-voice-expiry-60', mins: 60, label: '1 hour' },
+  { id: 'orbii-voice-expiry-30', mins: 30, label: '30 minutes' },
+  { id: 'orbii-voice-expiry-10', mins: 10, label: '10 minutes' },
+];
 
 function configure() {
   if (configured) return;
@@ -109,7 +118,30 @@ function configure() {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: false,
     }).catch(() => undefined);
+    // Reminder that always-on Voice SOS is about to turn itself off (the user
+    // armed it for a fixed window). Important enough to head-up so she can keep
+    // it on, but NOT an emergency: no DND bypass, a gentle double-buzz, so it
+    // never feels like a real SOS.
+    Notifications.setNotificationChannelAsync('voice-expiry', {
+      name: 'Voice SOS reminders',
+      description: 'Reminds you before background Voice SOS turns off, so you can keep it on.',
+      importance: Notifications.AndroidImportance.HIGH,
+      vibrationPattern: [0, 300, 150, 300],
+      enableVibrate: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      lightColor: '#8672CE',
+      sound: 'default',
+    }).catch(() => undefined);
   }
+  // "Keep it on" action on a Voice SOS expiry reminder — opens the app so she
+  // can re-arm before protection lapses.
+  Notifications.setNotificationCategoryAsync(VOICE_EXPIRY_CATEGORY, [
+    {
+      identifier: 'voice-extend',
+      buttonTitle: 'Keep listening',
+      options: { opensAppToForeground: true },
+    },
+  ]).catch(() => undefined);
   // Tap-actions on the persistent notification.
   Notifications.setNotificationCategoryAsync(PINNED_SHORTCUT_CATEGORY, [
     {
@@ -333,6 +365,85 @@ export async function hideListeningBadge(): Promise<void> {
     await Notifications.dismissNotificationAsync(LISTENING_BADGE_ID);
   } catch {
     // ignore
+  }
+}
+
+// Fired when we detect the phone killed the background listener and we've just
+// re-armed it. Honest and actionable: it tells her it paused, that it's back,
+// and offers the two OEM steps that stop it happening again. Uses the same
+// non-emergency channel as the expiry reminders.
+export async function fireVoiceGuardRecovered(): Promise<void> {
+  configure();
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: 'Your phone paused Voice SOS',
+        body: 'ORBII is listening again. Tap for the 2 steps that stop your phone pausing it.',
+        data: { kind: 'voice_oem_help' },
+        sound: 'default',
+        ...(Platform.OS === 'android'
+          ? { priority: Notifications.AndroidNotificationPriority.HIGH, color: '#8672CE' }
+          : {}),
+      },
+      trigger: Platform.OS === 'android'
+        ? ({ channelId: 'voice-expiry' } as Notifications.NotificationTriggerInput)
+        : null,
+    });
+  } catch (err) {
+    console.warn('[notifications] voice recovery notice failed', err);
+  }
+  addNotification({
+    title: 'Voice SOS was paused and restarted',
+    body: 'Your phone paused ORBII in the background. Tap for steps to keep it running.',
+    kind: 'system',
+  }).catch(() => undefined);
+}
+
+// Cancel any pending Voice SOS expiry reminders. Called on re-arm (before
+// rescheduling) and when protection is turned off.
+export async function cancelVoiceExpiryReminders(): Promise<void> {
+  await Promise.all(
+    VOICE_EXPIRY_REMINDERS.map((r) =>
+      Notifications.cancelScheduledNotificationAsync(r.id).catch(() => undefined),
+    ),
+  );
+}
+
+// Schedule the 1h / 30m / 10m "protection is about to end" reminders for a
+// time-boxed background Voice SOS session. Any reminder whose fire time is
+// already past (short sessions) is simply skipped. Re-arming replaces them.
+export async function scheduleVoiceExpiryReminders(expiresAtMs: number): Promise<void> {
+  configure();
+  await cancelVoiceExpiryReminders();
+  const now = Date.now();
+  for (const r of VOICE_EXPIRY_REMINDERS) {
+    const fireAt = expiresAtMs - r.mins * 60_000;
+    if (fireAt <= now + 15_000) continue; // in the past / too soon to matter
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: r.id,
+        content: {
+          title: `Voice SOS ends in ${r.label}`,
+          body:
+            r.mins <= 10
+              ? 'You’re about to be unprotected. Tap to keep ORBII listening.'
+              : 'Tap to keep ORBII listening for a call for help.',
+          data: { kind: 'voice_expiry' },
+          categoryIdentifier: VOICE_EXPIRY_CATEGORY,
+          sound: 'default',
+          ...(Platform.OS === 'android'
+            ? { priority: Notifications.AndroidNotificationPriority.HIGH, color: '#8672CE' }
+            : {}),
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: new Date(fireAt),
+          ...(Platform.OS === 'android' ? { channelId: 'voice-expiry' } : {}),
+        },
+      });
+    } catch (err) {
+      console.warn('[notifications] voice expiry reminder failed', err);
+    }
   }
 }
 

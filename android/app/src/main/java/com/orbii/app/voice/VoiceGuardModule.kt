@@ -1,5 +1,6 @@
 package com.orbii.app.voice
 
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -143,6 +144,98 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     } catch (e: Exception) {
       promise.resolve(false)
     }
+  }
+
+  // Liveness beacon written by VoiceGuardService's listen loop (epoch ms). 0 =
+  // never started. The app compares this against "now" on foreground to tell if
+  // an aggressive OEM battery manager silently killed the listener.
+  @ReactMethod
+  fun getLastHeartbeat(promise: Promise) {
+    try {
+      val ts = ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .getLong("heartbeat", 0L)
+      promise.resolve(ts.toDouble())
+    } catch (e: Exception) {
+      promise.resolve(0.0)
+    }
+  }
+
+  // Open ORBII's own App info page — the reliable, always-present home for
+  // per-app battery + background settings on every OEM.
+  @ReactMethod
+  fun openAppSettings(promise: Promise) {
+    try {
+      val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.parse("package:${ctx.packageName}")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      ctx.startActivity(intent)
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
+  // Try to open the OEM's Autostart / Auto-launch manager (the setting that most
+  // often decides whether a background service survives on Xiaomi/Oppo/Vivo/
+  // etc.). Component names vary wildly by skin and version, so we probe a list
+  // for the current manufacturer and fall back to App info if none resolves.
+  @ReactMethod
+  fun openAutoStartSettings(promise: Promise) {
+    for (c in autoStartComponents()) {
+      try {
+        val intent = Intent().apply {
+          component = c
+          addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        if (ctx.packageManager.resolveActivity(intent, 0) != null) {
+          ctx.startActivity(intent)
+          promise.resolve(true)
+          return
+        }
+      } catch (_: Exception) {
+        // try the next candidate
+      }
+    }
+    // Nothing matched — App info is always there and holds the same controls.
+    try {
+      val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+        data = Uri.parse("package:${ctx.packageName}")
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      }
+      ctx.startActivity(intent)
+    } catch (_: Exception) {
+      // give up quietly
+    }
+    promise.resolve(false)
+  }
+
+  private fun autoStartComponents(): List<ComponentName> {
+    val m = Build.MANUFACTURER.lowercase()
+    val list = mutableListOf<ComponentName>()
+    fun add(pkg: String, cls: String) = list.add(ComponentName(pkg, cls))
+    when {
+      m.contains("xiaomi") || m.contains("redmi") || m.contains("poco") ->
+        add("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+      m.contains("oppo") || m.contains("realme") -> {
+        add("com.coloros.safecenter", "com.coloros.safecenter.permission.startup.StartupAppListActivity")
+        add("com.coloros.safecenter", "com.coloros.safecenter.startupapp.StartupAppListActivity")
+        add("com.oppo.safe", "com.oppo.safe.permission.startup.StartupAppListActivity")
+      }
+      m.contains("vivo") || m.contains("iqoo") -> {
+        add("com.vivo.permissionmanager", "com.vivo.permissionmanager.activity.BgStartUpManagerActivity")
+        add("com.iqoo.secure", "com.iqoo.secure.ui.phoneoptimize.AddWhiteListActivity")
+      }
+      m.contains("oneplus") ->
+        add("com.oneplus.security", "com.oneplus.security.chainlaunch.view.ChainLaunchAppListActivity")
+      m.contains("huawei") || m.contains("honor") -> {
+        add("com.huawei.systemmanager", "com.huawei.systemmanager.startupmgr.ui.StartupNormalAppListActivity")
+        add("com.huawei.systemmanager", "com.huawei.systemmanager.optimize.process.ProtectActivity")
+      }
+      m.contains("samsung") ->
+        add("com.samsung.android.lool", "com.samsung.android.sm.ui.battery.BatteryActivity")
+    }
+    return list
   }
 
   @ReactMethod

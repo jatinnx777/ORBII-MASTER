@@ -79,7 +79,11 @@ import { refreshUserRole } from '@/services/roles';
 import { startHelperMode, stopHelperMode } from '@/services/helper-mode';
 import { voiceSOSStatus } from '@/services/voice-limits';
 import { consumeVoiceTestFire } from '@/services/voice-test';
-import { loadBgVoiceState, startBackgroundVoice } from '@/services/background-voice';
+import {
+  loadBgVoiceState,
+  startBackgroundVoice,
+  recoverVoiceGuardIfKilled,
+} from '@/services/background-voice';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -285,6 +289,9 @@ function RootNavigator() {
         // Also re-pull the role, so a responder approved while their app was open
         // gets the Missions tab on return without needing to sign out and back in.
         void refreshUserRole();
+        // If an aggressive OEM battery manager killed background Voice SOS while
+        // we were away, re-arm it and let her know (self-healing watchdog).
+        void recoverVoiceGuardIfKilled();
       }
     });
     return () => {
@@ -685,6 +692,20 @@ export default function App() {
         // Tapping the wake notification jumps straight into the countdown.
         // @ts-expect-error - SOSCountdown is in the AppStack only.
         navigationRef.navigate('SOSCountdown');
+        return;
+      }
+      // Reminder that a time-boxed Voice SOS session is about to end (plain tap
+      // or the "Keep listening" action) — open the Voice SOS screen to re-arm.
+      if (data.kind === 'voice_expiry' && navigationRef.isReady()) {
+        // @ts-expect-error - VoicePhrases is in the AppStack only.
+        navigationRef.navigate('VoicePhrases');
+        return;
+      }
+      // "Your phone paused Voice SOS" — open the reliability guide with the OEM
+      // steps that stop it happening again.
+      if (data.kind === 'voice_oem_help' && navigationRef.isReady()) {
+        // @ts-expect-error - VoiceReliability is in the AppStack only.
+        navigationRef.navigate('VoiceReliability');
         return;
       }
       if (data.kind === 'safe_journey_widget') {
