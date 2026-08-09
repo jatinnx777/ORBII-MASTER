@@ -1,7 +1,7 @@
 <resources>
   <color name="appBackground">#F7F5FC</color>
-  <color name="splashscreen_background">#7B5FC7</color>
-  <color name="iconBackground">#7B5FC7</color>
+  <color name="splashscreen_background">#bc95ec</color>
+  <color name="iconBackground">#bc95ec</color>
   <color name="colorPrimary">#7B5FC7</color>
   <color name="colorPrimaryDark">#5E45A0</color>
   <color name="notification_color">#7B5FC7</color>

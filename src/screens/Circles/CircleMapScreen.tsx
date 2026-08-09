@@ -1,12 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OSMMapView, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
+import { useAppSelector } from '@/redux/store';
+import { listCircleMembers } from '@/services/circles';
 import {
   isCircleSharing,
   startCircleSharing,
@@ -30,8 +33,8 @@ function avatarHtml(name: string | null, color: string, stale: boolean): string 
   // WebView, so any user-controlled character must be neutralised.
   const initial = escapeHtml((name || '?').slice(0, 1).toUpperCase());
   const bg = stale ? '#9a958c' : color;
-  const op = stale ? '0.6' : '1';
-  return `<div style="opacity:${op};width:38px;height:38px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,0.35);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:15px">${initial}</div>`;
+  const op = stale ? '0.65' : '1';
+  return `<div style="opacity:${op};width:40px;height:40px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 4px 14px rgba(20,18,40,0.28);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:16px">${initial}</div>`;
 }
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
@@ -50,14 +53,51 @@ function freshness(iso: string): { color: string; stale: boolean } {
 
 export function CircleMapScreen() {
   const navigation = useNavigation();
+  const circles = useAppSelector((s) => s.circles.circles);
+  const activeCircleId = useAppSelector((s) => s.circles.activeCircleId);
+
   const [members, setMembers] = useState<MemberLocation[]>([]);
   const [sharing, setSharing] = useState(false);
   const [center, setCenter] = useState<GeoPoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Which circle's members we're viewing, and that circle's member ids.
+  const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
+  const [memberIds, setMemberIds] = useState<Set<string> | null>(null);
   // History: which member's trail is shown.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [trail, setTrail] = useState<TrailPoint[]>([]);
+
+  // Default the selection to the active circle (or the first one).
+  useEffect(() => {
+    if (selectedCircleId || circles.length === 0) return;
+    setSelectedCircleId(activeCircleId ?? circles[0].id);
+  }, [circles, activeCircleId, selectedCircleId]);
+
+  // Load the selected circle's member ids so we can filter the shared locations
+  // down to just that circle, rather than everyone the user shares any circle with.
+  useEffect(() => {
+    if (!selectedCircleId) {
+      setMemberIds(null);
+      return;
+    }
+    let alive = true;
+    setMemberIds(null);
+    listCircleMembers(selectedCircleId)
+      .then((ms) => alive && setMemberIds(new Set(ms.map((m) => m.userId))))
+      .catch(() => alive && setMemberIds(new Set()));
+    return () => {
+      alive = false;
+    };
+  }, [selectedCircleId]);
+
+  // Only the selected circle's members (the RPC already excludes yourself).
+  const shown = useMemo(
+    () => (memberIds ? members.filter((m) => memberIds.has(m.userId)) : []),
+    [members, memberIds],
+  );
+
+  const selectedCircle = circles.find((c) => c.id === selectedCircleId) ?? null;
 
   const selectMember = async (m: MemberLocation) => {
     if (selectedId === m.userId) {
@@ -128,14 +168,14 @@ export function CircleMapScreen() {
     }
   };
 
-  const markers: OSMMarker[] = members.map((m) => ({
+  const markers: OSMMarker[] = shown.map((m) => ({
     id: m.userId,
     coordinate: { latitude: m.lat, longitude: m.lng },
     // A member who turned sharing off shows greyed at their LAST known spot.
     html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale),
   }));
   // Accuracy rings — "precise to ~Xm". Only for people actually sharing now.
-  const rings: OSMCircle[] = members
+  const rings: OSMCircle[] = shown
     .filter((m) => m.sharing && m.accuracyM != null)
     .map((m) => ({
       id: `acc-${m.userId}`,
@@ -150,7 +190,7 @@ export function CircleMapScreen() {
     selectedId && trail.length >= 2
       ? [{ id: 'trail', coordinates: trail.map((t) => ({ latitude: t.lat, longitude: t.lng })), color: colors.brandDeep, width: 3 }]
       : [];
-  const selectedMember = members.find((m) => m.userId === selectedId) ?? null;
+  const selectedMember = shown.find((m) => m.userId === selectedId) ?? null;
 
   return (
     <View style={styles.root}>
@@ -169,18 +209,42 @@ export function CircleMapScreen() {
       )}
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top', 'bottom']} pointerEvents="box-none">
+        {/* Top bar — floating glass controls. */}
         <View style={styles.topBar} pointerEvents="box-none">
-          <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={styles.glassBtn}>
-            <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-          </Pressable>
+          <GlassButton icon="chevron-back" onPress={() => navigation.goBack()} />
           <View style={styles.titlePill}>
-            <Ionicons name="people" size={14} color={colors.textInverse} />
+            <Ionicons name="people" size={13} color={colors.textPrimary} />
             <Text style={styles.titleText}>Circle map</Text>
           </View>
-          <Pressable onPress={() => void refresh()} hitSlop={10} style={styles.glassBtn}>
-            <Ionicons name="refresh" size={19} color={colors.textPrimary} />
-          </Pressable>
+          <GlassButton icon="refresh" onPress={() => void refresh()} />
         </View>
+
+        {/* Circle selector — pick whose circle you're looking at. */}
+        {circles.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipsRow}
+            style={styles.chipsScroll}
+          >
+            {circles.map((c) => {
+              const on = c.id === selectedCircleId;
+              return (
+                <Pressable
+                  key={c.id}
+                  onPress={() => { setSelectedCircleId(c.id); setSelectedId(null); setTrail([]); }}
+                  style={[styles.chip, on && styles.chipOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`Show ${c.name}`}
+                >
+                  <Text style={styles.chipEmoji}>{c.emoji || '👥'}</Text>
+                  <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>{c.name}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         <View style={{ flex: 1 }} pointerEvents="box-none" />
 
@@ -196,7 +260,8 @@ export function CircleMapScreen() {
           </View>
         ) : null}
 
-        <View style={styles.sheet}>
+        {/* Bottom sheet — frosted glass. */}
+        <BlurView intensity={32} tint="light" style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.shareRow}>
             <View style={{ flex: 1 }}>
@@ -209,26 +274,36 @@ export function CircleMapScreen() {
               value={sharing}
               onValueChange={toggleShare}
               disabled={busy}
-              trackColor={{ false: colors.border, true: colors.brandSoft }}
-              thumbColor={sharing ? colors.brand : colors.surface}
+              trackColor={{ false: colors.border, true: colors.brandMid }}
+              thumbColor={sharing ? colors.brand : '#FFFFFF'}
             />
           </View>
 
-          <Text style={styles.sectionLabel}>CIRCLE MEMBERS ({members.length})</Text>
-          {loading ? (
+          <View style={styles.listHead}>
+            <Text style={styles.sectionLabel}>
+              {selectedCircle ? selectedCircle.name.toUpperCase() : 'CIRCLE'}
+            </Text>
+            <Text style={styles.countPill}>{shown.length}</Text>
+          </View>
+
+          {loading || memberIds === null ? (
             <ActivityIndicator color={colors.brand} style={{ marginVertical: spacing.md }} />
-          ) : members.length === 0 ? (
+          ) : shown.length === 0 ? (
             <Text style={styles.empty}>
-              No one in your circle is sharing right now. Ask them to open the Circle map and turn on live location.
+              No one in {selectedCircle ? selectedCircle.name : 'this circle'} is sharing right now. Ask them to open the Circle map and turn on live location.
             </Text>
           ) : (
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-              {members.map((m) => {
+              {shown.map((m, i) => {
                 const f = freshness(m.updatedAt);
                 const sel = selectedId === m.userId;
                 const off = !m.sharing;
                 return (
-                  <Pressable key={m.userId} onPress={() => void selectMember(m)} style={[styles.memberRow, sel && styles.memberRowOn]}>
+                  <Pressable
+                    key={m.userId}
+                    onPress={() => void selectMember(m)}
+                    style={[styles.memberRow, i > 0 && styles.memberDivider, sel && styles.memberRowOn]}
+                  >
                     <View style={[styles.memberDot, { backgroundColor: off ? '#9a958c' : colorFor(m.userId) }]}>
                       <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
                     </View>
@@ -248,9 +323,7 @@ export function CircleMapScreen() {
                       </View>
                     </View>
                     {off ? (
-                      <View style={styles.offPill}>
-                        <Text style={styles.offPillText}>OFF</Text>
-                      </View>
+                      <View style={styles.offPill}><Text style={styles.offPillText}>OFF</Text></View>
                     ) : m.battery != null ? (
                       <Text style={styles.battery}>{m.battery}%</Text>
                     ) : null}
@@ -260,9 +333,20 @@ export function CircleMapScreen() {
               })}
             </ScrollView>
           )}
-        </View>
+        </BlurView>
       </SafeAreaView>
     </View>
+  );
+}
+
+// A small frosted round control used in the top bar.
+function GlassButton({ icon, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={10} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
+      <BlurView intensity={30} tint="light" style={styles.glassBtn}>
+        <Ionicons name={icon} size={20} color={colors.textPrimary} />
+      </BlurView>
+    </Pressable>
   );
 }
 
@@ -280,41 +364,71 @@ const styles = StyleSheet.create({
   },
   glassBtn: {
     width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.94)',
-    alignItems: 'center', justifyContent: 'center', ...shadows.card,
+    overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
+    ...shadows.card,
   },
   titlePill: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(20,18,15,0.85)', borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.7)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)',
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md, paddingVertical: 9,
+    ...shadows.icon,
   },
-  titleText: { fontFamily: fontFamilies.poppinsBold, fontSize: 13, color: colors.textInverse },
+  titleText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary, letterSpacing: 0.2 },
+
+  chipsScroll: { flexGrow: 0, marginTop: spacing.sm },
+  chipsRow: { paddingHorizontal: spacing.md, gap: 8, alignItems: 'center' },
+  chip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 13, paddingVertical: 8,
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)',
+    maxWidth: 190,
+    ...shadows.icon,
+  },
+  chipOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  chipEmoji: { fontSize: 13 },
+  chipText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textPrimary },
+  chipTextOn: { color: colors.textInverse },
 
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    overflow: 'hidden',
+    borderTopLeftRadius: 30, borderTopRightRadius: 30,
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: 'rgba(255,255,255,0.62)',
     paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.lg,
     gap: spacing.sm,
-    shadowColor: '#000', shadowOffset: { width: 0, height: -6 }, shadowOpacity: 0.12, shadowRadius: 20, elevation: 16,
   },
-  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: 'center', marginBottom: spacing.xs },
-  shareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: colors.divider },
-  shareTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15.5, color: colors.textPrimary },
+  handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(20,18,40,0.14)', alignSelf: 'center', marginBottom: spacing.xs },
+  shareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(20,18,40,0.06)' },
+  shareTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textPrimary },
   shareSub: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
-  sectionLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, letterSpacing: 0.8, color: colors.textMuted, marginTop: spacing.xs },
+  listHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.xs },
+  sectionLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, letterSpacing: 1, color: colors.textMuted },
+  countPill: {
+    fontFamily: fontFamilies.poppinsBold, fontSize: 11, color: colors.brandDeep,
+    backgroundColor: colors.brandSoft, overflow: 'hidden',
+    minWidth: 20, textAlign: 'center', borderRadius: radius.pill, paddingHorizontal: 7, paddingVertical: 1,
+  },
   empty: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted, lineHeight: 19, paddingVertical: spacing.sm },
-  list: { maxHeight: 220 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: spacing.sm, paddingHorizontal: spacing.xs, borderRadius: radius.md },
-  memberRowOn: { backgroundColor: colors.brandSoft },
-  memberDot: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
+  list: { maxHeight: 244 },
+  memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 11, paddingHorizontal: spacing.xs, borderRadius: radius.md },
+  memberDivider: { borderTopWidth: 1, borderTopColor: 'rgba(20,18,40,0.05)' },
+  memberRowOn: { backgroundColor: 'rgba(134,114,206,0.10)' },
+  memberDot: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   memberInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: '#fff' },
   memberName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
   freshRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   freshDot: { width: 7, height: 7, borderRadius: 4 },
   memberMeta: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary },
   battery: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted },
-  offPill: { backgroundColor: colors.creamDeep, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  offPill: { backgroundColor: 'rgba(20,18,40,0.06)', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   offPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, color: colors.textMuted, letterSpacing: 0.6 },
 
   trailBar: {
@@ -323,7 +437,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     alignSelf: 'center',
     marginBottom: spacing.sm,
-    backgroundColor: 'rgba(20,18,15,0.88)',
+    backgroundColor: 'rgba(20,18,40,0.86)',
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 9,
