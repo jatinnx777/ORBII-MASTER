@@ -1,12 +1,6 @@
 // MUST be first: polyfills global crypto.getRandomValues so tweetnacl (used by
 // the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
 import 'react-native-get-random-values';
-// Freeze off-screen screens so a backgrounded tab (and its timers/polls) stops
-// re-rendering while you're on another one. Big smoothness + battery win, and
-// safe: react-native-screens revives the screen on navigation. Must run at
-// module scope, before any navigator mounts.
-import { enableFreeze } from 'react-native-screens';
-enableFreeze(true);
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Image, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';

@@ -22,6 +22,9 @@ export type MemberLocation = {
   updatedAt: string;
   battery: number | null;
   accuracyM: number | null;
+  /** false = they turned live location off; this is their last known position. */
+  sharing: boolean;
+  sharingOffAt: string | null;
 };
 
 export type TrailPoint = { lat: number; lng: number; at: string };
@@ -127,6 +130,10 @@ export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
     updatedAt: r.updated_at as string,
     battery: (r.battery as number) ?? null,
     accuracyM: (r.accuracy_m as number) ?? null,
+    // Backward-compatible: before sql/70 the column doesn't exist, so a missing
+    // value means the row is only present because they're sharing.
+    sharing: r.sharing !== false,
+    sharingOffAt: (r.sharing_off_at as string) ?? null,
   }));
 }
 

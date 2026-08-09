@@ -31,6 +31,7 @@ import {
   type CircleKind,
 } from '@/services/circles';
 import { inviteResolved } from '@/redux/slices/circlesSlice';
+import { isCircleSharing, startCircleSharing } from '@/services/circle-location';
 import { useIsPremium } from '@/services/entitlements';
 import { promptUpgrade } from '@/services/paywall';
 import {
@@ -111,6 +112,37 @@ export function CirclesScreen() {
     [navigation],
   );
 
+  // On joining a circle, offer to turn on live location so the circle can see
+  // her on the map right away. Asked once (skipped if already sharing); the
+  // system location permission is requested inside startCircleSharing.
+  const promptEnableSharing = useCallback(async () => {
+    try {
+      if (await isCircleSharing()) return;
+    } catch {
+      // fall through and still offer
+    }
+    appAlert(
+      'Share your live location?',
+      'Let this circle see where you are on the live map, so they can reach you fast if something goes wrong. You can turn it off any time.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Turn on',
+          onPress: () => {
+            void startCircleSharing().then((ok) => {
+              if (!ok) {
+                appAlert(
+                  'Location permission needed',
+                  'To share your live location, allow ORBII to access your location in Settings, then turn it on from the Circle map.',
+                );
+              }
+            });
+          },
+        },
+      ],
+    );
+  }, []);
+
   const handleAccept = useCallback(
     async (invite: CircleInvite) => {
       try {
@@ -118,6 +150,7 @@ export function CirclesScreen() {
         dispatch(inviteResolved(invite.id));
         await refreshCircles();
         await setActiveCircle(invite.circleId);
+        void promptEnableSharing();
       } catch (err) {
         appAlert(
           'Could not accept',
@@ -125,7 +158,7 @@ export function CirclesScreen() {
         );
       }
     },
-    [dispatch],
+    [dispatch, promptEnableSharing],
   );
 
   const handleDecline = useCallback(
@@ -272,19 +305,34 @@ export function CirclesScreen() {
           }}
           ListHeaderComponent={
             <View style={styles.invitesWrap}>
-              <CircleExplainer />
+              <Text style={styles.sectionLabel}>Circle tools</Text>
               <Pressable
                 onPress={() => navigation.navigate('Geofences')}
                 style={({ pressed }) => [styles.zonesRow, pressed && styles.pressedScale]}
                 accessibilityRole="button"
-                accessibilityLabel="Safe zones"
+                accessibilityLabel="Geofencing"
               >
                 <View style={styles.zonesIcon}>
                   <Ionicons name="locate" size={18} color={colors.goldDeep} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.zonesTitle}>Geofencing</Text>
-                  <Text style={styles.zonesSub}>Draw an area and get told if someone leaves it.</Text>
+                  <Text style={styles.zonesSub}>Draw a safe area, get told if someone leaves it.</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+              <Pressable
+                onPress={() => navigation.navigate('CircleMap')}
+                style={({ pressed }) => [styles.zonesRow, pressed && styles.pressedScale]}
+                accessibilityRole="button"
+                accessibilityLabel="Live location map"
+              >
+                <View style={[styles.zonesIcon, { backgroundColor: colors.sageSoft }]}>
+                  <Ionicons name="map" size={18} color={colors.sageDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.zonesTitle}>Live location map</Text>
+                  <Text style={styles.zonesSub}>See everyone in your circle on one live map.</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>

@@ -5,6 +5,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OSMMapView, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
+import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
 import {
   isCircleSharing,
@@ -91,10 +92,22 @@ export function CircleMapScreen() {
         if (alive) void refresh().finally(() => alive && setLoading(false));
       };
       run();
-      const poll = setInterval(run, 15000);
+      const poll = setInterval(run, 10000);
+      // Realtime: refetch the instant any visible member's row changes, so the
+      // map moves live instead of waiting for the next poll. The poll stays as a
+      // fallback in case realtime isn't enabled on the project (needs sql/70).
+      const channel = supabase
+        .channel('circle-locations-live')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'circle_locations' },
+          () => run(),
+        )
+        .subscribe();
       return () => {
         alive = false;
         clearInterval(poll);
+        supabase.removeChannel(channel);
       };
     }, [refresh]),
   );
@@ -118,11 +131,12 @@ export function CircleMapScreen() {
   const markers: OSMMarker[] = members.map((m) => ({
     id: m.userId,
     coordinate: { latitude: m.lat, longitude: m.lng },
-    html: avatarHtml(m.name, colorFor(m.userId), freshness(m.updatedAt).stale),
+    // A member who turned sharing off shows greyed at their LAST known spot.
+    html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale),
   }));
-  // Accuracy rings — "precise to ~Xm".
+  // Accuracy rings — "precise to ~Xm". Only for people actually sharing now.
   const rings: OSMCircle[] = members
-    .filter((m) => m.accuracyM != null)
+    .filter((m) => m.sharing && m.accuracyM != null)
     .map((m) => ({
       id: `acc-${m.userId}`,
       center: { latitude: m.lat, longitude: m.lng },
@@ -200,7 +214,7 @@ export function CircleMapScreen() {
             />
           </View>
 
-          <Text style={styles.sectionLabel}>PEOPLE SHARING WITH YOU ({members.length})</Text>
+          <Text style={styles.sectionLabel}>CIRCLE MEMBERS ({members.length})</Text>
           {loading ? (
             <ActivityIndicator color={colors.brand} style={{ marginVertical: spacing.md }} />
           ) : members.length === 0 ? (
@@ -212,21 +226,34 @@ export function CircleMapScreen() {
               {members.map((m) => {
                 const f = freshness(m.updatedAt);
                 const sel = selectedId === m.userId;
+                const off = !m.sharing;
                 return (
                   <Pressable key={m.userId} onPress={() => void selectMember(m)} style={[styles.memberRow, sel && styles.memberRowOn]}>
-                    <View style={[styles.memberDot, { backgroundColor: colorFor(m.userId) }]}>
+                    <View style={[styles.memberDot, { backgroundColor: off ? '#9a958c' : colorFor(m.userId) }]}>
                       <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.memberName} numberOfLines={1}>{m.name || 'Circle member'}</Text>
                       <View style={styles.freshRow}>
-                        <View style={[styles.freshDot, { backgroundColor: f.color }]} />
-                        <Text style={styles.memberMeta}>
-                          {ago(m.updatedAt)}{m.accuracyM != null ? ` · ~${Math.round(m.accuracyM)}m` : ''}
+                        {off ? (
+                          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+                        ) : (
+                          <View style={[styles.freshDot, { backgroundColor: f.color }]} />
+                        )}
+                        <Text style={styles.memberMeta} numberOfLines={1}>
+                          {off
+                            ? `Location off · last seen ${ago(m.updatedAt)}`
+                            : `${ago(m.updatedAt)}${m.accuracyM != null ? ` · ~${Math.round(m.accuracyM)}m` : ''}`}
                         </Text>
                       </View>
                     </View>
-                    {m.battery != null ? <Text style={styles.battery}>{m.battery}%</Text> : null}
+                    {off ? (
+                      <View style={styles.offPill}>
+                        <Text style={styles.offPillText}>OFF</Text>
+                      </View>
+                    ) : m.battery != null ? (
+                      <Text style={styles.battery}>{m.battery}%</Text>
+                    ) : null}
                     <Ionicons name={sel ? 'time' : 'time-outline'} size={18} color={sel ? colors.brandDeep : colors.textMuted} />
                   </Pressable>
                 );
@@ -287,6 +314,8 @@ const styles = StyleSheet.create({
   freshDot: { width: 7, height: 7, borderRadius: 4 },
   memberMeta: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary },
   battery: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted },
+  offPill: { backgroundColor: colors.creamDeep, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  offPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, color: colors.textMuted, letterSpacing: 0.6 },
 
   trailBar: {
     flexDirection: 'row',
