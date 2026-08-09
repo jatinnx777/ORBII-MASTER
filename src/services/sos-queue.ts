@@ -16,11 +16,16 @@ type QueuedSOS = {
   record: SOSRecord;
   user: Pick<UserProfile, 'uid' | 'name' | 'photoUri'> & { isPremium: boolean };
   queuedAt: number;
+  attempts?: number;
 };
 
 // Drop anything older than this: a 45-minute-late "emergency" push is noise,
 // not help, and could alarm the circle long after the moment has passed.
 const MAX_AGE_MS = 45 * 60 * 1000;
+// Retry cap: a permanently-failing item (bad payload, server rejects it) must
+// not loop forever. After this many tries we drop it and report, so it can
+// never block the queue behind it.
+const MAX_ATTEMPTS = 8;
 
 export async function enqueueSOS(record: SOSRecord, user: UserProfile): Promise<void> {
   try {
@@ -73,8 +78,18 @@ export async function flushSOSQueue(): Promise<void> {
       try {
         await deliver(item);
         addBreadcrumb({ category: 'sos', severity: 'info', message: 'Queued SOS delivered', data: { id: item.record.id } });
-      } catch {
-        keep.push(item); // still offline / failed — retry next time
+      } catch (err) {
+        const attempts = (item.attempts ?? 0) + 1;
+        if (attempts >= MAX_ATTEMPTS) {
+          // Give up on this one so it can't block the rest of the queue.
+          reportError(err, {
+            category: 'sos.queue',
+            message: 'Dropping queued SOS after max retries',
+            data: { id: item.record.id, attempts },
+          });
+          continue;
+        }
+        keep.push({ ...item, attempts }); // still offline / failed — retry next time
       }
     }
     await setItem(storageKeys.sosQueue, keep);

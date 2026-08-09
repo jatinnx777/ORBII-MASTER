@@ -9,6 +9,7 @@ import {
   ViewStyle,
   TextStyle,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { colors, radius, spacing, typography } from '@/theme';
 
 type Variant = 'primary' | 'danger' | 'secondary' | 'outline' | 'ghost';
@@ -69,7 +70,17 @@ export function Button({
       <Pressable
         testID={testID}
         onPress={onPress}
-        onPressIn={() => !isDisabled && animateTo(0.96)}
+        onPressIn={() => {
+          if (isDisabled) return;
+          animateTo(0.96);
+          // Tactile confirmation on every CTA. Danger (SOS / 112) gets a firmer
+          // knock; everything else a light tick. Best-effort, never blocks.
+          Haptics.impactAsync(
+            variant === 'danger'
+              ? Haptics.ImpactFeedbackStyle.Medium
+              : Haptics.ImpactFeedbackStyle.Light,
+          ).catch(() => undefined);
+        }}
         onPressOut={() => animateTo(1)}
         android_ripple={{ color: 'rgba(0,0,0,0.06)', borderless: false }}
         disabled={isDisabled}

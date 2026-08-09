@@ -1,6 +1,12 @@
 // MUST be first: polyfills global crypto.getRandomValues so tweetnacl (used by
 // the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
 import 'react-native-get-random-values';
+// Freeze off-screen screens so a backgrounded tab (and its timers/polls) stops
+// re-rendering while you're on another one. Big smoothness + battery win, and
+// safe: react-native-screens revives the screen on navigation. Must run at
+// module scope, before any navigator mounts.
+import { enableFreeze } from 'react-native-screens';
+enableFreeze(true);
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, AppState, Easing, Image, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
@@ -70,7 +76,7 @@ import { alertReceived, alertDismissed } from '@/redux/slices/communitySlice';
 import { premiumTierResolved, signedOut } from '@/redux/slices/userSlice';
 import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
-import { initSOSQueue } from '@/services/sos-queue';
+import { initSOSQueue, flushSOSQueue } from '@/services/sos-queue';
 import { flushPendingSosAudio } from '@/services/sos-audio';
 // Side-effect import: registers the background victim-location task with the OS
 // so a headless invocation (app killed mid-SOS) can still find it.
@@ -292,6 +298,9 @@ function RootNavigator() {
         // If an aggressive OEM battery manager killed background Voice SOS while
         // we were away, re-arm it and let her know (self-healing watchdog).
         void recoverVoiceGuardIfKilled();
+        // Belt-and-braces: NetInfo change events can be missed, so also try to
+        // flush any offline-queued SOS whenever the app comes back to the front.
+        void flushSOSQueue();
       }
     });
     return () => {

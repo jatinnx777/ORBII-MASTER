@@ -18,6 +18,7 @@ import { colors, radius, shadows, spacing, typography } from '@/theme';
 import {
   PROTECTION_DURATIONS,
   backgroundVoiceAvailable,
+  isBatteryExempt,
   loadBgVoiceState,
   saveBgVoiceState,
   startBackgroundVoice,
@@ -87,6 +88,20 @@ export function VoicePhrasesScreen() {
       }
       setBgEnabled(true);
       saveBgVoiceState({ enabled: true, hours: bgHours });
+      // Proactive reliability nudge: if the phone can still doze/kill ORBII,
+      // Voice SOS may silently stop in the background. Offer the fix now rather
+      // than waiting for a kill to be detected.
+      const exempt = await isBatteryExempt();
+      if (!exempt) {
+        appAlert(
+          'Keep ORBII listening',
+          'Your phone may pause Voice SOS in the background to save battery. Two quick settings stop that.',
+          [
+            { text: 'Later', style: 'cancel' },
+            { text: 'Show me how', onPress: () => navigation.navigate('VoiceReliability' as never) },
+          ],
+        );
+      }
     } else {
       await stopBackgroundVoice();
       setBgEnabled(false);

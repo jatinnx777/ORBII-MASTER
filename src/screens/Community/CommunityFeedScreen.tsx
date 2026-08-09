@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -270,66 +271,77 @@ export function CommunityFeedScreen() {
           ))}
         </View>
 
-        <ScrollView
+        <FlatList
+          data={loading ? [] : shown}
+          keyExtractor={(p) => p.id}
           contentContainerStyle={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           onScroll={onTabScroll}
           scrollEventThrottle={16}
+          // Re-render rows when the open accordion or interaction gate changes;
+          // the memo comparator lets only the affected cards through.
+          extraData={`${openId ?? ''}|${hasProfile}`}
+          removeClippedSubviews
+          initialNumToRender={6}
+          maxToRenderPerBatch={8}
+          windowSize={11}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
-        >
-          {/* Moderation banner */}
-          <View style={styles.banner}>
-            <Text style={styles.bannerText}>Be respectful. Stay safe. All posts are anonymous and moderated 💜</Text>
-          </View>
+          ListHeaderComponent={
+            <>
+              {/* Moderation banner */}
+              <View style={styles.banner}>
+                <Text style={styles.bannerText}>Be respectful. Stay safe. All posts are anonymous and moderated 💜</Text>
+              </View>
 
-          {/* Search */}
-          <View style={styles.search}>
-            <Ionicons name="search" size={17} color={colors.textMuted} />
-            <TextInput
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search the community…"
-              placeholderTextColor={colors.textMuted}
-              style={styles.searchInput}
+              {/* Search */}
+              <View style={styles.search}>
+                <Ionicons name="search" size={17} color={colors.textMuted} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="Search the community…"
+                  placeholderTextColor={colors.textMuted}
+                  style={styles.searchInput}
+                />
+              </View>
+
+              {/* Category filter chips — centered */}
+              <View style={styles.chipsRow}>
+                {FILTERS.map((f) => (
+                  <Pressable key={f.key} onPress={() => setCat(f.key)} style={[styles.chip, cat === f.key && styles.chipOn]}>
+                    <Text style={[styles.chipText, cat === f.key && styles.chipTextOn]}>{f.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </>
+          }
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
+            ) : (
+              <View style={styles.empty}>
+                <Ionicons name="chatbubbles-outline" size={34} color={colors.textMuted} />
+                <Text style={styles.emptyText}>
+                  {tab === 'mine' ? "You haven't posted yet." : tab === 'following' ? 'No posts from people you follow.' : 'Nothing here yet.'}
+                </Text>
+                <Text style={styles.emptyHint}>Be the first to share something.</Text>
+              </View>
+            )
+          }
+          renderItem={({ item: p }) => (
+            <PostCard
+              post={p}
+              open={openId === p.id}
+              canInteract={hasProfile}
+              onToggleComments={() => setOpenId(openId === p.id ? null : p.id)}
+              onVote={() => vote(p)}
+              onDelete={() => remove(p)}
+              onMore={() => setActionFor(p)}
+              onOpenAuthor={() => openProfile(p.authorProfileId)}
             />
-          </View>
-
-          {/* Category filter chips — centered */}
-          <View style={styles.chipsRow}>
-            {FILTERS.map((f) => (
-              <Pressable key={f.key} onPress={() => setCat(f.key)} style={[styles.chip, cat === f.key && styles.chipOn]}>
-                <Text style={[styles.chipText, cat === f.key && styles.chipTextOn]}>{f.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {loading ? (
-            <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
-          ) : shown.length === 0 ? (
-            <View style={styles.empty}>
-              <Ionicons name="chatbubbles-outline" size={34} color={colors.textMuted} />
-              <Text style={styles.emptyText}>
-                {tab === 'mine' ? "You haven't posted yet." : tab === 'following' ? 'No posts from people you follow.' : 'Nothing here yet.'}
-              </Text>
-              <Text style={styles.emptyHint}>Be the first to share something.</Text>
-            </View>
-          ) : (
-            shown.map((p) => (
-              <PostCard
-                key={p.id}
-                post={p}
-                open={openId === p.id}
-                canInteract={hasProfile}
-                onToggleComments={() => setOpenId(openId === p.id ? null : p.id)}
-                onVote={() => vote(p)}
-                onDelete={() => remove(p)}
-                onMore={() => setActionFor(p)}
-                onOpenAuthor={() => openProfile(p.authorProfileId)}
-              />
-            ))
           )}
-        </ScrollView>
+        />
 
         <Pressable
           onPress={openCompose}
@@ -421,7 +433,7 @@ export function CommunityFeedScreen() {
   );
 }
 
-function PostCard({
+function PostCardBase({
   post,
   open,
   canInteract,
@@ -492,6 +504,18 @@ function PostCard({
     </View>
   );
 }
+
+// Memoized on DATA only: the comparator ignores the callback props (they're
+// re-created inline per render), so a card only re-renders when its post,
+// open, or canInteract actually changes. With the FlatList below, this keeps
+// the feed smooth as it grows and while you type in search.
+const PostCard = React.memo(
+  PostCardBase,
+  (prev, next) =>
+    prev.post === next.post &&
+    prev.open === next.open &&
+    prev.canInteract === next.canInteract,
+);
 
 function Comments({ postId, canInteract }: { postId: string; canInteract: boolean }) {
   const [items, setItems] = useState<FeedComment[] | null>(null);

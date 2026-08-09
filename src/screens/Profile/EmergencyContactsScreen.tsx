@@ -21,6 +21,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactRemoved } from '@/redux/slices/userSlice';
 import { trackEvent } from '@/services/analytics';
 import { deleteEmergencyContact } from '@/services/emergency-contacts';
+import { surfaced } from '@/services/failures';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'EmergencyContacts'>;
@@ -45,7 +46,12 @@ export function EmergencyContactsScreen() {
           trackEvent('contact_removed');
           dispatch(contactRemoved(id));
           if (profile?.uid) {
-            deleteEmergencyContact(profile.uid, id).catch(() => undefined);
+            deleteEmergencyContact(profile.uid, id).catch(
+              surfaced(
+                'contacts.delete',
+                'Could not remove that contact on the server. Check your connection and try again.',
+              ),
+            );
           }
         },
       },

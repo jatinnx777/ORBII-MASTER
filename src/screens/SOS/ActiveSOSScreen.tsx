@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AccessibilityInfo,
   ActivityIndicator,
+  Animated,
+  Easing,
   Linking,
   Pressable,
   ScrollView,
@@ -125,7 +127,6 @@ export function ActiveSOSScreen() {
   const [responders, setResponders] = useState<Record<string, LiveResponder>>({});
   const [resolved, setResolved] = useState(false);
   const [resolvedBy, setResolvedBy] = useState<LiveResponder | null>(null);
-  const [elapsed, setElapsed] = useState(0);
   const [noHelperWarned, setNoHelperWarned] = useState(false);
   // PIN guard state for the cancel flow. When the user taps Cancel and a
   // PIN is set, we open this sheet and only proceed with the cancellation
@@ -342,12 +343,6 @@ export function ActiveSOSScreen() {
       promptArrival(closest);
     }
   }, [responders, userLocation, resolved, promptArrival]);
-
-  useEffect(() => {
-    if (resolved) return;
-    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
-    return () => clearInterval(id);
-  }, [resolved]);
 
   const responderList = useMemo(() => Object.values(responders), [responders]);
 
@@ -699,13 +694,31 @@ export function ActiveSOSScreen() {
           </View>
           <View style={styles.elapsedPill}>
             <View style={styles.liveDot} />
-            <Text style={styles.elapsedText}>{formatElapsed(elapsed)}</Text>
+            <LiveElapsed startAt={activeSOS.timestamp} style={styles.elapsedText} />
           </View>
         </View>
 
-        <View style={styles.statusBanner}>
-          <Text style={styles.statusBannerText}>{statusBannerText}</Text>
-        </View>
+        {/* Broadcasting hero — the focal moment before a helper accepts. */}
+        {!primary && !resolved ? (
+          <View style={styles.broadcastHero}>
+            <BroadcastPulse />
+            <Text style={styles.broadcastTitle}>Broadcasting your SOS</Text>
+            <Text style={styles.broadcastSub}>
+              Alerting every ORBII helper and your circle nearby. Stay on this screen.
+            </Text>
+            <View style={styles.livePill}>
+              <View style={styles.livePillDot} />
+              <Text style={styles.livePillText}>LIVE</Text>
+              <LiveElapsed startAt={activeSOS.timestamp} style={styles.livePillTime} />
+            </View>
+          </View>
+        ) : null}
+
+        {primary ? (
+          <View style={styles.statusBanner}>
+            <Text style={styles.statusBannerText}>{statusBannerText}</Text>
+          </View>
+        ) : null}
 
         {/* The rescue code. Only she can see it. She reads it out to the helper
             once he's physically in front of her, and only then does his app
@@ -806,14 +819,7 @@ export function ActiveSOSScreen() {
               <Ionicons name="call" size={20} color={colors.textInverse} />
             </Pressable>
           </View>
-        ) : (
-          <View style={styles.searchingCard}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={styles.searchingText}>
-              Alerting every ORBII user within 2 km
-            </Text>
-          </View>
-        )}
+        ) : null}
 
         {primary ? (
           <View style={styles.subStatus}>
@@ -921,31 +927,81 @@ export function ActiveSOSScreen() {
   );
 }
 
-// Stylised "cartoon" helper avatar built from layered Views. Black helmet,
-// red shirt, white face. No external assets so the bundle stays small.
-function HelperAvatar() {
+// Live "time since SOS fired" badge. Owns its own 1-second interval so the
+// tick re-renders ONLY this tiny text, never the whole SOS screen (which holds
+// the live map and responder list). Reads from the fire timestamp, so it stays
+// accurate even if the screen is re-opened.
+function LiveElapsed({
+  startAt,
+  style,
+}: {
+  startAt: number;
+  style?: object;
+}) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
   return (
-    <View style={avatar.wrap}>
-      <View style={avatar.helmet} />
-      <View style={avatar.face} />
-      <View style={avatar.shirt} />
-    </View>
+    <Text style={style}>
+      {formatElapsed(Math.max(0, Math.floor((now - startAt) / 1000)))}
+    </Text>
   );
 }
 
-// "Thank you" cartoon: scooter helper + waving home recipient, suggested
-// with shapes and emoji rather than imported art.
-function ThankYouArt() {
+// Broadcast radar: three coral rings that expand and fade outward from a solid
+// core, so "we are actively reaching people" reads at a glance. Fully on the
+// native driver (transform + opacity only), so it never stutters even while the
+// JS thread is busy dispatching the SOS.
+function BroadcastPulse() {
+  const rings = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+  const core = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const ringAnims = rings.map((v, i) =>
+      Animated.loop(
+        Animated.timing(v, {
+          toValue: 1,
+          duration: 2400,
+          delay: i * 800,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ),
+    );
+    const breathe = Animated.loop(
+      Animated.sequence([
+        Animated.timing(core, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(core, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    ringAnims.forEach((a) => a.start());
+    breathe.start();
+    return () => {
+      ringAnims.forEach((a) => a.stop());
+      breathe.stop();
+    };
+  }, [rings, core]);
+
+  const coreScale = core.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+
   return (
-    <View style={art.wrap}>
-      <View style={art.house}>
-        <Text style={art.houseEmoji}>🏠</Text>
-      </View>
-      <View style={art.helperBlock}>
-        <View style={art.helperHelmet} />
-        <View style={art.helperBody} />
-        <Text style={art.scooterEmoji}>🛵</Text>
-      </View>
+    <View style={styles.pulseWrap} pointerEvents="none">
+      {rings.map((v, i) => (
+        <Animated.View
+          key={i}
+          style={[
+            styles.pulseRing,
+            {
+              opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] }),
+              transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1.15] }) }],
+            },
+          ]}
+        />
+      ))}
+      <Animated.View style={[styles.pulseCore, { transform: [{ scale: coreScale }] }]}>
+        <Ionicons name="radio" size={40} color={colors.textInverse} />
+      </Animated.View>
     </View>
   );
 }
@@ -994,102 +1050,6 @@ function MissingRecord({ navigation }: { navigation: Nav }) {
     </View>
   );
 }
-
-const avatar = StyleSheet.create({
-  wrap: {
-    width: 56,
-    height: 64,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  helmet: {
-    position: 'absolute',
-    top: 0,
-    width: 36,
-    height: 26,
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-    backgroundColor: '#1a1a1a',
-    zIndex: 2,
-  },
-  face: {
-    position: 'absolute',
-    top: 16,
-    width: 28,
-    height: 22,
-    borderRadius: 6,
-    backgroundColor: '#F4C28E',
-    zIndex: 1,
-  },
-  shirt: {
-    position: 'absolute',
-    bottom: 0,
-    width: 56,
-    height: 30,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    backgroundColor: colors.primary,
-  },
-});
-
-const art = StyleSheet.create({
-  wrap: {
-    width: 110,
-    height: 78,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'flex-end',
-  },
-  house: {
-    position: 'absolute',
-    right: 0,
-    bottom: 6,
-    width: 50,
-    height: 60,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#1a1a1a',
-  },
-  houseEmoji: {
-    fontSize: 28,
-  },
-  helperBlock: {
-    position: 'absolute',
-    left: 0,
-    bottom: 0,
-    width: 64,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  helperHelmet: {
-    position: 'absolute',
-    top: 4,
-    width: 24,
-    height: 18,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    backgroundColor: '#1a1a1a',
-    zIndex: 3,
-  },
-  helperBody: {
-    position: 'absolute',
-    top: 18,
-    width: 30,
-    height: 28,
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
-    backgroundColor: colors.primary,
-    zIndex: 2,
-  },
-  scooterEmoji: {
-    fontSize: 30,
-    zIndex: 4,
-  },
-});
 
 // Honest "who did we actually reach" line, instead of an optimistic "sent".
 function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
@@ -1224,6 +1184,85 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     alignSelf: 'center',
+  },
+  // ── Broadcasting hero ──────────────────────────────────────
+  broadcastHero: {
+    alignItems: 'center',
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  pulseWrap: {
+    width: 200,
+    height: 200,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.md,
+  },
+  pulseRing: {
+    position: 'absolute',
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 2,
+    borderColor: colors.coral,
+    backgroundColor: colors.coralSoft,
+  },
+  pulseCore: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    backgroundColor: colors.coral,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: colors.coral,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 18,
+    elevation: 10,
+  },
+  broadcastTitle: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 22,
+    color: colors.textPrimary,
+    letterSpacing: -0.3,
+    textAlign: 'center',
+  },
+  broadcastSub: {
+    ...typography.body,
+    color: colors.textSecondary,
+    fontSize: 14,
+    textAlign: 'center',
+    maxWidth: 300,
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  livePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: spacing.md,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.coralSoft,
+  },
+  livePillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: colors.coral,
+  },
+  livePillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    letterSpacing: 1.2,
+    color: colors.coralDeep,
+  },
+  livePillTime: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 12,
+    color: colors.coralDeep,
+    fontVariant: ['tabular-nums'],
   },
   call112: {
     flexDirection: 'row',

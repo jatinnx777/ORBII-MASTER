@@ -54,3 +54,30 @@ export function critical(
     return undefined;
   };
 }
+
+/**
+ * Like `critical`, but the user is doing something and needs to KNOW it failed
+ * (saving a contact, accepting a mission, redeeming coins). A silent catch here
+ * looks like success and quietly breaks trust. Reports for telemetry AND shows
+ * a plain message. Lazy-imports the dialog so this stays usable on the SOS path
+ * without pulling UI into every failure site.
+ */
+export function surfaced(
+  category: string,
+  userMessage: string,
+  title = 'Something went wrong',
+) {
+  return (err: unknown): undefined => {
+    reportError(err, { category, message: userMessage });
+    // Lazy require avoids a static UI dependency (and any import cycle) here.
+    try {
+      const { appAlert } = require('@/components/common/AppDialog') as {
+        appAlert: (t: string, m: string) => void;
+      };
+      appAlert(title, userMessage);
+    } catch {
+      // If the dialog can't load we've still reported it; never throw from a catch.
+    }
+    return undefined;
+  };
+}
