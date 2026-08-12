@@ -30,6 +30,13 @@
 -dontwarn com.sun.jna.**
 -dontwarn java.awt.**
 
+# LiteRT (TensorFlow Lite successor) — YAMNet distress-sound detection. Keeps the
+# org.tensorflow.lite API and the LiteRT native/JNI-loaded classes.
+-keep class org.tensorflow.lite.** { *; }
+-keep class com.google.ai.edge.litert.** { *; }
+-dontwarn org.tensorflow.lite.**
+-dontwarn com.google.ai.edge.litert.**
+
 # Razorpay (react-native-razorpay) — keep SDK + payment callbacks; silence
 # optional deps it references but we don't ship.
 -keep class com.razorpay.** { *; }

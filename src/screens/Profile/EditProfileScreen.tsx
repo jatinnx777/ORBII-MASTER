@@ -43,11 +43,7 @@ export function EditProfileScreen() {
     photoUri !== (profile?.photoUri ?? null);
 
   const pickImage = async () => {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) {
-      appAlert('Permission needed', 'Enable photo access to change your picture.');
-      return;
-    }
+    // Android system Photo Picker — no media permission required.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,

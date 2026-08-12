@@ -102,8 +102,8 @@ android {
         applicationId 'in.orbii.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 26659
-        versionName "31.79.0"
+        versionCode 26662
+        versionName "31.79.3"
         // Ship only the locales the app actually has strings for. Strips
         // dozens of library translations (androidx etc.) from resources.
         resConfigs "en", "hi"
@@ -170,6 +170,12 @@ android {
     androidResources {
         ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~'
     }
+    kotlinOptions {
+        // LiteRT (16 KB-aligned TF Lite) ships Kotlin 2.3 metadata; this project
+        // compiles with Kotlin 2.1. The API is JVM-compatible, so skip the
+        // metadata version guard rather than force-upgrading the whole toolchain.
+        freeCompilerArgs += ["-Xskip-metadata-version-check"]
+    }
 }
 
 // Apply static values from `gradle.properties` to the `android.packagingOptions`
@@ -197,7 +203,10 @@ dependencies {
     implementation("com.facebook.react:react-android")
 
     // On-device distress-sound detection (YAMNet) for the VoiceGuard service.
-    implementation("org.tensorflow:tensorflow-lite:2.14.0")
+    // LiteRT is TensorFlow Lite's successor: it keeps the exact org.tensorflow.lite
+    // API (drop-in, no code change) but ships 16 KB-page-aligned native libs, which
+    // the classic tensorflow-lite 2.14 .so was not (Google Play now requires it).
+    implementation("com.google.ai.edge.litert:litert:2.1.6")
 
     def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
     def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
@@ -226,6 +235,6 @@ dependencies {
     // Vosk — fully offline, open-source (Apache-2.0) speech recognition.
     // NO API key, no cloud, no recurring cost. Runs custom user phrases via
     // on-device ASR inside the background-protection foreground service.
-    implementation 'com.alphacephei:vosk-android:0.3.47'
+    implementation 'com.alphacephei:vosk-android:0.3.70'
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
 }

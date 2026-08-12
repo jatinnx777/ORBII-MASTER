@@ -288,7 +288,10 @@ export function CommunityFeedScreen() {
           windowSize={11}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={
-            <>
+            // A single wrapper with its own gap — a FlatList header is one cell,
+            // so the list's contentContainer gap does NOT space these children;
+            // this restores the vertical rhythm between banner, search and chips.
+            <View style={styles.feedHeader}>
               {/* Moderation banner */}
               <View style={styles.banner}>
                 <Text style={styles.bannerText}>Be respectful. Stay safe. All posts are anonymous and moderated 💜</Text>
@@ -306,7 +309,7 @@ export function CommunityFeedScreen() {
                 />
               </View>
 
-              {/* Category filter chips — centered */}
+              {/* Category filter chips */}
               <View style={styles.chipsRow}>
                 {FILTERS.map((f) => (
                   <Pressable key={f.key} onPress={() => setCat(f.key)} style={[styles.chip, cat === f.key && styles.chipOn]}>
@@ -314,7 +317,7 @@ export function CommunityFeedScreen() {
                   </Pressable>
                 ))}
               </View>
-            </>
+            </View>
           }
           ListEmptyComponent={
             loading ? (
@@ -661,7 +664,8 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 14, color: colors.textPrimary, paddingVertical: 11 },
 
-  chipsRow: { flexDirection: 'row', justifyContent: 'center', gap: spacing.sm, paddingVertical: 2 },
+  feedHeader: { gap: spacing.md, paddingBottom: spacing.xs },
+  chipsRow: { flexDirection: 'row', justifyContent: 'center', flexWrap: 'wrap', gap: spacing.sm, paddingVertical: 2 },
   chip: {
     paddingHorizontal: spacing.md,
     paddingVertical: 8,

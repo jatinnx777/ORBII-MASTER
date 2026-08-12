@@ -125,15 +125,8 @@ export function ProfileSetupScreen() {
 
   const pickPhoto = async () => {
     try {
-      const permission =
-        await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!permission.granted) {
-        appAlert(
-          'Permission needed',
-          'Allow photo access to set a profile picture.',
-        );
-        return;
-      }
+      // Android system Photo Picker (and iOS picker) — no media permission
+      // needed, and complies with Google Play's Photo & Video Permissions policy.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,

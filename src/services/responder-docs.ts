@@ -26,9 +26,7 @@ export async function pickAndUploadDoc(
   kind: DocKind,
 ): Promise<string | null> {
   try {
-    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!perm.granted) return null;
-
+    // Android system Photo Picker — no media permission required.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       quality: 0.7,
