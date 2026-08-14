@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
+import { LinearGradient } from 'expo-linear-gradient';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -337,36 +338,49 @@ export function CountdownScreen() {
     }
   };
 
-  const accent = isTest ? colors.textSecondary : colors.coral;
-  const accentDeep = isTest ? colors.textPrimary : colors.coralDeep;
+  // Immersive, full-bleed emergency screen. A rich coral gradient (calm neutral
+  // in practice mode) carries a white countdown ring and number for maximum
+  // urgency and legibility — no "card floating on a page" look.
+  const isReal = !isTest;
+  const grad = (isTest
+    ? ['#F7F5FC', '#EFEAF7']
+    : ['#FF6B70', '#E23F45']) as [string, string];
+  const onColor = isTest ? colors.textPrimary : '#FFFFFF';
+  const trackColor = isTest ? colors.creamDeep : 'rgba(255,255,255,0.26)';
+  const subColor = isTest ? colors.textSecondary : 'rgba(255,255,255,0.92)';
 
   return (
-    <View style={[styles.container, { backgroundColor: isTest ? colors.creamDeep : colors.coralSoft }]}>
-      <StatusBar style="dark" />
+    <LinearGradient
+      colors={grad}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={styles.container}
+    >
+      <StatusBar style={isReal ? 'light' : 'dark'} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.top}>
-          <View style={[styles.badge, { backgroundColor: isTest ? colors.surface : '#fff' }]}>
-            <View style={[styles.badgeDot, { backgroundColor: accent }]} />
-            <Text style={[styles.badgeText, { color: accentDeep }]}>
+          <View style={[styles.badge, isReal ? styles.badgeGlass : styles.badgeLight]}>
+            <View style={[styles.badgeDot, { backgroundColor: onColor }]} />
+            <Text style={[styles.badgeText, { color: onColor }]}>
               {isTest ? 'PRACTICE · NO ALERTS SENT' : 'EMERGENCY SOS'}
             </Text>
           </View>
         </View>
 
-        {/* Clean white card carries the countdown — calm, but serious. */}
-        <View style={styles.card}>
-          <Text style={styles.heading}>
+        <View style={styles.center}>
+          <Text style={[styles.heading, { color: subColor }]}>
             {isTest ? 'Practice SOS in' : 'Sending your SOS in'}
           </Text>
 
           {/* A real countdown ring: the arc drains as the seconds do. */}
           <View style={styles.ringWrap}>
+            {isReal ? <View style={styles.glow} pointerEvents="none" /> : null}
             <Svg width={RING} height={RING}>
               <Circle
                 cx={RING / 2}
                 cy={RING / 2}
                 r={R}
-                stroke={colors.creamDeep}
+                stroke={trackColor}
                 strokeWidth={STROKE}
                 fill="none"
               />
@@ -374,7 +388,7 @@ export function CountdownScreen() {
                 cx={RING / 2}
                 cy={RING / 2}
                 r={R}
-                stroke={accent}
+                stroke={onColor}
                 strokeWidth={STROKE}
                 strokeLinecap="round"
                 fill="none"
@@ -389,15 +403,17 @@ export function CountdownScreen() {
             </Svg>
             <View style={styles.ringCenter} pointerEvents="none">
               <Animated.Text
-                style={[styles.number, { color: accent, transform: [{ scale: pulse }] }]}
+                style={[styles.number, { color: onColor, transform: [{ scale: pulse }] }]}
               >
                 {triggering ? '…' : Math.max(seconds, 0)}
               </Animated.Text>
-              {!triggering ? <Text style={styles.unit}>seconds</Text> : null}
+              {!triggering ? (
+                <Text style={[styles.unit, { color: subColor }]}>seconds</Text>
+              ) : null}
             </View>
           </View>
 
-          <Text style={styles.caption} accessibilityLiveRegion="polite">
+          <Text style={[styles.caption, { color: subColor }]} accessibilityLiveRegion="polite">
             {triggering
               ? isTest
                 ? 'Test SOS recorded. No real alerts were sent.'
@@ -413,11 +429,12 @@ export function CountdownScreen() {
           accessibilityLabel="Cancel SOS"
           style={({ pressed }) => [
             styles.cancel,
+            isReal ? styles.cancelReal : styles.cancelTest,
             pressed && styles.cancelPressed,
             triggering && styles.cancelDisabled,
           ]}
         >
-          <Text style={styles.cancelText}>
+          <Text style={[styles.cancelText, { color: isReal ? colors.coralDeep : colors.textPrimary }]}>
             {isVoice && pinGuarded ? 'I’m safe, cancel (PIN)' : 'I’m safe, cancel'}
           </Text>
         </Pressable>
@@ -445,7 +462,7 @@ export function CountdownScreen() {
           doCancel();
         }}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -458,34 +475,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   top: { paddingTop: spacing.lg, alignItems: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: spacing.md,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: radius.pill,
-    ...shadows.icon,
   },
+  // Frosted glass pill on the coral gradient; plain light pill in practice mode.
+  badgeGlass: {
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.35)',
+  },
+  badgeLight: { backgroundColor: colors.surface, ...shadows.icon },
   badgeDot: { width: 8, height: 8, borderRadius: 4 },
   badgeText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 11.5,
     letterSpacing: 1.2,
   },
-  card: {
-    alignSelf: 'stretch',
-    backgroundColor: colors.surface,
-    borderRadius: 36,
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    ...shadows.card,
-  },
   heading: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 16,
-    color: colors.textSecondary,
     textAlign: 'center',
   },
   ringWrap: {
@@ -493,7 +507,16 @@ const styles = StyleSheet.create({
     height: RING,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
+  },
+  // Soft depth glow behind the ring, so it reads as a light source on the
+  // gradient rather than a flat SVG pasted on a page.
+  glow: {
+    position: 'absolute',
+    width: RING + 44,
+    height: RING + 44,
+    borderRadius: (RING + 44) / 2,
+    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   ringCenter: {
     ...StyleSheet.absoluteFillObject,
@@ -502,8 +525,8 @@ const styles = StyleSheet.create({
   },
   number: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 96,
-    lineHeight: 108,
+    fontSize: 100,
+    lineHeight: 112,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
   },
@@ -512,45 +535,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 3,
     textTransform: 'uppercase',
-    color: colors.textMuted,
     marginTop: -8,
   },
-  progressTrack: {
-    height: 8,
-    alignSelf: 'stretch',
-    borderRadius: 4,
-    backgroundColor: colors.creamDeep,
-    marginTop: spacing.lg,
-    overflow: 'hidden',
-  },
-  progressFill: { height: '100%', borderRadius: 4 },
   caption: {
     ...typography.body,
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontSize: 14.5,
     textAlign: 'center',
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
     maxWidth: 300,
   },
   cancel: {
     alignSelf: 'stretch',
-    minHeight: touchTarget.comfortable + 6,
+    minHeight: touchTarget.comfortable + 8,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: spacing.md,
     marginBottom: spacing.lg,
-    ...shadows.card,
   },
-  cancelPressed: {
-    transform: [{ scale: 0.98 }],
-    backgroundColor: colors.creamDeep,
+  // Solid white pill on coral = confident, obvious, high-contrast "I'm safe".
+  cancelReal: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
+  cancelTest: { backgroundColor: colors.surface, ...shadows.card },
+  cancelPressed: { transform: [{ scale: 0.98 }], opacity: 0.94 },
   cancelDisabled: { opacity: 0.5 },
   cancelText: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 17,
-    color: colors.textPrimary,
   },
 });

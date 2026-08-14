@@ -37,10 +37,9 @@ import {
 } from '@/services/auth';
 import type { AuthScreenProps } from '@/navigation/types';
 
-// 6-digit OTP entry. Renders as a single TextInput styled to look like
-// 6 boxes — keeps the UX simple while supporting paste-fill from the
-// system SMS suggestion bar.
-const OTP_LENGTH = 6;
+// OTP entry. Renders a single hidden TextInput styled to look like a row of
+// boxes, which supports paste-fill from the SMS/e-mail suggestion bar. Email
+// codes are 8 digits; SMS codes are 6, so the box count follows the channel.
 const RESEND_COOLDOWN_S = 30;
 
 export function PhoneVerifyScreen({
@@ -54,6 +53,15 @@ export function PhoneVerifyScreen({
   const email = route.params.email;
   const target = phone ?? email ?? '';
   const isEmail = !phone && !!email;
+  // SMS codes are exactly 6. Email codes depend on the Supabase OTP length
+  // setting (6 by default, up to 8), so email accepts 6 to 8 and enables Verify
+  // as soon as 6 digits are in. This avoids blocking sign-in if the real code is
+  // shorter than the boxes shown.
+  const otpLength = isEmail ? 8 : 6;
+  const minLen = isEmail ? 6 : 6;
+  const boxW = otpLength > 6 ? 36 : 44;
+  const boxH = otpLength > 6 ? 48 : 56;
+  const boxGap = otpLength > 6 ? 6 : 8;
 
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -77,7 +85,7 @@ export function PhoneVerifyScreen({
     }).start();
   }, [enter]);
 
-  const ready = code.length === OTP_LENGTH && !verifying;
+  const ready = (isEmail ? code.length >= minLen : code.length === otpLength) && !verifying;
 
   const onVerify = async () => {
     if (!ready) return;
@@ -157,33 +165,30 @@ export function PhoneVerifyScreen({
               We have sent a verification code to{'\n'}
               <Text style={styles.target}>{target}</Text>
             </Text>
-            <View style={styles.testHint}>
-              <Ionicons name="flask-outline" size={12} color={colors.brandDeep} />
-              <Text style={styles.testHintText}>{t('phone.testHint')}</Text>
-            </View>
 
             <TextInput
               value={code}
               onChangeText={(v) => {
-                setCode(v.replace(/\D/g, '').slice(0, OTP_LENGTH));
+                setCode(v.replace(/\D/g, '').slice(0, otpLength));
                 if (error) setError(null);
               }}
               keyboardType="number-pad"
-              maxLength={OTP_LENGTH}
+              maxLength={otpLength}
               autoComplete="sms-otp"
               autoFocus
               textContentType="oneTimeCode"
               style={styles.otpField}
             />
 
-            <View style={styles.boxesRow}>
-              {Array.from({ length: OTP_LENGTH }).map((_, i) => {
+            <View style={[styles.boxesRow, { gap: boxGap }]}>
+              {Array.from({ length: otpLength }).map((_, i) => {
                 const filled = i < code.length;
                 return (
                   <View
                     key={i}
                     style={[
                       styles.box,
+                      { width: boxW, height: boxH },
                       filled && styles.boxFilled,
                       i === code.length && styles.boxActive,
                     ]}
@@ -282,12 +287,9 @@ const styles = StyleSheet.create({
   },
   boxesRow: {
     flexDirection: 'row',
-    gap: 8,
     marginTop: spacing.xl,
   },
   box: {
-    width: 44,
-    height: 56,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
@@ -347,22 +349,6 @@ const styles = StyleSheet.create({
   resendActive: {
     color: colors.brandDeep,
     fontFamily: fontFamilies.poppinsSemiBold,
-  },
-  testHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: spacing.md,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: colors.brandSoft,
-  },
-  testHintText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 11,
-    color: colors.brandDeep,
-    letterSpacing: 0.3,
   },
   pressed: {
     opacity: 0.92,

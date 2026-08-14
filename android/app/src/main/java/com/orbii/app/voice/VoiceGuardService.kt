@@ -152,7 +152,14 @@ class VoiceGuardService : Service() {
     private val SINGLE_DISTRESS = setOf(
       "help", "bachao", "bacho", "madad", "madat", "बचाओ", "मदद",
     )
-    private const val SINGLE_CONF = 0.62
+    // A single distress word fires on its own only when the recogniser is VERY
+    // sure it heard it. Raised from 0.62 → 0.88: at 0.62 the small model was
+    // emitting "help"/"madad" from TV chatter, other people talking nearby, and
+    // half-caught words, firing the countdown when the user had said nothing to
+    // it. A real, deliberate shout still clears 0.88; a mumbled or ambient
+    // near-match now falls through to the stricter two-shout / repeat / fusion
+    // paths instead of firing.
+    private const val SINGLE_CONF = 0.88
 
     // Cross-utterance repeat detection. A panicked "help ... help" has a pause
     // between the shouts, so the two-word phrase " help help " may never appear
@@ -204,6 +211,20 @@ class VoiceGuardService : Service() {
     // Persist phrases + duration so a START_STICKY restart (null intent, after
     // the OS kills us) keeps listening for the SAME custom phrases.
     val prefs = getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+
+    // HARD OFF GATE. A null intent means Android auto-restarted us (START_STICKY
+    // after an OEM kill). If the user has turned Voice SOS OFF, we must NOT
+    // resurrect the mic — stop immediately and stay dead. Only an explicit start
+    // (real intent) or a self-heal while still enabled may listen. This is the
+    // fix for "the mic is on even though I switched Voice SOS off".
+    if (intent == null && !prefs.getBoolean("enabled", false)) {
+      stopSelf()
+      return START_NOT_STICKY
+    }
+    // A real (user/JS-initiated) start marks the guard as enabled, so a later
+    // OEM kill CAN self-heal, but a user turn-off (which clears this) cannot be
+    // undone by the OS.
+    if (intent != null) prefs.edit().putBoolean("enabled", true).apply()
     val raw = intent?.getStringExtra(EXTRA_PHRASES)
     if (raw != null) prefs.edit().putString("phrases", raw).apply()
     val source = raw ?: prefs.getString("phrases", "") ?: ""
@@ -296,8 +317,18 @@ class VoiceGuardService : Service() {
       ScreamDetector(
         this,
         onDanger = { label, score ->
+          // A distress SOUND on its own (scream / crying / glass) NO LONGER
+          // fires an SOS by itself. On-device sound classification false-fires
+          // on TV, music, laughter, children playing and household noise, which
+          // was opening the countdown with no word ever spoken. A sound now only
+          // CORROBORATES a soft word: a scream plus "help"/"bachao" within a few
+          // seconds still fires, but a sound alone never does. The spoken-word
+          // paths (single confident word, "help help", repeat, phrase) remain
+          // the only things that can fire on their own.
           VoiceMetrics.lastText = "[$label ${String.format("%.2f", score)}]"
-          triggerNow(label, 0L)
+          lastWeakDangerAt = System.currentTimeMillis()
+          lastWeakLabel = label
+          VoiceMetrics.screamScore = score.toDouble()
         },
         onWeak = { label, score ->
           // Not enough to fire. Remembered for a few seconds so that a soft

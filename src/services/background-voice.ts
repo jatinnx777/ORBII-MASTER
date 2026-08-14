@@ -1,6 +1,11 @@
 import { NativeModules, Platform } from 'react-native';
 import { getItem, setItem, removeItem, storageKeys } from './storage';
 import { appAlert } from '@/components/common/AppDialog';
+import {
+  overlayAvailable,
+  hasOverlayPermission,
+  requestOverlayPermission,
+} from './helper-overlay';
 import { logVoiceSessionStart, logVoiceSessionEnd } from './voice-sessions';
 import {
   scheduleVoiceExpiryReminders,
@@ -54,14 +59,59 @@ export async function ensureFullScreenIntentAccess(): Promise<void> {
   }
 }
 
+// THE fix for "background firing is a myth". Android blocks a background app
+// from launching a screen on its own — which is why a voice trigger only showed
+// a notification you had to tap. But an app holding the "display over other
+// apps" (SYSTEM_ALERT_WINDOW) permission is EXEMPT: with it granted, the voice
+// service can bring the SOS countdown straight up over whatever app you're in,
+// hands-free. So we ask for it (once, with a clear reason) when Voice SOS turns
+// on. If declined, nothing breaks — it simply falls back to today's tappable
+// notification.
+export async function ensureOverlayForVoiceSos(): Promise<void> {
+  if (!overlayAvailable()) return;
+  try {
+    if (await hasOverlayPermission()) return;
+    const asked = await getItem<boolean>(storageKeys.overlayAsked);
+    if (asked) return;
+    await setItem(storageKeys.overlayAsked, true);
+    appAlert(
+      'Let ORBII pop up when you shout',
+      'For Voice SOS to show the emergency by itself — even when you are in another app or your screen is off — allow ORBII to "display over other apps". Without it, Android can only show a notification you would have to tap.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        {
+          text: 'Allow',
+          onPress: () => {
+            void requestOverlayPermission();
+          },
+        },
+      ],
+    );
+  } catch {
+    // best effort — never block arming over a permission prompt
+  }
+}
+
+// One call that makes sure a voice trigger can actually surface. Overlay first
+// (it's what unblocks background launch); only chase the lock-screen full-screen
+// permission once overlay is sorted, so two system dialogs never stack.
+export async function ensureVoiceSosVisibility(): Promise<void> {
+  if (overlayAvailable() && !(await hasOverlayPermission())) {
+    await ensureOverlayForVoiceSos();
+    return;
+  }
+  await ensureFullScreenIntentAccess();
+}
+
 export const backgroundVoiceAvailable = Platform.OS === 'android' && !!VoiceGuard;
 
-/** Hours the user can arm background protection for. 0 = until turned off. */
+/** Hours the user can arm protection for. Hard-capped at 8h, never indefinite,
+ *  so the mic is always time-bounded and honest. */
 export const PROTECTION_DURATIONS = [
+  { label: '1 hour', hours: 1 },
+  { label: '2 hours', hours: 2 },
   { label: '4 hours', hours: 4 },
-  { label: '12 hours', hours: 12 },
-  { label: '24 hours', hours: 24 },
-  { label: 'Until I turn it off', hours: 0 },
+  { label: '8 hours', hours: 8 },
 ];
 
 export async function startBackgroundVoice(
@@ -72,7 +122,7 @@ export async function startBackgroundVoice(
   try {
     const durationMs = durationHours > 0 ? durationHours * 3600_000 : 0;
     await VoiceGuard.startGuard(phrases, durationMs);
-    void ensureFullScreenIntentAccess();
+    void ensureVoiceSosVisibility();
     // Survive a reboot — BootReceiver re-arms the service if this is set.
     void VoiceGuard.setBootRestore?.(true);
     // Audit log (fire-and-forget). whisper state is read where it's toggled;
@@ -206,6 +256,8 @@ export async function recoverVoiceGuardIfKilled(): Promise<
   if (expiresAt && now >= expiresAt) {
     await setItem(storageKeys.voiceGuardArmed, false);
     await removeItem(storageKeys.voiceGuardExpiresAt);
+    // Reflect the auto-off in the persisted toggle state so the UI shows OFF.
+    await saveBgVoiceState({ enabled: false, hours: 0 });
     return 'expired';
   }
 

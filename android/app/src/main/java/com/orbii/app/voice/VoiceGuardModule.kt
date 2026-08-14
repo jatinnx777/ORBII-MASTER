@@ -114,10 +114,32 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
   @ReactMethod
   fun stopGuard(promise: Promise) {
     try {
+      // Clear the "enabled" gate FIRST, so an OEM auto-restart (START_STICKY,
+      // null intent) sees the guard is off and stops itself instead of quietly
+      // turning the mic back on. This is the core of the "still listening after
+      // I turned it off" fix.
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("enabled", false).apply()
       ctx.stopService(Intent(ctx, VoiceGuardService::class.java))
       promise.resolve(true)
     } catch (e: Exception) {
       promise.reject("stop_failed", e)
+    }
+  }
+
+  // Dismiss the "ORBII SOS" alert notification that fireSos() posts. Used by the
+  // Voice SOS self-test / onboarding demo: the test consumes the deep-link fire,
+  // but the notification would linger and re-open the REAL countdown when it
+  // auto-launches or is tapped. Cancelling it here closes that double-fire hole.
+  @ReactMethod
+  fun cancelSosAlert(promise: Promise) {
+    try {
+      val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE)
+        as android.app.NotificationManager
+      nm.cancel(4102) // VoiceGuardService.ALERT_ID
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
     }
   }
 

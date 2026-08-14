@@ -24,6 +24,7 @@ const KEYS = {
   voiceGuardExpiresAt: 'orbii:voice-guard-expires-at',
   voiceLang: 'orbii:voice-lang',
   fsiAsked: 'orbii:fsi-asked',
+  overlayAsked: 'orbii:overlay-asked',
   disclosureAck: 'orbii:disclosure-ack',
   guidedSetup: 'orbii:guided-setup-done',
   sosQueue: 'orbii:sos-queue',

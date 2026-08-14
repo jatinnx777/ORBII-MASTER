@@ -12,17 +12,37 @@
 
 import { NativeModules, PermissionsAndroid, Platform } from 'react-native';
 import {
-  ensureFullScreenIntentAccess,
+  ensureVoiceSosVisibility,
   loadBgVoiceState,
+  saveBgVoiceState,
+  startBackgroundVoice,
+  stopBackgroundVoice,
+  requestBatteryExemption,
 } from '@/services/background-voice';
+
+// Voice SOS is ALWAYS time-bounded now — never "until I turn it off". Every
+// entry point (Home, Safety tab, Settings, onboarding) arms it for a duration
+// the user picks, capped here so the mic can never run indefinitely.
+export const VOICE_MAX_HOURS = 8;
+export const VOICE_MIN_HOURS = 0.5;
 
 const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {
     startGuard(phrases: string[], durationMs: number): Promise<boolean>;
     setWhisperMode(enabled: boolean): Promise<boolean>;
     stopGuard(): Promise<boolean>;
+    cancelSosAlert?(): Promise<boolean>;
   };
 };
+
+/** Dismiss the lingering SOS alert notification (used by the voice self-test). */
+export function cancelSosAlert(): void {
+  try {
+    void VoiceGuard?.cancelSosAlert?.();
+  } catch {
+    // best effort
+  }
+}
 
 const available = Platform.OS === 'android' && !!VoiceGuard;
 
@@ -136,7 +156,7 @@ export async function startListening(): Promise<{ ok: boolean; reason?: string }
   try {
     // duration 0 = listen until explicitly stopped.
     await VoiceGuard!.startGuard(NO_EXTRA_PHRASES, 0);
-    void ensureFullScreenIntentAccess();
+    void ensureVoiceSosVisibility();
     listening = true;
     setStatus('listening');
     return { ok: true };
@@ -170,4 +190,46 @@ export async function stopListening(): Promise<void> {
 
 export function getStatus(): VoiceDetectionStatus {
   return status;
+}
+
+// Reflect the guard's real on/off in the shared status without starting or
+// stopping native twice (arm/disarm own the native calls).
+function markGuardState(on: boolean): void {
+  listening = on;
+  setStatus(on ? 'listening' : 'idle');
+}
+
+/**
+ * The ONE way to turn Voice SOS on. Always time-bounded (clamped to 8h), starts
+ * the background guard with that duration so it auto-stops and fires the
+ * expiry warnings, persists the state, and asks the OS not to kill it.
+ */
+export async function armVoiceSos(hours: number): Promise<{ ok: boolean; reason?: string }> {
+  if (!available) return { ok: false, reason: 'native-unavailable' };
+  setStatus('requesting-permission');
+  const granted = await ensureMicPermission();
+  if (!granted) {
+    setStatus('idle');
+    return { ok: false, reason: 'permission-denied' };
+  }
+  const h = Math.min(VOICE_MAX_HOURS, Math.max(VOICE_MIN_HOURS, hours));
+  setStatus('starting');
+  const started = await startBackgroundVoice([], h);
+  if (!started) {
+    setStatus('error');
+    return { ok: false, reason: 'start-failed' };
+  }
+  await saveBgVoiceState({ enabled: true, hours: h });
+  void ensureVoiceSosVisibility();
+  void requestBatteryExemption();
+  markGuardState(true);
+  return { ok: true };
+}
+
+/** The ONE way to turn Voice SOS off. Fully tears the guard down. */
+export async function disarmVoiceSos(): Promise<void> {
+  await stopBackgroundVoice();
+  await saveBgVoiceState({ enabled: false, hours: 0 });
+  await stopListening();
+  markGuardState(false);
 }

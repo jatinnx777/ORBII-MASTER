@@ -8,6 +8,8 @@ export const fontFamilies = {
   interRegular: 'Inter_400Regular',
   interMedium: 'Inter_500Medium',
   interLight: 'Inter_300Light',
+  // Handwriting, for the founder's note / signature moments only.
+  handwriting: 'Caveat_600SemiBold',
 } as const;
 
 export const typography: Record<string, TextStyle> = {

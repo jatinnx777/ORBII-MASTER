@@ -90,16 +90,16 @@ export function AppDialogHost() {
       : [{ text: 'OK', style: 'default' as const }];
 
   const hasDestructive = buttons.some((b) => b.style === 'destructive');
-  // Decorative header icon. Destructive dialogs get a warning; everything else
-  // gets a calm brand mark. (appAlert has no icon param, so this is inferred.)
-  const icon = hasDestructive ? 'alert-circle' : 'shield-checkmark';
+  // Small squircle glyph, like an app icon rather than a big badge. Destructive
+  // dialogs read as a warning; everything else gets a calm brand mark.
+  const icon = hasDestructive ? 'alert' : 'shield-checkmark';
   const iconTint = hasDestructive ? colors.coralDeep : colors.brandDeep;
   const iconBg = hasDestructive ? colors.coralSoft : colors.brandSoft;
 
   return (
     <Modal transparent visible statusBarTranslucent onRequestClose={() => close()}>
       <View style={styles.backdrop}>
-        <BlurView intensity={22} tint="dark" style={StyleSheet.absoluteFill} />
+        <BlurView intensity={16} tint="dark" style={StyleSheet.absoluteFill} />
         <View style={styles.scrim} />
         <Pressable style={StyleSheet.absoluteFill} onPress={() => close()} />
 
@@ -109,18 +109,14 @@ export function AppDialogHost() {
             {
               opacity: anim,
               transform: [
-                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
-                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [12, 0] }) },
+                { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) },
               ],
             },
           ]}
         >
-          <Pressable style={styles.closeBtn} hitSlop={10} onPress={() => close()} accessibilityLabel="Close">
-            <Ionicons name="close" size={18} color={colors.textSecondary} />
-          </Pressable>
-
           <View style={[styles.iconWrap, { backgroundColor: iconBg }]}>
-            <Ionicons name={icon} size={30} color={iconTint} />
+            <Ionicons name={icon} size={24} color={iconTint} />
           </View>
 
           <Text style={styles.title}>{cfg.title}</Text>
@@ -128,7 +124,7 @@ export function AppDialogHost() {
 
           <View style={styles.btns}>
             {[...buttons]
-              // Primary/destructive on top, cancel below — like the reference.
+              // Primary/destructive on top, cancel below.
               .sort((a, b) => (a.style === 'cancel' ? 1 : 0) - (b.style === 'cancel' ? 1 : 0))
               .map((b, i) => {
                 const cancel = b.style === 'cancel';
@@ -140,7 +136,7 @@ export function AppDialogHost() {
                     style={({ pressed }) => [
                       styles.btn,
                       cancel ? styles.btnCancel : destructive ? styles.btnDestructive : styles.btnDefault,
-                      pressed && { opacity: 0.9 },
+                      pressed && styles.btnPressed,
                     ]}
                     accessibilityRole="button"
                   >
@@ -164,58 +160,53 @@ export function AppDialogHost() {
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.xl },
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(20,20,30,0.34)' },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(17,16,28,0.42)' },
   card: {
     width: '100%',
-    maxWidth: 350,
+    maxWidth: 360,
     backgroundColor: colors.surface,
-    borderRadius: 28,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xl,
-    paddingBottom: spacing.lg,
+    borderRadius: 32,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(17,16,28,0.06)',
+    paddingHorizontal: 24,
+    paddingTop: 26,
+    paddingBottom: 20,
     alignItems: 'center',
     ...shadows.sheet,
   },
-  closeBtn: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.creamDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  // Squircle app-icon-style glyph, not a big circular badge.
   iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 52,
+    height: 52,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: spacing.md,
+    marginBottom: 16,
   },
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 19,
+    fontSize: 20,
     color: colors.textPrimary,
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
     textAlign: 'center',
   },
   message: {
     fontFamily: fontFamilies.interRegular,
-    fontSize: 13.5,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 20,
     color: colors.textSecondary,
     textAlign: 'center',
-    marginTop: spacing.xs,
+    marginTop: 8,
+    paddingHorizontal: 4,
   },
-  btns: { width: '100%', gap: spacing.sm, marginTop: spacing.lg },
+  btns: { width: '100%', gap: 10, marginTop: 24 },
   btn: { width: '100%', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, borderRadius: radius.pill },
+  btnPressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
   btnDefault: { backgroundColor: colors.brand },
   btnDestructive: { backgroundColor: colors.coral },
-  btnCancel: { backgroundColor: 'transparent' },
-  btnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15 },
+  // Filled light pill rather than a bare text link — reads as finished, modern.
+  btnCancel: { backgroundColor: colors.creamDeep },
+  btnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5 },
   btnTextInverse: { color: colors.textInverse },
   btnTextCancel: { color: colors.textSecondary },
 });

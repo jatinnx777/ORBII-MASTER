@@ -11,6 +11,7 @@ import { supabase } from './supabase';
 type EventName =
   | 'app_opened'
   | 'onboarding_completed'
+  | 'onboarding_voice_demo'
   | 'login_started'
   | 'login_completed'
   | 'sos_triggered'

@@ -1,5 +1,7 @@
 export { AppDialogHost, appAlert, type AppDialogButton } from './AppDialog';
 export { BatteryWarning } from './BatteryWarning';
+export { Celebration } from './Celebration';
+export { VoiceDurationSheet } from './VoiceDurationSheet';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { Button } from './Button';
 export { Card } from './Card';

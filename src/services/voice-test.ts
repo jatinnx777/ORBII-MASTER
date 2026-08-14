@@ -10,10 +10,18 @@
 // in App.tsx calls `consumeVoiceTestFire()` first; if it returns true the fire
 // belonged to the test and the real SOS flow is skipped.
 
-import { isAvailable, startListening, stopListening } from '@/services/voice-detection';
+import { cancelSosAlert, isAvailable, startListening, stopListening } from '@/services/voice-detection';
 
 let active = false;
 let onHeard: (() => void) | null = null;
+// When a test fire was last consumed. The native service posts a full-screen
+// SOS notification AND launches the countdown, so ONE spoken "help" can deliver
+// the `orbii://voice-sos` deep link twice (the launch, then the notification's
+// auto full-screen or a tap). The first delivery resolves the test; without a
+// short grace window the SECOND would slip through and open the REAL emergency
+// during a harmless test. This is the fix for "the demo opens the real SOS".
+let lastConsumedAt = 0;
+const DUPLICATE_GRACE_MS = 8000;
 
 export function isVoiceTestActive(): boolean {
   return active;
@@ -21,17 +29,28 @@ export function isVoiceTestActive(): boolean {
 
 /**
  * Called by the `orbii://voice-sos` deep-link handler. If a voice test is in
- * progress this consumes the fire (resolving the test) and returns true, so the
- * caller must NOT dispatch a real SOS. Returns false when no test is running.
+ * progress (or a test just fired moments ago) this consumes the fire and returns
+ * true, so the caller must NOT dispatch a real SOS. Returns false otherwise.
  */
 export function consumeVoiceTestFire(): boolean {
-  if (!active) return false;
-  active = false;
-  const cb = onHeard;
-  onHeard = null;
-  void stopListening();
-  cb?.();
-  return true;
+  const now = Date.now();
+  if (active) {
+    active = false;
+    lastConsumedAt = now;
+    const cb = onHeard;
+    onHeard = null;
+    void stopListening();
+    // Kill the SOS notification so a later tap can't re-open the real countdown.
+    cancelSosAlert();
+    cb?.();
+    return true;
+  }
+  // The same test's second delivery (auto full-screen / notification tap).
+  if (now - lastConsumedAt < DUPLICATE_GRACE_MS) {
+    cancelSosAlert();
+    return true;
+  }
+  return false;
 }
 
 export type VoiceTestResult =

@@ -13,6 +13,14 @@ import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
+// Responder verification is PAUSED until ORBII can handle government ID
+// (Aadhaar / PAN) legally and securely — collecting identity documents without
+// the right legal footing and data handling is not something we will ship on a
+// safety app. Flip this to true only once that pipeline is properly in place.
+// Existing applicants and approved responders keep their status; this only
+// stops NEW applications from being filed.
+const APPLICATIONS_OPEN = false;
+
 const DOES = [
   { icon: 'walk', text: 'Reach people in danger nearby, safely.' },
   { icon: 'call', text: 'Call the police and become a visible presence.' },
@@ -63,6 +71,13 @@ export function ResponderApplicationScreen() {
   // move you forward; the profile read is only a nicety.
   const apply = async () => {
     if (submitting) return;
+    if (!APPLICATIONS_OPEN) {
+      appAlert(
+        'Responder verification is opening soon',
+        "We're putting the legal and identity checks in place first, so responder sign-ups are paused for now. Voice SOS and alerts to your circle work as normal. We'll open this the moment it's ready.",
+      );
+      return;
+    }
     setSubmitting(true);
     const res = await applyAsResponder();
     if (!res.ok) {
@@ -145,13 +160,21 @@ export function ResponderApplicationScreen() {
           <View style={styles.note}>
             <Ionicons name="information-circle" size={16} color={colors.lavenderDeep} />
             <Text style={styles.noteText}>
-              After applying you'll complete identity verification and a short
-              training. An ORBII admin reviews every responder before approval.
+              {APPLICATIONS_OPEN
+                ? "After applying you'll complete identity verification and a short training. An ORBII admin reviews every responder before approval."
+                : "Responder sign-ups are paused while we put the identity and legal checks in place. Your Voice SOS and circle alerts work as normal in the meantime."}
             </Text>
           </View>
         </ScrollView>
 
-        {!applied ? (
+        {!applied && !APPLICATIONS_OPEN ? (
+          <View style={styles.footer}>
+            <View style={styles.locked}>
+              <Ionicons name="lock-closed" size={16} color={colors.textMuted} />
+              <Text style={styles.lockedText}>Verification opening soon</Text>
+            </View>
+          </View>
+        ) : !applied ? (
           <View style={styles.footer}>
             <Pressable
               onPress={apply}
@@ -234,6 +257,16 @@ const styles = StyleSheet.create({
   noteText: { flex: 1, ...typography.caption, fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, paddingTop: spacing.sm },
   cta: { backgroundColor: colors.sage, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center' },
+  locked: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.creamDeep,
+    borderRadius: radius.pill,
+    paddingVertical: 16,
+  },
+  lockedText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textMuted },
   ctaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textInverse },
   ctaSecondary: { backgroundColor: colors.surface, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center', ...shadows.card },
   ctaSecondaryText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },

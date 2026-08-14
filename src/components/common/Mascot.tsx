@@ -1,15 +1,19 @@
 import React from 'react';
 import {
-  Image,
-  ImageSourcePropType,
   ImageStyle,
   StyleProp,
   StyleSheet,
+  View,
+  ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { colors } from '@/theme';
 
-// The real illustrated Orbi (cropped from the brand icon artwork: bee on its
-// peach circle with the coral heart, soft feathered edges).
-const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
+// The mascot character has been retired. To avoid touching every screen that
+// used <Mascot pose=... size=.../>, this component keeps the SAME API but now
+// renders a clean icon-in-orb in the brand palette. Each old "pose" maps to a
+// fitting icon, so call sites keep their intent and the whole app drops the
+// mascot at once, with no layout changes (size still drives the diameter).
 
 export type MascotPose =
   | 'neutral'
@@ -19,29 +23,47 @@ export type MascotPose =
   | 'headset'
   | 'celebrate';
 
-// One artwork for now, so `pose` is accepted (call sites keep their intent)
-// but ignored. When per-pose PNGs exist, map pose → source here and every
-// screen gets its pose automatically.
-type Props = {
-  pose?: MascotPose;
-  /** Override with different Orbi artwork (a require'd PNG). */
-  source?: ImageSourcePropType;
-  size?: number;
-  style?: StyleProp<ImageStyle>;
+type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+const POSE: Record<MascotPose, { icon: IconName; accent: string; soft: string }> = {
+  neutral: { icon: 'shield-checkmark', accent: colors.brand, soft: colors.brandSoft },
+  peek: { icon: 'shield-half', accent: colors.brand, soft: colors.brandSoft },
+  wave: { icon: 'hand-left', accent: colors.peach, soft: colors.peachSoft },
+  shield: { icon: 'shield-checkmark', accent: colors.brand, soft: colors.brandSoft },
+  headset: { icon: 'headset', accent: colors.brand, soft: colors.brandSoft },
+  celebrate: { icon: 'sparkles', accent: colors.sage, soft: colors.sageSoft },
 };
 
-/** ORBII's guardian mascot, Orbi. Always the real illustration. */
-export function Mascot({ source, size = 160, style }: Props) {
+type Props = {
+  pose?: MascotPose;
+  size?: number;
+  style?: StyleProp<ViewStyle | ImageStyle>;
+};
+
+export function Mascot({ pose = 'neutral', size = 160, style }: Props) {
+  const p = POSE[pose];
+  const inner = Math.round(size * 0.6);
   return (
-    <Image
-      source={source ?? ORBI_HERO}
-      // Square artwork (the Orbi face). resizeMode contain keeps it crisp.
-      style={[{ width: size, height: size }, styles.img, style as StyleProp<ImageStyle>]}
-      resizeMode="contain"
-    />
+    <View
+      style={[
+        { width: size, height: size, borderRadius: size / 2, backgroundColor: p.soft },
+        styles.orb,
+        style as StyleProp<ViewStyle>,
+      ]}
+    >
+      <View
+        style={[
+          styles.inner,
+          { width: inner, height: inner, borderRadius: inner / 2, backgroundColor: p.accent },
+        ]}
+      >
+        <Ionicons name={p.icon} size={Math.round(inner * 0.5)} color={colors.textInverse} />
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  img: { alignSelf: 'center' },
+  orb: { alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
+  inner: { alignItems: 'center', justifyContent: 'center' },
 });

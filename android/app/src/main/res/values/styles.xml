@@ -9,10 +9,12 @@
     <item name="android:windowBackground">@color/appBackground</item>
     <item name="android:statusBarColor">@android:color/transparent</item>
   </style>
+  <!-- No-logo splash: just the solid brand colour. The animated-icon slot points
+       at a transparent drawable so Android 12+ shows nothing there (and does not
+       fall back to the launcher icon). -->
   <style name="Theme.App.SplashScreen" parent="Theme.SplashScreen">
     <item name="windowSplashScreenBackground">@color/splashscreen_background</item>
-    <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_logo</item>
+    <item name="windowSplashScreenAnimatedIcon">@drawable/splashscreen_blank</item>
     <item name="postSplashScreenTheme">@style/AppTheme</item>
-    <item name="android:windowSplashScreenBehavior">icon_preferred</item>
   </style>
 </resources>

@@ -43,12 +43,13 @@ export function VoicePhrasesScreen() {
   const navigation = useNavigation();
   const isPremium = useIsPremium();
   const [bgEnabled, setBgEnabled] = useState(false);
-  const [bgHours, setBgHours] = useState(12);
+  const [bgHours, setBgHours] = useState(2);
 
   useEffect(() => {
     loadBgVoiceState().then((s) => {
       setBgEnabled(s.enabled);
-      setBgHours(s.hours);
+      // Clamp any legacy value (12h/24h/indefinite) to the 8h cap.
+      setBgHours(s.hours > 0 && s.hours <= 8 ? s.hours : 2);
     });
   }, []);
 

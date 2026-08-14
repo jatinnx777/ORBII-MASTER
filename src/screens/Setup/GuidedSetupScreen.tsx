@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,16 +10,17 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
-import { appAlert } from '@/components/common';
-// The real illustrated Orbi (from the brand artwork).
-const ORBI_HERO = require('../../../assets/onboarding/orbi-hero.png');
+import { appAlert, Celebration } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded } from '@/redux/slices/userSlice';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
-import { startListening } from '@/services/voice-detection';
+import { armVoiceSos } from '@/services/voice-detection';
+import { VoiceDurationSheet } from '@/components/common';
+import { runVoiceTest, cancelVoiceTest } from '@/services/voice-test';
 import { requestBatteryExemption } from '@/services/background-voice';
 import { getCurrentPermission } from '@/services/location';
 import { trackEvent } from '@/services/analytics';
@@ -28,11 +28,18 @@ import { trackEvent } from '@/services/analytics';
 // First-run guided setup, shown once after sign-in (per the reference design):
 //   1. Build Your Safety Circle — add the people ORBII reaches in an emergency
 //   2. Turn on Voice SOS        — activate hands-free "help, help" protection
-//   3. Practise it once         — a compulsory test SOS (nobody is alerted)
+//   3. Try it once              — she actually SAYS "help, help" and feels the
+//      engine hear her (routed to a callback, so nobody is alerted). This is the
+//      aha moment: the core promise proven in her own voice before she needs it.
 //   4. You're Protected         — an HONEST checklist (rows only turn green
 //      when the underlying signal is actually true), then enter the app.
 
-type StepId = 'circle' | 'voice' | 'practice' | 'done';
+type StepId = 'intent' | 'circle' | 'voice' | 'practice' | 'done' | 'note';
+type DemoState = 'idle' | 'listening' | 'heard' | 'missed';
+
+// Ordered so the progress bar always knows where we are. The founder note is a
+// full-screen coda AFTER setup, so it deliberately sits outside this list.
+const STEP_ORDER: StepId[] = ['intent', 'circle', 'voice', 'practice', 'done'];
 
 const ROLES = [
   { key: 'Parent', icon: 'person' as const },
@@ -41,23 +48,48 @@ const ROLES = [
   { key: 'Partner', icon: 'heart' as const },
 ];
 
+// Personalisation. Picking what's on her mind lets the whole setup speak to HER
+// situation, and makes ORBII feel like it was set up for her, not everyone.
+// Multi-select on purpose: most people carry more than one worry.
+const INTENTS = [
+  { key: 'night', label: 'Walking alone at night', icon: 'moon' as const, said: 'walking home at night' },
+  { key: 'commute', label: 'My daily commute', icon: 'bus' as const, said: 'on your commute' },
+  { key: 'travel', label: 'Travelling somewhere new', icon: 'airplane' as const, said: 'travelling' },
+  { key: 'campus', label: 'On campus', icon: 'school' as const, said: 'on campus' },
+  { key: 'cabs', label: 'Cabs and autos', icon: 'car' as const, said: 'in a cab' },
+  { key: 'justcase', label: 'Just in case', icon: 'shield-checkmark' as const, said: 'the moment you need it' },
+];
+
+// Turn her picks into one warm, personalised line she sees echoed back.
+function reflection(intents: string[]): string {
+  const first = INTENTS.find((i) => i.key === intents[0]);
+  if (!first) return 'ORBII will be ready the moment you need it.';
+  return `ORBII will be ready when you're ${first.said}.`;
+}
+
 export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
   const contacts = profile?.emergencyContacts ?? [];
 
-  const [step, setStep] = useState<StepId>('circle');
+  const [step, setStep] = useState<StepId>('intent');
+  const [intents, setIntents] = useState<string[]>([]);
   const [openRole, setOpenRole] = useState<string | null>(null);
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
   const [activating, setActivating] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
+  const armedHoursRef = useRef(2);
   const [voiceOn, setVoiceOn] = useState(false);
   const [locationOn, setLocationOn] = useState(false);
-  // Compulsory practice run. Local only: no dispatch, no contacts pinged. It
-  // exists so the first time she sees the countdown is NOT during an emergency.
-  const [practiceRunning, setPracticeRunning] = useState(false);
-  const [practiceDone, setPracticeDone] = useState(false);
-  const [practiceLeft, setPracticeLeft] = useState(5);
+  // Live "say help" demo. She speaks; the real on-device engine hears her and we
+  // route that detection to a callback (runVoiceTest) instead of firing an SOS,
+  // so nobody is alerted. It's the first time she experiences the core promise,
+  // in her own voice, before she ever needs it.
+  const [demo, setDemo] = useState<DemoState>('idle');
+  const demoActiveRef = useRef(false);
+  // Gift-moment celebration on the final "You're Protected" reveal.
+  const [celebrate, setCelebrate] = useState(false);
 
   // Gentle slide-in per step.
   const enter = useRef(new Animated.Value(0)).current;
@@ -72,12 +104,18 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
   }, [step, enter]);
 
-  // Real signals for the final checklist.
+  // Real signals for the final checklist. The reveal is a "gift" moment: a short
+  // beat, then the confetti + success haptic land together.
   useEffect(() => {
     if (step !== 'done') return;
     getCurrentPermission()
       .then((p) => setLocationOn(p === 'granted'))
       .catch(() => undefined);
+    const id = setTimeout(() => {
+      setCelebrate(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    }, 380);
+    return () => clearTimeout(id);
   }, [step]);
 
   const saveContact = () => {
@@ -108,15 +146,20 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
     setCPhone('');
   };
 
-  const activateProtection = async () => {
+  // Turning on protection always picks a duration first (max 8h), like every
+  // other Voice SOS gate.
+  const activateProtection = () => {
     if (activating) return;
+    setDurationOpen(true);
+  };
+
+  const onPickDuration = async (hours: number) => {
+    setDurationOpen(false);
+    armedHoursRef.current = hours;
     setActivating(true);
     try {
-      const res = await startListening();
+      const res = await armVoiceSos(hours);
       setVoiceOn(res.ok);
-      // OEM killer fix: ask the system to keep ORBII alive in the background.
-      // On Xiaomi/Oppo/Vivo the voice service is killed otherwise, silently
-      // breaking protection. Baking this into setup makes it hard to skip.
       if (res.ok) await requestBatteryExemption().catch(() => undefined);
       trackEvent('setup_protection_activated', { ok: res.ok });
     } finally {
@@ -125,28 +168,92 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const runPractice = () => {
-    if (practiceRunning || practiceDone) return;
-    setPracticeRunning(true);
-    setPracticeLeft(5);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
-    const started = Date.now();
-    const id = setInterval(() => {
-      const left = Math.max(0, 5 - Math.floor((Date.now() - started) / 1000));
-      setPracticeLeft(left);
-      if (left > 0) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-        return;
+  // Pulsing mic ring while listening.
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (demo !== 'listening') {
+      pulse.stopAnimation();
+      pulse.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.16, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [demo, pulse]);
+
+  // Stop the mic/engine if she leaves the demo (back out, unmount) mid-listen.
+  useEffect(() => {
+    return () => {
+      if (demoActiveRef.current) {
+        demoActiveRef.current = false;
+        cancelVoiceTest();
       }
-      clearInterval(id);
-      setPracticeRunning(false);
-      setPracticeDone(true);
-      trackEvent('sos_triggered', { kind: 'test', source: 'onboarding_practice' });
+    };
+  }, []);
+
+  const startDemo = async () => {
+    if (demo === 'listening' || demo === 'heard') return;
+    setDemo('listening');
+    demoActiveRef.current = true;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    const result = await runVoiceTest(20000);
+    demoActiveRef.current = false;
+    if (result === 'heard') {
+      setDemo('heard');
+      setCelebrate(true);
+      trackEvent('onboarding_voice_demo', { result: 'heard' });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    }, 1000);
+      // The test consumed the fire and stopped the engine. Re-arm for the same
+      // duration she chose, so protection carries on into the app.
+      void armVoiceSos(armedHoursRef.current);
+    } else {
+      // Timeout, no mic, or a non-Android device: never trap her here. Let her
+      // retry, and still allow her to move on.
+      setDemo('missed');
+      trackEvent('onboarding_voice_demo', { result });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => undefined);
+    }
   };
 
+  const leaveDemo = (next: StepId) => {
+    if (demoActiveRef.current) {
+      demoActiveRef.current = false;
+      cancelVoiceTest();
+    }
+    setStep(next);
+  };
+
+  const toggleIntent = (key: string) => {
+    Haptics.selectionAsync().catch(() => undefined);
+    setIntents((cur) =>
+      cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key],
+    );
+  };
+
+  const stepIndex = STEP_ORDER.indexOf(step);
   const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] });
+
+  // Full-screen coda: a personal letter from the founders, on its own page.
+  if (step === 'note') {
+    return (
+      <FounderNote
+        onEnter={() => {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+          trackEvent('setup_completed', {
+            contacts: contacts.length,
+            voice: voiceOn,
+            location: locationOn,
+          });
+          onDone();
+        }}
+      />
+    );
+  }
 
   return (
     <View style={styles.root}>
@@ -157,17 +264,81 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
           <Text style={styles.brand}>ORBII</Text>
         </View>
 
+        {/* Step progress — a small "you're moving" signal all the way through. */}
+        <View style={styles.progress}>
+          {STEP_ORDER.map((s, i) => (
+            <View
+              key={s}
+              style={[
+                styles.progressSeg,
+                i <= stepIndex ? styles.progressSegOn : styles.progressSegOff,
+              ]}
+            />
+          ))}
+        </View>
+
         <Animated.View style={{ flex: 1, opacity: enter, transform: [{ translateY }] }}>
+          {step === 'intent' ? (
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              <StepHero icon="sparkles" accent={colors.brand} accentSoft={colors.brandSoft} />
+              <Text style={styles.title}>When do you want ORBII ready?</Text>
+              <Text style={styles.sub}>
+                Pick whatever is on your mind. Choose as many as you like, we'll
+                set ORBII up around them.
+              </Text>
+
+              <View style={styles.chipsWrap}>
+                {INTENTS.map((it) => {
+                  const on = intents.includes(it.key);
+                  return (
+                    <Pressable
+                      key={it.key}
+                      onPress={() => toggleIntent(it.key)}
+                      style={[styles.chip, on && styles.chipOn]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                    >
+                      <Ionicons
+                        name={it.icon}
+                        size={17}
+                        color={on ? colors.textInverse : colors.peachDeep}
+                      />
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{it.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              <Pressable
+                onPress={() => setStep('circle')}
+                disabled={intents.length === 0}
+                style={({ pressed }) => [
+                  styles.cta,
+                  intents.length === 0 && { opacity: 0.5 },
+                  pressed && styles.ctaPressed,
+                ]}
+              >
+                <Text style={styles.ctaText}>
+                  {intents.length === 0 ? 'Pick at least one' : 'Continue'}
+                </Text>
+              </Pressable>
+            </ScrollView>
+          ) : null}
+
           {step === 'circle' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.heroWrap}>
-                <View style={styles.bubble}>
-                  <Text style={styles.bubbleText}>The more trusted people{'\n'}around you, the safer you are.</Text>
-                </View>
-                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
+              <StepHero icon="people" accent={colors.peach} accentSoft={colors.peachSoft} />
+              {/* Reflection: her own choice echoed back, so setup feels made for her. */}
+              <View style={styles.reflect}>
+                <Ionicons name="sparkles" size={13} color={colors.peachDeep} />
+                <Text style={styles.reflectText}>{reflection(intents)}</Text>
               </View>
-              <Text style={styles.title}>Build Your Safety Circle</Text>
-              <Text style={styles.sub}>Add the people you'd want ORBII to reach in an emergency.</Text>
+
+              <Text style={styles.title}>Who should ORBII reach?</Text>
+              <Text style={styles.sub}>
+                The instant you need help, these people get your live location.
+                Add even one, an SOS with no circle reaches no one.
+              </Text>
 
               {ROLES.map((r) => {
                 const added = contacts.find((c) => c.relation === r.key);
@@ -247,9 +418,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
 
           {step === 'voice' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.heroWrap}>
-                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
-              </View>
+              <StepHero icon="mic" accent={colors.coral} accentSoft={colors.coralSoft} />
               <Text style={styles.title}>Turn on Voice SOS</Text>
               <Text style={styles.sub}>
                 If you can't reach your phone, just shout "help, help" and ORBII
@@ -291,71 +460,76 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
 
           {step === 'practice' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.heroWrap}>
-                <Image source={ORBI_HERO} style={styles.heroImg} resizeMode="contain" />
-              </View>
-              <Text style={styles.title}>Practise it once</Text>
+              <StepHero icon="ear" accent={colors.brand} accentSoft={colors.brandSoft} />
+              <Text style={styles.title}>Now try it yourself</Text>
               <Text style={styles.sub}>
-                A safety feature you have never used is a safety feature you don't
-                have. Run one practice SOS now. Nobody is alerted.
+                {demo === 'heard'
+                  ? 'ORBII heard you. That is exactly how it works in a real emergency, hands-free.'
+                  : 'Say “help, help” out loud. ORBII will hear you, right now, so you know it works before you ever need it. Nobody is alerted.'}
               </Text>
 
               <View style={styles.practiceWrap}>
                 <Pressable
-                  onPress={runPractice}
-                  disabled={practiceRunning || practiceDone}
+                  onPress={startDemo}
+                  disabled={demo === 'listening' || demo === 'heard'}
                   style={({ pressed }) => [
-                    styles.practiceBtn,
-                    practiceDone && styles.practiceBtnDone,
-                    pressed && !practiceDone && { transform: [{ scale: 0.97 }] },
+                    styles.demoOrb,
+                    demo === 'heard' && styles.demoOrbHeard,
+                    demo === 'listening' && styles.demoOrbListening,
+                    pressed && demo === 'idle' && { transform: [{ scale: 0.97 }] },
                   ]}
                   accessibilityRole="button"
-                  accessibilityLabel="Run a practice SOS"
+                  accessibilityLabel={demo === 'heard' ? 'ORBII heard you' : 'Tap, then say help help'}
                 >
-                  {practiceDone ? (
-                    <Ionicons name="checkmark" size={44} color={colors.textInverse} />
-                  ) : practiceRunning ? (
-                    <Text style={styles.practiceCount}>{practiceLeft}</Text>
+                  {demo === 'heard' ? (
+                    <Ionicons name="checkmark" size={52} color={colors.textInverse} />
+                  ) : demo === 'listening' ? (
+                    <Animated.View style={{ transform: [{ scale: pulse }] }}>
+                      <Ionicons name="mic" size={48} color={colors.textInverse} />
+                    </Animated.View>
                   ) : (
-                    <Text style={styles.practiceLabel}>SOS</Text>
+                    <Ionicons name="mic-outline" size={48} color={colors.textInverse} />
                   )}
                 </Pressable>
                 <Text style={styles.practiceHint}>
-                  {practiceDone
-                    ? "That's exactly what a real SOS feels like."
-                    : practiceRunning
-                      ? 'Counting down. In a real emergency you could cancel here.'
-                      : 'Tap to start your practice countdown.'}
+                  {demo === 'heard'
+                    ? 'Heard you, loud and clear.'
+                    : demo === 'listening'
+                      ? 'Listening… say “help, help” now.'
+                      : demo === 'missed'
+                        ? "Didn't catch that. Move somewhere quieter and tap to try again."
+                        : 'Tap the mic, then say “help, help”.'}
                 </Text>
               </View>
 
               <Pressable
-                onPress={() => setStep('done')}
-                disabled={!practiceDone}
+                onPress={() => leaveDemo('done')}
+                disabled={demo !== 'heard'}
                 style={({ pressed }) => [
                   styles.cta,
-                  !practiceDone && { opacity: 0.5 },
+                  demo !== 'heard' && { opacity: 0.5 },
                   pressed && styles.ctaPressed,
                 ]}
               >
                 <Text style={styles.ctaText}>
-                  {practiceDone ? 'Continue' : 'Run the practice to continue'}
+                  {demo === 'heard' ? 'Continue' : 'Say “help, help” to continue'}
                 </Text>
               </Pressable>
-              <Text style={styles.skipNote}>
-                This practice is required. It never alerts anyone.
-              </Text>
+              {demo === 'missed' ? (
+                <Pressable onPress={() => leaveDemo('done')} hitSlop={8}>
+                  <Text style={styles.skipNote}>Skip for now, I'll try later</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.skipNote}>
+                  Your voice is heard on your phone and never uploaded.
+                </Text>
+              )}
             </ScrollView>
           ) : null}
 
           {step === 'done' ? (
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-              <View style={styles.heroWrap}>
-                <View style={styles.bubble}>
-                  <Text style={styles.bubbleText}>I'm always here{'\n'}when you need me.</Text>
-                </View>
-                <Image source={ORBI_HERO} style={styles.heroImgBig} resizeMode="contain" />
-              </View>
+              <StepHero icon="shield-checkmark" accent={colors.sage} accentSoft={colors.sageSoft} />
               <Text style={styles.title}>You're Protected</Text>
               <Text style={styles.sub}>ORBII is now ready to watch over you.</Text>
 
@@ -369,13 +543,8 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
 
               <Pressable
                 onPress={() => {
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-                  trackEvent('setup_completed', {
-                    contacts: contacts.length,
-                    voice: voiceOn,
-                    location: locationOn,
-                  });
-                  onDone();
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                  setStep('note');
                 }}
                 style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
               >
@@ -384,6 +553,14 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
             </ScrollView>
           ) : null}
         </Animated.View>
+
+        {/* Positive gift-moment only — never shown for an SOS. */}
+        <Celebration visible={celebrate} originY={0.34} onDone={() => setCelebrate(false)} />
+        <VoiceDurationSheet
+          visible={durationOpen}
+          onConfirm={onPickDuration}
+          onCancel={() => setDurationOpen(false)}
+        />
       </SafeAreaView>
     </View>
   );
@@ -404,6 +581,69 @@ function CheckRow({ ok, label, fixHint }: { ok: boolean; label: string; fixHint:
   );
 }
 
+// Clean icon-in-orb hero for each setup step (replaces the mascot artwork).
+function StepHero({
+  icon,
+  accent,
+  accentSoft,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  accent: string;
+  accentSoft: string;
+}) {
+  return (
+    <View style={styles.stepHero}>
+      <View style={[styles.stepHeroOrb, { backgroundColor: accentSoft }]}>
+        <View style={[styles.stepHeroInner, { backgroundColor: accent }]}>
+          <Ionicons name={icon} size={36} color={colors.textInverse} />
+        </View>
+      </View>
+    </View>
+  );
+}
+
+// A full-screen letter from the founders. Sincere, not gimmicky: a calm warm
+// page, the body set like a real handwritten letter, a signature, one CTA.
+function FounderNote({ onEnter }: { onEnter: () => void }) {
+  return (
+    <View style={styles.noteRoot}>
+      <LinearGradient colors={[colors.brandSoft, colors.cream]} style={styles.noteGlow} />
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.noteScroll} showsVerticalScrollIndicator={false}>
+          <Text style={styles.noteEyebrow}>A NOTE FROM US</Text>
+          <View style={styles.paper}>
+            <Text style={styles.paperBody}>
+              Thank you for being here.{'\n\n'}
+              We built ORBII because the women around us kept saying the same thing,
+              that help is never there in the seconds that matter. So we made
+              something that listens for you, and reaches your people the instant you
+              need them.{'\n\n'}
+              You are not a user to us. You are the whole reason this exists.{'\n\n'}
+              Stay safe out there. We have got you.
+            </Text>
+            <View style={styles.paperRule} />
+            <Text style={styles.paperSign}>Jatin & Vishnu</Text>
+            <View style={styles.paperSignRow}>
+              <Text style={styles.paperSignSub}>Founders of ORBII</Text>
+              <Ionicons name="heart" size={12} color={colors.coral} />
+            </View>
+          </View>
+        </ScrollView>
+        <View style={styles.noteFooter}>
+          <Pressable
+            onPress={onEnter}
+            style={({ pressed }) => [styles.noteCta, pressed && styles.ctaPressed]}
+            accessibilityRole="button"
+          >
+            <Text style={styles.noteCtaText}>Enter ORBII</Text>
+            <Ionicons name="arrow-forward" size={18} color={colors.textInverse} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },
   brandRow: {
@@ -419,19 +659,60 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     color: colors.textPrimary,
   },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, alignItems: 'stretch' },
-  heroWrap: { alignItems: 'center', marginTop: spacing.xs, marginBottom: spacing.sm },
-  heroImg: { width: 190, height: 152 },
-  heroImgBig: { width: 225, height: 180 },
-  bubble: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
+  progress: {
+    flexDirection: 'row',
+    gap: 5,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  progressSeg: { flex: 1, height: 4, borderRadius: 2 },
+  progressSegOn: { backgroundColor: colors.peach },
+  progressSegOff: { backgroundColor: colors.creamDeep },
+  chipsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginBottom: spacing.md },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 11,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
     ...shadows.icon,
   },
-  bubbleText: { ...typography.caption, fontSize: 12.5, lineHeight: 17, color: colors.textSecondary, textAlign: 'center' },
+  chipOn: { backgroundColor: colors.peach, borderColor: colors.peach },
+  chipText: { fontFamily: fontFamilies.poppinsMedium, fontSize: 13.5, color: colors.textPrimary },
+  chipTextOn: { color: colors.textInverse },
+  reflect: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    alignSelf: 'center',
+    backgroundColor: colors.peachSoft,
+    borderRadius: radius.pill,
+    paddingVertical: 7,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  reflectText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.peachDeep },
+  scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xl, alignItems: 'stretch' },
+  stepHero: { alignItems: 'center', marginTop: spacing.md, marginBottom: spacing.md },
+  stepHeroOrb: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepHeroInner: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...shadows.card,
+  },
   title: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 26,
@@ -549,19 +830,71 @@ const styles = StyleSheet.create({
   checkIconOff: { backgroundColor: colors.creamDeep },
   checkLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary },
   checkHint: { ...typography.caption, fontSize: 11.5, color: colors.textMuted, marginTop: 1 },
+  // Full-page founder letter.
+  noteRoot: { flex: 1, backgroundColor: colors.cream },
+  noteGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 360 },
+  noteScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: spacing.lg, paddingVertical: spacing.xl },
+  noteEyebrow: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 11,
+    letterSpacing: 2.5,
+    color: colors.brandDeep,
+    textAlign: 'center',
+    marginBottom: spacing.md,
+  },
+  paper: {
+    backgroundColor: '#FFFDF7',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#ECE4D2',
+    paddingHorizontal: spacing.lg + 4,
+    paddingVertical: spacing.xl,
+    ...shadows.card,
+  },
+  paperBody: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 16,
+    lineHeight: 26,
+    color: '#3A3540',
+  },
+  paperRule: {
+    height: 1,
+    backgroundColor: '#ECE4D2',
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  paperSign: {
+    fontFamily: fontFamilies.handwriting,
+    fontSize: 34,
+    lineHeight: 38,
+    color: colors.brandDeep,
+  },
+  paperSignRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 },
+  paperSignSub: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, letterSpacing: 0.4, color: colors.textMuted },
+  noteFooter: { paddingHorizontal: spacing.lg, paddingBottom: spacing.md, paddingTop: spacing.sm },
+  noteCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brand,
+    borderRadius: radius.pill,
+    paddingVertical: 16,
+    ...shadows.card,
+  },
+  noteCtaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 15.5, color: colors.textInverse },
   practiceWrap: { alignItems: 'center', gap: spacing.md, marginTop: spacing.lg },
-  practiceBtn: {
+  demoOrb: {
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: colors.coral,
+    backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,
   },
-  practiceBtnDone: { backgroundColor: colors.sage },
-  practiceLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 34, color: colors.textInverse, letterSpacing: 2 },
-  practiceCount: { fontFamily: fontFamilies.poppinsBold, fontSize: 56, color: colors.textInverse },
+  demoOrbListening: { backgroundColor: colors.coral },
+  demoOrbHeard: { backgroundColor: colors.sage },
   practiceHint: {
     ...typography.caption,
     fontSize: 12.5,

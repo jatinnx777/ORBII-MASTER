@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { OSMMapView, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
+import { OSMMapView, VoiceDurationSheet, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
@@ -61,6 +61,7 @@ export function CircleMapScreen() {
   const [center, setCenter] = useState<GeoPoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
   // Which circle's members we're viewing, and that circle's member ids.
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState<Set<string> | null>(null);
@@ -154,15 +155,25 @@ export function CircleMapScreen() {
 
   const toggleShare = async (next: boolean) => {
     if (busy) return;
+    if (next) {
+      setDurationOpen(true); // turning ON always picks a duration first
+      return;
+    }
     setBusy(true);
     try {
-      if (next) {
-        const ok = await startCircleSharing();
-        setSharing(ok);
-      } else {
-        await stopCircleSharing();
-        setSharing(false);
-      }
+      await stopCircleSharing();
+      setSharing(false);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const onPickShareDuration = async (hours: number) => {
+    setDurationOpen(false);
+    setBusy(true);
+    try {
+      const ok = await startCircleSharing(hours);
+      setSharing(ok);
     } finally {
       setBusy(false);
     }
@@ -335,6 +346,14 @@ export function CircleMapScreen() {
           )}
         </BlurView>
       </SafeAreaView>
+      <VoiceDurationSheet
+        visible={durationOpen}
+        icon="location"
+        title="How long should your circle see you?"
+        subtitle="Live location turns off on its own after this, and warns you before it ends. Max 8 hours."
+        onConfirm={onPickShareDuration}
+        onCancel={() => setDurationOpen(false)}
+      />
     </View>
   );
 }

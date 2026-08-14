@@ -27,17 +27,12 @@ import { listCircles, listCircleMembers, type Circle } from '@/services/circles'
 import { loadZoneEvents, type ZoneEvent } from '@/services/geofence';
 import {
   isListening,
-  startListening,
-  stopListening,
+  armVoiceSos,
+  disarmVoiceSos,
   subscribeStatus,
   type VoiceDetectionStatus,
 } from '@/services/voice-detection';
-import {
-  startBackgroundVoice,
-  stopBackgroundVoice,
-  saveBgVoiceState,
-  requestBatteryExemption,
-} from '@/services/background-voice';
+import { VoiceDurationSheet } from '@/components/common';
 import { getFastLocation } from '@/services/location';
 import { shareMyLocation } from '@/services/location-share';
 import { trackEvent } from '@/services/analytics';
@@ -68,6 +63,12 @@ export function HomeScreen() {
   const alerts = useAppSelector((s) => s.community.alerts);
   const tier = profile?.premiumTier ?? null;
   const { pct, doneCount, total } = useReadiness();
+  // Smoothly grow the safety-status bar toward the current % (endowed progress:
+  // a bar that visibly fills pulls people to finish setup).
+  const barAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(barAnim, { toValue: pct, duration: 650, useNativeDriver: false }).start();
+  }, [pct, barAnim]);
 
   const [me, setMe] = useState<GeoPoint | null>(null);
   const [peers, setPeers] = useState<PresencePeer[]>([]);
@@ -84,6 +85,7 @@ export function HomeScreen() {
     isListening() ? 'listening' : 'idle',
   );
   const [voiceBusy, setVoiceBusy] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
   const voiceOn = voiceStatus === 'listening' || voiceStatus === 'starting';
 
   useEffect(() => subscribeStatus(setVoiceStatus), []);
@@ -91,15 +93,24 @@ export function HomeScreen() {
 
   const toggleVoice = async () => {
     if (voiceBusy) return;
+    if (voiceOn) {
+      setVoiceBusy(true);
+      try {
+        await disarmVoiceSos();
+      } finally {
+        setVoiceBusy(false);
+      }
+      return;
+    }
+    // Turning ON always goes through the duration picker first.
+    setDurationOpen(true);
+  };
+
+  const onPickDuration = async (hours: number) => {
+    setDurationOpen(false);
     setVoiceBusy(true);
     try {
-      if (voiceOn) {
-        await stopBackgroundVoice();
-        await saveBgVoiceState({ enabled: false, hours: 0 });
-        await stopListening();
-        return;
-      }
-      const res = await startListening();
+      const res = await armVoiceSos(hours);
       if (!res.ok) {
         appAlert(
           "Voice SOS couldn't start",
@@ -109,10 +120,6 @@ export function HomeScreen() {
         );
         return;
       }
-      // Arm background protection too, so she's covered with the app closed.
-      await startBackgroundVoice([], 0).catch(() => undefined);
-      await saveBgVoiceState({ enabled: true, hours: 0 });
-      await requestBatteryExemption().catch(() => undefined);
       trackEvent('voice_sos_enabled', { from: 'home_box' });
     } finally {
       setVoiceBusy(false);
@@ -436,15 +443,24 @@ export function HomeScreen() {
               <Text style={styles.statusPct}>{pct}% safe</Text>
             </View>
             <View style={styles.bar}>
-              <LinearGradient
-                colors={[colors.brand, colors.peach]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={[styles.barFill, { width: `${Math.max(pct, 4)}%` }]}
-              />
+              <Animated.View
+                style={[
+                  styles.barFill,
+                  { width: barAnim.interpolate({ inputRange: [0, 100], outputRange: ['4%', '100%'] }) },
+                ]}
+              >
+                <LinearGradient
+                  colors={[colors.brand, colors.peach]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={StyleSheet.absoluteFill}
+                />
+              </Animated.View>
             </View>
             <Text style={styles.statusHint}>
-              {setupDone ? "You're fully set up and protected." : `${doneCount} of ${total} steps done. Tap to finish.`}
+              {setupDone
+                ? "You're fully set up and protected."
+                : `Just ${total - doneCount} step${total - doneCount > 1 ? 's' : ''} to full protection. Tap to finish.`}
             </Text>
           </Pressable>
 
@@ -588,6 +604,11 @@ export function HomeScreen() {
           </View>
         </ScrollView>
       </Animated.View>
+      <VoiceDurationSheet
+        visible={durationOpen}
+        onConfirm={onPickDuration}
+        onCancel={() => setDurationOpen(false)}
+      />
     </View>
   );
 }

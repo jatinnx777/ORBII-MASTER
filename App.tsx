@@ -2,7 +2,7 @@
 // the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
 import 'react-native-get-random-values';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, AppState, Easing, Image, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
+import { Animated, AppState, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -26,6 +26,7 @@ import {
   Inter_400Regular,
   Inter_500Medium,
 } from '@expo-google-fonts/inter';
+import { Caveat_600SemiBold } from '@expo-google-fonts/caveat';
 
 import { store, useAppSelector } from '@/redux/store';
 import { hydrateStore } from '@/redux/persist';
@@ -84,6 +85,7 @@ import {
   startBackgroundVoice,
   recoverVoiceGuardIfKilled,
 } from '@/services/background-voice';
+import { ensureCircleShareNotExpired } from '@/services/circle-location';
 import { initI18n } from '@/i18n';
 import {
   hydrateCirclesFromCache,
@@ -292,6 +294,9 @@ function RootNavigator() {
         // If an aggressive OEM battery manager killed background Voice SOS while
         // we were away, re-arm it and let her know (self-healing watchdog).
         void recoverVoiceGuardIfKilled();
+        // Backup for circle live-location auto-off: if its window elapsed while
+        // we were away, stop sharing now.
+        void ensureCircleShareNotExpired();
         // Belt-and-braces: NetInfo change events can be missed, so also try to
         // flush any offline-queued SOS whenever the app comes back to the front.
         void flushSOSQueue();
@@ -586,6 +591,7 @@ export default function App() {
     Inter_300Light,
     Inter_400Regular,
     Inter_500Medium,
+    Caveat_600SemiBold,
   });
 
   useEffect(() => {
@@ -901,28 +907,27 @@ export default function App() {
   );
 }
 
-// Full-screen branded launch screen (orbii wordmark + tagline). Shown briefly
-// over the app on cold start, then fades out. The native splash uses the same
-// orange so the hand-off is seamless.
+// Launch hand-off. A plain solid pane in the exact colour of the native splash,
+// shown for a beat over the app on cold start, then faded out. NO logo — it just
+// masks the first paint so the app doesn't flash in, then gets out of the way
+// fast. Kept short so startup feels instant.
 function LaunchOverlay({ onDone }: { onDone: () => void }) {
   const opacity = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     const t = setTimeout(() => {
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 350,
+        duration: 260,
         useNativeDriver: true,
       }).start(() => onDone());
-    }, 900);
+    }, 400);
     return () => clearTimeout(t);
   }, [opacity, onDone]);
   return (
     <Animated.View
       pointerEvents="none"
       style={[StyleSheet.absoluteFillObject, styles.launch, { opacity }]}
-    >
-      <Image source={require('./assets/splash.png')} style={StyleSheet.absoluteFillObject} resizeMode="cover" />
-    </Animated.View>
+    />
   );
 }
 
@@ -950,25 +955,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   launch: {
-    backgroundColor: '#7B5FC7',
-    alignItems: 'center',
-    justifyContent: 'center',
+    // Exact native-splash colour so the hand-off is a seamless single surface.
+    backgroundColor: '#bc95ec',
     zIndex: 999,
-  },
-  launchLogo: { width: 132, height: 132 },
-  launchGlow: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
-  launchRing: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.6)',
   },
 });

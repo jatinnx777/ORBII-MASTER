@@ -18,17 +18,12 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppSelector } from '@/redux/store';
 import {
   isListening,
-  startListening,
-  stopListening,
+  armVoiceSos,
+  disarmVoiceSos,
   subscribeStatus,
   type VoiceDetectionStatus,
 } from '@/services/voice-detection';
-import {
-  startBackgroundVoice,
-  stopBackgroundVoice,
-  saveBgVoiceState,
-  requestBatteryExemption,
-} from '@/services/background-voice';
+import { VoiceDurationSheet } from '@/components/common';
 import { useIsPremium } from '@/services/entitlements';
 import { trackEvent } from '@/services/analytics';
 import { comingSoon } from '@/services/coming-soon';
@@ -55,20 +50,29 @@ export function EmergencyScreen() {
     isListening() ? 'listening' : 'idle',
   );
   const [busy, setBusy] = useState(false);
+  const [durationOpen, setDurationOpen] = useState(false);
   useEffect(() => subscribeStatus(setVoiceStatus), []);
   const voiceOn = voiceStatus === 'listening' || voiceStatus === 'starting';
 
   const toggleVoice = async (next: boolean) => {
     if (busy) return;
+    if (!next) {
+      setBusy(true);
+      try {
+        await disarmVoiceSos();
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
+    setDurationOpen(true); // turning ON always picks a duration first
+  };
+
+  const onPickDuration = async (hours: number) => {
+    setDurationOpen(false);
     setBusy(true);
     try {
-      if (!next) {
-        await stopBackgroundVoice();
-        await saveBgVoiceState({ enabled: false, hours: 0 });
-        await stopListening();
-        return;
-      }
-      const res = await startListening();
+      const res = await armVoiceSos(hours);
       if (!res.ok) {
         appAlert(
           "Voice SOS couldn't start",
@@ -78,11 +82,6 @@ export function EmergencyScreen() {
         );
         return;
       }
-      // Also arm background protection (until turned off) so she stays covered
-      // with the app closed, and ask Android not to kill it.
-      await startBackgroundVoice([], 0).catch(() => undefined);
-      await saveBgVoiceState({ enabled: true, hours: 0 });
-      await requestBatteryExemption().catch(() => undefined);
       trackEvent('voice_sos_enabled', { from: 'emergency_tab' });
     } finally {
       setBusy(false);
@@ -294,6 +293,11 @@ export function EmergencyScreen() {
           </View>
         </ScrollView>
       </SafeAreaView>
+      <VoiceDurationSheet
+        visible={durationOpen}
+        onConfirm={onPickDuration}
+        onCancel={() => setDurationOpen(false)}
+      />
     </View>
   );
 }
