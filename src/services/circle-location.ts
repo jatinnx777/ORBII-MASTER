@@ -147,7 +147,7 @@ async function scheduleShareReminder(expiresAtMs: number): Promise<void> {
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(oneHourBefore) },
     });
   } catch {
-    // best-effort — never block sharing on a reminder
+    // best-effort, never block sharing on a reminder
   }
 }
 async function cancelShareReminder(): Promise<void> {

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { getItem, setItem, removeItem, storageKeys } from './storage';
 
-// Audit log of background Voice SOS sessions (voice_sos_sessions, sql/40) — the
+// Audit log of background Voice SOS sessions (voice_sos_sessions, sql/40), the
 // on/off history of a user's protection, kept for ORBII's legal record.
 //
 // All calls are fire-and-forget and fail-safe: logging must NEVER block or break
@@ -36,7 +36,7 @@ export async function logVoiceSessionStart(
     if (error || !data?.id) return;
     await setItem(storageKeys.voiceSessionId, data.id as string);
   } catch {
-    // best-effort audit log — never let it affect protection
+    // best-effort audit log, never let it affect protection
   }
 }
 

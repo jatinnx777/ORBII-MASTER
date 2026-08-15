@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, type ViewStyle, type StyleProp } from 'react-native';
 
-// Spring-entrance wrapper — fades + lifts its child into place with a soft
+// Spring-entrance wrapper, fades + lifts its child into place with a soft
 // overshoot/settle. Stagger a list by passing increasing `delay`s so the
 // screen "assembles" with momentum instead of appearing flat.
 export function PopIn({

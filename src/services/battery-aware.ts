@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 // Battery-aware mode.
 //
 // The moment of greatest physical danger is often the same moment your
-// phone is about to die — long walk home, screen-on for navigation,
+// phone is about to die, long walk home, screen-on for navigation,
 // camera flash for visibility, etc. This module:
 //
 //   • Exposes a `useBatteryStatus()` hook that components can subscribe
@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 //     skip a tick to save juice.
 //
 // Why we don't reduce GPS frequency centrally: location.ts is consumed
-// by the SOS critical path. We intentionally never throttle SOS work —
+// by the SOS critical path. We intentionally never throttle SOS work , 
 // even on a 3% battery, the user pressing the button must broadcast.
 // We only dampen the AMBIENT chatter (presence pings, route refresh)
 // where one missed tick is invisible.
@@ -62,7 +62,7 @@ export async function readBatteryStatus(): Promise<BatteryStatus> {
 }
 
 // True when we should skip non-essential background work to save juice.
-// Callable from anywhere — uses the cached value rather than racing a
+// Callable from anywhere, uses the cached value rather than racing a
 // native read every time the call is made.
 export function shouldDampenWork(): boolean {
   return cached.isLow;

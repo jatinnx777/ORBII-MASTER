@@ -31,6 +31,6 @@ export function playTick(): void {
     void p.seekTo(0);
     p.play();
   } catch {
-    // ignore — a UI sound is never worth an error
+    // ignore, a UI sound is never worth an error
   }
 }

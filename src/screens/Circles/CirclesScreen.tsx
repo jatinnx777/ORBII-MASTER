@@ -44,7 +44,7 @@ import {
 } from '@/theme';
 import type { AppStackParamList } from '@/navigation/types';
 
-// Circles tab — top-level list of every circle the user belongs to, plus
+// Circles tab, top-level list of every circle the user belongs to, plus
 // any pending invites. Everything comes from Redux (server-backed); the
 // only persisted local thing is the active-circle id.
 
@@ -68,7 +68,7 @@ export function CirclesScreen() {
   const dispatch = useAppDispatch();
   const isPremium = useIsPremium();
 
-  // Family Circle creation is an ORBII Plus feature — the circle owner must be
+  // Family Circle creation is an ORBII Plus feature, the circle owner must be
   // a subscriber. Joining a circle (via invite) stays free.
   const handleCreatePress = () => {
     if (!isPremium) {

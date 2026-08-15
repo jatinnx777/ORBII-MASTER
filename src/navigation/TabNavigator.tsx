@@ -32,7 +32,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
-// The centre button is NOT a tab — it's the raised SOS panic button. Everything
+// The centre button is NOT a tab, it's the raised SOS panic button. Everything
 // else is a side item. "Emergency" is the full safety toolbox, shown as the
 // "Safety" side tab; the centre is reserved for the one action she needs fast.
 const ICONS: Partial<Record<
@@ -238,7 +238,7 @@ function FloatingTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
 }
 
 // The quick-action sheet the centre button opens on a tap. Every action here is
-// real and does exactly what it says — nothing decorative on the emergency path.
+// real and does exactly what it says, nothing decorative on the emergency path.
 function SOSActionSheet({
   visible,
   sharing,

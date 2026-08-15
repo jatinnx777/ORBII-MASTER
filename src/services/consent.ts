@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from './supabase';
 
 // DPDP Act 2023 consent. We record that the user was shown the itemised
-// privacy notice, confirmed they are 18 or older, and agreed — with a version
+// privacy notice, confirmed they are 18 or older, and agreed, with a version
 // and language so the record is meaningful if the notice text changes later.
 //
 // The server copy (user_consent_logs, sql/65) is the evidentiary trail. The
@@ -36,7 +36,7 @@ export async function recordConsent(lang: string): Promise<void> {
       p_is_adult: true,
     });
   } catch {
-    /* best effort — local flag still set, will retry next launch if needed */
+    /* best effort, local flag still set, will retry next launch if needed */
   }
 }
 

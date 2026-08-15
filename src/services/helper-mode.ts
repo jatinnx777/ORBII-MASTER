@@ -18,7 +18,7 @@ async function pingOnce(): Promise<void> {
     lastPoint = point;
     await setHelperLocation(point, true);
   } catch {
-    // ignore — offline, no permission, or transient RPC error
+    // ignore, offline, no permission, or transient RPC error
   }
 }
 

@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 
 // Remote push registration. Stores this device's Expo push token against the
 // signed-in user so the `notify-sos` edge function can reach them when someone
-// in their circle fires an SOS — even if their app is closed.
+// in their circle fires an SOS, even if their app is closed.
 //
 // IMPORTANT (setup): Android push needs Firebase Cloud Messaging configured for
 // this project. Until that's done, `getExpoPushTokenAsync` throws and we simply
@@ -46,7 +46,7 @@ export async function registerPushToken(userId: string): Promise<void> {
     );
     if (!error) lastRegisteredFor = userId;
   } catch (err) {
-    // FCM not configured yet, permission denied, or offline — non-fatal.
+    // FCM not configured yet, permission denied, or offline, non-fatal.
     console.warn('[push] token registration skipped:', err);
   }
 }

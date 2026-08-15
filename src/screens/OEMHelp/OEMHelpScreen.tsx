@@ -36,7 +36,7 @@ import {
 // Why this matters: on MIUI / ColorOS / FuntouchOS, ORBII's foreground
 // service (lock-screen SOS shortcut, listening badge, hardware-SOS
 // detector) is killed within hours unless the user has manually
-// granted these. We can't grant them programmatically — the OS
+// granted these. We can't grant them programmatically, the OS
 // requires the user to tap through. So we make it as smooth as
 // possible.
 
@@ -227,7 +227,7 @@ async function openIntent(intent: Step['intent']): Promise<void> {
   }
   if (intent === 'autostart') {
     // No universal deep-link for autostart. Best we can do is the
-    // generic app settings — the user takes one tap from there.
+    // generic app settings, the user takes one tap from there.
     await Linking.openSettings().catch(() => undefined);
     return;
   }
@@ -363,7 +363,7 @@ export function OEMHelpScreen() {
 
         <Text style={styles.footnote}>
           The Android API doesn't let apps grant these permissions
-          themselves — only you can. We only ever open Settings; we never
+          themselves, only you can. We only ever open Settings; we never
           touch other apps.
         </Text>
       </ScrollView>

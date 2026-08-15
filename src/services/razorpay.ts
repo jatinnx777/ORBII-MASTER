@@ -8,9 +8,9 @@ import { getItem, setItem, storageKeys } from './storage';
 //      orderId + publishable keyId.
 //   2. Razorpay Checkout opens with that order.
 //   3. `verify-payment` Edge Function re-checks the HMAC signature server-side
-//      and writes the entitlement — the client "success" is never trusted.
+//      and writes the entitlement, the client "success" is never trusted.
 
-// Publishable Razorpay TEST key id — safe to ship in the app (it cannot move
+// Publishable Razorpay TEST key id, safe to ship in the app (it cannot move
 // money or verify payments on its own). The SECRET stays only in the Supabase
 // edge-function env, never here.
 //
@@ -66,7 +66,7 @@ export async function tipHelper(
 const PLUS_VALID_DAYS = 30;
 
 /// Reads the user's entitlement so premium persists across re-login / reinstall
-/// — but only while it's within the 1-month validity window. This row can only
+///, but only while it's within the 1-month validity window. This row can only
 /// ever be written by the verify-payment Edge Function (service role), so it is
 /// the authoritative answer to "did this person actually pay?".
 ///
@@ -97,7 +97,7 @@ export async function fetchEntitlementTier(): Promise<PremiumTier | 'unknown'> {
 ///
 /// This used to call `supabase.auth.getUser()`, which is a network round-trip to
 /// the auth server. Every uid-scoped premium record was therefore gated on a
-/// request that fails offline or on a slow first frame after sign-in — and a
+/// request that fails offline or on a slow first frame after sign-in, and a
 /// null uid reads as "no premium". `getSession()` reads the persisted session
 /// from disk and never leaves the device.
 async function currentUid(): Promise<string | null> {
@@ -154,7 +154,7 @@ async function localTier(uid: string): Promise<PremiumTier> {
 
 /// Which tier is active right now, or `null` when we genuinely could not tell.
 ///
-/// Precedence matters. The SERVER entitlement wins — it's the only record that
+/// Precedence matters. The SERVER entitlement wins, it's the only record that
 /// proves a real, signature-verified payment, and it survives reinstall. The
 /// local records are secondary: the ORBII coupon is a deliberate free grant,
 /// and the local tier is just a cached echo of a verified purchase so the
@@ -168,7 +168,7 @@ async function localTier(uid: string): Promise<PremiumTier> {
 /// either, is allowed to return 'none'.
 export async function resolvePremiumTier(): Promise<PremiumTier | null> {
   const uid = await currentUid();
-  if (!uid) return null; // no session yet — ask again once there is one
+  if (!uid) return null; // no session yet, ask again once there is one
 
   const [serverTier, coupon, local] = await Promise.all([
     fetchEntitlementTier(),

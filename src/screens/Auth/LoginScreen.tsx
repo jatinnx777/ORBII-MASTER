@@ -34,7 +34,7 @@ import type { AuthScreenProps } from '@/navigation/types';
 
 // "Welcome back" entry for returning users. Reached via the Welcome
 // screen's "Already have an account? Log in" link. Kept visually close
-// to Welcome — same gradient, same logo motif — so the transition feels
+// to Welcome, same gradient, same logo motif, so the transition feels
 // like one continuous flow.
 export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   const dispatch = useAppDispatch();
@@ -76,7 +76,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   }, [enter, breathe]);
 
   // The actual Google sign-in. Separated so the policy modal can call it
-  // directly on accept — the user no longer has to tap "Sign in" a second
+  // directly on accept, the user no longer has to tap "Sign in" a second
   // time after agreeing to the terms.
   const doGoogleSignIn = async () => {
     dispatch(signInStarted());
@@ -110,7 +110,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
   // Tapping the inline checkbox toggles agreement directly (no modal needed),
   // so a user who's happy to agree can do it in one tap then sign in.
   const togglePolicy = () => {
-    if (policyOk) return; // already agreed — leave it on
+    if (policyOk) return; // already agreed, leave it on
     dispatch(policyAccepted());
   };
 
@@ -225,7 +225,7 @@ export function LoginScreen({ navigation }: AuthScreenProps<'Login'>) {
         onAccept={() => {
           dispatch(policyAccepted());
           setPolicyOpen(false);
-          // Continue straight into sign-in — no second tap needed.
+          // Continue straight into sign-in, no second tap needed.
           void doGoogleSignIn();
         }}
         onDecline={() => setPolicyOpen(false)}
@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   logoImg: {
-    width: '100%',
-    height: '100%',
+    width: 84,
+    height: 84,
   },
   brand: {
     fontFamily: fontFamilies.poppinsBold,

@@ -34,7 +34,7 @@ import type { MLMarker } from '@/components/common';
 
 type Nav = NativeStackNavigationProp<AppStackParamList, 'GhostActive'>;
 
-// Polling interval — every 30s while active. Cheap on battery and gives
+// Polling interval, every 30s while active. Cheap on battery and gives
 // us a fresh "lastSeen" stamp so the map dot isn't stale.
 const PING_MS = 30_000;
 // If the user doesn't move >40m for this long, we flag a suspicious
@@ -63,7 +63,7 @@ export function GhostActiveScreen() {
         const now = Date.now();
         dispatch(ghostLocationPinged({ point, at: now }));
 
-        // Detect "still" — same spot for STILL_THRESHOLD_MS triggers a
+        // Detect "still", same spot for STILL_THRESHOLD_MS triggers a
         // status flip to suspicious so the active screen pill changes.
         const last = lastMovedPoint.current;
         if (
@@ -77,7 +77,7 @@ export function GhostActiveScreen() {
           dispatch(ghostStatusChanged('suspicious'));
         }
       } catch {
-        // ignore — try again on next tick.
+        // ignore, try again on next tick.
       }
     };
     tick();
@@ -263,7 +263,7 @@ export function GhostActiveScreen() {
               />
               <Text style={styles.suspiciousText}>
                 You haven't moved in a while. Tap "Everything okay?" if all is
-                well — otherwise alert your circle.
+                well, otherwise alert your circle.
               </Text>
             </View>
           ) : null}

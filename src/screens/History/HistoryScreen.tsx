@@ -124,7 +124,7 @@ function StatusIcon({ record }: { record: SOSRecord }) {
   );
 }
 
-// One pill per record — surfaces the most informative thing about it.
+// One pill per record, surfaces the most informative thing about it.
 //   Test record           → "PRACTICE"
 //   Cancelled before send → "CANCELLED"
 //   Resolved with helper  → "RESOLVED"

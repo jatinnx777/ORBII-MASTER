@@ -24,12 +24,12 @@ export const touchTarget = {
   comfortable: 56,
 } as const;
 
-// Soft, warm, diffuse shadows — the warm canvas reads better with a
+// Soft, warm, diffuse shadows, the warm canvas reads better with a
 // brown-tinted shadow than a cold grey/black one. Four presets:
-//   • card  — everyday resting card elevation
-//   • sheet — upward shadow under the Home bottom sheet
-//   • hero  — stronger lift for the peach CTA / pressed primary
-//   • icon  — tiny soft pop under the round icon badges
+//   • card , everyday resting card elevation
+//   • sheet, upward shadow under the Home bottom sheet
+//   • hero , stronger lift for the peach CTA / pressed primary
+//   • icon , tiny soft pop under the round icon badges
 // iOS-style shadows: neutral, tight, very subtle. Cards read as lifted
 // paper, not glowy. (Replaced the old warm-brown diffuse glow.)
 export const shadows = {
@@ -61,7 +61,7 @@ export const shadows = {
     shadowRadius: 6,
     elevation: 2,
   },
-  // Neumorphism — a soft, extruded surface on the warm canvas. RN allows one
+  // Neumorphism, a soft, extruded surface on the warm canvas. RN allows one
   // shadow per view, so a neu card renders the warm-grey drop shadow here and
   // pairs it with a top/left white highlight border in the component.
   neu: {
@@ -71,7 +71,7 @@ export const shadows = {
     shadowRadius: 14,
     elevation: 5,
   },
-  // Pressed / inset neumorphic feel — tighter, lower.
+  // Pressed / inset neumorphic feel, tighter, lower.
   neuPressed: {
     shadowColor: '#B7AEA4',
     shadowOffset: { width: 2, height: 2 },
@@ -81,7 +81,7 @@ export const shadows = {
   },
 } as const;
 
-// Glassmorphism tokens — pair with an expo-blur <BlurView>. The fill is a
+// Glassmorphism tokens, pair with an expo-blur <BlurView>. The fill is a
 // translucent surface; the hairline highlight sells the frosted edge.
 export const glass = {
   fill: 'rgba(250,248,246,0.55)',

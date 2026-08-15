@@ -13,7 +13,7 @@ import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { COUNTRIES, type Country } from './countries';
 
 // Searchable country sheet for the sign-in screen. Slides up over the login,
-// dims the page behind it, and closes on the round X — matching the pattern
+// dims the page behind it, and closes on the round X, matching the pattern
 // people already know from Blinkit / Swiggy, in ORBII's white + green.
 
 export function CountryPickerSheet({

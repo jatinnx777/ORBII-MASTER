@@ -33,7 +33,7 @@ function toPoint(p: Location.LocationObject): GeoPoint {
 }
 
 // Accurate location read. A single getCurrentPositionAsync often returns an
-// early NETWORK/wifi fix that can be kilometres off indoors — which made two
+// early NETWORK/wifi fix that can be kilometres off indoors, which made two
 // phones 5 m apart look "hours away". We force GPS (BestForNavigation) and
 // CONVERGE: keep the best (lowest accuracy-radius) reading until it's within
 // `targetAccuracyM`, or `timeoutMs` elapses. Never returns 0,0.
@@ -91,7 +91,7 @@ async function getAccurateFix(
   });
   if (cached) return toPoint(cached);
 
-  // Nothing usable — surface an error rather than returning 0,0 (which would
+  // Nothing usable, surface an error rather than returning 0,0 (which would
   // make distance maths nonsensical).
   throw new Error('Could not get an accurate GPS fix. Make sure location is on.');
 }
@@ -149,7 +149,7 @@ export async function getSOSLocationFix(): Promise<{
   point: GeoPoint | null;
   precise: boolean;
 }> {
-  // 1. Recent, reasonably precise cached fix — instant.
+  // 1. Recent, reasonably precise cached fix, instant.
   try {
     const cached = await Location.getLastKnownPositionAsync({
       maxAge: 30_000,
@@ -171,7 +171,7 @@ export async function getSOSLocationFix(): Promise<{
     return { point: toPoint(live), precise: (live.coords.accuracy ?? 9999) <= 100 };
   }
 
-  // 2.5. Coarse NETWORK/cell-tower fix — the "Find My Train" fallback. When GPS
+  // 2.5. Coarse NETWORK/cell-tower fix, the "Find My Train" fallback. When GPS
   // is dead (indoors, a basement, a moving train) this still returns a rough
   // position from cell towers + Wi-Fi, as long as the phone's Location toggle is
   // on. ~1 km, but a rough location beats none in an emergency.
@@ -183,7 +183,7 @@ export async function getSOSLocationFix(): Promise<{
     return { point: toPoint(network), precise: false };
   }
 
-  // 3. Any last-known fix, however old — better than nothing for the map.
+  // 3. Any last-known fix, however old, better than nothing for the map.
   try {
     const any = await Location.getLastKnownPositionAsync();
     if (any) return { point: toPoint(any), precise: false };
@@ -221,7 +221,7 @@ export async function getSOSLocation(point: GeoPoint): Promise<SOSLocation> {
 export type LocationWatcher = { remove: () => void };
 
 // Continuous GPS stream. Emits a new point whenever the device moves more
-// than `distanceIntervalMeters` or `timeIntervalMs` elapses — whichever
+// than `distanceIntervalMeters` or `timeIntervalMs` elapses, whichever
 // comes first. Used for Swiggy-style live tracking of a responder.
 export async function watchLocation(
   onUpdate: (point: GeoPoint) => void,
@@ -230,7 +230,7 @@ export async function watchLocation(
   const sub = await Location.watchPositionAsync(
     {
       // BestForNavigation forces the full GPS chipset for turn-by-turn grade
-      // precision — during an emergency we want the tightest fix possible for
+      // precision, during an emergency we want the tightest fix possible for
       // both the victim and the responder. Tighter intervals = fresher dots.
       accuracy: Location.Accuracy.BestForNavigation,
       distanceInterval: opts.distanceIntervalMeters ?? 4,

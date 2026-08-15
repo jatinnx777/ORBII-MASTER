@@ -25,7 +25,7 @@ type Nav = NativeStackNavigationProp<AppStackParamList, 'EditProfile'>;
 
 // Instagram-style edit profile: a big calm avatar, a "Change photo" text link,
 // then a quiet list of labeled rows. "Done" lives in the header. Warm/neutral
-// throughout — red is reserved for emergencies, never for profile chrome.
+// throughout, red is reserved for emergencies, never for profile chrome.
 export function EditProfileScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
@@ -43,7 +43,7 @@ export function EditProfileScreen() {
     photoUri !== (profile?.photoUri ?? null);
 
   const pickImage = async () => {
-    // Android system Photo Picker — no media permission required.
+    // Android system Photo Picker, no media permission required.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing: true,

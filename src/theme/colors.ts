@@ -1,17 +1,17 @@
-// ORBII — Violet Neo-Minimal design system (v31).
+// ORBII, Violet Neo-Minimal design system (v31).
 //
 // Soft-minimal / neo-minimal, the language of Blinkit, Uber, Google Maps,
 // Airbnb and Apple: clean near-white canvas, pure-white cards, generous
 // rounding, subtle neutral elevation, and ONE confident brand colour.
 //
-//   • BRAND / SAFE  (#7B5FC7) — ORBII violet. CTAs, "protected", success,
+//   • BRAND / SAFE  (#7B5FC7), ORBII violet. CTAs, "protected", success,
 //     "help is coming". This is the app's identity.
-//   • CORAL         (#FF5A5F) — SOS / danger only. Never used for anything calm.
-//   • GOLD          (#F5C451) — premium (ORBII Plus) + highlights.
-//   • MINT          (#3DBE8B) — "all clear" / verified confirmations.
+//   • CORAL         (#FF5A5F), SOS / danger only. Never used for anything calm.
+//   • GOLD          (#F5C451), premium (ORBII Plus) + highlights.
+//   • MINT          (#3DBE8B), "all clear" / verified confirmations.
 //
 // Every screen reads these tokens, so retinting here restyles the whole app.
-// Nothing brand-related is hardcoded in screens — always reference a token.
+// Nothing brand-related is hardcoded in screens, always reference a token.
 
 // Brand violet scale.
 const GREEN = '#7B5FC7';
@@ -22,11 +22,11 @@ export const colors = {
   // ── Canvas (clean near-white, faintly violet-biased neutral) ──
   cream: '#F7F5FC', // app background
   creamDeep: '#EEEAF6', // pressed / alt surface
-  surface: '#FFFFFF', // cards (pure white — neo-minimal)
+  surface: '#FFFFFF', // cards (pure white, neo-minimal)
   surfaceAlt: '#FFFFFF', // insets
 
   // ── Green (primary accent / CTA / safe) ──────────────────
-  peach: GREEN, // legacy name — now the brand green (drives most CTAs)
+  peach: GREEN, // legacy name, now the brand green (drives most CTAs)
   peachDeep: GREEN_DEEP,
   peachSoft: GREEN_SOFT,
 
@@ -75,7 +75,7 @@ export const colors = {
   brandSoft: GREEN_SOFT,
   brandMid: '#BCA9EE',
   brandDeep: GREEN_DEEP,
-  primary: '#FF5A5F', // SOS / danger primary — stays coral
+  primary: '#FF5A5F', // SOS / danger primary, stays coral
   primaryDeep: '#E23F45',
   secondary: '#FFFFFF',
   accent: GREEN,

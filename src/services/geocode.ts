@@ -1,12 +1,12 @@
 // Free place search (geocoding). No API key required by default.
 //
 // Ranked by quality:
-//   1. LocationIQ (if LOCATIONIQ_KEY is set) — best India coverage + autocomplete,
+//   1. LocationIQ (if LOCATIONIQ_KEY is set), best India coverage + autocomplete,
 //      free tier 5,000/day at https://locationiq.com. Paste a free key below to
 //      dramatically improve results (finds colleges/hospitals raw OSM misses).
-//   2. Photon (komoot, OSM) — no key, biased to the user's location so nearby
+//   2. Photon (komoot, OSM), no key, biased to the user's location so nearby
 //      Indian places rank first.
-//   3. Nominatim (OSM) — no key, restricted to India (countrycodes=in).
+//   3. Nominatim (OSM), no key, restricted to India (countrycodes=in).
 
 // Optional: paste a free LocationIQ key here for the best results. Leave '' to
 // use the no-key providers below.

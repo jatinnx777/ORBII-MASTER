@@ -32,7 +32,7 @@ import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
-// Emergency — everything that fires help, in one place.
+// Emergency, everything that fires help, in one place.
 //
 // Only real, working triggers live here. No decorative buttons: on this screen
 // a control that doesn't do what it says could get someone hurt.

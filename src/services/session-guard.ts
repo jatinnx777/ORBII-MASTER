@@ -31,7 +31,7 @@ export async function claimThisDevice(): Promise<void> {
 
 /**
  * Watch our user_sessions row while authenticated. The device is claimed at
- * sign-in (see auth.claimThisDevice), so this guard does NOT claim on resume —
+ * sign-in (see auth.claimThisDevice), so this guard does NOT claim on resume , 
  * it only detects eviction: if the account's active device is already something
  * other than us (we were superseded while away), or it changes to another
  * device live (a fresh login elsewhere), we invoke onEvicted().

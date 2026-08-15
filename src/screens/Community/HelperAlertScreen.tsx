@@ -25,7 +25,7 @@ type Nav = NativeStackNavigationProp<AppStackParamList>;
 type R = RouteProp<AppStackParamList, 'HelperAlert'>;
 
 const RESPONSE_SECONDS = 15;
-// Buzz-buzz, pause, buzz-buzz-buzz — the ORBII emergency signature. Distinct
+// Buzz-buzz, pause, buzz-buzz-buzz, the ORBII emergency signature. Distinct
 // from a single social-notification buzz so helpers learn to recognise it.
 const EMERGENCY_VIBRATION = [0, 300, 160, 300, 450, 300, 160, 300, 160, 300];
 
@@ -106,7 +106,7 @@ export function HelperAlertScreen() {
       name: profile.name ?? 'A helper',
       photoUri: profile.photoUri ?? null,
     });
-    // In-app live navigation to the person in need — no bouncing out to
+    // In-app live navigation to the person in need, no bouncing out to
     // Google Maps. `replace` so the alert screen is removed from the stack.
     navigation.replace('HelperNavigation', {
       sosId: alert.id,

@@ -20,7 +20,7 @@ const PENDING_KEY = 'orbii:sos-audio-pending';
 
 type Pending = { userId: string; sosId: string; localUri: string; at: number };
 
-/** `<uid>/<sosId>.m4a` — the path layout the bucket's RLS policy expects. */
+/** `<uid>/<sosId>.m4a`, the path layout the bucket's RLS policy expects. */
 function storagePath(userId: string, sosId: string): string {
   return `${userId}/${sosId}.m4a`;
 }
@@ -41,7 +41,7 @@ async function enqueue(item: Pending): Promise<void> {
 
 /**
  * Upload one clip and stamp `sos_events.audio_path`. Returns true on success.
- * Never throws — the caller is on the SOS path.
+ * Never throws, the caller is on the SOS path.
  */
 export async function uploadSosRecording(
   userId: string,
@@ -88,7 +88,7 @@ export async function uploadSosRecording(
 }
 
 /**
- * Upload the pre-roll clip — the 15 seconds the mic captured BEFORE the voice
+ * Upload the pre-roll clip, the 15 seconds the mic captured BEFORE the voice
  * trigger fired. This is often the only recording of the threat itself, since
  * the SOS clip only starts once she's already shouting.
  *
@@ -149,7 +149,7 @@ export async function flushPendingSosAudio(): Promise<void> {
     } catch {
       exists = false;
     }
-    if (!exists) continue; // local copy gone — nothing left to upload
+    if (!exists) continue; // local copy gone, nothing left to upload
     const ok = await uploadSosRecording(item.userId, item.sosId, item.localUri);
     if (!ok) stillPending.push(item);
   }

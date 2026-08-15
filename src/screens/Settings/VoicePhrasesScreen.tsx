@@ -34,7 +34,7 @@ import {
   removeHindiPack,
 } from '@/services/voice-language';
 
-// Voice SOS settings. There is no custom phrase to set — in a real emergency
+// Voice SOS settings. There is no custom phrase to set, in a real emergency
 // nobody remembers an invented secret word, they just shout "help, help". The
 // engine listens for the built-in panic words (always on, on-device). This
 // screen only manages the optional Hindi language pack and always-on

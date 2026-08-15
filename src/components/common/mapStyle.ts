@@ -1,8 +1,8 @@
-// Custom MapLibre style for ORBII — a calm, premium green-and-cream theme.
+// Custom MapLibre style for ORBII, a calm, premium green-and-cream theme.
 //
 // Built ENTIRELY on OpenFreeMap's free vector tiles (no API key, no rate
 // limits, OpenMapTiles schema). We just repaint the layers in ORBII's palette:
-// soft cream land, sage-green parks/greenery, gentle water, clean white roads —
+// soft cream land, sage-green parks/greenery, gentle water, clean white roads , 
 // the "expensive app" feel without any paid map provider.
 //
 // If the map ever renders blank, revert by passing `FALLBACK_STYLE_URL` to
@@ -143,7 +143,7 @@ export const ORBII_MAP_STYLE = {
         'text-halo-width': 1.3,
       },
     },
-    // Street names along roads at close zoom — makes the map read as a real
+    // Street names along roads at close zoom, makes the map read as a real
     // navigation surface, not just a colour field. Subtle, follows the road.
     {
       id: 'road-label',

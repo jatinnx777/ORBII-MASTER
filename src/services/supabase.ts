@@ -10,7 +10,7 @@ export const SESSION_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 2 weeks
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
-    // Hybrid storage — Supabase auth tokens (sb-* keys) go to SecureStore
+    // Hybrid storage, Supabase auth tokens (sb-* keys) go to SecureStore
     // (Android Keystore / iOS Keychain). Other persisted state stays on
     // AsyncStorage. See src/services/secure-store.ts.
     storage: secureStorage,

@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // In-app-only Community activity notifications (likes, comments, replies).
-// These are read into the app's own Notifications screen — never pushed to the
+// These are read into the app's own Notifications screen, never pushed to the
 // phone's system tray. Populated server-side by triggers (sql/50).
 
 export type CommunityNotifType = 'like' | 'comment' | 'reply';

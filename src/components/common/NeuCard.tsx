@@ -2,7 +2,7 @@ import React from 'react';
 import { Pressable, StyleSheet, View, type ViewStyle, type StyleProp } from 'react-native';
 import { colors, radius, shadows } from '@/theme';
 
-// Neumorphic surface — a soft extruded card on the warm canvas. RN supports a
+// Neumorphic surface, a soft extruded card on the warm canvas. RN supports a
 // single shadow per view, so we render the warm-grey drop shadow on the outer
 // view and a white top/left highlight border to fake the second light source.
 // Set `onPress` to get a tactile pressed (inset-ish) state.
@@ -27,7 +27,7 @@ export function NeuCard({
         style,
       ]}
     >
-      {/* top highlight edge — the second (light) source */}
+      {/* top highlight edge, the second (light) source */}
       <View
         pointerEvents="none"
         style={[styles.highlight, { borderRadius: r }]}

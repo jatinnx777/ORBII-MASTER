@@ -6,7 +6,7 @@ export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
   PhoneSignIn: undefined;
-  // OTP entry — either a phone (SMS) or an email code.
+  // OTP entry, either a phone (SMS) or an email code.
   PhoneVerify: { phone?: string; email?: string };
   LanguageSelector: undefined;
   ProfileSetup: undefined;
@@ -32,7 +32,7 @@ export type AppStackParamList = {
         instant?: boolean;
         test?: boolean;
         voice?: boolean;
-        /** Which phrase/sound fired the voice trigger — for false-positive tuning. */
+        /** Which phrase/sound fired the voice trigger, for false-positive tuning. */
         phrase?: string;
         /** Absolute path to the pre-roll WAV captured before the trigger. */
         preroll?: string;
@@ -58,6 +58,7 @@ export type AppStackParamList = {
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
   SafetyReadiness: undefined;
+  VoiceDonation: undefined;
   Geofences: undefined;
   Recordings: undefined;
   DisasterMode: undefined;
@@ -90,7 +91,7 @@ export type AppStackParamList = {
     sosCreatedMs?: number;
   };
   // Settings + Circles are now stack destinations (reached via the Home
-  // gear / helpers row), not tabs — the tab bar is Home/Safety/Plans/Profile.
+  // gear / helpers row), not tabs, the tab bar is Home/Safety/Plans/Profile.
   Settings: undefined;
   Circles: undefined;
   History: undefined;

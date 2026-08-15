@@ -6,7 +6,7 @@ import { store } from '@/redux/store';
 import { trackEvent } from './analytics';
 import type { EmergencyContact } from '@/types';
 
-// "Share my location" — a calm, non-emergency alternative to an SOS.
+// "Share my location", a calm, non-emergency alternative to an SOS.
 //
 // Two things happen:
 //   1. A maps link is texted to your TOP emergency contact (the first one on
@@ -43,7 +43,7 @@ export async function shareMyLocation(): Promise<ShareResult> {
     const body = encodeURIComponent(
       `${profile.name || 'I'} shared a live location with you via ORBII: ${link}`,
     );
-    // Android uses ? , iOS uses & — Linking handles both with this form.
+    // Android uses ? , iOS uses &, Linking handles both with this form.
     const sep = Platform.OS === 'ios' ? '&' : '?';
     Linking.openURL(`sms:${top.phone}${sep}body=${body}`).catch(() => undefined);
   }
@@ -56,7 +56,7 @@ export async function shareMyLocation(): Promise<ShareResult> {
     });
     circleNotified = (data as { sent?: number })?.sent ?? 0;
   } catch {
-    // function not deployed yet, or offline — the SMS still went out.
+    // function not deployed yet, or offline, the SMS still went out.
   }
 
   // 3. A local record so she can see she shared, and when.

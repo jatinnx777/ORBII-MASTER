@@ -50,7 +50,7 @@ export function DeadmanStartScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   if (active) {
-    // Already running — punt the user to the active screen.
+    // Already running, punt the user to the active screen.
     navigation.replace('DeadmanActive');
     return null;
   }

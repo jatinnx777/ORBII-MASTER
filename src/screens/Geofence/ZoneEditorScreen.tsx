@@ -20,7 +20,7 @@ import { searchPlaces, type Place } from '@/services/geocode';
 import type { GeoPoint } from '@/types';
 
 // Full-bleed map with the wizard as floating sheets over it. The map mounts the
-// instant we have a location — while the parent picks a circle + member (a few
+// instant we have a location, while the parent picks a circle + member (a few
 // seconds) the tiles finish loading, so the "draw" step feels instant.
 
 type Step = 'circle' | 'member' | 'map';

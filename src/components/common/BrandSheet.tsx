@@ -94,7 +94,7 @@ export function useBrandSheet(): SheetContext {
   return ctx;
 }
 
-// Flat tone-driven icon backdrop. Solid surface tinted by tone — no
+// Flat tone-driven icon backdrop. Solid surface tinted by tone, no
 // gradient, no halo.
 const TONE_BG: Record<Tone, string> = {
   neutral: colors.surface,
@@ -386,7 +386,7 @@ function SheetButtonView({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    // Lighter scrim — the BlurView behind does the heavy lifting now.
+    // Lighter scrim, the BlurView behind does the heavy lifting now.
     backgroundColor: 'rgba(20,18,30,0.30)',
     justifyContent: 'center',
     alignItems: 'center',

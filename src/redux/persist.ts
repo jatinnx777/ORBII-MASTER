@@ -50,7 +50,7 @@ export async function hydrateStore() {
   }
   if (safetyModes) {
     // If a deadman timer was armed and has since expired while the app
-    // was killed, drop the local copy — the local notification already
+    // was killed, drop the local copy, the local notification already
     // fired (or is about to). The user-facing "your timer expired"
     // surface is the notification, not the slice.
     const now = Date.now();
@@ -96,7 +96,7 @@ function subscribePersist() {
         void syncProfile(next.user.profile);
         // Durable, per-user safety cache of emergency contacts. Survives
         // sign-out (unlike the session profile above) so contacts are never
-        // lost even if a server write failed — merged back in on next login.
+        // lost even if a server write failed, merged back in on next login.
         void cacheContactsLocally(
           next.user.profile.uid,
           next.user.profile.emergencyContacts,
@@ -106,7 +106,7 @@ function subscribePersist() {
         void cacheProfileLocally(next.user.profile);
       } else {
         // Sign-out clears the session profile, but NOT the per-user contacts
-        // cache — re-login restores it.
+        // cache, re-login restores it.
         removeItem(storageKeys.profile);
         clearSession();
       }

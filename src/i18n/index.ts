@@ -43,7 +43,7 @@ function detectDeviceLocale(): Locale {
       if (SUPPORTED_LOCALES.includes(code)) return code;
     }
   } catch {
-    // ignore — fall back to English.
+    // ignore, fall back to English.
   }
   return FALLBACK;
 }

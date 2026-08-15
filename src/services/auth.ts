@@ -19,7 +19,7 @@ import { claimThisDevice } from './session-guard';
 // Additional Redirect URLs.
 export const AUTH_REDIRECT_URL = 'orbii://auth/callback';
 
-// ORBII auth — Supabase OAuth (Google provider) via the browser.
+// ORBII auth, Supabase OAuth (Google provider) via the browser.
 //
 // One-time setup the project owner has to do:
 //   1. Google Cloud Console → create a Web OAuth client. Copy ID + Secret.
@@ -39,7 +39,7 @@ export const AUTH_REDIRECT_URL = 'orbii://auth/callback';
 // to a local-only fake profile. The UI flow stays identical.
 const DEV_AUTH_MODE = false;
 
-// PHONE OTP TEST BYPASS — accepts a hard-coded OTP for phone sign-in so
+// PHONE OTP TEST BYPASS, accepts a hard-coded OTP for phone sign-in so
 // we can demo the flow before wiring a real SMS gateway (Twilio /
 // MessageBird etc.). When enabled:
 //   • sendPhoneOtp does NOT call Supabase; just returns the E.164 number.
@@ -48,7 +48,7 @@ const DEV_AUTH_MODE = false;
 //   • No real Supabase session is created, so server-side calls
 //     (friends search, messages, sos broadcast) will fail until you
 //     either flip this off OR configure Supabase Phone Auth properly.
-// DISABLED for launch — ORBII uses Google sign-in only. The phone/OTP flow is
+// DISABLED for launch, ORBII uses Google sign-in only. The phone/OTP flow is
 // retired (no real SMS gateway wired), and the Welcome screen no longer routes
 // to it. Keeping the constant (false) so the phone screens still compile.
 const TEST_OTP_BYPASS = false;
@@ -68,7 +68,7 @@ export type SignInResult = {
 // Sends a 6-digit OTP to the given phone via Supabase Auth (Phone
 // provider). Requires the Supabase project's Auth → Phone settings to
 // have a configured SMS gateway (Twilio / MessageBird / Vonage / built-in
-// test mode). The caller surfaces success/failure as UI state — this
+// test mode). The caller surfaces success/failure as UI state, this
 // function only throws on hard transport errors.
 export async function sendPhoneOtp(rawPhone: string): Promise<string> {
   if (!isValidIndianPhone(rawPhone)) {
@@ -105,7 +105,7 @@ export async function sendOtpToE164(e164: string): Promise<string> {
 
 // ── Email OTP (free on Supabase; no SMS gateway needed) ──────────────────
 // Sends a 6-digit code. NOTE: Supabase's default email template sends a magic
-// LINK — switch the "Magic Link" template to use {{ .Token }} to get a code.
+// LINK, switch the "Magic Link" template to use {{ .Token }} to get a code.
 export async function sendEmailOtp(email: string): Promise<string> {
   const clean = email.trim().toLowerCase();
   if (!/^\S+@\S+\.\S+$/.test(clean)) throw new Error('Enter a valid email address.');
@@ -156,7 +156,7 @@ export async function verifyPhoneOtp(
 
   // Hard-coded test path. Returns a local-only profile so the user can
   // walk the post-signin flow without a real Supabase session. Server
-  // calls (Supabase reads/writes) will fail under this path — fine for
+  // calls (Supabase reads/writes) will fail under this path, fine for
   // UI demos, not for production.
   if (DEV_AUTH_MODE || TEST_OTP_BYPASS) {
     await delay(500);
@@ -303,7 +303,7 @@ type ProfileRow = {
 };
 
 // Last-line-of-defence profile creator. The DB trigger in
-// sql/04_profile_triggers.sql is the primary path — this is here for
+// sql/04_profile_triggers.sql is the primary path, this is here for
 // projects that haven't installed the trigger yet, or for the rare case
 // where the trigger fires but RLS blocks SELECT immediately after.
 //

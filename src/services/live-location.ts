@@ -2,11 +2,11 @@ import { supabase } from './supabase';
 import type { GeoPoint } from '@/types';
 
 // Live location pub/sub for in-progress SOS responses. Uses Supabase
-// Realtime's broadcast channel — no database row per ping, no writes, no
+// Realtime's broadcast channel, no database row per ping, no writes, no
 // cost. The responder publishes their GPS every few seconds; the victim's
 // device subscribes to the same channel and re-renders the marker.
 //
-// Fallback: if realtime fails (offline, bad tunnel) we silently no-op —
+// Fallback: if realtime fails (offline, bad tunnel) we silently no-op , 
 // the helper still moves toward the victim IRL even if the map doesn't
 // update. Safety first, tracking is a nice-to-have.
 
@@ -21,7 +21,7 @@ export type LiveLocationPayload = {
   responder: Responder;
   point: GeoPoint;
   at: number;
-  // true when the helper taps "I've reached" — the victim is then asked to
+  // true when the helper taps "I've reached", the victim is then asked to
   // confirm, and confirming resolves the SOS.
   arrived?: boolean;
 };
@@ -94,7 +94,7 @@ export type VictimPublishHandle = {
 
 export function publishVictimLocation(sosId: string): VictimPublishHandle {
   const channel = supabase.channel(victimChannelName(sosId), {
-    // private: gated by Realtime Authorization (sql/39) — participants only.
+    // private: gated by Realtime Authorization (sql/39), participants only.
     config: { private: true, broadcast: { ack: false, self: false } },
   });
   let subscribed = false;
@@ -130,7 +130,7 @@ export function subscribeVictimLocation(
 ): { unsubscribe: () => void } {
   const channel = supabase
     .channel(victimChannelName(sosId), {
-      // private: gated by Realtime Authorization (sql/39) — participants only.
+      // private: gated by Realtime Authorization (sql/39), participants only.
       config: { private: true, broadcast: { ack: false, self: false } },
     })
     .on('broadcast', { event: 'vpos' }, (msg) => {
@@ -156,7 +156,7 @@ export function subscribeLiveLocation(
 ): { unsubscribe: () => void } {
   const channel = supabase
     .channel(channelName(sosId), {
-      // private: gated by Realtime Authorization (sql/39) — participants only.
+      // private: gated by Realtime Authorization (sql/39), participants only.
       config: { private: true, broadcast: { ack: false, self: false } },
     })
     .on('broadcast', { event: 'pos' }, (msg) => {

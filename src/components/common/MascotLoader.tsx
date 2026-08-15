@@ -18,7 +18,7 @@ type Props = {
   size?: number;
 };
 
-/** A warm loading state — the guardian gently bobs while things load. */
+/** A warm loading state, the guardian gently bobs while things load. */
 export function MascotLoader({ message, pose = 'neutral', size = 96 }: Props) {
   const bob = useRef(new Animated.Value(0)).current;
   const [i, setI] = useState(0);

@@ -75,7 +75,7 @@ export async function sendFriendRequest(args: {
     throw new Error(rateLimitMessage(gate));
   }
 
-  // Quick existence check — without it we'd create requests for ghost
+  // Quick existence check, without it we'd create requests for ghost
   // usernames, which is bad UX.
   const { data: target } = await supabase
     .from('profiles')

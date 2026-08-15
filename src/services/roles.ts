@@ -5,7 +5,7 @@ import { supabase } from './supabase';
 import { reportError } from './error-reporting';
 import type { UserRole } from '@/types';
 
-// Role-based permissions for ORBII. ONE app, ONE account — the role decides
+// Role-based permissions for ORBII. ONE app, ONE account, the role decides
 // which UI a user can see. Keep all role logic here so we never hardcode
 // `role === 'x'` checks scattered across screens.
 
@@ -50,7 +50,7 @@ export type ApplyResult = { ok: true } | { ok: false; error: string };
  * Submit an application to become a responder (creates a pending profile).
  *
  * Returns the REAL failure rather than a bare false. This used to swallow the
- * error and the UI blamed the user's connection — so a missing `apply_as_responder`
+ * error and the UI blamed the user's connection, so a missing `apply_as_responder`
  * function (sql/24_roles.sql never run) looked exactly like bad wifi, and the
  * actual cause was invisible to everyone.
  */
@@ -91,11 +91,11 @@ export async function refreshUserRole(): Promise<void> {
       .maybeSingle();
     if (error) {
       // A missing `role` column (sql/24_roles.sql never run) silently pinned
-      // every user to 'user' — so an approved responder never saw the Missions
+      // every user to 'user', so an approved responder never saw the Missions
       // tab and nobody knew why. Report it once, don't guess.
       reportError(error, {
         category: 'responder.role',
-        message: 'could not read profiles.role — responders will never appear',
+        message: 'could not read profiles.role, responders will never appear',
         data: { code: error.code, hint: error.hint },
       });
       return;
@@ -106,6 +106,6 @@ export async function refreshUserRole(): Promise<void> {
       store.dispatch(profileUpdated({ ...profile, role }));
     }
   } catch {
-    // best-effort — keep whatever role we had
+    // best-effort, keep whatever role we had
   }
 }

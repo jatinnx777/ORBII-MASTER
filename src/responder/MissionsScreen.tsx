@@ -45,7 +45,7 @@ const LEVEL_TINT: Record<GuardianLevel, { bg: string; fg: string }> = {
 };
 
 // Missions = the responder dashboard. A permission-gated tab (only approved
-// responders reach it). A professional responder console — online/offline,
+// responders reach it). A professional responder console, online/offline,
 // trust, recognition. Dispatch/mission logic comes in a later milestone.
 export function MissionsScreen() {
   const navigation = useNavigation<Nav>();
@@ -82,7 +82,7 @@ export function MissionsScreen() {
 
   // Live dashboard: it refreshes the moment the server changes the helper's
   // row or wallet (Supabase realtime), when the app returns to the foreground,
-  // and on a slow safety poll — so trust, earnings, level and missions update
+  // and on a slow safety poll, so trust, earnings, level and missions update
   // without ever closing and reopening the app.
   useFocusEffect(
     useCallback(() => {
@@ -125,7 +125,7 @@ export function MissionsScreen() {
   );
 
   // "Can go online" = admin has approved this responder (verification_status =
-  // 'verified'). We deliberately do NOT require isFullyVerified() here — that
+  // 'verified'). We deliberately do NOT require isFullyVerified() here, that
   // also needs training_done, which admin approval doesn't set, so it would
   // trap approved helpers on the verification screen forever.
   const verified = hp?.verificationStatus === 'verified';
@@ -186,7 +186,7 @@ export function MissionsScreen() {
                 </Pressable>
               ) : null}
 
-              {/* availability — the centerpiece */}
+              {/* availability, the centerpiece */}
               <View style={[styles.statusCard, online && styles.statusCardOn]}>
                 <View style={styles.statusRow}>
                   <View style={[styles.statusIcon, online && styles.statusIconOn]}>
@@ -252,7 +252,7 @@ export function MissionsScreen() {
                 </View>
               </View>
 
-              {/* Monthly help quota — scales with Guardian level (sql/66). */}
+              {/* Monthly help quota, scales with Guardian level (sql/66). */}
               {verified && quota ? (
                 <View style={styles.quotaCard}>
                   <View style={styles.quotaHead}>
@@ -287,7 +287,7 @@ export function MissionsScreen() {
                 </View>
               ) : null}
 
-              {/* ORBII coins wallet — payout-style card (balance up top, a clear
+              {/* ORBII coins wallet, payout-style card (balance up top, a clear
                   full-width action below, so nothing floats). */}
               <Pressable
                 style={styles.earnCard}

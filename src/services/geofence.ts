@@ -116,7 +116,7 @@ export function circleFromCorners(corners: Corner[]): { lat: number; lng: number
   return { lat, lng, radiusM };
 }
 
-/** Zones set ON me — the ones this device must actually monitor. */
+/** Zones set ON me, the ones this device must actually monitor. */
 export async function loadMyZones(uid: string): Promise<Geofence[]> {
   const { data, error } = await supabase
     .from('geofences')
@@ -138,7 +138,7 @@ export async function loadZonesISet(uid: string): Promise<Geofence[]> {
   return (data ?? []).map((r) => fromRow(r as Row));
 }
 
-/** Zones I've already set on ONE person — so they can be reused, not redrawn. */
+/** Zones I've already set on ONE person, so they can be reused, not redrawn. */
 export async function loadZonesForMember(ownerId: string, memberId: string): Promise<Geofence[]> {
   const { data, error } = await supabase
     .from('geofences')
@@ -272,7 +272,7 @@ export async function loadZoneRequests(uid: string): Promise<ZoneRequest[]> {
   }));
 }
 
-/** I'm fine with this zone — keep it, just stop showing it as a request. */
+/** I'm fine with this zone, keep it, just stop showing it as a request. */
 export async function acknowledgeZone(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.rpc('geofence_member_ack', { p_id: id });
@@ -282,7 +282,7 @@ export async function acknowledgeZone(id: string): Promise<boolean> {
   }
 }
 
-/** I don't want this zone — deactivate it so it stops watching me. */
+/** I don't want this zone, deactivate it so it stops watching me. */
 export async function declineZoneOnMe(id: string): Promise<boolean> {
   try {
     const { error } = await supabase.rpc('geofence_member_decline', { p_id: id });
@@ -329,7 +329,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
       .select('id')
       .single();
 
-    // On EXIT: alert the WHOLE circle — but ONLY during the zone's active hours.
+    // On EXIT: alert the WHOLE circle, but ONLY during the zone's active hours.
     // Leaving college at 6pm when they're only expected inside 9-5 is normal and
     // must not fire an alarm. Outside the window the crossing is still recorded
     // for history; it just doesn't alert anyone. ENTER is history-only.
@@ -347,7 +347,7 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
         supabase.functions
           .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
           .catch(() => {
-            // Best-effort — a failed push must never throw here or Android may
+            // Best-effort, a failed push must never throw here or Android may
             // stop delivering geofence events to us.
           });
         await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
@@ -368,7 +368,7 @@ export async function syncZoneMonitoring(uid: string): Promise<void> {
     if (!fg.granted) return;
     // Geofencing needs background location on Android. Without it the OS will
     // not deliver events once the app is closed, which is the only time it
-    // matters. A denial isn't fatal — we just can't monitor.
+    // matters. A denial isn't fatal, we just can't monitor.
     const bg = await Location.getBackgroundPermissionsAsync();
     if (!bg.granted) return;
 
@@ -461,7 +461,7 @@ export type ZoneEvent = {
   kind: 'exit' | 'enter';
   createdAt: string;
   label: string;
-  // WHO crossed — a circle can hold many people, so "left Hostel" is useless
+  // WHO crossed, a circle can hold many people, so "left Hostel" is useless
   // without a name. Null only if the person can't be resolved.
   memberName: string | null;
   // For exits: true = confirmed intentional, false = flagged/escalated, null = pending.

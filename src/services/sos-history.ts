@@ -77,7 +77,7 @@ export async function fetchSOSHistory(userId: string): Promise<SOSRecord[]> {
   return (data as SOSRow[]).map(rowToRecord);
 }
 
-// Upsert a full SOSRecord — used when an SOS resolves or is cancelled, so
+// Upsert a full SOSRecord, used when an SOS resolves or is cancelled, so
 // the server row reflects the final state.
 export async function upsertSOSRecord(record: SOSRecord): Promise<void> {
   const { error } = await supabase.from('sos_events').upsert(

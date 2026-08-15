@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
 // Hybrid storage that Supabase plugs into. Auth tokens (anything starting
-// with `sb-`) live in SecureStore — Android Keystore / iOS Keychain
+// with `sb-`) live in SecureStore, Android Keystore / iOS Keychain
 // backed, encrypted at rest. Everything else stays on AsyncStorage so
 // behaviour is unchanged for non-sensitive cache.
 //

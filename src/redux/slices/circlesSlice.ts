@@ -19,7 +19,7 @@ type CirclesState = {
   activeCircleId: string | null;
   status: 'idle' | 'loading' | 'ready' | 'errored';
   error: string | null;
-  // True when the server returned a "table does not exist" error — the user
+  // True when the server returned a "table does not exist" error, the user
   // needs to paste sql/09_circles.sql into Supabase. The UI shows a clear
   // setup banner in this state instead of a generic error.
   setupNeeded: boolean;

@@ -28,7 +28,7 @@ import {
   type Locale,
 } from '@/i18n';
 
-// Stack-agnostic — used from both AuthNavigator (during welcome flow)
+// Stack-agnostic, used from both AuthNavigator (during welcome flow)
 // and AppNavigator (Settings → Language). Picks navigation from the
 // hook so neither stack's typed param list has to match.
 export function LanguageSelectorScreen() {
@@ -55,7 +55,7 @@ export function LanguageSelectorScreen() {
     if (navigation.canGoBack()) {
       navigation.goBack();
     } else {
-      // Reached as a deep-link root somehow — punt to Welcome.
+      // Reached as a deep-link root somehow, punt to Welcome.
       // @ts-expect-error - cross-stack navigate; runtime safe.
       navigation.navigate('Welcome');
     }

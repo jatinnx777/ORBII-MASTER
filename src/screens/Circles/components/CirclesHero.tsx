@@ -5,7 +5,7 @@ import { colors, fontFamilies } from '@/theme';
 
 // Pure-RN animated illustration used as the empty-state hero on the
 // Circles tab and at the top of the invite screen. No external assets,
-// no Lottie — just nested rings + floating member chips that breathe.
+// no Lottie, just nested rings + floating member chips that breathe.
 //
 // Why we draw it ourselves: the design system wants premium polish, and
 // shipping a 600 KB Lottie JSON for one illustration eats the bundle
@@ -13,7 +13,7 @@ import { colors, fontFamilies } from '@/theme';
 // driven primitives give us 60 FPS at 0 KB cost.
 
 // Floating member chips around the hero core. Every chip uses a tone
-// from the official brand palette — the variation is in saturation and
+// from the official brand palette, the variation is in saturation and
 // position, not hue. Keeps the illustration on-brand.
 const ICON_KINDS: Array<{
   icon: React.ComponentProps<typeof Ionicons>['name'];

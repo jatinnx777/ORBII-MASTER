@@ -1,7 +1,7 @@
 // On-device, fully offline Voice SOS keyword spotting.
 //
 // Powered by the bundled Vosk models (English + Hindi) running inside the
-// native VoiceGuard foreground service — NO speech API, NO network, nothing
+// native VoiceGuard foreground service, NO speech API, NO network, nothing
 // downloaded. The in-app "Voice SOS" toggle runs the exact same engine that
 // powers always-on background protection; the only difference is that the
 // in-app toggle stops when the user turns it off (it isn't armed for hours).
@@ -20,7 +20,7 @@ import {
   requestBatteryExemption,
 } from '@/services/background-voice';
 
-// Voice SOS is ALWAYS time-bounded now — never "until I turn it off". Every
+// Voice SOS is ALWAYS time-bounded now, never "until I turn it off". Every
 // entry point (Home, Safety tab, Settings, onboarding) arms it for a duration
 // the user picks, capped here so the mic can never run indefinitely.
 export const VOICE_MAX_HOURS = 8;
@@ -59,7 +59,7 @@ export type VoiceKeyword =
   | 'madad';
 
 // No custom phrases. In a real emergency nobody remembers an invented secret
-// word — they just shout "help, help". The native engine's built-in panic
+// word, they just shout "help, help". The native engine's built-in panic
 // words ("help help", "save me", "bachao", "madad", plus their near-miss forms
 // and cross-shout repeat detection) are always armed, so we start the guard
 // with an empty extra-phrase list.
@@ -71,7 +71,7 @@ export function isListening(): boolean {
 
 /**
  * Whisper mode. The silence gate that keeps the battery alive also makes the
- * engine deafest to a whispered plea — exactly the situation where an attacker
+ * engine deafest to a whispered plea, exactly the situation where an attacker
  * is standing next to her. Opt-in; costs battery. Re-issues startGuard so it
  * applies to the already-running service.
  */
@@ -99,7 +99,7 @@ let status: VoiceDetectionStatus = 'idle';
 let statusListeners: Listener[] = [];
 // Kept for API compatibility. The native engine fires SOS directly via the
 // `orbii://voice-sos` deep link, so these listeners are not invoked on the
-// Vosk path — but the export remains so call sites don't break.
+// Vosk path, but the export remains so call sites don't break.
 let keywordListeners: KeywordListener[] = [];
 let listening = false;
 
@@ -169,7 +169,7 @@ export async function startListening(): Promise<{ ok: boolean; reason?: string }
 
 export async function stopListening(): Promise<void> {
   listening = false;
-  // Don't tear down the engine if always-on background protection is armed —
+  // Don't tear down the engine if always-on background protection is armed , 
   // that's a separate, persistent session owned by the user's premium setting.
   try {
     const bg = await loadBgVoiceState();

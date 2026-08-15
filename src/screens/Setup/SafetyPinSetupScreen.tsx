@@ -6,14 +6,14 @@ import { Mascot, PinPrompt } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { setPin } from '@/services/safety-pin';
 
-// Mandatory, one-time safety PIN — collected at registration and never again.
+// Mandatory, one-time safety PIN, collected at registration and never again.
 //
 // It exists for one moment: an attacker has her phone, ORBII heard her
 // emergency phrase, and the 5-second countdown is running. Without a PIN he
 // simply taps Cancel. With one, he can't.
 //
 // It cannot be skipped (there is no dismiss) and cannot be changed later
-// (setPin is write-once) — a PIN an attacker can change is not a PIN.
+// (setPin is write-once), a PIN an attacker can change is not a PIN.
 
 export function SafetyPinSetupScreen({ onDone }: { onDone: () => void }) {
   const [error, setError] = useState<string | null>(null);

@@ -28,7 +28,7 @@ export class SOSRateLimitedError extends Error {
 //   2. Broadcasts the alert on the shared `orbii:alerts` realtime channel
 //      so every app currently open receives it in real time.
 //
-// `kind: 'test'` skips both the DB write and the broadcast — a practice run
+// `kind: 'test'` skips both the DB write and the broadcast, a practice run
 // that only writes a local history record, so the user can rehearse the
 // flow without notifying real helpers.
 //
@@ -83,7 +83,7 @@ export async function createSOS(
     .map((f) => f.uid)
     .filter((uid): uid is string => !!uid);
 
-  // Every SOS now reaches nearby ORBII users in real time, free or paid — a
+  // Every SOS now reaches nearby ORBII users in real time, free or paid, a
   // free user can still be helped by whoever is close and willing (they may or
   // may not come). The paid tier's real advantage is the VERIFIED helper
   // dispatch, decided server-side in notify-sos, not whether the alert reaches
@@ -111,7 +111,7 @@ export async function createSOS(
     }),
   );
 
-  // Fire-and-forget DB write. We never await it on the critical path —
+  // Fire-and-forget DB write. We never await it on the critical path , 
   // DB failure must not delay the broadcast.
   void persistSOS(record, user);
 
@@ -185,8 +185,8 @@ async function persistSOS(
         user_photo: user.photoUri,
         // Every active SOS is visible to nearby users while it's live (the RPC
         // still bounds this to a radius + the last 15 minutes + active only),
-        // so a free user can be reached by whoever is close. The paid perk —
-        // verified-helper dispatch — is gated separately, server-side.
+        // so a free user can be reached by whoever is close. The paid perk , 
+        // verified-helper dispatch, is gated separately, server-side.
         circle_only: false,
       },
       { onConflict: 'id' },

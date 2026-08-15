@@ -13,7 +13,7 @@ export const fontFamilies = {
 } as const;
 
 export const typography: Record<string, TextStyle> = {
-  // Hero headline — "Your Safety. Always." / "All Clear". Big, bold,
+  // Hero headline, "Your Safety. Always." / "All Clear". Big, bold,
   // tight leading like the mockups.
   display: {
     fontFamily: fontFamilies.poppinsBold,

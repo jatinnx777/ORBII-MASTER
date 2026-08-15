@@ -29,7 +29,7 @@ const communitySlice = createSlice({
     // MERGE rather than replace. The DB query (`listNearbyAlerts`) is a
     // best-effort backfill; if our Supabase project doesn't have `sos_events`
     // populated, it returns []. The realtime broadcast is the actual source
-    // of truth — a wholesale replace here was wiping live alerts ~1s after
+    // of truth, a wholesale replace here was wiping live alerts ~1s after
     // they appeared, which is the "pops up then disappears" bug.
     alertsLoaded(state, action: PayloadAction<CommunityAlert[]>) {
       const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
@@ -38,7 +38,7 @@ const communitySlice = createSlice({
       for (const a of state.alerts) {
         if (a.createdAt >= fifteenMinAgo) merged.set(a.id, a);
       }
-      // Layer DB results on top — they fill in things we missed.
+      // Layer DB results on top, they fill in things we missed.
       for (const a of action.payload) {
         if (a.createdAt >= fifteenMinAgo) merged.set(a.id, a);
       }

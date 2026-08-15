@@ -24,7 +24,7 @@ export async function getCachedContacts(
   return (await getItem<EmergencyContact[]>(cacheKey(uid))) ?? [];
 }
 
-// Only for account deletion — a signed-out user keeps their cache so re-login
+// Only for account deletion, a signed-out user keeps their cache so re-login
 // restores it, but a deleted account must leave nothing behind.
 export async function clearCachedContacts(uid: string): Promise<void> {
   await setItem(cacheKey(uid), []);
@@ -107,7 +107,7 @@ export async function upsertEmergencyContact(
     .single<ContactRow>();
   if (error || !data) {
     // DURABLE write. A lost guardian number means an SOS reaches nobody, so
-    // this has to be visible in client_errors — not a console.warn that
+    // this has to be visible in client_errors, not a console.warn that
     // evaporates in release. The local cache still protects the user.
     reportError(error ?? new Error('no row returned'), {
       category: 'contacts.upsert',

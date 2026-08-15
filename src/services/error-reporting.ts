@@ -70,12 +70,12 @@ export function reportError(err: unknown, context: ErrorContext): void {
     console.error(`[error:${context.category}]`, normalised.message, normalised.stack);
   }
 
-  // Forward point — wire to Crashlytics / Sentry here when available.
+  // Forward point, wire to Crashlytics / Sentry here when available.
   void sendToBackend(normalised, context);
 }
 
 // Remote sink: best-effort insert into Supabase `client_errors` so the founder
-// can see real beta crashes in the dashboard — no Sentry account / native
+// can see real beta crashes in the dashboard, no Sentry account / native
 // module / DSN needed. Never throws (an error in the error pipeline must not
 // crash the app), and is silent in dev so we don't spam the table.
 async function sendToBackend(err: Error, context: ErrorContext): Promise<void> {
@@ -90,7 +90,7 @@ async function sendToBackend(err: Error, context: ErrorContext): Promise<void> {
       const { data } = await supabase.auth.getSession();
       userId = data.session?.user?.id ?? null;
     } catch {
-      // unauthenticated / session unavailable — still log the error
+      // unauthenticated / session unavailable, still log the error
     }
     await supabase.from('client_errors').insert({
       user_id: userId,
@@ -102,7 +102,7 @@ async function sendToBackend(err: Error, context: ErrorContext): Promise<void> {
       platform: Platform.OS,
     });
   } catch {
-    // swallow — the error pipeline must never throw
+    // swallow, the error pipeline must never throw
   }
 }
 

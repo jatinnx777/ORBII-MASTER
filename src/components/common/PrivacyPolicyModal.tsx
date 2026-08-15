@@ -67,8 +67,8 @@ export function PrivacyPolicyModal({ visible, onAccept, onDecline }: Props) {
                 active{'\n'}
               • A timestamped record of each SOS you trigger (for your own
                 history){'\n'}
-              • Voice-detection runs on-device; the audio never leaves your
-                phone
+              • Voice-detection runs on-device; the audio stays on your phone,
+                except any clip you explicitly choose to donate to help train ORBII
             </Text>
 
             <Text style={styles.sectionHeader}>How we use it</Text>

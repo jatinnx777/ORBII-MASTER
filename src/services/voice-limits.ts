@@ -8,7 +8,7 @@ import { supabase } from './supabase';
 // The count is tracked locally (AsyncStorage, monthly bucket) so gating
 // works instantly and offline, and for phone-OTP users who have no Supabase
 // session. When a session exists we also mirror the count to Supabase
-// (sql/13_voice_usage.sql) for cross-device + analytics — best-effort.
+// (sql/13_voice_usage.sql) for cross-device + analytics, best-effort.
 //
 // Safety note: this NEVER blocks an emergency. The manual SOS button is
 // always free and unlimited; the limit only gates the hands-free *voice*

@@ -10,7 +10,7 @@ import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
-// Support — help, guidance and resources.
+// Support, help, guidance and resources.
 //
 // Every row here goes somewhere real. Where ORBII genuinely can't help yet
 // (counsellors, legal aid, shelters) we hand her the numbers that CAN, rather

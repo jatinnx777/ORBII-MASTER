@@ -39,7 +39,7 @@ import {
 import { useIsPremium } from '@/services/entitlements';
 import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
-// Community — an anonymous, moderated space to share safety experiences.
+// Community, an anonymous, moderated space to share safety experiences.
 // Your community identity is separate from your real account.
 
 function timeAgo(iso: string): string {
@@ -288,7 +288,7 @@ export function CommunityFeedScreen() {
           windowSize={11}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} />}
           ListHeaderComponent={
-            // A single wrapper with its own gap — a FlatList header is one cell,
+            // A single wrapper with its own gap, a FlatList header is one cell,
             // so the list's contentContainer gap does NOT space these children;
             // this restores the vertical rhythm between banner, search and chips.
             <View style={styles.feedHeader}>

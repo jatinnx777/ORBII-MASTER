@@ -12,7 +12,7 @@ import {
   type SavedRecording,
 } from '@/services/sos-recording';
 
-// Evidence vault — every SOS audio clip saved on THIS device. Play, or delete.
+// Evidence vault, every SOS audio clip saved on THIS device. Play, or delete.
 // Nothing here ever leaves the phone unless the user shares it; deleting is
 // permanent and immediate, because it's her evidence and her choice.
 

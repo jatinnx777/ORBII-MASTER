@@ -20,7 +20,7 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import type { AppStackParamList } from '@/navigation/types';
 import type { GeoPoint } from '@/types';
 
-// Victim-facing "Help is on the way" screen — the calm, premium moment right
+// Victim-facing "Help is on the way" screen, the calm, premium moment right
 // after a helper accepts the SOS. Soft-minimal (Blinkit / Uber / Google Maps),
 // entirely in ORBII green so it reads as reassurance, never alarm. Red is used
 // only for the two genuinely-danger actions (Exit, Call Police).
@@ -328,7 +328,7 @@ export function HelperResponseScreen() {
               <Row k="Vehicle" v={vehicle} />
               <Row k="Verification" v="ORBII verified responder" />
               <Row k="Rating" v="★ 4.9" />
-              <Row k="Completed assists" v="—" />
+              <Row k="Completed assists" v=", " />
             </View>
           ) : null}
         </View>

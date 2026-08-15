@@ -12,6 +12,6 @@ export function comingSoon(feature: string, detail?: string): void {
   appAlert(
     `${feature} is coming soon`,
     detail ??
-      "We're still building this, so it isn't live yet. Please don't rely on it in an emergency — use SOS or call 112.",
+      "We're still building this, so it isn't live yet. Please don't rely on it in an emergency, use SOS or call 112.",
   );
 }

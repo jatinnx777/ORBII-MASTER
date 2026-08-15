@@ -1,7 +1,7 @@
 import { supabase } from '@/services/supabase';
 import { getItem, setItem } from '@/services/storage';
 
-// FraudDetectionService — collects client-side signals the server can't see on
+// FraudDetectionService, collects client-side signals the server can't see on
 // its own (device fingerprint, spoofed GPS, impossible movement) and reports
 // them to the server, which folds them into the authoritative fraud score. The
 // server never trusts these blindly: it weights them and combines with its own

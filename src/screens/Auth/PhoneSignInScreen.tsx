@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     shadowRadius: 22,
     elevation: 6,
   },
-  logoImg: { width: '100%', height: '100%' },
+  logoImg: { width: 84, height: 84 },
   brand: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 13,

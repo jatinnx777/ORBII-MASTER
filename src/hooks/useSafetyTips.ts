@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useAppSelector } from '@/redux/store';
 
-// Rule-based safety tips. Each tip is a function of real app state —
+// Rule-based safety tips. Each tip is a function of real app state , 
 // nothing hardcoded as a static list. The Home card surfaces ONE tip
 // at a time, the top-priority one. When the user dismisses it (future)
 // we fall through to the next.
@@ -19,7 +19,7 @@ export type SafetyTip = {
   title: string;
   body: string;
   cta: string;
-  // Internal — what tapping the CTA should do. The Home component
+  // Internal, what tapping the CTA should do. The Home component
   // decides the actual navigation based on `target`.
   target:
     | 'enable_location'

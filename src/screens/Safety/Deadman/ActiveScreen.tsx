@@ -82,7 +82,7 @@ export function DeadmanActiveScreen() {
   }, [breathe]);
 
   if (!timer.active || timer.expiresAt == null) {
-    // Timer was disarmed elsewhere (notification handler) — punt back.
+    // Timer was disarmed elsewhere (notification handler), punt back.
     setTimeout(() => navigation.goBack(), 0);
     return null;
   }
@@ -95,7 +95,7 @@ export function DeadmanActiveScreen() {
   const seconds = Math.floor((remainingMs % 60_000) / 1000);
 
   // Foreground auto-fire on expiry. Background path is the scheduled
-  // notification (handled by App.tsx response listener — could also
+  // notification (handled by App.tsx response listener, could also
   // route here when tapped).
   useEffect(() => {
     if (remainingMs > 0 || fired.current || !profile) return;
@@ -259,7 +259,7 @@ export function DeadmanActiveScreen() {
           ]}
         >
           <Ionicons name="shield-checkmark" size={16} color={colors.textInverse} />
-          <Text style={styles.safeBtnText}>I'm safe — cancel timer</Text>
+          <Text style={styles.safeBtnText}>I'm safe, cancel timer</Text>
         </Pressable>
 
         <Pressable onPress={handleCancel} style={styles.cancelLink}>

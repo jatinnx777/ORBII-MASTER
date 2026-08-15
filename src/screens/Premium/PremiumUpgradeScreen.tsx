@@ -16,7 +16,7 @@ import type { AppStackParamList } from '@/navigation/types';
 //
 // Paywall design follows the HONEST patterns that actually lift conversion:
 // safety stays visibly free, we say exactly when (and whether) you'll be charged,
-// and cancelling is one tap. No fake urgency, no hidden cost — a safety app has
+// and cancelling is one tap. No fake urgency, no hidden cost, a safety app has
 // to be the last place anyone feels tricked.
 
 type Feature = { icon: React.ComponentProps<typeof Ionicons>['name']; text: string };

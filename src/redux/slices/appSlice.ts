@@ -26,7 +26,7 @@ type AppState = {
   pushEnabled: boolean;
   // Helper Mode: the user volunteers as a nearby helper. Their location is
   // periodically uploaded to helpers_live so others' SOS can find them.
-  // Off by default — opt-in only.
+  // Off by default, opt-in only.
   helperMode: boolean;
   hydrated: boolean;
   // Safe Mode toggle (live journey guard). Null = not active.

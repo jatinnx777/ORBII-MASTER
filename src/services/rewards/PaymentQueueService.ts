@@ -1,7 +1,7 @@
 import { RewardService, type RewardRow } from './RewardService';
 import { formatPaise } from './config';
 
-// PaymentQueueService — read-only view of the helper's reward pipeline. Payouts
+// PaymentQueueService, read-only view of the helper's reward pipeline. Payouts
 // are NEVER instant: rewards sit in the queue and are released by the weekly
 // server batch (process_weekly_payouts) after fraud analysis. This service just
 // surfaces where each reward is in that pipeline.

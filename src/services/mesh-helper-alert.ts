@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { hasMeshPermissions } from './mesh';
 
 /**
- * Offline helper alert, Phase 1 — FIRST CUT (needs on-device testing).
+ * Offline helper alert, Phase 1, FIRST CUT (needs on-device testing).
  *
  * When an SOS fires with NO internet and no phone nearby can bridge it, the only
  * people who can reach her are ORBII users already within Bluetooth range. This

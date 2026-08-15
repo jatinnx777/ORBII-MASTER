@@ -5,7 +5,7 @@ import type { EmergencyContact, SOSLocation, UserProfile } from '@/types';
 // WhatsApp deep-link broadcast.
 //
 // India has ~530M WhatsApp users. Push notifications get muted, SMS gets
-// lost in OTP noise — WhatsApp messages get read. Sending the SOS link
+// lost in OTP noise, WhatsApp messages get read. Sending the SOS link
 // over WhatsApp instead of (or alongside) push is the single biggest
 // reach win for the alert pipeline.
 //
@@ -82,7 +82,7 @@ export async function openWhatsAppFor(
 
 // Top-level entry called from the SOS flow. Sends to every emergency
 // contact serially with a tiny gap so the WhatsApp UI doesn't drop
-// intents. We don't block the SOS broadcast on this — it runs in
+// intents. We don't block the SOS broadcast on this, it runs in
 // parallel with the existing push + Supabase pipeline.
 export async function broadcastSOSViaWhatsApp(args: {
   user: UserProfile;
@@ -93,7 +93,7 @@ export async function broadcastSOSViaWhatsApp(args: {
   if (Platform.OS !== 'android' && Platform.OS !== 'ios') return;
   const message = buildSOSMessage(args);
   // One contact → just open. Multiple → open the first; show a confirm
-  // for the rest. (We don't auto-loop all of them — Android system
+  // for the rest. (We don't auto-loop all of them, Android system
   // throttles rapid Activity starts.)
   if (contacts.length === 1) {
     await openWhatsAppFor(contacts[0], message);

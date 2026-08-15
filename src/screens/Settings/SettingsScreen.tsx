@@ -122,7 +122,7 @@ export function SettingsScreen() {
           <Text style={styles.title}>Settings</Text>
         </View>
 
-        {/* Profile hero — a personal header, taps through to edit. */}
+        {/* Profile hero, a personal header, taps through to edit. */}
         <Pressable
           onPress={() => navigation.navigate('EditProfile')}
           style={({ pressed }) => [styles.profileHero, pressed && { opacity: 0.9 }]}

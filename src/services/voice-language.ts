@@ -10,7 +10,7 @@ import { getStatus, startListening, stopListening } from '@/services/voice-detec
 // Voice SOS language handling.
 //
 // English ships INSIDE the app (bundled Vosk model) and is always available.
-// Hindi is an OPTIONAL on-demand language pack — downloaded + unpacked into
+// Hindi is an OPTIONAL on-demand language pack, downloaded + unpacked into
 // private storage by the native side only if the user opts in. Keeping Hindi
 // out of the APK is what holds the base download small; English-only users
 // never download it and the engine never allocates a Hindi recognizer.

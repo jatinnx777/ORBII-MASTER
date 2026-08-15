@@ -211,7 +211,7 @@ export function HelperNavigationScreen() {
         );
         return;
       }
-      // Enough responders are already assigned — you're a backup. Don't head out
+      // Enough responders are already assigned, you're a backup. Don't head out
       // unless we promote you (which happens automatically if one of them drops).
       if (status === 'standby') {
         appAlert(
@@ -317,7 +317,7 @@ export function HelperNavigationScreen() {
   };
   // Completing a rescue is no longer a button the helper taps about himself.
   // He must be within 50 m AND type the 4-digit code that only the victim can
-  // see — she reads it out once he's actually standing in front of her.
+  // see, she reads it out once he's actually standing in front of her.
   const [codeOpen, setCodeOpen] = useState(false);
   const [codeError, setCodeError] = useState<string | null>(null);
 
@@ -392,7 +392,7 @@ export function HelperNavigationScreen() {
       <TrackingSheet
         name={name}
         photoUri={photoUri ?? null}
-        etaText={etaMin != null ? `${etaMin} min` : '—'}
+        etaText={etaMin != null ? `${etaMin} min` : ', '}
         distText={distText}
         moving={snap?.victimMoving ?? false}
         sharing={sharing}
@@ -406,7 +406,7 @@ export function HelperNavigationScreen() {
         onArrived={openCodeEntry}
       />
 
-      {/* She reads the code out; he types it. Server-verified — he never sees
+      {/* She reads the code out; he types it. Server-verified, he never sees
           it, so he cannot complete a rescue he did not attend. */}
       <PinPrompt
         visible={codeOpen}
@@ -520,7 +520,7 @@ function TrackingSheet(props: {
         />
       </View>
 
-      {/* Helplines — the responder may need to call police / an ambulance to
+      {/* Helplines, the responder may need to call police / an ambulance to
           the scene, so the numbers are right here, not buried. */}
       <View style={{ marginTop: spacing.md }}>
         <HelplinesCard compact />

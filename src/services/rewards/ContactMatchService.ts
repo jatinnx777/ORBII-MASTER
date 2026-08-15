@@ -1,7 +1,7 @@
 import { RewardService } from './RewardService';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 
-// ContactMatchService — DISABLED for the Play Store build.
+// ContactMatchService, DISABLED for the Play Store build.
 //
 // This opt-in anti-fraud feature hashed the address book to detect reward
 // abuse, but it needs READ_CONTACTS, a Play "sensitive permission" that

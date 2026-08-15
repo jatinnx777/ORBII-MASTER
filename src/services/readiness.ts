@@ -11,7 +11,7 @@ import { getItem, storageKeys } from '@/services/storage';
 // always identical.
 //
 // Important product rule: readiness is CAPPED AT 98%. The last 2% is reserved
-// for the things ORBII can never promise — network outages, a phone that's off,
+// for the things ORBII can never promise, network outages, a phone that's off,
 // a responder who can't make it. We never show 100% because no safety system
 // is ever truly 100%.
 export const READINESS_CAP = 98;

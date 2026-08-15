@@ -2,7 +2,7 @@
 //
 // This arms the exact same on-device VoiceGuard engine that fires a real Voice
 // SOS, waits for it to actually hear a panic word ("help help", "bachao", ...),
-// and reports success — but routes that detection to a callback instead of
+// and reports success, but routes that detection to a callback instead of
 // dispatching an alert. Nothing is sent, nobody is notified, no quota is spent.
 //
 // The engine signals a hit the only way it can: by firing the
@@ -23,6 +23,15 @@ let onHeard: (() => void) | null = null;
 let lastConsumedAt = 0;
 const DUPLICATE_GRACE_MS = 8000;
 
+// Hard suppression window. While the user is recording a voice-DONATION clip,
+// they will say "help"/"bachao" into the mic on purpose, which the always-on
+// guard would otherwise hear and fire a REAL SOS. Wrapping the recording in
+// setSosSuppressed(true/false) makes the deep-link handler swallow any fire.
+let suppressed = false;
+export function setSosSuppressed(on: boolean): void {
+  suppressed = on;
+}
+
 export function isVoiceTestActive(): boolean {
   return active;
 }
@@ -34,6 +43,11 @@ export function isVoiceTestActive(): boolean {
  */
 export function consumeVoiceTestFire(): boolean {
   const now = Date.now();
+  // Donation recording in progress: swallow every fire, no real SOS.
+  if (suppressed) {
+    cancelSosAlert();
+    return true;
+  }
   if (active) {
     active = false;
     lastConsumedAt = now;
@@ -54,7 +68,7 @@ export function consumeVoiceTestFire(): boolean {
 }
 
 export type VoiceTestResult =
-  | 'heard' // engine detected a panic word — the real win
+  | 'heard' // engine detected a panic word, the real win
   | 'timeout' // armed fine, but nothing was heard in time
   | 'unavailable' // native engine not present (e.g. non-Android)
   | 'permission' // mic permission denied

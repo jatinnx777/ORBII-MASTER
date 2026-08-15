@@ -26,15 +26,15 @@ import { getCurrentPermission } from '@/services/location';
 import { trackEvent } from '@/services/analytics';
 
 // First-run guided setup, shown once after sign-in (per the reference design):
-//   1. Build Your Safety Circle — add the people ORBII reaches in an emergency
-//   2. Turn on Voice SOS        — activate hands-free "help, help" protection
-//   3. Try it once              — she actually SAYS "help, help" and feels the
+//   1. Build Your Safety Circle, add the people ORBII reaches in an emergency
+//   2. Turn on Voice SOS       , activate hands-free "help, help" protection
+//   3. Try it once             , she actually SAYS "help, help" and feels the
 //      engine hear her (routed to a callback, so nobody is alerted). This is the
 //      aha moment: the core promise proven in her own voice before she needs it.
-//   4. You're Protected         — an HONEST checklist (rows only turn green
+//   4. You're Protected        , an HONEST checklist (rows only turn green
 //      when the underlying signal is actually true), then enter the app.
 
-type StepId = 'intent' | 'circle' | 'voice' | 'practice' | 'done' | 'note';
+type StepId = 'intent' | 'circle' | 'voice' | 'practice' | 'done';
 type DemoState = 'idle' | 'listening' | 'heard' | 'missed';
 
 // Ordered so the progress bar always knows where we are. The founder note is a
@@ -238,22 +238,15 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
   const stepIndex = STEP_ORDER.indexOf(step);
   const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] });
 
-  // Full-screen coda: a personal letter from the founders, on its own page.
-  if (step === 'note') {
-    return (
-      <FounderNote
-        onEnter={() => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-          trackEvent('setup_completed', {
-            contacts: contacts.length,
-            voice: voiceOn,
-            location: locationOn,
-          });
-          onDone();
-        }}
-      />
-    );
-  }
+  const finishSetup = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+    trackEvent('setup_completed', {
+      contacts: contacts.length,
+      voice: voiceOn,
+      location: locationOn,
+    });
+    onDone();
+  };
 
   return (
     <View style={styles.root}>
@@ -264,7 +257,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
           <Text style={styles.brand}>ORBII</Text>
         </View>
 
-        {/* Step progress — a small "you're moving" signal all the way through. */}
+        {/* Step progress, a small "you're moving" signal all the way through. */}
         <View style={styles.progress}>
           {STEP_ORDER.map((s, i) => (
             <View
@@ -440,7 +433,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.privacyTitle}>Privacy First</Text>
                   <Text style={styles.privacyBody}>
-                    Listening happens on your phone. Your voice is never uploaded or stored.
+                    Listening happens on your phone. Your voice is not uploaded, unless you choose to donate a clip.
                   </Text>
                 </View>
               </View>
@@ -521,7 +514,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
                 </Pressable>
               ) : (
                 <Text style={styles.skipNote}>
-                  Your voice is heard on your phone and never uploaded.
+                  Your voice is heard on your phone, and only shared if you choose to donate a clip.
                 </Text>
               )}
             </ScrollView>
@@ -542,10 +535,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
               />
 
               <Pressable
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-                  setStep('note');
-                }}
+                onPress={finishSetup}
                 style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
               >
                 <Text style={styles.ctaText}>Enter ORBII</Text>
@@ -554,7 +544,7 @@ export function GuidedSetupScreen({ onDone }: { onDone: () => void }) {
           ) : null}
         </Animated.View>
 
-        {/* Positive gift-moment only — never shown for an SOS. */}
+        {/* Positive gift-moment only, never shown for an SOS. */}
         <Celebration visible={celebrate} originY={0.34} onDone={() => setCelebrate(false)} />
         <VoiceDurationSheet
           visible={durationOpen}
@@ -602,47 +592,6 @@ function StepHero({
   );
 }
 
-// A full-screen letter from the founders. Sincere, not gimmicky: a calm warm
-// page, the body set like a real handwritten letter, a signature, one CTA.
-function FounderNote({ onEnter }: { onEnter: () => void }) {
-  return (
-    <View style={styles.noteRoot}>
-      <LinearGradient colors={[colors.brandSoft, colors.cream]} style={styles.noteGlow} />
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <ScrollView contentContainerStyle={styles.noteScroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.noteEyebrow}>A NOTE FROM US</Text>
-          <View style={styles.paper}>
-            <Text style={styles.paperBody}>
-              Thank you for being here.{'\n\n'}
-              We built ORBII because the women around us kept saying the same thing,
-              that help is never there in the seconds that matter. So we made
-              something that listens for you, and reaches your people the instant you
-              need them.{'\n\n'}
-              You are not a user to us. You are the whole reason this exists.{'\n\n'}
-              Stay safe out there. We have got you.
-            </Text>
-            <View style={styles.paperRule} />
-            <Text style={styles.paperSign}>Jatin & Vishnu</Text>
-            <View style={styles.paperSignRow}>
-              <Text style={styles.paperSignSub}>Founders of ORBII</Text>
-              <Ionicons name="heart" size={12} color={colors.coral} />
-            </View>
-          </View>
-        </ScrollView>
-        <View style={styles.noteFooter}>
-          <Pressable
-            onPress={onEnter}
-            style={({ pressed }) => [styles.noteCta, pressed && styles.ctaPressed]}
-            accessibilityRole="button"
-          >
-            <Text style={styles.noteCtaText}>Enter ORBII</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.textInverse} />
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.cream },

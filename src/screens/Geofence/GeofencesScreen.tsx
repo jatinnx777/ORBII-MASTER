@@ -31,7 +31,7 @@ import {
   type PendingLeave,
 } from '@/services/geofence';
 
-// Safe zones — set a zone around someone you love, and know if they leave it.
+// Safe zones, set a zone around someone you love, and know if they leave it.
 //
 // Consent is built in, not bolted on: you can only fence someone who shares a
 // circle with you (enforced by RLS, not just this UI), the person being fenced
@@ -56,7 +56,7 @@ export function GeofencesScreen() {
   const [label, setLabel] = useState('');
   const [radius, setRadius] = useState(500);
   // Who the zone is for. null = yourself. Anyone else must share a circle with
-  // you (the server enforces that too — this picker is only the friendly half).
+  // you (the server enforces that too, this picker is only the friendly half).
   const [target, setTarget] = useState<CircleMember | null>(null);
   const [people, setPeople] = useState<CircleMember[]>([]);
 
@@ -74,7 +74,7 @@ export function GeofencesScreen() {
     setPending(p);
     setLoading(false);
 
-    // Everyone I share a circle with — the only people I'm allowed to fence.
+    // Everyone I share a circle with, the only people I'm allowed to fence.
     try {
       const circles = await listCircles();
       const lists = await Promise.all(circles.map((c) => listCircleMembers(c.id)));

@@ -222,7 +222,7 @@ export function ActiveSOSScreen() {
           setResolved(true);
           const sid = activeSOS?.id;
           if (sid) {
-            // Rate the helper — feeds the reward's rating bonus + confirms
+            // Rate the helper, feeds the reward's rating bonus + confirms
             // arrival (a real victim confirmation, not a self-declared one).
             appAlert(
               'How was your rescue?',
@@ -291,7 +291,7 @@ export function ActiveSOSScreen() {
   // screen follows her if she keeps moving, instead of a stale drop pin.
   //
   // This runs as an OS background location task backed by a foreground service,
-  // NOT a React effect — during a real emergency the phone is in a pocket with
+  // NOT a React effect, during a real emergency the phone is in a pocket with
   // the screen locked, and foreground-only tracking dies there. If the OS
   // refuses to start it we fall back to foreground watching rather than going
   // silent, because a frozen pin is worse than a slightly stale one.
@@ -451,7 +451,7 @@ export function ActiveSOSScreen() {
         };
 
         // PIN guard. If the user set a safety PIN, require it before
-        // dismissing the alert — stops an attacker who grabbed the phone
+        // dismissing the alert, stops an attacker who grabbed the phone
         // from silently killing the SOS.
         const guarded = await isPinSet();
         if (!guarded) {
@@ -698,7 +698,7 @@ export function ActiveSOSScreen() {
           </View>
         </View>
 
-        {/* Broadcasting hero — the focal moment before a helper accepts. */}
+        {/* Broadcasting hero, the focal moment before a helper accepts. */}
         {!primary && !resolved ? (
           <View style={styles.broadcastHero}>
             <BroadcastPulse />
@@ -1068,7 +1068,7 @@ function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
       <View style={[dstyles.card, dstyles.warn]}>
         <Ionicons name="warning" size={16} color={colors.textInverse} />
         <Text style={dstyles.text}>
-          No one on ORBII reached yet — text or call your contacts directly to be sure.
+          No one on ORBII reached yet, text or call your contacts directly to be sure.
         </Text>
       </View>
     );

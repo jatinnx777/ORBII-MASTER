@@ -6,7 +6,7 @@
 //   per hour, 20 friend-requests per hour).
 //
 // State is in-memory only. A page reload / app restart resets the limit
-// — that's intentional. Server-side enforcement is the authoritative
+//, that's intentional. Server-side enforcement is the authoritative
 // throttle; this guard is here to stop accidental spam (double-tap,
 // runaway code) and to give the user a clear "you're going too fast"
 // message before the request even leaves the device.
@@ -23,7 +23,7 @@ type Rule = {
 
 const RULES: Record<RuleKey, Rule> = {
   // SOS: stop accidental double-fires; 5 real SOS in an hour is already
-  // a stretch — anything more is almost certainly noise / abuse.
+  // a stretch, anything more is almost certainly noise / abuse.
   'sos.fire': { cooldownMs: 15_000, maxInWindow: 5, windowMs: 60 * 60_000 },
   // Friend requests: 20 / hour caps social spam.
   'friend.request': { cooldownMs: 1_500, maxInWindow: 20, windowMs: 60 * 60_000 },
@@ -97,7 +97,7 @@ export function rateLimitMessage(result: RateLimitResult): string {
   return `Limit reached. Try again in ${seconds}s.`;
 }
 
-// Test/debug only — wipe in-memory state.
+// Test/debug only, wipe in-memory state.
 export function _resetRateLimits(): void {
   lastFire.clear();
   history.clear();

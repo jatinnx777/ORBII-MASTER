@@ -35,7 +35,7 @@ import {
 } from '@/services/geofence';
 
 // Two clearly divided inboxes, like Instagram: "You" (things that concern your
-// safety — requests + activity) and "Community" (social likes/replies, kept out
+// safety, requests + activity) and "Community" (social likes/replies, kept out
 // of the way so a like never sits next to an SOS). Each section says what it is.
 
 type Tab = 'you' | 'community';

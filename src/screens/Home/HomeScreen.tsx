@@ -77,7 +77,7 @@ export function HomeScreen() {
   const [circleMemberUids, setCircleMemberUids] = useState<Set<string>>(new Set());
   const [zoneEvents, setZoneEvents] = useState<ZoneEvent[]>([]);
   const [sharing, setSharing] = useState(false);
-  // Last-known location of circle members who share it — survives them going
+  // Last-known location of circle members who share it, survives them going
   // offline (from circle_locations), so the map isn't empty when nobody's live.
   const [memberLocs, setMemberLocs] = useState<MemberLocation[]>([]);
   const [tab, setTab] = useState<'people' | 'fake' | 'journey'>('people');
@@ -166,7 +166,7 @@ export function HomeScreen() {
     }, []),
   );
 
-  // Members of the SELECTED circle only — so a user with several circles sees
+  // Members of the SELECTED circle only, so a user with several circles sees
   // one clean group on the map, not everyone at once.
   useEffect(() => {
     if (!selectedCircle) {
@@ -209,7 +209,7 @@ export function HomeScreen() {
     const list: AvatarMarker[] = [];
     const shown = new Set<string>();
     if (me) list.push({ id: 'me', coordinate: me, photoUri: profile?.photoUri ?? null, name: 'You' });
-    // Live (online) members first — freshest position wins.
+    // Live (online) members first, freshest position wins.
     for (const p of peers) {
       if (p.userId === profile?.uid || !p.location) continue;
       if (!circleMemberUids.has(p.userId)) continue;
@@ -239,7 +239,7 @@ export function HomeScreen() {
     Linking.openURL(`https://www.google.com/maps/search/${encodeURIComponent(near)}`).catch(() => undefined);
   };
 
-  // ── Draggable bottom sheet (built-in PanResponder — no extra libs) ──
+  // ── Draggable bottom sheet (built-in PanResponder, no extra libs) ──
   // The sheet is anchored near the top; a translateY moves it DOWN to the
   // collapsed resting position. Dragging the handle slides it, and it snaps to
   // fully-open or collapsed on release.
@@ -310,7 +310,7 @@ export function HomeScreen() {
           <Ionicons name="settings-outline" size={20} color={colors.brandDeep} />
         </Pressable>
 
-        {/* Circle selector — side-scroll to pick which circle to view. The
+        {/* Circle selector, side-scroll to pick which circle to view. The
             map + members below reflect the chosen circle. */}
         <ScrollView
           horizontal
@@ -380,7 +380,7 @@ export function HomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 150 }]}
         >
-          {/* Consent-first sharing state — who can see you, right now. The
+          {/* Consent-first sharing state, who can see you, right now. The
               opposite of silent tracking: always visible, always yours to
               change, and we say plainly that we never sell it. */}
           <Pressable
@@ -410,7 +410,7 @@ export function HomeScreen() {
             <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
           </Pressable>
 
-          {/* Voice SOS activation box — also starts background protection. */}
+          {/* Voice SOS activation box, also starts background protection. */}
           <Pressable
             onPress={toggleVoice}
             disabled={voiceBusy}
@@ -510,7 +510,7 @@ export function HomeScreen() {
             </View>
           )}
 
-          {/* B2. Recent activity — real safe-zone crossings, the calm ambient
+          {/* B2. Recent activity, real safe-zone crossings, the calm ambient
               feed. Only shows when there's something to show. */}
           {zoneEvents.length > 0 ? (
             <>

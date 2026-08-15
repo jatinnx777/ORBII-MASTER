@@ -5,7 +5,7 @@ import { useBatteryStatus } from '@/services/battery-aware';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 
 // Low-battery warning banner. Renders inline (callers decide where) and
-// only paints when the phone is below 20% AND unplugged. Honest copy —
+// only paints when the phone is below 20% AND unplugged. Honest copy , 
 // we tell the user exactly what will go wrong (their SOS may not get
 // through if the phone dies) rather than vague "low battery" noise.
 

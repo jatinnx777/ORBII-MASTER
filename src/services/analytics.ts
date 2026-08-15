@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 // Product analytics. This used to console.log in __DEV__ and do NOTHING in a
-// release build, so every trackEvent call in the app — dozens of them — was
+// release build, so every trackEvent call in the app, dozens of them, was
 // silently discarded. Events now go to the `app_events` table (sql/35), which
 // is insert-only: the app can never read the stream back.
 //
@@ -34,7 +34,7 @@ type EventName =
   | 'voice_sos_confirmed'
   | 'voice_sos_enabled'
   | 'voice_phrase_rejected'
-  // Which unbuilt features people actually tap — tells us what to build next.
+  // Which unbuilt features people actually tap, tells us what to build next.
   | 'coming_soon_tapped'
   | 'location_shared'
   | 'route_fetched'
@@ -53,7 +53,7 @@ type EventName =
   | 'offline_helper_accept'
   | 'screen_viewed';
 
-// Fire-and-forget. Never throws, never blocks a caller — several of these sit
+// Fire-and-forget. Never throws, never blocks a caller, several of these sit
 // on the SOS path where an analytics hiccup must not cost a rescue.
 async function send(name: EventName, params: Record<string, unknown>): Promise<void> {
   try {

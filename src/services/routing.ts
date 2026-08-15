@@ -1,7 +1,7 @@
 // Road routing via OSRM's public demo server.
 // This is the same engine Uber / Zomato-style apps use (OpenStreetMap road
 // graph + shortest-path over Dijkstra/Contraction Hierarchies). The public
-// demo host is free and unlimited for testing but has no SLA — swap to a
+// demo host is free and unlimited for testing but has no SLA, swap to a
 // self-hosted OSRM or a paid Mapbox/Google Directions endpoint before
 // production traffic.
 
@@ -45,7 +45,7 @@ type OsrmResponse = {
   }>;
 };
 
-// Polyline5 decoder — Google's polyline algorithm, which OSRM emits by
+// Polyline5 decoder, Google's polyline algorithm, which OSRM emits by
 // default. Returns GeoPoints in order along the route.
 function decodePolyline(str: string): GeoPoint[] {
   const coords: GeoPoint[] = [];
@@ -153,7 +153,7 @@ export async function fetchRoute(
 }
 
 // Returns a point that is `t` (0..1) of the way along the polyline by
-// cumulative road distance — used to animate the driver pin along the
+// cumulative road distance, used to animate the driver pin along the
 // real route rather than a straight line.
 export function pointAlongRoute(polyline: GeoPoint[], t: number): GeoPoint {
   if (polyline.length === 0) throw new Error('empty polyline');
@@ -186,7 +186,7 @@ export function pointAlongRoute(polyline: GeoPoint[], t: number): GeoPoint {
   return polyline[polyline.length - 1];
 }
 
-// Cheap flat-earth distance — accurate enough for interpolation along
+// Cheap flat-earth distance, accurate enough for interpolation along
 // sub-kilometer segments within a single city route.
 function flatDistance(a: GeoPoint, b: GeoPoint): number {
   const dLat = (b.latitude - a.latitude) * 111_320;

@@ -9,7 +9,7 @@ import type { GeoPoint } from '@/types';
 // Ghost Mode: silent trip protection. Captures destination + ride
 // metadata, polls location, and watches for unusual stops / route
 // deviations. Cab-specific fields (cab number, driver info) are
-// Gold-tier only — handled at the UI layer, not gated here.
+// Gold-tier only, handled at the UI layer, not gated here.
 //
 // Deadman Timer: countdown the user must cancel before expiry. If it
 // expires, ORBII fires an auto-SOS to the user's circle.

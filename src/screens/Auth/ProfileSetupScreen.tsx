@@ -47,7 +47,7 @@ import {
 //
 // The wizard advances on Continue and saves only on the last step. If
 // the user hits back from step 1 we keep them in AuthNavigator (no
-// way out without finishing setup — same gate as before).
+// way out without finishing setup, same gate as before).
 
 // The emergency contact used to be collected here AND again in guided setup's
 // "Build Your Safety Circle". Asking twice made people think the first one
@@ -103,7 +103,7 @@ export function ProfileSetupScreen() {
     }
     if (step === 'phone') {
       // Second confirmation. This is the number helpers and your circle dial in
-      // an emergency, and it cannot be changed afterwards — so make the user
+      // an emergency, and it cannot be changed afterwards, so make the user
       // look at it once more before it's locked.
       appAlert(
         'Confirm your number',
@@ -125,7 +125,7 @@ export function ProfileSetupScreen() {
 
   const pickPhoto = async () => {
     try {
-      // Android system Photo Picker (and iOS picker) — no media permission
+      // Android system Photo Picker (and iOS picker), no media permission
       // needed, and complies with Google Play's Photo & Video Permissions policy.
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
@@ -272,7 +272,7 @@ export function ProfileSetupScreen() {
   );
 }
 
-// DPDP Act 2023, Section 5/6 — a clear, itemised notice with a free, specific,
+// DPDP Act 2023, Section 5/6, a clear, itemised notice with a free, specific,
 // unambiguous, *unticked* opt-in. Both boxes must be checked to continue, and we
 // log the consent (version + language + 18+) before any setup begins.
 function ConsentGate({ onAccept }: { onAccept: () => Promise<void> }) {

@@ -89,7 +89,7 @@ export async function flushSOSQueue(): Promise<void> {
           });
           continue;
         }
-        keep.push({ ...item, attempts }); // still offline / failed — retry next time
+        keep.push({ ...item, attempts }); // still offline / failed, retry next time
       }
     }
     await setItem(storageKeys.sosQueue, keep);

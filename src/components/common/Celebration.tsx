@@ -6,7 +6,7 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 //
 // Deliberately reserved for POSITIVE, non-emergency "gift" moments (finishing
 // setup, the voice demo hearing you, a milestone). It is NEVER shown for firing
-// an SOS — celebrating an emergency would be wrong, and nudging people toward it
+// an SOS, celebrating an emergency would be wrong, and nudging people toward it
 // is exactly the pattern regulators fined Robinhood for.
 
 const COLORS = ['#8672CE', '#C3B4EC', '#FF8FA3', '#FFC46B', '#4FA383', '#FF5A5F'];

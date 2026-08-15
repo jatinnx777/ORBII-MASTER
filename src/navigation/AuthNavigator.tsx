@@ -12,7 +12,7 @@ import type { AuthStackParamList } from './types';
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 
 // Auth flow:
-//   Welcome (first impression — pulse, gradient, three CTAs)
+//   Welcome (first impression, pulse, gradient, three CTAs)
 //     ↓ Continue with Google      → OAuth → ProfileSetup or Tabs
 //     ↓ "Already have an account" → Login (Welcome back)
 //     ↓ Continue with Email       → placeholder alert

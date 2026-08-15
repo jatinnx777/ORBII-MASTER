@@ -20,7 +20,7 @@ import {
   requestBatteryExemption,
 } from '@/services/background-voice';
 
-// "Keep ORBII listening" — the OEM-survival screen. Over 70% of phones sold in
+// "Keep ORBII listening", the OEM-survival screen. Over 70% of phones sold in
 // India (Xiaomi, Samsung, Oppo, Vivo, Realme) aggressively kill background
 // services. Battery-optimization exemption alone isn't enough on those skins;
 // they each hide an Autostart / Auto-launch toggle that actually decides

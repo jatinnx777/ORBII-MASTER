@@ -9,7 +9,7 @@ import { fetchRoute } from './osrm';
 import { haversineMeters, snapToRoute } from '@/utils/geo';
 import type { GeoPoint } from '@/types';
 
-// TrackingService — the single engine behind the responder's live-tracking
+// TrackingService, the single engine behind the responder's live-tracking
 // screen. It fuses three streams into one clean snapshot the UI just renders:
 //   1. the responder's own fused-provider GPS (published to the victim), with
 //      accuracy / heading, and road-snapped onto the active route,

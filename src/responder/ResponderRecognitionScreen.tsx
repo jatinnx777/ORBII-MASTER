@@ -82,7 +82,7 @@ export function ResponderRecognitionScreen() {
           })}
 
           <Text style={styles.footnote}>
-            ORBII recognises responders by impact and trust — not money. Every
+            ORBII recognises responders by impact and trust, not money. Every
             verified response makes someone safer, and moves you up.
           </Text>
         </ScrollView>

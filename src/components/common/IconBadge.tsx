@@ -25,7 +25,7 @@ type Props = {
 };
 
 /**
- * The soft round icon badge that appears all over ORBII — feature chips,
+ * The soft round icon badge that appears all over ORBII, feature chips,
  * orbiting hero icons, status rows, verified markers.
  */
 export function IconBadge({

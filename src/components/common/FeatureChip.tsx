@@ -13,7 +13,7 @@ type Props = {
 };
 
 /**
- * Icon badge stacked over a short label — the four-feature row on the
+ * Icon badge stacked over a short label, the four-feature row on the
  * splash / onboarding screens (AI-Powered Protection, Live Location, …).
  */
 export function FeatureChip({ icon, label, tint = 'neutral', badgeSize = 48, style }: Props) {

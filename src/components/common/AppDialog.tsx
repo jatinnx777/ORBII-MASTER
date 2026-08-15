@@ -14,7 +14,7 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 
 // On-brand replacement for React Native's system Alert. `appAlert` mirrors the
 // system alert signature exactly, so call sites can swap one for the other with
-// no behaviour change — but the popup renders inside the app as a centred glass
+// no behaviour change, but the popup renders inside the app as a centred glass
 // card: frosted backdrop, close X, an icon, a bold title, and full-width pill
 // buttons. One shape for every popup in ORBII.
 
@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   btnPressed: { opacity: 0.92, transform: [{ scale: 0.985 }] },
   btnDefault: { backgroundColor: colors.brand },
   btnDestructive: { backgroundColor: colors.coral },
-  // Filled light pill rather than a bare text link — reads as finished, modern.
+  // Filled light pill rather than a bare text link, reads as finished, modern.
   btnCancel: { backgroundColor: colors.creamDeep },
   btnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5 },
   btnTextInverse: { color: colors.textInverse },

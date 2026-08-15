@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -62,6 +62,16 @@ export function CircleMapScreen() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
+  // Modern animated toggle (replaces the default Switch).
+  const toggleAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(toggleAnim, {
+      toValue: sharing ? 1 : 0,
+      duration: 200,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [sharing, toggleAnim]);
   // Which circle's members we're viewing, and that circle's member ids.
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState<Set<string> | null>(null);
@@ -185,7 +195,7 @@ export function CircleMapScreen() {
     // A member who turned sharing off shows greyed at their LAST known spot.
     html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale),
   }));
-  // Accuracy rings — "precise to ~Xm". Only for people actually sharing now.
+  // Accuracy rings, "precise to ~Xm". Only for people actually sharing now.
   const rings: OSMCircle[] = shown
     .filter((m) => m.sharing && m.accuracyM != null)
     .map((m) => ({
@@ -220,7 +230,7 @@ export function CircleMapScreen() {
       )}
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top', 'bottom']} pointerEvents="box-none">
-        {/* Top bar — floating glass controls. */}
+        {/* Top bar, floating glass controls. */}
         <View style={styles.topBar} pointerEvents="box-none">
           <GlassButton icon="chevron-back" onPress={() => navigation.goBack()} />
           <View style={styles.titlePill}>
@@ -230,7 +240,7 @@ export function CircleMapScreen() {
           <GlassButton icon="refresh" onPress={() => void refresh()} />
         </View>
 
-        {/* Circle selector — pick whose circle you're looking at. */}
+        {/* Circle selector, pick whose circle you're looking at. */}
         {circles.length > 0 ? (
           <ScrollView
             horizontal
@@ -271,7 +281,7 @@ export function CircleMapScreen() {
           </View>
         ) : null}
 
-        {/* Bottom sheet — frosted glass. */}
+        {/* Bottom sheet, frosted glass. */}
         <BlurView intensity={32} tint="light" style={styles.sheet}>
           <View style={styles.handle} />
           <View style={styles.shareRow}>
@@ -281,13 +291,27 @@ export function CircleMapScreen() {
                 {sharing ? 'Your circle can see you. Turn off any time.' : 'Only your circle can see it, when it’s on.'}
               </Text>
             </View>
-            <Switch
-              value={sharing}
-              onValueChange={toggleShare}
+            <Pressable
+              onPress={() => !busy && toggleShare(!sharing)}
               disabled={busy}
-              trackColor={{ false: colors.border, true: colors.brandMid }}
-              thumbColor={sharing ? colors.brand : '#FFFFFF'}
-            />
+              accessibilityRole="switch"
+              accessibilityState={{ checked: sharing }}
+              hitSlop={8}
+            >
+              <Animated.View
+                style={[
+                  styles.toggleTrack,
+                  { backgroundColor: toggleAnim.interpolate({ inputRange: [0, 1], outputRange: [colors.border, colors.brand] }) },
+                ]}
+              >
+                <Animated.View
+                  style={[
+                    styles.toggleThumb,
+                    { transform: [{ translateX: toggleAnim.interpolate({ inputRange: [0, 1], outputRange: [2, 24] }) }] },
+                  ]}
+                />
+              </Animated.View>
+            </Pressable>
           </View>
 
           <View style={styles.listHead}>
@@ -427,6 +451,8 @@ const styles = StyleSheet.create({
   shareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(20,18,40,0.06)' },
   shareTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textPrimary },
   shareSub: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  toggleTrack: { width: 50, height: 28, borderRadius: 14, justifyContent: 'center' },
+  toggleThumb: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 2 },
 
   listHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: spacing.xs },
   sectionLabel: { fontFamily: fontFamilies.poppinsBold, fontSize: 11, letterSpacing: 1, color: colors.textMuted },

@@ -16,7 +16,7 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // One-time "prominent disclosure" shown on first launch, BEFORE ORBII asks for
-// any sensitive permission — required by Google Play for location + microphone
+// any sensitive permission, required by Google Play for location + microphone
 // access. Plain-language, no dark patterns: it explains what we access and why,
 // and that audio stays on the device.
 const ROWS: { icon: IconName; title: string; body: string }[] = [
@@ -28,7 +28,7 @@ const ROWS: { icon: IconName; title: string; body: string }[] = [
   {
     icon: 'mic',
     title: 'Microphone (optional)',
-    body: 'Only for hands-free Voice SOS, if you turn it on. Listening happens on your device. Your audio is never uploaded or shared.',
+    body: 'Only for hands-free Voice SOS, if you turn it on. Listening happens on your device, and your audio is not uploaded, unless you choose to donate a clip to help train ORBII.',
   },
   {
     icon: 'notifications',
@@ -68,7 +68,7 @@ export function PermissionDisclosureModal() {
           </View>
           <Text style={styles.title}>How ORBII uses your data</Text>
           <Text style={styles.sub}>
-            So you know exactly what we access, and why — before you're asked.
+            So you know exactly what we access, and why, before you're asked.
           </Text>
 
           <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>

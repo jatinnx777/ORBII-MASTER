@@ -26,7 +26,7 @@
     "neverShare": "We never share your number with anyone.",
     "verifyTitle": "Enter the OTP",
     "verifySubtitle": "We sent a 6-digit code to {{phone}}.",
-    "testHint": "Test mode — use 123456",
+    "testHint": "Test mode, use 123456",
     "verify": "Verify",
     "verifying": "Verifying…",
     "resend": "Resend OTP",

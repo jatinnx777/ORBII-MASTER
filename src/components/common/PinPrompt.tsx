@@ -12,9 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 
 // Bottom-sheet PIN entry. Used in two modes:
-//   • `mode='set'`     — first-time setup: user picks a new PIN, then
+//   • `mode='set'`    , first-time setup: user picks a new PIN, then
 //                        confirms it. Returns the chosen PIN to onSubmit.
-//   • `mode='verify'`  — guard mode: user types their PIN. We validate
+//   • `mode='verify'` , guard mode: user types their PIN. We validate
 //                        externally (via verifyPin) and onSubmit is
 //                        called with the raw entry so the caller can
 //                        decide what to do on mismatch.
@@ -138,7 +138,7 @@ export function PinPrompt({
     >
       <Pressable style={styles.backdrop} onPress={onCancel}>
         {/* A nested Pressable swallows the backdrop's dismiss press, which is
-            what the old onStartShouldSetResponder was for — but a raw responder
+            what the old onStartShouldSetResponder was for, but a raw responder
             claim also competed with child touches. */}
         <Animated.View
           style={[
@@ -176,7 +176,7 @@ export function PinPrompt({
 
           {/* ORBII draws its own number pad rather than asking Android for one.
               The old hidden-TextInput trick depended on the soft keyboard
-              opening for a 1x1, opacity:0 field — which it doesn't reliably do,
+              opening for a 1x1, opacity:0 field, which it doesn't reliably do,
               and that left the mandatory PIN screen impossible to complete.
               A drawn pad has no such failure mode, and it's what banking apps
               do anyway: nothing to autofill, nothing for a keyboard to log. */}
@@ -298,12 +298,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     // creamDeep, not cream: these keys sit on a WHITE sheet and cream is only
-    // 4% darker than white — the pad was there but effectively invisible.
+    // 4% darker than white, the pad was there but effectively invisible.
     backgroundColor: colors.creamDeep,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  // Blank cell under 7 — keeps 0 centred without rendering a fake button.
+  // Blank cell under 7, keeps 0 centred without rendering a fake button.
   keyGap: { flex: 1, height: 62, margin: 4 },
   keyPressed: {
     backgroundColor: colors.creamDeep,

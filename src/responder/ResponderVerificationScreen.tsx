@@ -157,7 +157,7 @@ export function ResponderVerificationScreen() {
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           <Text style={styles.intro}>
             ORBII responders are verified people, not anonymous strangers. Upload
-            these from your gallery once — our team reviews them before you can
+            these from your gallery once, our team reviews them before you can
             go online.
           </Text>
 
@@ -172,7 +172,7 @@ export function ResponderVerificationScreen() {
             <View style={[styles.banner, styles.bannerPending]}>
               <Ionicons name="time" size={18} color={colors.peachDeep} />
               <Text style={[styles.bannerText, { color: colors.peachDeep }]}>
-                Submitted — under review. We’ll notify you once approved.
+                Submitted, under review. We’ll notify you once approved.
               </Text>
             </View>
           ) : null}

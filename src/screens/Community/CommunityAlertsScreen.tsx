@@ -94,7 +94,7 @@ export function CommunityAlertsScreen() {
       onAlert: (broadcast) => {
         const me = profileRef.current?.uid ?? null;
         // Premium gate: a free user's SOS (circleOnly) is for their circle
-        // only — never list it for nearby strangers.
+        // only, never list it for nearby strangers.
         const isFriend =
           !!me &&
           Array.isArray(broadcast.friendUids) &&

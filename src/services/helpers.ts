@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import type { GeoPoint } from '@/types';
 
-// Helpers System — backed by sql/12_helpers.sql (PostGIS).
+// Helpers System, backed by sql/12_helpers.sql (PostGIS).
 //
 //   • `setHelperLocation` upserts the caller's live position + online flag
 //     via the `set_helper_location` RPC (owner-only row, RLS enforced).

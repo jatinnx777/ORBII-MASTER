@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { reportError } from './error-reporting';
 
-// Responder profile for the ORBII Helpers app — verification + trust +
+// Responder profile for the ORBII Helpers app, verification + trust +
 // recognition (NOT earnings). Backed by helper_profiles (sql/23).
 
 export type VerificationStatus = 'pending' | 'verified' | 'suspended';

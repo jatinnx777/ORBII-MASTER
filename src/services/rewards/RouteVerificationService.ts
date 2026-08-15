@@ -2,7 +2,7 @@ import { haversineMeters, snapToRoute } from '@/utils/geo';
 import { MOVEMENT } from './config';
 import type { GeoPoint } from '@/types';
 
-// RouteVerificationService — proves the helper actually travelled. Each fix is
+// RouteVerificationService, proves the helper actually travelled. Each fix is
 // snapped to the live route (map-matching) and the road distance is accumulated
 // from the snapped track, so drift and fake GPS jumps don't inflate the number.
 // Impossible speeds and teleports are flagged as fraud signals rather than

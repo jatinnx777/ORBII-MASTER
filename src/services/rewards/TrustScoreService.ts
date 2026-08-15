@@ -1,6 +1,6 @@
 import { guardianLevel, type GuardianLevel, type HelperProfile } from '@/services/helper-profile';
 
-// TrustScoreService — maps a helper's recognition tier to the reward multiplier.
+// TrustScoreService, maps a helper's recognition tier to the reward multiplier.
 // Mirrors trust_multiplier() in sql/33 so the preview UI matches what the server
 // will actually apply. The server value is authoritative.
 

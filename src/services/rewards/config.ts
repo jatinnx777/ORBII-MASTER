@@ -1,4 +1,4 @@
-// Reward config — a client-side MIRROR of sql/33 (reward_config) used only for
+// Reward config, a client-side MIRROR of sql/33 (reward_config) used only for
 // transparency (showing helpers how a reward is made up) and preview UI. The
 // server is the sole authority on the money; changing values here never grants
 // a rupee. Keep in sync with reward_config if you retune the server.
@@ -28,7 +28,7 @@ export const REWARD = {
 } as const;
 
 // Geofence: a helper "arrives" only after dwelling inside this radius for the
-// dwell time — no manual arrival tap is ever accepted for reward purposes.
+// dwell time, no manual arrival tap is ever accepted for reward purposes.
 export const GEOFENCE = {
   arriveRadiusM: 45,
   dwellMs: 20_000, // must stay ~20s inside before it counts as arrival
@@ -38,7 +38,7 @@ export const GEOFENCE = {
 // Movement sanity thresholds for the route verifier.
 export const MOVEMENT = {
   teleportM: 250, // a single jump larger than this with no time = teleport
-  maxSpeedMps: 45, // ~162 km/h — above this is impossible for a rescue
+  maxSpeedMps: 45, // ~162 km/h, above this is impossible for a rescue
 } as const;
 
 export function formatPaise(paise: number): string {

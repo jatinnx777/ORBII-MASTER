@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 
-// Community v2 — an anonymous, moderated feed. Your community identity (handle,
+// Community v2, an anonymous, moderated feed. Your community identity (handle,
 // display name, gender, avatar) is SEPARATE from your real account. The server
 // still knows the real author for moderation, but other users never do.
 // Backed by sql/47_community_v2.sql.

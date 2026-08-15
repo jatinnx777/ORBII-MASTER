@@ -14,7 +14,7 @@ import type { AppStackParamList } from '@/navigation/types';
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 // Responder verification is PAUSED until ORBII can handle government ID
-// (Aadhaar / PAN) legally and securely — collecting identity documents without
+// (Aadhaar / PAN) legally and securely, collecting identity documents without
 // the right legal footing and data handling is not something we will ship on a
 // safety app. Flip this to true only once that pipeline is properly in place.
 // Existing applicants and approved responders keep their status; this only
@@ -33,7 +33,7 @@ const REQUIREMENTS = [
   'Agree to never confront or use force',
 ];
 
-// Become an ORBII Responder — intro + requirements + apply. Applying creates a
+// Become an ORBII Responder, intro + requirements + apply. Applying creates a
 // pending application; an admin approves, and the account's role flips to
 // 'responder' (which unlocks the Missions tab). Same app, same account.
 export function ResponderApplicationScreen() {
@@ -117,7 +117,7 @@ export function ResponderApplicationScreen() {
             <Text style={styles.heroTitle}>Help save lives near you</Text>
             <Text style={styles.heroSub}>
               ORBII Responders are verified people who can reach an emergency
-              faster than anyone else. This is about protecting people — not money.
+              faster than anyone else. This is about protecting people, not money.
             </Text>
           </View>
 

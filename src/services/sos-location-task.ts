@@ -10,14 +10,14 @@ import type { GeoPoint } from '@/types';
 //
 // THE BUG THIS FIXES: the publisher used to be a React effect on ActiveSOSScreen
 // calling watchLocation(). JS timers and foreground location both stop when the
-// screen locks or the app backgrounds — and during a real emergency the phone is
+// screen locks or the app backgrounds, and during a real emergency the phone is
 // in a pocket. So live tracking, the feature helpers depend on, died in exactly
 // the scenario it exists for. The helper's map would freeze on a stale pin.
 //
 // The fix is an OS-level background location task backed by a foreground service
 // (expo-location declares one with foregroundServiceType="location"). Android
 // keeps delivering fixes with the screen off, and the persistent notification is
-// required by policy anyway — which is honest: she should be able to see that
+// required by policy anyway, which is honest: she should be able to see that
 // ORBII is sharing her location.
 
 export const SOS_LOCATION_TASK = 'ORBII_SOS_VICTIM_LOCATION';
@@ -120,7 +120,7 @@ async function adaptCadence(point: GeoPoint): Promise<void> {
     if (cadence === 'slow' && !switching) {
       switching = true;
       try {
-        await startUpdates('fast'); // she's moving again — helpers need this
+        await startUpdates('fast'); // she's moving again, helpers need this
       } catch {
         // keep whatever cadence we had
       } finally {

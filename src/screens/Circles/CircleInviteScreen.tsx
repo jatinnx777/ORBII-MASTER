@@ -33,7 +33,7 @@ import type { AppScreenProps } from '@/navigation/types';
 //   • You type a +91 mobile number.
 //   • We look it up in users_public (debounced). If the number belongs to
 //     a registered ORBII user, their profile card surfaces with a single
-//     "Send invite" CTA — the invite is tied to their account so they get
+//     "Send invite" CTA, the invite is tied to their account so they get
 //     pulled into the circle the moment they accept.
 //   • If the number ISN'T registered, we fall back to a shareable join
 //     link (orbii://join/<token>) the inviter can drop into WhatsApp/SMS.
@@ -152,7 +152,7 @@ export function CircleInviteScreen({
           message: `Join my ORBII safety circle "${circle?.name ?? ''}". Tap to accept and share your live location: ${link}`,
         });
       } catch {
-        // Share sheet dismissed — invite is still saved server-side.
+        // Share sheet dismissed, invite is still saved server-side.
       }
       navigation.goBack();
     } catch (err) {
@@ -196,7 +196,7 @@ export function CircleInviteScreen({
               </Text>
             ) : null}
 
-            {/* Search the ORBII directory — finds email signups too. */}
+            {/* Search the ORBII directory, finds email signups too. */}
             <View style={styles.card}>
               <Text style={styles.sectionLabel}>Search people on ORBII</Text>
               <Text style={styles.hint}>

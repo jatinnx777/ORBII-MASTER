@@ -227,7 +227,7 @@ function ChecklistRow({
 }
 
 // Real Voice SOS test. Arms the actual on-device engine and waits to genuinely
-// hear a panic word — no alert is dispatched (see services/voice-test). This is
+// hear a panic word, no alert is dispatched (see services/voice-test). This is
 // an honest rehearsal of hands-free Voice SOS, not a scripted animation.
 function SafetyTestModal({
   visible,

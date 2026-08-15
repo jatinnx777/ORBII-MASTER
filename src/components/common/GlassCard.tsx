@@ -3,7 +3,7 @@ import { StyleSheet, View, type ViewStyle, type StyleProp } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { glass, radius, shadows } from '@/theme';
 
-// Glassmorphism surface — a real frosted blur (expo-blur) under a translucent
+// Glassmorphism surface, a real frosted blur (expo-blur) under a translucent
 // fill with a hairline highlight border. Use for overlays, hero panels, and
 // premium cards that sit over colour/imagery.
 export function GlassCard({

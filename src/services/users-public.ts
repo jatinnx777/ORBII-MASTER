@@ -12,7 +12,7 @@ export type PublicUser = {
   username: string;
   name: string | null;
   photoUri: string | null;
-  // E.164 phone (e.g. "+919876543210"). Optional — populated when the
+  // E.164 phone (e.g. "+919876543210"). Optional, populated when the
   // user has set their phone during sign-up. Used by the phone-number
   // circle invite flow to find registered friends.
   phone: string | null;
@@ -33,7 +33,7 @@ function rowToUser(row: PublicUserRow): PublicUser {
     username: row.username,
     name: row.name,
     photoUri: row.photo_url,
-    // Phone is never returned by directory reads anymore (sql/18) — only the
+    // Phone is never returned by directory reads anymore (sql/18), only the
     // user's own record carries it, set locally during profile sync.
     phone: row.phone ?? null,
   };
@@ -73,7 +73,7 @@ export async function findUserByPhone(
   if (!phoneE164.startsWith('+')) return null;
   // Phone is no longer a readable column on users_public (see sql/18). We
   // resolve it through a SECURITY DEFINER RPC that does an exact match and
-  // never returns the number — so the directory can't be scraped.
+  // never returns the number, so the directory can't be scraped.
   const { data, error } = await supabase.rpc('find_user_by_phone', {
     p_phone: phoneE164,
     p_exclude: excludeUid,
@@ -161,7 +161,7 @@ export async function isUsernameAvailable(
     .eq('username', u)
     .maybeSingle<{ id: string; username: string }>();
   if (error) {
-    // Network / RLS failure — be permissive so profile setup doesn't
+    // Network / RLS failure, be permissive so profile setup doesn't
     // soft-block the user. The DB unique constraint is the final guard.
     console.warn('[users-public] availability check failed:', error.message);
     return true;

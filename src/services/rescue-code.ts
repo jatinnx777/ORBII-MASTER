@@ -6,7 +6,7 @@ import { reportError } from './error-reporting';
 // The victim's screen shows it. The helper, standing in front of her, asks for
 // it and types it in. Only a correct code completes the rescue.
 //
-// The helper can never read the code — he submits a guess to a SECURITY DEFINER
+// The helper can never read the code, he submits a guess to a SECURITY DEFINER
 // function that compares it server-side. That's what makes it proof: geofencing
 // says his phone was nearby; the code says a human actually spoke to her.
 
@@ -22,7 +22,7 @@ export async function ensureSosCode(sosId: string): Promise<string | null> {
     if (error) {
       reportError(error, {
         category: 'rescue.code',
-        message: 'could not mint the rescue code — helper cannot complete the rescue',
+        message: 'could not mint the rescue code, helper cannot complete the rescue',
         data: { code: error.code, hint: error.hint },
       });
       return null;
@@ -36,7 +36,7 @@ export async function ensureSosCode(sosId: string): Promise<string | null> {
 
 /**
  * Helper: submit the code she read out.
- * A wrong code is a normal outcome (he may have misheard) — it changes nothing
+ * A wrong code is a normal outcome (he may have misheard), it changes nothing
  * server-side and he can simply try again.
  */
 export async function verifyRescueCode(

@@ -43,7 +43,7 @@ export function SafetyPinScreen({ navigation }: AppScreenProps<'SafetyPin'>) {
             <Text style={styles.cardTitle}>What it protects</Text>
             <Text style={styles.cardBody}>
               If ORBII hears your emergency phrase, a 5-second countdown starts.
-              Your PIN is what someone must enter to cancel it — so a person who
+              Your PIN is what someone must enter to cancel it, so a person who
               has taken your phone cannot silence your SOS.
             </Text>
           </View>

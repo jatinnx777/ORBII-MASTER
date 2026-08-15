@@ -33,7 +33,7 @@ import type { AppScreenProps } from '@/navigation/types';
 
 // Circle detail. Shows the member list (real, from circle_members joined
 // with users_public), an Invite button, and Leave / Delete depending on
-// role. No hardcoded names — empty member list shows an EmptyState.
+// role. No hardcoded names, empty member list shows an EmptyState.
 
 export function CircleDetailScreen({
   route,

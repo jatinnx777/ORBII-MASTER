@@ -172,9 +172,9 @@ export function VoiceDebugScreen() {
           <Text style={styles.note}>
             How to measure: pick a scenario, tap Reset, then say a trigger phrase
             10 times. Detection rate = triggers ÷ 10. For false triggers, Reset
-            and stay silent / play noise for 2 minutes — any triggers are false.
+            and stay silent / play noise for 2 minutes, any triggers are false.
             Compare avg ms before vs after. (Saying the phrase here fires a real
-            SOS countdown — cancel it each time, or test from a screen where the
+            SOS countdown, cancel it each time, or test from a screen where the
             countdown is expected.)
           </Text>
         </ScrollView>

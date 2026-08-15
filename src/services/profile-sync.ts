@@ -50,15 +50,15 @@ export async function syncProfile(profile: UserProfile): Promise<void> {
       { onConflict: 'id' },
     );
     if (error) {
-      // Table missing or RLS blocking. This is a DURABLE write — losing it is
-      // exactly why a user's name/photo vanishes on sign-out — so report it
+      // Table missing or RLS blocking. This is a DURABLE write, losing it is
+      // exactly why a user's name/photo vanishes on sign-out, so report it
       // once (never spam) rather than a console.warn that does nothing in a
       // release build.
       if (!warnedMissingTable) {
         warnedMissingTable = true;
         reportError(error, {
           category: 'profile.sync',
-          message: 'profile did not sync to Supabase — data is device-only',
+          message: 'profile did not sync to Supabase, data is device-only',
           data: { code: error.code, hint: error.hint },
         });
       }
@@ -87,7 +87,7 @@ export async function syncFriend(
       { onConflict: 'user_id,friend_username' },
     );
   } catch {
-    // ignore — friends table may not exist yet
+    // ignore, friends table may not exist yet
   }
 }
 

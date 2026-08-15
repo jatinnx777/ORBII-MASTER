@@ -11,7 +11,7 @@ import { isHelperModeRunning, startHelperMode, stopHelperMode } from '@/services
 import { trackEvent } from '@/services/analytics';
 
 // Community Guardian (Path B): any user can opt in to be reachable when someone
-// nearby fires an SOS — no verification, no KYC. This grows the "someone close
+// nearby fires an SOS, no verification, no KYC. This grows the "someone close
 // can come" pool from day one. It is deliberately framed and consent-gated:
 // guardians are volunteers, not vetted responders, their job is presence and
 // calling 112, never confrontation, and they must accept that before going on.

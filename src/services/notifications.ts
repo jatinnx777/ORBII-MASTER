@@ -35,7 +35,7 @@ function configure() {
     Notifications.setNotificationChannelAsync('sos', {
       name: 'SOS alerts',
       importance: Notifications.AndroidImportance.MAX,
-      // Aggressive 3-second vibration burst — meant to grab attention
+      // Aggressive 3-second vibration burst, meant to grab attention
       // even from a pocket. Pattern is wait/buzz pairs in ms.
       vibrationPattern: [0, 800, 200, 800, 200, 800, 200, 800],
       enableVibrate: true,
@@ -46,7 +46,7 @@ function configure() {
     }).catch(() => undefined);
     // Safe zone crossed. Important, but NOT an emergency: someone leaving their
     // college is worth knowing, not worth a siren. Default importance, no DND
-    // bypass — a safety app that buzzes like an SOS for routine events trains
+    // bypass, a safety app that buzzes like an SOS for routine events trains
     // people to ignore the real one.
     Notifications.setNotificationChannelAsync('safe-zone', {
       name: 'Geofence alerts',
@@ -75,7 +75,7 @@ function configure() {
       lightColor: '#8672CE',
       sound: 'default',
     }).catch(() => undefined);
-    // Incoming help request for a VERIFIED HELPER — someone nearby needs them
+    // Incoming help request for a VERIFIED HELPER, someone nearby needs them
     // right now. Max importance so it wakes the screen and heads-up over the
     // lock screen even if the app has been closed all day. Separate channel so
     // the user can't silence family SOS and stranger requests together, and so
@@ -104,7 +104,7 @@ function configure() {
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       showBadge: false,
     }).catch(() => undefined);
-    // "Listening" badge channel — silent, low-importance ongoing notification
+    // "Listening" badge channel, silent, low-importance ongoing notification
     // posted while always-on Voice SOS is active. Its primary purpose is to
     // give Android a visible reason to keep our process alive in the
     // background (battery-optimization carve-out for foreground-state apps).
@@ -133,7 +133,7 @@ function configure() {
       sound: 'default',
     }).catch(() => undefined);
   }
-  // "Keep it on" action on a Voice SOS expiry reminder — opens the app so she
+  // "Keep it on" action on a Voice SOS expiry reminder, opens the app so she
   // can re-arm before protection lapses.
   Notifications.setNotificationCategoryAsync(VOICE_EXPIRY_CATEGORY, [
     {
@@ -202,7 +202,7 @@ function configure() {
 // glancing at the lock screen) can see and dismiss the trip without
 // unlocking the phone.
 //
-// Re-call this whenever the ETA changes — same identifier means it
+// Re-call this whenever the ETA changes, same identifier means it
 // updates in place rather than stacking.
 export async function showSafeJourneyWidget(args: {
   label: string;
@@ -325,7 +325,7 @@ export async function hidePinnedSOSShortcut(): Promise<void> {
   try {
     await Notifications.dismissNotificationAsync(PINNED_SHORTCUT_ID);
   } catch {
-    // ignore — may already be gone
+    // ignore, may already be gone
   }
 }
 

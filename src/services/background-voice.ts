@@ -55,17 +55,17 @@ export async function ensureFullScreenIntentAccess(): Promise<void> {
       ],
     );
   } catch {
-    // ignore — best effort
+    // ignore, best effort
   }
 }
 
 // THE fix for "background firing is a myth". Android blocks a background app
-// from launching a screen on its own — which is why a voice trigger only showed
+// from launching a screen on its own, which is why a voice trigger only showed
 // a notification you had to tap. But an app holding the "display over other
 // apps" (SYSTEM_ALERT_WINDOW) permission is EXEMPT: with it granted, the voice
 // service can bring the SOS countdown straight up over whatever app you're in,
 // hands-free. So we ask for it (once, with a clear reason) when Voice SOS turns
-// on. If declined, nothing breaks — it simply falls back to today's tappable
+// on. If declined, nothing breaks, it simply falls back to today's tappable
 // notification.
 export async function ensureOverlayForVoiceSos(): Promise<void> {
   if (!overlayAvailable()) return;
@@ -76,7 +76,7 @@ export async function ensureOverlayForVoiceSos(): Promise<void> {
     await setItem(storageKeys.overlayAsked, true);
     appAlert(
       'Let ORBII pop up when you shout',
-      'For Voice SOS to show the emergency by itself — even when you are in another app or your screen is off — allow ORBII to "display over other apps". Without it, Android can only show a notification you would have to tap.',
+      'For Voice SOS to show the emergency by itself, even when you are in another app or your screen is off, allow ORBII to "display over other apps". Without it, Android can only show a notification you would have to tap.',
       [
         { text: 'Not now', style: 'cancel' },
         {
@@ -88,7 +88,7 @@ export async function ensureOverlayForVoiceSos(): Promise<void> {
       ],
     );
   } catch {
-    // best effort — never block arming over a permission prompt
+    // best effort, never block arming over a permission prompt
   }
 }
 
@@ -123,7 +123,7 @@ export async function startBackgroundVoice(
     const durationMs = durationHours > 0 ? durationHours * 3600_000 : 0;
     await VoiceGuard.startGuard(phrases, durationMs);
     void ensureVoiceSosVisibility();
-    // Survive a reboot — BootReceiver re-arms the service if this is set.
+    // Survive a reboot, BootReceiver re-arms the service if this is set.
     void VoiceGuard.setBootRestore?.(true);
     // Audit log (fire-and-forget). whisper state is read where it's toggled;
     // default false here keeps the call simple and never blocks arming.
@@ -136,7 +136,7 @@ export async function startBackgroundVoice(
     if (expiresAtMs) void setItem(storageKeys.voiceGuardExpiresAt, expiresAtMs);
     else void removeItem(storageKeys.voiceGuardExpiresAt);
     // Remind her before a fixed-length session lapses, so protection never
-    // ends silently. "Until I turn it off" (0) has no expiry — clear reminders.
+    // ends silently. "Until I turn it off" (0) has no expiry, clear reminders.
     if (expiresAtMs) {
       void scheduleVoiceExpiryReminders(expiresAtMs);
     } else {
@@ -154,7 +154,7 @@ export async function stopBackgroundVoice(): Promise<void> {
   void VoiceGuard.setBootRestore?.(false);
   // Close the audit-log row for this session (manual turn-off).
   void logVoiceSessionEnd('manual');
-  // No live session — drop any pending "about to end" reminders and the
+  // No live session, drop any pending "about to end" reminders and the
   // armed flag, so the kill-watchdog won't try to resurrect a stopped guard.
   void cancelVoiceExpiryReminders();
   void setItem(storageKeys.voiceGuardArmed, false);
@@ -251,7 +251,7 @@ export async function recoverVoiceGuardIfKilled(): Promise<
 
   const now = Date.now();
   const expiresAt = await getItem<number>(storageKeys.voiceGuardExpiresAt);
-  // A timed window that has simply run out ended NORMALLY — the native service
+  // A timed window that has simply run out ended NORMALLY, the native service
   // already told her. Clear the flag; this is not a kill.
   if (expiresAt && now >= expiresAt) {
     await setItem(storageKeys.voiceGuardArmed, false);

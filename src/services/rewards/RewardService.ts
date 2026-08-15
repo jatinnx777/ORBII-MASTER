@@ -1,10 +1,10 @@
 import { supabase } from '@/services/supabase';
 import { REWARD } from './config';
 
-// RewardService — the app's doorway to the server reward engine. Every method
+// RewardService, the app's doorway to the server reward engine. Every method
 // that touches money just forwards to a SECURITY DEFINER RPC in sql/33; the
 // amount, eligibility and fraud decision are computed there. `previewReward`
-// is a display-only mirror of the formula so the UI can show a breakdown — it
+// is a display-only mirror of the formula so the UI can show a breakdown, it
 // never grants anything.
 
 export type RewardRow = {

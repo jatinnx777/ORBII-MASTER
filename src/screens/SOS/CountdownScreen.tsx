@@ -63,7 +63,7 @@ export function CountdownScreen() {
   const isVoice = route.params?.voice === true;
 
   // Deadline-based countdown. We compute remaining time off Date.now() each
-  // tick rather than decrementing a counter — that way an incoming phone
+  // tick rather than decrementing a counter, that way an incoming phone
   // call (which background-throttles JS timers) can't pause the SOS. When
   // the app comes back to foreground we recompute from the original deadline,
   // and if the deadline has already passed we fire immediately.
@@ -77,7 +77,7 @@ export function CountdownScreen() {
 
   // Record from the INSTANT the countdown starts, so the 5 seconds before the
   // alert (often the moment of the threat) aren't lost. It's saved as the SOS
-  // pre-roll — a SEPARATE clip from the main recording ActiveSOS makes, so the
+  // pre-roll, a SEPARATE clip from the main recording ActiveSOS makes, so the
   // two never fight over the mic (this one is stopped before that one starts).
   // Manual/button SOS only: voice triggers already keep their own pre-roll, and
   // starting a second recorder there could clash with the voice detector's mic.
@@ -96,7 +96,7 @@ export function CountdownScreen() {
         countdownRecorder.record();
         recActiveRef.current = true;
       } catch {
-        // Best-effort — recording must NEVER block or fail the SOS.
+        // Best-effort, recording must NEVER block or fail the SOS.
       }
     })();
     return () => {
@@ -208,7 +208,7 @@ export function CountdownScreen() {
     cancelledRef.current = true;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     // A cancelled VOICE trigger is a false positive. Cancelled ÷ (cancelled +
-    // confirmed) is the voice engine's real error rate — the number we've never
+    // confirmed) is the voice engine's real error rate, the number we've never
     // measured and can now tune thresholds against.
     if (isVoice) {
       trackEvent('voice_sos_cancelled', {
@@ -249,7 +249,7 @@ export function CountdownScreen() {
     try {
       // Critical path: get a best-effort location fix WITHOUT ever failing the
       // SOS. getSOSLocationFix degrades to last-known / null and never throws
-      // or hangs, so an SOS still fires with no GPS — the circle + contacts are
+      // or hangs, so an SOS still fires with no GPS, the circle + contacts are
       // pushed regardless; only nearby strangers (who need coordinates) are
       // skipped when location is unavailable. Reverse geocoding stays off the
       // critical path.
@@ -271,7 +271,7 @@ export function CountdownScreen() {
           const uri = countdownRecorder.uri;
           if (uri && !isTest) void uploadPreRoll(profile.uid, record.id, uri);
         } catch {
-          // best-effort — never fail the SOS over a recording
+          // best-effort, never fail the SOS over a recording
         }
       }
       trackEvent('sos_triggered', {
@@ -283,7 +283,7 @@ export function CountdownScreen() {
       // let run to zero, i.e. a genuine detection.
       if (isVoice && !isTest) {
         trackEvent('voice_sos_confirmed', { phrase: route.params?.phrase ?? null });
-        // The 15s captured BEFORE she spoke — often the only recording of the
+        // The 15s captured BEFORE she spoke, often the only recording of the
         // threat itself. We only learn the sosId here, so upload now.
         const preroll = route.params?.preroll;
         if (preroll) {
@@ -340,7 +340,7 @@ export function CountdownScreen() {
 
   // Immersive, full-bleed emergency screen. A rich coral gradient (calm neutral
   // in practice mode) carries a white countdown ring and number for maximum
-  // urgency and legibility — no "card floating on a page" look.
+  // urgency and legibility, no "card floating on a page" look.
   const isReal = !isTest;
   const grad = (isTest
     ? ['#F7F5FC', '#EFEAF7']

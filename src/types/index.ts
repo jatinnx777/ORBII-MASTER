@@ -67,11 +67,11 @@ export type SOSLocation = GeoPoint & {
 
 export type SOSStatus = 'active' | 'resolved' | 'cancelled';
 
-// 'real' = the user pressed the SOS button — alerted everyone in their circle.
+// 'real' = the user pressed the SOS button, alerted everyone in their circle.
 // 'test' = practice SOS from Settings. No one is notified.
 export type SOSKind = 'real' | 'test';
 
-// Summary of someone who responded to an SOS — a circle member who tapped
+// Summary of someone who responded to an SOS, a circle member who tapped
 // "I'm coming to help". Used by the SOS detail screen + history.
 export type Responder = {
   id: string;

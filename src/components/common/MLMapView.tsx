@@ -12,7 +12,7 @@ import {
 import type { GeoPoint } from '@/types';
 import { ORBII_MAP_STYLE } from './mapStyle';
 
-// Avatar marker — a circle member shown on the map with their photo (or
+// Avatar marker, a circle member shown on the map with their photo (or
 // initial), Life360 style. Rendered as a MarkerView overlay so we can use a
 // real profile image instead of a flat dot.
 export type AvatarMarker = {
@@ -52,7 +52,7 @@ type Props = {
   route?: MLRoute | null;
   // Fit camera to all markers (with padding). Wins over `center` when set.
   fitAll?: boolean;
-  // Camera tracks user — flips on a built-in MapLibre tracking mode.
+  // Camera tracks user, flips on a built-in MapLibre tracking mode.
   followUser?: boolean;
   interactive?: boolean;
   // Padding when `fitAll` is on. Defaults to a comfortable safe-area value.

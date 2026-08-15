@@ -22,6 +22,7 @@ import { fontFamilies } from '@/theme';
 import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
 import { requestOverlayPermission } from '@/services/helper-overlay';
+import { runVoiceTest, cancelVoiceTest } from '@/services/voice-test';
 
 // Long, invested onboarding built on two psychology plays:
 //  • The Mirror: a quiz makes her work for a "safety profile", so the (tuned but
@@ -45,18 +46,23 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 type Answers = {
   name?: string;
+  heard?: string;
+  usedbefore?: string;
   why?: string;
   scenarios: string[];
   routine?: string;
   env?: string;
   transport?: string;
   instinct?: string;
+  priority: string[];
 };
 
-// Ordered flow. Quiz screens are data-driven; the rest are bespoke.
+// Ordered flow. The VOICE "try it" moment leads (feel the value in the first ~30
+// seconds, the aha), THEN the invested quiz, so investment lands after they've
+// felt it work. Quiz screens are data-driven; the rest are bespoke.
 const SCREENS = [
-  'hero', 'name', 'why', 'scenarios', 'routine', 'env', 'transport', 'instinct',
-  'loader', 'mirror', 'label', 'plus', 'pledge', 'voice', 'perms', 'summary',
+  'hero', 'name', 'heard', 'usedbefore', 'why', 'scenarios', 'routine', 'env', 'transport', 'instinct', 'priority',
+  'loader', 'mirror', 'label', 'control', 'voice', 'pledge', 'plus', 'perms', 'summary',
 ] as const;
 type ScreenId = typeof SCREENS[number];
 
@@ -68,6 +74,25 @@ type Question = {
   options: { key: string; label: string; icon: IconName }[];
 };
 const QUESTIONS: Record<string, Question> = {
+  heard: {
+    id: 'heard', kind: 'single', eyebrow: 'ONE QUICK THING', q: 'Where did you hear about ORBII?',
+    options: [
+      { key: 'instagram', label: 'Instagram', icon: 'logo-instagram' },
+      { key: 'youtube', label: 'YouTube', icon: 'logo-youtube' },
+      { key: 'linkedin', label: 'LinkedIn', icon: 'logo-linkedin' },
+      { key: 'friend', label: 'A friend told me', icon: 'people' },
+      { key: 'search', label: 'Search or a website', icon: 'search' },
+      { key: 'other', label: 'Somewhere else', icon: 'ellipsis-horizontal' },
+    ],
+  },
+  usedbefore: {
+    id: 'usedbefore', kind: 'single', eyebrow: 'BEFORE ORBII', q: 'Have you used a safety app before?',
+    options: [
+      { key: 'letdown', label: 'Yes, and it let me down', icon: 'sad' },
+      { key: 'some', label: 'Yes, one or two', icon: 'checkmark-done' },
+      { key: 'first', label: "No, you're my first", icon: 'sparkles' },
+    ],
+  },
   why: {
     id: 'why', kind: 'single', eyebrow: 'ABOUT YOU', q: 'What brought you to ORBII?',
     options: [
@@ -123,6 +148,15 @@ const QUESTIONS: Record<string, Question> = {
       { key: 'freeze', label: 'I freeze up', icon: 'snow' },
     ],
   },
+  priority: {
+    id: 'priority', kind: 'multi', eyebrow: 'YOUR RULES', q: 'What should ORBII care about most?',
+    options: [
+      { key: 'privacy', label: 'My privacy, always', icon: 'lock-closed' },
+      { key: 'works', label: 'That it actually works', icon: 'shield-checkmark' },
+      { key: 'speed', label: 'Speed when it counts', icon: 'flash' },
+      { key: 'notrack', label: 'Never tracking or selling me', icon: 'eye-off' },
+    ],
+  },
 };
 
 type TypeKey = 'guardian' | 'protector' | 'strategist' | 'warrior';
@@ -154,7 +188,7 @@ export function OnboardingScreen() {
   const dispatch = useAppDispatch();
   const insets = useSafeAreaInsets();
   const [si, setSi] = useState(0);
-  const [answers, setAnswers] = useState<Answers>({ scenarios: [] });
+  const [answers, setAnswers] = useState<Answers>({ scenarios: [], priority: [] });
   const screen: ScreenId = SCREENS[si];
 
   // Smooth spring transition between every screen.
@@ -183,11 +217,13 @@ export function OnboardingScreen() {
     switch (screen) {
       case 'hero': return <Hero onNext={next} />;
       case 'name': return <NameStep value={answers.name ?? ''} onSet={(v) => setAnswer('name', v)} onNext={next} />;
-      case 'why': case 'scenarios': case 'routine': case 'env': case 'transport': case 'instinct':
+      case 'heard': case 'usedbefore': case 'why': case 'scenarios': case 'routine':
+      case 'env': case 'transport': case 'instinct': case 'priority':
         return <Quiz key={screen} q={QUESTIONS[screen]} answers={answers} onSet={setAnswer} onNext={next} />;
       case 'loader': return <Loader onDone={next} />;
       case 'mirror': return <Mirror name={answers.name} lines={mirrorLines(answers)} onNext={next} />;
       case 'label': return <Label name={answers.name} type={TYPES[type]} onNext={next} />;
+      case 'control': return <Control name={answers.name} onNext={next} />;
       case 'plus': return <Plus onNext={next} />;
       case 'pledge': return <Pledge onNext={next} />;
       case 'voice': return <Voice onNext={next} />;
@@ -199,9 +235,16 @@ export function OnboardingScreen() {
   return (
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
-        <View style={styles.progressTrack}>
-          <Animated.View style={[styles.progressFill, { width: prog.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
-        </View>
+        {/* Only show progress AFTER the aha (hero + voice). Advertising "16 steps"
+            up front makes people bounce; momentum shown once they're invested does
+            the opposite. */}
+        {si >= 1 ? (
+          <View style={styles.progressTrack}>
+            <Animated.View style={[styles.progressFill, { width: prog.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }]} />
+          </View>
+        ) : (
+          <View style={styles.progressSpacer} />
+        )}
         <Animated.View style={{ flex: 1, opacity: t, transform: [{ translateX: t.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }] }}>
           <Scaffoldless insets={insets.bottom}>{body()}</Scaffoldless>
         </Animated.View>
@@ -377,6 +420,30 @@ function Label({ name, type, onNext }: { name?: string; type: typeof TYPES[TypeK
   );
 }
 
+/* ─── CONTROL (trust + ownership) ─── */
+function Control({ name, onNext }: { name?: string; onNext: () => void }) {
+  const rows: { icon: IconName; text: string }[] = [
+    { icon: 'eye', text: 'You decide who sees you, and you can cut it in one tap.' },
+    { icon: 'mic', text: 'ORBII listens only when you say so, and only as long as you choose.' },
+    { icon: 'lock-closed', text: 'Your voice stays on your phone. We never sell you. Ever.' },
+  ];
+  return (
+    <Screen ctaLabel="It's mine, let's go" onCta={onNext}>
+      <Text style={styles.eyebrow}>YOU'RE IN CONTROL</Text>
+      <Text style={styles.h2}>{name ? `${name}, this is yours now.` : 'This is yours now.'}</Text>
+      <Text style={styles.sub}>Not ours. You set the rules, ORBII just follows them.</Text>
+      <View style={styles.controlList}>
+        {rows.map((r) => (
+          <View key={r.icon} style={styles.controlRow}>
+            <View style={styles.controlIcon}><Ionicons name={r.icon} size={18} color={C.primary} /></View>
+            <Text style={styles.controlText}>{r.text}</Text>
+          </View>
+        ))}
+      </View>
+    </Screen>
+  );
+}
+
 /* ─── NAME (personalisation) ─── */
 function NameStep({ value, onSet, onNext }: { value: string; onSet: (v: string) => void; onNext: () => void }) {
   const ready = value.trim().length >= 2;
@@ -494,50 +561,100 @@ function Pledge({ onNext }: { onNext: () => void }) {
 
 /* ─── VOICE ─── */
 const AnimatedPath = Animated.createAnimatedComponent(Path);
+const VOICE_WORDS = [
+  { key: 'help', prompt: '“Help, help”' },
+  { key: 'bachao', prompt: '“Bachao, bachao”' },
+];
+// REAL two-word test: the actual on-device engine listens for "help", then
+// "bachao". runVoiceTest routes any fire to a callback, so no real SOS is sent.
 function Voice({ onNext }: { onNext: () => void }) {
   const bars = useRef([0, 1, 2, 3, 4].map(() => new Animated.Value(0))).current;
-  const [heard, setHeard] = useState(false);
+  const [step, setStep] = useState(0); // 0 = help, 1 = bachao, 2 = both done
+  const [listening, setListening] = useState(false);
+  const [flash, setFlash] = useState(false);
+  const [missed, setMissed] = useState(false);
   const circle = useRef(new Animated.Value(0)).current;
   const check = useRef(new Animated.Value(40)).current;
-  const banner = useRef(new Animated.Value(0)).current;
+
   useEffect(() => {
-    if (heard) return;
+    if (!listening) { bars.forEach((b) => { b.stopAnimation(); b.setValue(0); }); return; }
     const loops = bars.map((b, i) => Animated.loop(Animated.sequence([
       Animated.timing(b, { toValue: 1, duration: 500, delay: i * 120, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
       Animated.timing(b, { toValue: 0, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: false }),
     ])));
     loops.forEach((l) => l.start());
     return () => loops.forEach((l) => l.stop());
-  }, [bars, heard]);
-  const simulate = () => {
+  }, [bars, listening]);
+  useEffect(() => () => { cancelVoiceTest(); }, []);
+
+  const heardFlash = (after: () => void) => {
+    setFlash(true);
+    circle.setValue(0); check.setValue(40);
+    Animated.spring(circle, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start();
+    Animated.timing(check, { toValue: 0, duration: 350, delay: 150, easing: Easing.out(Easing.ease), useNativeDriver: false }).start();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
-    setHeard(true);
-    setTimeout(() => {
-      Animated.spring(circle, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start();
-      Animated.timing(check, { toValue: 0, duration: 350, delay: 180, easing: Easing.out(Easing.ease), useNativeDriver: false }).start();
-      Animated.timing(banner, { toValue: 1, duration: 400, delay: 250, useNativeDriver: true }).start();
-    }, 400);
+    setTimeout(() => { setFlash(false); after(); }, 1100);
   };
+
+  const listen = async () => {
+    setMissed(false);
+    setListening(true);
+    const res = await runVoiceTest(12000);
+    setListening(false);
+    // 'unavailable' = emulator / non-Android: let the flow continue.
+    if (res === 'heard' || res === 'unavailable') {
+      heardFlash(() => setStep((s) => Math.min(2, s + 1)));
+    } else {
+      setMissed(true);
+    }
+  };
+
+  const done = step >= 2;
+  const cur = VOICE_WORDS[Math.min(step, 1)];
+
   return (
-    <Screen ctaLabel={heard ? 'Continue' : 'Simulate Voice Trigger “Help Help”'} arrow={heard} onCta={heard ? onNext : simulate}>
-      <Text style={styles.eyebrow}>VOICE SOS SIMULATOR</Text>
-      <Text style={styles.h2}>Test your hands-free trigger.</Text>
-      <Text style={styles.sub}>In a real emergency you just shout. Try it now, nothing is sent.</Text>
+    <Screen
+      ctaLabel={done ? 'Continue' : listening ? 'Listening…' : `Shout ${cur.prompt}`}
+      arrow={done}
+      disabled={listening}
+      onCta={done ? onNext : listen}
+      footer={missed && !done ? (
+        <Pressable onPress={() => setStep((s) => Math.min(2, s + 1))} style={{ alignItems: 'center', paddingVertical: S.sm }}>
+          <Text style={styles.voiceSkip}>Can't right now, skip this word</Text>
+        </Pressable>
+      ) : undefined}
+    >
+      <Text style={styles.eyebrow}>VOICE SOS TEST</Text>
+      <Text style={styles.h2}>{done ? 'You did it.' : `Now shout ${cur.prompt}`}</Text>
+      <Text style={styles.sub}>
+        {done
+          ? 'ORBII heard you both times. That is exactly how it works in a real emergency, hands-free.'
+          : listening
+            ? 'Listening… say it out loud. Nothing is sent.'
+            : missed
+              ? 'Did not catch that. Move somewhere quieter and try again.'
+              : 'Two quick tests, so you know it really hears you. Nothing is sent.'}
+      </Text>
       <View style={styles.visual}>
-        <Animated.View style={[styles.barsRow, { opacity: circle.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}>
-          {bars.map((b, i) => (
-            <Animated.View key={i} style={[styles.bar, { backgroundColor: heard ? C.emerald : C.primary, height: heard ? 30 : b.interpolate({ inputRange: [0, 1], outputRange: [10, 30] }) }]} />
-          ))}
-        </Animated.View>
-        {heard ? (
+        {flash ? (
           <Animated.View style={[styles.greenCircle, { opacity: circle, transform: [{ scale: circle }] }]}>
             <Svg width={46} height={46} viewBox="0 0 24 24">
               <AnimatedPath d="M20 6 9 17l-5-5" stroke="#fff" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none" strokeDasharray={40} strokeDashoffset={check} />
             </Svg>
           </Animated.View>
-        ) : null}
+        ) : (
+          <View style={styles.barsRow}>
+            {bars.map((b, i) => (
+              <Animated.View key={i} style={[styles.bar, { backgroundColor: listening ? C.primary : C.hairline, height: listening ? b.interpolate({ inputRange: [0, 1], outputRange: [10, 30] }) : 12 }]} />
+            ))}
+          </View>
+        )}
       </View>
-      <Animated.Text style={[styles.banner, { opacity: banner, transform: [{ translateY: banner.interpolate({ inputRange: [0, 1], outputRange: [6, 0] }) }] }]}>Heard Loud & Clear! (0.2s Response Time)</Animated.Text>
+      <View style={styles.voiceDots}>
+        {VOICE_WORDS.map((w, i) => (
+          <View key={w.key} style={[styles.voiceDot, (step > i) && styles.voiceDotOn]} />
+        ))}
+      </View>
     </Screen>
   );
 }
@@ -609,11 +726,6 @@ function Summary({ type, onDone }: { type: typeof TYPES[TypeKey]; onDone: () => 
           ))}
         </View>
       </View>
-      <View style={styles.founderNote}>
-        <Text style={styles.founderBody}>Thank you for being here. We built ORBII because the women around us kept saying the same thing, that help is never there in the seconds that matter. You are the whole reason this exists. Stay safe out there.</Text>
-        <Text style={styles.founderSig}>Jatin & Vishnu</Text>
-        <Text style={styles.founderSub}>FOUNDERS OF ORBII</Text>
-      </View>
     </Screen>
   );
 }
@@ -622,6 +734,7 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   progressTrack: { height: 4, marginHorizontal: S.lg, marginTop: S.sm, borderRadius: 99, backgroundColor: C.hairline, overflow: 'hidden' },
   progressFill: { height: 4, borderRadius: 99, backgroundColor: C.primary },
+  progressSpacer: { height: 4, marginTop: S.sm },
 
   scroll: { flexGrow: 1, paddingHorizontal: S.lg, paddingTop: S.lg },
   ctaWrap: { paddingHorizontal: S.xl, paddingTop: S.sm },
@@ -674,6 +787,10 @@ const styles = StyleSheet.create({
   badgeFoot: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: S.md },
   badgeFootText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11, color: C.muted },
 
+  controlList: { gap: S.md, marginTop: S.lg },
+  controlRow: { flexDirection: 'row', alignItems: 'center', gap: S.md, backgroundColor: C.surface, borderRadius: 16, padding: S.md },
+  controlIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: C.pill, alignItems: 'center', justifyContent: 'center' },
+  controlText: { flex: 1, fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, lineHeight: 20, color: C.text },
   nameField: { marginTop: S.lg, backgroundColor: C.surface, borderRadius: 16, borderWidth: 1.5, borderColor: C.hairline, paddingHorizontal: S.md, height: 60, justifyContent: 'center' },
   nameInput: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 18, color: C.text },
 
@@ -698,6 +815,10 @@ const styles = StyleSheet.create({
   bar: { width: 8, borderRadius: 99 },
   greenCircle: { position: 'absolute', width: 96, height: 96, borderRadius: 99, backgroundColor: C.emerald, alignItems: 'center', justifyContent: 'center', shadowColor: C.emerald, shadowOffset: { width: 0, height: 14 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 8 },
   banner: { textAlign: 'center', fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: C.emerald },
+  voiceDots: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: S.sm },
+  voiceDot: { width: 9, height: 9, borderRadius: 99, backgroundColor: C.hairline },
+  voiceDotOn: { backgroundColor: C.emerald },
+  voiceSkip: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: C.muted },
 
   permStack: { gap: S.md, marginTop: S.lg },
   perm: { flexDirection: 'row', alignItems: 'center', gap: S.md, backgroundColor: C.surface, borderRadius: 20, borderWidth: 2, borderColor: '#ECEAF6', padding: S.md },

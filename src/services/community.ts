@@ -8,7 +8,7 @@ import type { CommunityAlert, GeoPoint, SOSLocation } from '@/types';
 //
 // Transport: Supabase Realtime **broadcast** channel. The victim posts the
 // alert once; every subscribed listener receives it instantly. No DB table
-// required, no RLS hurdles, no profile-table join — which is why this
+// required, no RLS hurdles, no profile-table join, which is why this
 // works across two real devices with the same anon key. Alerts are also
 // persisted to `sos_events` as a best-effort for history.
 
@@ -16,7 +16,7 @@ const WALKING_MPS = 1.4;
 const ALERTS_CHANNEL = 'orbii:alerts';
 
 // Shape of a single broadcast. All fields needed to render the alert card
-// travel with the message — no secondary lookup required.
+// travel with the message, no secondary lookup required.
 export type AlertBroadcast = {
   id: string;
   victim: {
@@ -39,7 +39,7 @@ export type AlertBroadcast = {
 let broadcastChannel: ReturnType<typeof supabase.channel> | null = null;
 let broadcastChannelReady = false;
 
-// Realtime presence — every open app joins a single channel and tracks its
+// Realtime presence, every open app joins a single channel and tracks its
 // own row. We use this to count "helpers nearby" without needing a DB table
 // or RLS. Presence handles join/leave/heartbeat for us.
 const PRESENCE_CHANNEL = 'orbii:presence';
@@ -71,7 +71,7 @@ function ensureBroadcastChannel() {
 
 // Pre-open the broadcast channel at app launch so the first SOS the user
 // ever sends doesn't pay the WebSocket handshake cost (which can be 3–8s
-// on a cold network). Cheap to call multiple times — idempotent.
+// on a cold network). Cheap to call multiple times, idempotent.
 export function prewarmBroadcastChannel(): void {
   ensureBroadcastChannel();
 }
@@ -293,7 +293,7 @@ export function subscribeToAlerts(handlers: {
 }
 
 // Converts a raw broadcast into a per-viewer CommunityAlert. We do NOT
-// filter by distance here — the receiving screen can choose to hide far
+// filter by distance here, the receiving screen can choose to hide far
 // alerts visually, but silent drops at this layer make testing impossible
 // (e.g. two devices >2km apart never see each other). Only filter is "not
 // my own SOS." If the viewer hasn't shared location, distance is recorded
@@ -337,7 +337,7 @@ export async function listNearbyAlerts(
     // Radius-bounded server-side RPC. Replaces a direct `select * where
     // status='active'` that let any user pull EVERY active victim's live
     // coordinates. The RPC filters to a radius around the caller, excludes
-    // the caller, and only returns the last 15 minutes — see sql/21.
+    // the caller, and only returns the last 15 minutes, see sql/21.
     const { data, error } = await supabase.rpc('sos_events_nearby', {
       p_lat: point.latitude,
       p_lng: point.longitude,
@@ -376,7 +376,7 @@ export async function listNearbyAlerts(
   }
 }
 
-// Record that the current user is responding to this alert. Best-effort —
+// Record that the current user is responding to this alert. Best-effort , 
 // if it fails we still allow the local flow to proceed so the victim isn't
 // left waiting on a network hiccup.
 export async function respondToAlert(

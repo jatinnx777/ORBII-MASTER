@@ -195,7 +195,7 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
 
               <View style={styles.reassure}>
                 <Ionicons name="lock-closed" size={12} color={colors.brandDeep} />
-                <Text style={styles.reassureText}>Private by design. Your audio never leaves your phone.</Text>
+                <Text style={styles.reassureText}>Private by design. Your voice stays on your phone unless you choose to share it.</Text>
               </View>
 
               {DEV_AUTH.enabled ? (
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     ...shadows.card,
   },
-  brandImg: { width: 52, height: 52 },
+  brandImg: { width: 72, height: 72 },
   headline: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 34,
@@ -275,8 +275,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    height: 56,
-    borderRadius: radius.lg,
+    height: 58,
+    borderRadius: radius.pill,
     borderWidth: 1.5,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -292,18 +292,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
     height: 58,
-    borderRadius: radius.lg,
-    borderWidth: 1.5,
-    borderColor: colors.inputBorder,
-    backgroundColor: colors.cream,
+    borderRadius: radius.pill,
+    backgroundColor: colors.creamDeep,
   },
   input: { flex: 1, fontFamily: fontFamilies.interMedium, fontSize: 16, color: colors.textPrimary },
 
   primaryBtn: {
-    height: 56,
-    borderRadius: radius.lg,
+    height: 58,
+    borderRadius: radius.pill,
     backgroundColor: colors.brand,
     alignItems: 'center',
     justifyContent: 'center',

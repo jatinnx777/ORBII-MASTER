@@ -21,8 +21,8 @@ export class CirclesNotInstalledError extends Error {
 
 function isMissingTableError(message: string, code?: string): boolean {
   // Postgres error 42P01 = undefined_table. Supabase surfaces this as
-  // `{ code: '42P01', message: 'relation … does not exist' }` or — when
-  // the schema cache is stale — as a "Could not find the table 'public.X'
+  // `{ code: '42P01', message: 'relation … does not exist' }` or, when
+  // the schema cache is stale, as a "Could not find the table 'public.X'
   // in the schema cache" string. We catch both flavours.
   if (code === '42P01') return true;
   const m = message.toLowerCase();
@@ -277,7 +277,7 @@ export async function createCircle(input: {
 
   // Ensure the owner is a member. A DB trigger (sql/14) is supposed to do
   // this, but if it isn't installed the circle would be created yet never
-  // show up (listCircles reads via circle_members) — the "create does
+  // show up (listCircles reads via circle_members), the "create does
   // nothing" bug. This self-insert is idempotent: it's a no-op (duplicate
   // key) when the trigger already added the row, and passes RLS because the
   // user is adding themselves.
@@ -459,7 +459,7 @@ export async function acceptInviteByToken(
 ): Promise<{ circleId: string }> {
   const user = (await supabase.auth.getUser()).data.user;
   if (!user) throw new Error('Sign in to accept this invite.');
-  // Find the invite. We don't filter on invitee_username here — the
+  // Find the invite. We don't filter on invitee_username here, the
   // token is the proof of legitimacy.
   const { data: inviteRow, error: lookupErr } = await supabase
     .from('circle_invites')

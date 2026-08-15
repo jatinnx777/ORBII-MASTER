@@ -8,8 +8,8 @@ import {
 import { addBreadcrumb, reportError } from './error-reporting';
 
 // Deadman Timer service. Schedules two local notifications:
-//   • REMINDER — fires 90s before expiry. "Tap to extend or confirm safe."
-//   • EXPIRY — fires at expiry. Tells the user the alert went out.
+//   • REMINDER, fires 90s before expiry. "Tap to extend or confirm safe."
+//   • EXPIRY, fires at expiry. Tells the user the alert went out.
 //
 // Reminder + expiry IDs are stored on the redux state so disarm/extend
 // can cancel them. The actual auto-SOS at expiry is fired by the
@@ -20,7 +20,7 @@ import { addBreadcrumb, reportError } from './error-reporting';
 // killed, but Notifications.scheduleNotificationAsync hands the alarm
 // to the Android AlarmManager which DOES survive. So even if ORBII is
 // force-stopped, the user still gets the expiry notification at the
-// right second — and tapping it lands them in the app to fire the SOS.
+// right second, and tapping it lands them in the app to fire the SOS.
 
 const REMINDER_LEAD_MS = 90_000;
 

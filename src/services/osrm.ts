@@ -1,12 +1,12 @@
 import type { GeoPoint } from '@/types';
 
-// OSRM driving routing — public demo server, free, no API key.
+// OSRM driving routing, public demo server, free, no API key.
 //
 //   https://router.project-osrm.org/route/v1/driving/{lon,lat;lon,lat}?overview=full&geometries=geojson
 //
 // Returns a GeoJSON LineString (drawable as a MapLibre ShapeSource), plus
 // duration in seconds and distance in metres. The demo server has rate
-// limits and is not guaranteed for production traffic — fine for MVP /
+// limits and is not guaranteed for production traffic, fine for MVP /
 // pilot.
 
 const OSRM_BASE = 'https://router.project-osrm.org/route/v1/driving';

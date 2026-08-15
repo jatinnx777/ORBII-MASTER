@@ -107,7 +107,7 @@ export function useSOSRecorder(args: {
         message: `recording started for SOS ${args.sosId}`,
       });
       // Auto-stop after the configured duration. The recorder is still
-      // alive after this — uploads happen on unmount via the cleanup
+      // alive after this, uploads happen on unmount via the cleanup
       // below regardless of whether we hit the timer or the user cancel.
       timerRef.current = setTimeout(
         () => {
@@ -159,7 +159,7 @@ export function useSOSRecorder(args: {
         }
       })();
     };
-    // We only want this effect to fire when the SOS identity changes —
+    // We only want this effect to fire when the SOS identity changes , 
     // the recorder instance is stable for the lifetime of the screen.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [args.enabled, args.userId, args.sosId]);

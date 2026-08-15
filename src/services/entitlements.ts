@@ -47,7 +47,7 @@ const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
 // Features that are Plus-only RIGHT NOW, even while EARLY_ACCESS_UNLOCK is on.
 // Everything else stays free during early access; these are the sections the
 // founder chose to make premium (Disaster mode, ORBII Community, and the circle
-// EXTRA of safe-zone geofencing — basic circles stay free). Unlock is via the
+// EXTRA of safe-zone geofencing, basic circles stay free). Unlock is via the
 // launch coupon (checkout) until Play Billing is wired.
 const ALWAYS_GATED: ReadonlySet<Feature> = new Set<Feature>([
   'disaster_mode',

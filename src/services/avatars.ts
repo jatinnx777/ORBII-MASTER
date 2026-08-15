@@ -34,7 +34,7 @@ export async function uploadAvatar(
       // path dies. EditProfile warns the user; this makes sure WE see it too.
       reportError(error, {
         category: 'avatar.upload',
-        message: 'avatar upload failed — photo will not survive sign-out',
+        message: 'avatar upload failed, photo will not survive sign-out',
         tags: { userId },
       });
       return localUri;

@@ -6,7 +6,7 @@ import type { GeoPoint } from '@/types';
 import { LEAFLET_JS, LEAFLET_CSS } from './leaflet-src';
 
 // OpenStreetMap-based map. Uses Leaflet (MIT) inside a WebView with OSM tiles.
-// Completely free — no Google Maps / Mapbox API key required.
+// Completely free, no Google Maps / Mapbox API key required.
 //
 // Rendering model: we mount the WebView ONCE with an empty Leaflet map and
 // expose `window.__orbiiMap.update(...)` inside. React-side prop changes are

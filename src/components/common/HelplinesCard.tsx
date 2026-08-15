@@ -3,8 +3,8 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 
-// India's official, free, 24/7 helplines. Shown to BOTH sides of a rescue — the
-// victim and the responding helper — because in a real emergency either of them
+// India's official, free, 24/7 helplines. Shown to BOTH sides of a rescue, the
+// victim and the responding helper, because in a real emergency either of them
 // may need to reach the police, an ambulance, or a specialist line fast, and
 // hunting for the number is exactly what you can't afford then.
 const LINES = [

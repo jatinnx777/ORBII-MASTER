@@ -174,6 +174,23 @@ export function ProfileScreen() {
             )}
           </Pressable>
 
+          {/* ── Help train ORBII (opt-in voice donation) ── */}
+          <Pressable
+            onPress={() => navigation.navigate('VoiceDonation')}
+            style={({ pressed }) => [styles.planCard, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Help train ORBII"
+          >
+            <View style={[styles.planIcon, { backgroundColor: colors.brandSoft }]}>
+              <Ionicons name="mic" size={18} color={colors.brandDeep} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.planTitle}>Help train ORBII</Text>
+              <Text style={styles.planSub}>Donate a few voice clips to help it hear more women. Optional.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </Pressable>
+
           {/* ── Responder Missions (golden, just below the plan; responders only) ── */}
           {isResponder ? (
             <Pressable
@@ -271,7 +288,7 @@ export function ProfileScreen() {
               <>
                 <SettingRow
                   icon="people-outline"
-                  label="Community Guardian — help people nearby"
+                  label="Community Guardian, help people nearby"
                   onPress={() => navigation.navigate('CommunityGuardian')}
                 />
                 <View style={styles.divider} />
