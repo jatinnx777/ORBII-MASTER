@@ -37,7 +37,7 @@ export type UserProfile = {
   // profiles table exists we can resolve these to real user records.
   friends: Friend[];
   isPremium: boolean;
-  // Which paid tier the user is on. 'plus' = ₹99, 'family' = ₹299. Drives the
+  // Which paid tier the user is on. 'plus' = ₹149, 'family' = ₹499. Drives the
   // Plans screen so we never re-sell a plan someone already owns and only
   // offer a genuine upgrade (Plus → Family).
   premiumTier?: 'plus' | 'family' | null;

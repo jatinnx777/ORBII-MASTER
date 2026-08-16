@@ -23,6 +23,7 @@ const VISIBLE = 5; // odd, so one sits dead-centre
 const PAD = Math.floor(VISIBLE / 2) * ITEM_H;
 
 function label(h: number): string {
+  if (h === 0) return 'Until I turn it off';
   if (h < 1) return '30 minutes';
   const whole = Math.floor(h);
   const half = h % 1 !== 0;
@@ -36,6 +37,7 @@ export function VoiceDurationSheet({
   title = 'How long should ORBII listen?',
   subtitle = 'It turns off on its own after this, and warns you before it ends. Max 8 hours.',
   icon = 'mic',
+  allowAlways = false,
   onConfirm,
   onCancel,
 }: {
@@ -44,14 +46,19 @@ export function VoiceDurationSheet({
   title?: string;
   subtitle?: string;
   icon?: React.ComponentProps<typeof Ionicons>['name'];
+  /** Adds an "Until I turn it off" choice at the end of the wheel, reported as 0
+   *  hours. Used for circle location sharing, where always-on is the point. The
+   *  microphone deliberately never gets this. */
+  allowAlways?: boolean;
   onConfirm: (hours: number) => void;
   onCancel: () => void;
 }) {
   const options = useMemo(() => {
     const out: number[] = [];
     for (let h = 0.5; h <= VOICE_MAX_HOURS + 1e-6; h += 0.5) out.push(Math.round(h * 2) / 2);
+    if (allowAlways) out.push(0); // 0 = until turned off, sits at the end
     return out;
-  }, []);
+  }, [allowAlways]);
   const startIdx = Math.max(0, options.findIndex((h) => h === initialHours));
   const [sel, setSel] = useState(startIdx < 0 ? 3 : startIdx);
   const scroller = useRef<ScrollView>(null);
@@ -116,7 +123,7 @@ export function VoiceDurationSheet({
             style={({ pressed }) => [styles.confirm, pressed && { opacity: 0.92, transform: [{ scale: 0.99 }] }]}
           >
             <Ionicons name="shield-checkmark" size={18} color={colors.textInverse} />
-            <Text style={styles.confirmText}>Turn on for {label(options[sel])}</Text>
+            <Text style={styles.confirmText}>{options[sel] === 0 ? 'Turn on until I stop it' : `Turn on for ${label(options[sel])}`}</Text>
           </Pressable>
           <Pressable onPress={onCancel} style={styles.cancel} hitSlop={8}>
             <Text style={styles.cancelText}>Not now</Text>

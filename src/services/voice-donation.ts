@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { getItem, setItem } from './storage';
+import { isDeclaredAdult, logConsentEvent } from './consent';
 import { reportError } from './error-reporting';
 
 async function sha256Hex(bytes: Uint8Array): Promise<string | undefined> {
@@ -28,6 +29,7 @@ export async function hasDonationConsent(): Promise<boolean> {
 }
 export async function setDonationConsent(on: boolean): Promise<void> {
   await setItem(CONSENT_KEY, on);
+  void logConsentEvent('voice_donation', on, { method: 'checkbox' });
 }
 
 /**
@@ -35,7 +37,7 @@ export async function setDonationConsent(on: boolean): Promise<void> {
  * No-op (returns false) if the user hasn't consented or isn't signed in, so it
  * is impossible to upload a clip without an explicit yes.
  */
-export type DonationResult = 'ok' | 'duplicate' | 'no-consent' | 'error';
+export type DonationResult = 'ok' | 'duplicate' | 'no-consent' | 'minor' | 'error';
 
 export async function uploadVoiceSample(opts: {
   uri: string;
@@ -46,6 +48,10 @@ export async function uploadVoiceSample(opts: {
 }): Promise<DonationResult> {
   try {
     if (!(await hasDonationConsent())) return 'no-consent';
+    // DPDP: a child's biometric data must not be processed on a self-consent
+    // basis. Voice donation is optional, so the safe answer for anyone who did
+    // not declare adulthood is simply never to collect it.
+    if (!(await isDeclaredAdult())) return 'minor';
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     if (!uid) return 'error';
 

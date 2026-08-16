@@ -27,7 +27,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, profileUpdated } from '@/redux/slices/userSlice';
 import { updateProfile } from '@/services/auth';
-import { recordConsent } from '@/services/consent';
+import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { isUsernameAvailable } from '@/services/users-public';
 import {
@@ -185,8 +185,10 @@ export function ProfileSetupScreen() {
     return (
       <ScreenContainer scroll>
         <ConsentGate
-          onAccept={async () => {
-            await recordConsent('en');
+          onAccept={async (isAdult) => {
+            await recordConsent('en', isAdult);
+            // Evidence trail: what was agreed, when, against which notice.
+            void logConsentEvent('core', true, { method: 'checkbox' });
             setConsented(true);
           }}
         />
@@ -275,14 +277,37 @@ export function ProfileSetupScreen() {
 // DPDP Act 2023, Section 5/6, a clear, itemised notice with a free, specific,
 // unambiguous, *unticked* opt-in. Both boxes must be checked to continue, and we
 // log the consent (version + language + 18+) before any setup begins.
-function ConsentGate({ onAccept }: { onAccept: () => Promise<void> }) {
-  const [adult, setAdult] = useState(false);
+// Age of majority under the DPDP Act. Anyone below it is a "child", and the
+// Rules forbid tracking, monitoring or profiling them without verifiable
+// parental consent, so ORBII must know a real date, not a tick-box.
+function ageFrom(d: number, m: number, y: number): number | null {
+  if (!d || !m || !y || y < 1900) return null;
+  const dob = new Date(y, m - 1, d);
+  if (dob.getDate() !== d || dob.getMonth() !== m - 1) return null; // 31 Feb etc
+  const now = new Date();
+  let age = now.getFullYear() - y;
+  const beforeBirthday =
+    now.getMonth() < m - 1 || (now.getMonth() === m - 1 && now.getDate() < d);
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+function ConsentGate({ onAccept }: { onAccept: (isAdult: boolean) => Promise<void> }) {
+  const [dob, setDob] = useState('');
   const [agree, setAgree] = useState(false);
   const [busy, setBusy] = useState(false);
-  const ready = adult && agree;
+  const digits = dob.replace(/\D/g, '').slice(0, 8);
+  const age = ageFrom(
+    Number(digits.slice(0, 2)),
+    Number(digits.slice(2, 4)),
+    Number(digits.slice(4, 8)),
+  );
+  const dobComplete = digits.length === 8 && age !== null && age >= 0 && age < 120;
+  const adult = dobComplete && (age as number) >= 18;
+  const ready = dobComplete && agree;
 
   const points: { icon: keyof typeof Ionicons.glyphMap; text: string }[] = [
-    { icon: 'mic-off-outline', text: 'Your voice is checked only on your phone. No audio ever leaves your device or reaches our servers.' },
+    { icon: 'mic-off-outline', text: 'Your voice is checked only on your phone. Audio leaves your device only if you choose to donate a clip to help train ORBII, which is optional and off by default.' },
     { icon: 'location-outline', text: 'Location is shared only when you turn it on, and only with the circle you choose. You can pause it any time.' },
     { icon: 'time-outline', text: 'Location history is auto-deleted after 48 hours.' },
     { icon: 'lock-closed-outline', text: 'We never sell your data, and never give it to your college or any third party.' },
@@ -308,11 +333,33 @@ function ConsentGate({ onAccept }: { onAccept: () => Promise<void> }) {
         ))}
       </View>
 
-      <ConsentCheck
-        checked={adult}
-        onToggle={() => setAdult((v) => !v)}
-        label="I am 18 years of age or older."
-      />
+      <View style={styles.dobBlock}>
+        <Text style={styles.dobLabel}>Your date of birth</Text>
+        <Input
+          value={dob}
+          onChangeText={(v: string) => {
+            const d = v.replace(/\D/g, '').slice(0, 8);
+            setDob(
+              d.length > 4 ? `${d.slice(0,2)}/${d.slice(2,4)}/${d.slice(4)}`
+              : d.length > 2 ? `${d.slice(0,2)}/${d.slice(2)}`
+              : d,
+            );
+          }}
+          placeholder="DD / MM / YYYY"
+          keyboardType="number-pad"
+        />
+        {dobComplete ? (
+          <Text style={[styles.dobNote, !adult && styles.dobNoteWarn]}>
+            {adult
+              ? 'Thanks. Everything in ORBII is available to you.'
+              : "You're under 18, so ORBII will protect you but will never track your location or share it with a circle. That's the law, and we think it's right."}
+          </Text>
+        ) : (
+          <Text style={styles.dobNote}>
+            We ask because Indian law treats under-18s differently, and we will not track a minor's location.
+          </Text>
+        )}
+      </View>
       <ConsentCheck
         checked={agree}
         onToggle={() => setAgree((v) => !v)}
@@ -329,7 +376,7 @@ function ConsentGate({ onAccept }: { onAccept: () => Promise<void> }) {
           onPress={async () => {
             setBusy(true);
             try {
-              await onAccept();
+              await onAccept(adult);
             } finally {
               setBusy(false);
             }
@@ -613,6 +660,10 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
     alignItems: 'center',
   },
+  dobBlock: { marginBottom: spacing.md, gap: spacing.xs },
+  dobLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
+  dobNote: { ...typography.caption, fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+  dobNoteWarn: { color: colors.brandDeep, fontFamily: fontFamilies.interMedium },
   stepMascot: {
     marginBottom: spacing.sm,
   },

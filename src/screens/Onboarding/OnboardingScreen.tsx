@@ -12,6 +12,8 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
+  type TextStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Path } from 'react-native-svg';
@@ -191,11 +193,13 @@ export function OnboardingScreen() {
   const [answers, setAnswers] = useState<Answers>({ scenarios: [], priority: [] });
   const screen: ScreenId = SCREENS[si];
 
-  // Smooth spring transition between every screen.
+  // Screen-level transition is deliberately light (a short fade + a few px of
+  // travel) because the text now blurs in element by element. A big container
+  // slide on top of that reads as double animation.
   const t = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     t.setValue(0);
-    Animated.timing(t, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    Animated.timing(t, { toValue: 1, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
   }, [si, t]);
 
   // Progress bar fills across the flow.
@@ -205,6 +209,7 @@ export function OnboardingScreen() {
   }, [si, prog]);
 
   const next = () => { Haptics.selectionAsync().catch(() => undefined); setSi((n) => Math.min(SCREENS.length - 1, n + 1)); };
+  const back = () => { Haptics.selectionAsync().catch(() => undefined); setSi((n) => Math.max(0, n - 1)); };
   const finish = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
     dispatch(onboardingCompleted());
@@ -216,10 +221,10 @@ export function OnboardingScreen() {
   const body = () => {
     switch (screen) {
       case 'hero': return <Hero onNext={next} />;
-      case 'name': return <NameStep value={answers.name ?? ''} onSet={(v) => setAnswer('name', v)} onNext={next} />;
+      case 'name': return <NameStep value={answers.name ?? ''} onSet={(v) => setAnswer('name', v)} onNext={next} onBack={back} />;
       case 'heard': case 'usedbefore': case 'why': case 'scenarios': case 'routine':
       case 'env': case 'transport': case 'instinct': case 'priority':
-        return <Quiz key={screen} q={QUESTIONS[screen]} answers={answers} onSet={setAnswer} onNext={next} />;
+        return <Quiz key={screen} q={QUESTIONS[screen]} answers={answers} onSet={setAnswer} onNext={next} onBack={back} />;
       case 'loader': return <Loader onDone={next} />;
       case 'mirror': return <Mirror name={answers.name} lines={mirrorLines(answers)} onNext={next} />;
       case 'label': return <Label name={answers.name} type={TYPES[type]} onNext={next} />;
@@ -245,7 +250,7 @@ export function OnboardingScreen() {
         ) : (
           <View style={styles.progressSpacer} />
         )}
-        <Animated.View style={{ flex: 1, opacity: t, transform: [{ translateX: t.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }] }}>
+        <Animated.View style={{ flex: 1, opacity: t, transform: [{ translateX: t.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] }}>
           <Scaffoldless insets={insets.bottom}>{body()}</Scaffoldless>
         </Animated.View>
       </SafeAreaView>
@@ -259,13 +264,79 @@ function Scaffoldless({ children, insets }: { children: React.ReactNode; insets:
   return <InsetCtx.Provider value={insets}><View style={{ flex: 1 }}>{children}</View></InsetCtx.Provider>;
 }
 
+/**
+ * Blur-in text. Two stacked layers cross-fade: a genuinely blurred "ghost"
+ * (transparent glyphs casting a wide text shadow, which renders as a soft cloud
+ * of the letterforms) dissolves as the crisp text resolves over it. Both run on
+ * the native driver, so the whole thing stays at 60fps.
+ */
+function BlurText({
+  children,
+  style,
+  delay = 0,
+  blur = 10,
+  color = C.text,
+}: {
+  children: React.ReactNode;
+  style?: StyleProp<TextStyle>;
+  delay?: number;
+  blur?: number;
+  color?: string;
+}) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const a = Animated.timing(v, {
+      toValue: 1,
+      duration: 620,
+      delay,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    a.start();
+    return () => a.stop();
+  }, [v, delay]);
+
+  const rise = v.interpolate({ inputRange: [0, 1], outputRange: [12, 0] });
+  const scale = v.interpolate({ inputRange: [0, 1], outputRange: [1.04, 1] });
+  const ghostOut = v.interpolate({ inputRange: [0, 0.65, 1], outputRange: [1, 0.25, 0] });
+
+  return (
+    <Animated.View style={{ transform: [{ translateY: rise }, { scale }] }}>
+      <Animated.Text style={[style, { opacity: v }]}>{children}</Animated.Text>
+      <Animated.Text
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          style,
+          {
+            color: 'transparent',
+            textShadowColor: color,
+            textShadowOffset: { width: 0, height: 0 },
+            textShadowRadius: blur,
+            opacity: ghostOut,
+          },
+        ]}
+      >
+        {children}
+      </Animated.Text>
+    </Animated.View>
+  );
+}
+
 /* Shared layout: scrolling content + a pinned bottom CTA (same spot every screen). */
-function Screen({ children, ctaLabel, onCta, disabled, footer, arrow = true }: {
-  children: React.ReactNode; ctaLabel: string; onCta: () => void; disabled?: boolean; footer?: React.ReactNode; arrow?: boolean;
+function Screen({ children, ctaLabel, onCta, onBack, disabled, footer, arrow = true }: {
+  children: React.ReactNode; ctaLabel: string; onCta: () => void; onBack?: () => void; disabled?: boolean; footer?: React.ReactNode; arrow?: boolean;
 }) {
   const inset = React.useContext(InsetCtx);
   return (
     <View style={{ flex: 1 }}>
+      {/* A mis-tapped answer used to be unrecoverable (single-select auto-advances),
+          so every step past the first can go back. */}
+      {onBack ? (
+        <Pressable onPress={onBack} hitSlop={12} style={styles.backBtn} accessibilityLabel="Go back">
+          <Ionicons name="chevron-back" size={22} color={C.muted} />
+        </Pressable>
+      ) : null}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>{children}</ScrollView>
       <View style={[styles.ctaWrap, { paddingBottom: inset + S.sm }]}>
         <Pressable onPress={onCta} disabled={disabled} style={({ pressed }) => [styles.cta, disabled && styles.ctaOff, pressed && !disabled && styles.ctaPressed]}>
@@ -302,15 +373,15 @@ function Hero({ onNext }: { onNext: () => void }) {
         <Animated.View style={[styles.ripple, rs(r2)]} />
         <View style={styles.shieldCore}><Ionicons name="shield-checkmark" size={40} color="#fff" /></View>
       </View>
-      <Text style={styles.eyebrow}>WELCOME TO ORBII</Text>
-      <Text style={styles.h1}>Let's build your safety, together.</Text>
-      <Text style={styles.sub}>A few quick questions and ORBII tunes itself around your life. This is yours, not a template.</Text>
+      <BlurText style={styles.eyebrow} color={C.primary} blur={7} delay={120}>WELCOME TO ORBII</BlurText>
+      <BlurText style={styles.h1} blur={12} delay={240}>Let's build your safety, together.</BlurText>
+      <BlurText style={styles.sub} color={C.muted} blur={8} delay={400}>A few quick questions and ORBII tunes itself around your life. This is yours, not a template.</BlurText>
     </Screen>
   );
 }
 
 /* ─── QUIZ ─── */
-function Quiz({ q, answers, onSet, onNext }: { q: Question; answers: Answers; onSet: (id: keyof Answers, v: string | string[]) => void; onNext: () => void }) {
+function Quiz({ q, answers, onSet, onNext, onBack }: { q: Question; answers: Answers; onSet: (id: keyof Answers, v: string | string[]) => void; onNext: () => void; onBack?: () => void }) {
   const multi = q.kind === 'multi';
   const selected: string[] = multi ? (answers[q.id] as string[]) ?? [] : answers[q.id] ? [answers[q.id] as string] : [];
   const pick = (key: string) => {
@@ -326,10 +397,10 @@ function Quiz({ q, answers, onSet, onNext }: { q: Question; answers: Answers; on
   };
   const ready = selected.length > 0;
   return (
-    <Screen ctaLabel={multi ? (ready ? 'Continue' : 'Pick what fits') : 'Continue'} disabled={!ready} onCta={onNext}>
-      <Text style={styles.eyebrow}>{q.eyebrow}</Text>
-      <Text style={styles.h2}>{q.q}</Text>
-      {multi ? <Text style={styles.hint}>Choose as many as you like.</Text> : null}
+    <Screen ctaLabel={multi ? (ready ? 'Continue' : 'Pick what fits') : 'Continue'} disabled={!ready} onCta={onNext} onBack={onBack}>
+      <BlurText style={styles.eyebrow} color={C.primary} blur={7} delay={40}>{q.eyebrow}</BlurText>
+      <BlurText style={styles.h2} delay={120}>{q.q}</BlurText>
+      {multi ? <BlurText style={styles.hint} color={C.muted} blur={7} delay={210}>Choose as many as you like.</BlurText> : null}
       <View style={styles.opts}>
         {q.options.map((o) => {
           const on = selected.includes(o.key);
@@ -381,9 +452,9 @@ function Mirror({ name, lines, onNext }: { name?: string; lines: string[]; onNex
   }, [items]);
   return (
     <Screen ctaLabel="This is me" onCta={onNext}>
-      <Text style={styles.eyebrow}>YOUR SAFETY PROFILE</Text>
-      <Text style={styles.h2}>{name ? `${name}, meet your ORBII.` : 'Meet your ORBII.'}</Text>
-      <Text style={styles.sub}>Built from your answers, tuned to your life. Here is what it is watching for.</Text>
+      <BlurText style={styles.eyebrow} color={C.primary} blur={7} delay={60}>YOUR SAFETY PROFILE</BlurText>
+      <BlurText style={styles.h2} blur={12} delay={180}>{name ? `${name}, meet your ORBII.` : 'Meet your ORBII.'}</BlurText>
+      <BlurText style={styles.sub} color={C.muted} blur={8} delay={320}>Built from your answers, tuned to your life. Here is what it is watching for.</BlurText>
       <View style={styles.profileCard}>
         {lines.map((l, i) => (
           <Animated.View key={i} style={[styles.profileRow, { opacity: items[i], transform: [{ translateY: items[i].interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }] }]}>
@@ -407,7 +478,9 @@ function Label({ name, type, onNext }: { name?: string; type: typeof TYPES[TypeK
   }, [pop]);
   return (
     <Screen ctaLabel="Claim my type" onCta={onNext}>
-      <Text style={[styles.eyebrow, { textAlign: 'center' }]}>{name ? `${name.toUpperCase()}, YOU ARE` : 'YOUR SAFETY TYPE'}</Text>
+      <BlurText style={[styles.eyebrow, { textAlign: 'center' }]} color={C.primary} blur={7} delay={60}>
+        {name ? `${name.toUpperCase()}, YOU ARE` : 'YOUR SAFETY TYPE'}
+      </BlurText>
       <Animated.View style={[styles.badgeCard, { transform: [{ scale: pop.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }], opacity: pop }]}>
         <View style={[styles.badgeIcon, { backgroundColor: type.color }]}><Ionicons name={type.icon} size={44} color="#fff" /></View>
         <Text style={styles.badgeTag}>{type.tag}</Text>
@@ -429,9 +502,9 @@ function Control({ name, onNext }: { name?: string; onNext: () => void }) {
   ];
   return (
     <Screen ctaLabel="It's mine, let's go" onCta={onNext}>
-      <Text style={styles.eyebrow}>YOU'RE IN CONTROL</Text>
-      <Text style={styles.h2}>{name ? `${name}, this is yours now.` : 'This is yours now.'}</Text>
-      <Text style={styles.sub}>Not ours. You set the rules, ORBII just follows them.</Text>
+      <BlurText style={styles.eyebrow} color={C.primary} blur={7} delay={60}>YOU'RE IN CONTROL</BlurText>
+      <BlurText style={styles.h2} blur={12} delay={180}>{name ? `${name}, this is yours now.` : 'This is yours now.'}</BlurText>
+      <BlurText style={styles.sub} color={C.muted} blur={8} delay={320}>Not ours. You set the rules, ORBII just follows them.</BlurText>
       <View style={styles.controlList}>
         {rows.map((r) => (
           <View key={r.icon} style={styles.controlRow}>
@@ -445,14 +518,14 @@ function Control({ name, onNext }: { name?: string; onNext: () => void }) {
 }
 
 /* ─── NAME (personalisation) ─── */
-function NameStep({ value, onSet, onNext }: { value: string; onSet: (v: string) => void; onNext: () => void }) {
+function NameStep({ value, onSet, onNext, onBack }: { value: string; onSet: (v: string) => void; onNext: () => void; onBack?: () => void }) {
   const ready = value.trim().length >= 2;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen ctaLabel="Continue" disabled={!ready} onCta={onNext}>
-        <Text style={styles.eyebrow}>FIRST, THE BASICS</Text>
-        <Text style={styles.h2}>What should we call you?</Text>
-        <Text style={styles.sub}>So ORBII feels like yours from the very first screen.</Text>
+      <Screen ctaLabel="Continue" disabled={!ready} onCta={onNext} onBack={onBack}>
+        <BlurText style={styles.eyebrow} color={C.primary} blur={7} delay={40}>FIRST, THE BASICS</BlurText>
+        <BlurText style={styles.h2} delay={120}>What should we call you?</BlurText>
+        <BlurText style={styles.sub} color={C.muted} blur={8} delay={210}>So ORBII feels like yours from the very first screen.</BlurText>
         <View style={styles.nameField}>
           <TextInput
             value={value}
@@ -488,7 +561,7 @@ function Plus({ onNext }: { onNext: () => void }) {
           <View style={[styles.planIcon, { backgroundColor: C.primary }]}><Ionicons name="infinite" size={20} color="#fff" /></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.planName}>ORBII Plus</Text>
-            <Text style={styles.planPrice}>7 days free, then ₹99/mo</Text>
+            <Text style={styles.planPrice}>7 days free, then ₹149/mo</Text>
           </View>
         </View>
         <Text style={styles.planLine}>Unlimited verified helpers dispatched to you, priority matching, and the offline helper alert.</Text>
@@ -499,7 +572,7 @@ function Plus({ onNext }: { onNext: () => void }) {
           <View style={[styles.planIcon, { backgroundColor: '#E84393' }]}><Ionicons name="people" size={20} color="#fff" /></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.planName}>ORBII Family</Text>
-            <Text style={styles.planPrice}>₹299/mo</Text>
+            <Text style={styles.planPrice}>₹499/mo</Text>
           </View>
         </View>
         <Text style={styles.planLine}>Protect up to 4 people you love, with shared safe zones and alerts when someone leaves one.</Text>
@@ -737,6 +810,7 @@ const styles = StyleSheet.create({
   progressSpacer: { height: 4, marginTop: S.sm },
 
   scroll: { flexGrow: 1, paddingHorizontal: S.lg, paddingTop: S.lg },
+  backBtn: { alignSelf: 'flex-start', marginLeft: S.md, marginBottom: -S.sm, width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   ctaWrap: { paddingHorizontal: S.xl, paddingTop: S.sm },
   cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: S.sm, backgroundColor: C.ink, borderRadius: 32, paddingVertical: 19 },
   ctaOff: { opacity: 0.4 },

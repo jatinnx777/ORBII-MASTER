@@ -31,6 +31,17 @@ function pinHtml(n: number): string {
   return `<div style="width:24px;height:24px;border-radius:50%;background:${colors.brandDeep};border:2.5px solid #ffffff;box-shadow:0 3px 10px rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:12px">${n}</div>`;
 }
 
+// The places people actually save, so naming a zone is one tap instead of
+// typing on a phone keyboard. Tapping an active chip clears it again.
+const PLACE_PRESETS: { label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
+  { label: 'Home', icon: 'home' },
+  { label: 'College', icon: 'school' },
+  { label: 'Hostel', icon: 'bed' },
+  { label: 'Work', icon: 'briefcase' },
+  { label: 'Gym', icon: 'barbell' },
+  { label: 'Friend', icon: 'people' },
+];
+
 // Scrollable time picker (30-min steps). 'HH:MM' 24h values, 12h labels.
 const WHEEL_ITEM_H = 38;
 const TIME_OPTS: { value: string; label: string }[] = (() => {
@@ -483,6 +494,26 @@ export function ZoneEditorScreen() {
                   style={styles.inputField}
                   maxLength={40}
                 />
+                <View style={styles.presetRow}>
+                  {PLACE_PRESETS.map((p) => {
+                    const on = label.trim().toLowerCase() === p.label.toLowerCase();
+                    return (
+                      <Pressable
+                        key={p.label}
+                        onPress={() => setLabel(on ? '' : p.label)}
+                        style={[styles.preset, on && styles.presetOn]}
+                        accessibilityRole="button"
+                      >
+                        <Ionicons
+                          name={p.icon}
+                          size={14}
+                          color={on ? colors.textInverse : colors.brandDeep}
+                        />
+                        <Text style={[styles.presetText, on && styles.presetTextOn]}>{p.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
 
               {corners.length >= 3 ? (
@@ -678,6 +709,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.textPrimary,
   },
+  presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: spacing.sm },
+  preset: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 11, paddingVertical: 7,
+    borderRadius: radius.pill, backgroundColor: colors.brandSoft,
+  },
+  presetOn: { backgroundColor: colors.brand },
+  presetText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.brandDeep },
+  presetTextOn: { color: colors.textInverse },
   cta: { flexDirection: 'row', gap: spacing.sm, backgroundColor: colors.brand, borderRadius: radius.pill, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', marginTop: spacing.sm },
   ctaDim: { opacity: 0.5 },
   ctaText: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: colors.textInverse },

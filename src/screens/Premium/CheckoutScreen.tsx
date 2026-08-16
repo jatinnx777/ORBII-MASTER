@@ -66,7 +66,7 @@ export function CheckoutScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.planName}>ORBII Plus</Text>
-                <Text style={styles.planPrice}>₹99 / month</Text>
+                <Text style={styles.planPrice}>₹149 / month</Text>
               </View>
             </View>
             {PLUS_INCLUDES.map((f) => (

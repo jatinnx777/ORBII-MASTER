@@ -4,37 +4,63 @@ import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { OSMMapView, VoiceDurationSheet, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
+import { appAlert, OSMMapView, VoiceDurationSheet, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
 import { useAppSelector } from '@/redux/store';
 import { listCircleMembers } from '@/services/circles';
+import { logConsentEvent, isDeclaredAdult } from '@/services/consent';
 import {
   isCircleSharing,
   startCircleSharing,
   stopCircleSharing,
   loadCircleMembersLocations,
   loadMemberTrail,
+  detectStops,
+  dwellMinutes,
+  formatDuration,
   type MemberLocation,
   type TrailPoint,
+  type Stop,
 } from '@/services/circle-location';
 import type { GeoPoint } from '@/types';
 import { escapeHtml } from '@/utils/html';
 
-const DOT_COLORS = ['#8672CE', '#C6913A', '#6F7C61', '#BC5B3C', '#4F86C6', '#B0568C'];
-function colorFor(id: string): string {
-  let h = 0;
-  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
-  return DOT_COLORS[h % DOT_COLORS.length];
+// A circle holds at most four people, so each one gets a fixed, permanent
+// colour by their position in the circle. Same person, same colour, every
+// session: that is what makes four overlapping trails readable at a glance.
+const MEMBER_COLORS = ['#6C5CE7', '#00B894', '#E8804A', '#D6467F'] as const;
+/** Stable colour for a member, by their index in the circle's sorted roster. */
+function colorAt(index: number): string {
+  return MEMBER_COLORS[index % MEMBER_COLORS.length];
 }
-function avatarHtml(name: string | null, color: string, stale: boolean): string {
+function avatarHtml(
+  name: string | null,
+  color: string,
+  stale: boolean,
+  photoUri: string | null,
+): string {
   // Escaped defensively: this string is rendered as raw HTML inside the map
   // WebView, so any user-controlled character must be neutralised.
   const initial = escapeHtml((name || '?').slice(0, 1).toUpperCase());
-  const bg = stale ? '#9a958c' : color;
-  const op = stale ? '0.65' : '1';
-  return `<div style="opacity:${op};width:40px;height:40px;border-radius:50%;background:${bg};border:3px solid #fff;box-shadow:0 4px 14px rgba(20,18,40,0.28);display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:16px">${initial}</div>`;
+  const op = stale ? '0.6' : '1';
+  const inner = photoUri
+    ? `<img src="${escapeHtml(photoUri)}" style="width:100%;height:100%;object-fit:cover;display:block" />`
+    : `<div style="width:100%;height:100%;background:${color};display:flex;align-items:center;justify-content:center;color:#fff;font-family:sans-serif;font-weight:700;font-size:17px">${initial}</div>`;
+  // Coloured ring + white gap + soft drop shadow, the Life360 read, but with a
+  // glass highlight so it sits on our own design language rather than theirs.
+  return `<div style="opacity:${op};position:relative;width:46px;height:46px">
+    <div style="position:absolute;inset:0;border-radius:50%;background:${stale ? '#9a958c' : color};box-shadow:0 6px 18px rgba(20,18,40,0.30)"></div>
+    <div style="position:absolute;inset:3px;border-radius:50%;overflow:hidden;background:#fff;border:2px solid #fff">${inner}</div>
+    <div style="position:absolute;inset:0;border-radius:50%;background:linear-gradient(160deg,rgba(255,255,255,0.45),rgba(255,255,255,0) 55%);pointer-events:none"></div>
+  </div>`;
+}
+/** Hours elapsed since local midnight, so history always means "today". */
+function hoursSinceMidnight(): number {
+  const now = new Date();
+  const mid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.max(0.25, (now.getTime() - mid.getTime()) / 3_600_000);
 }
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
@@ -75,9 +101,10 @@ export function CircleMapScreen() {
   // Which circle's members we're viewing, and that circle's member ids.
   const [selectedCircleId, setSelectedCircleId] = useState<string | null>(null);
   const [memberIds, setMemberIds] = useState<Set<string> | null>(null);
-  // History: which member's trail is shown.
+  // Today's history for every member of the circle, keyed by user id. All four
+  // are drawn at once, each in that member's own colour.
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [trail, setTrail] = useState<TrailPoint[]>([]);
+  const [trails, setTrails] = useState<Record<string, TrailPoint[]>>({});
 
   // Default the selection to the active circle (or the first one).
   useEffect(() => {
@@ -110,15 +137,35 @@ export function CircleMapScreen() {
 
   const selectedCircle = circles.find((c) => c.id === selectedCircleId) ?? null;
 
-  const selectMember = async (m: MemberLocation) => {
+  // Fixed colour per member for this circle. Sorted by user id so the mapping is
+  // identical on every device and every launch.
+  const colorByUser = useMemo(() => {
+    const map: Record<string, string> = {};
+    [...shown].sort((a, b) => a.userId.localeCompare(b.userId))
+      .forEach((m, i) => { map[m.userId] = colorAt(i); });
+    return map;
+  }, [shown]);
+  const colorFor = useCallback((id: string) => colorByUser[id] ?? MEMBER_COLORS[0], [colorByUser]);
+
+  // Pull today's breadcrumbs for everyone visible, refreshed with the map.
+  useEffect(() => {
+    if (shown.length === 0) { setTrails({}); return; }
+    let alive = true;
+    const hrs = hoursSinceMidnight();
+    Promise.all(shown.map(async (m) => [m.userId, await loadMemberTrail(m.userId, hrs)] as const))
+      .then((pairs) => { if (alive) setTrails(Object.fromEntries(pairs)); })
+      .catch(() => undefined);
+    return () => { alive = false; };
+    // Re-run when the roster changes, not on every position tick.
+  }, [shown.map((m) => m.userId).join(',')]);
+
+  const selectMember = (m: MemberLocation) => {
     if (selectedId === m.userId) {
       setSelectedId(null);
-      setTrail([]);
       return;
     }
     setSelectedId(m.userId);
     setCenter({ latitude: m.lat, longitude: m.lng });
-    setTrail(await loadMemberTrail(m.userId, 12));
   };
 
   const refresh = useCallback(async () => {
@@ -172,6 +219,7 @@ export function CircleMapScreen() {
     setBusy(true);
     try {
       await stopCircleSharing();
+      void logConsentEvent('location_share', false, { method: 'toggle' });
       setSharing(false);
     } finally {
       setBusy(false);
@@ -183,6 +231,16 @@ export function CircleMapScreen() {
     setBusy(true);
     try {
       const ok = await startCircleSharing(hours);
+      if (!ok && !(await isDeclaredAdult())) {
+        appAlert(
+          'Location sharing is 18+',
+          "Indian law does not allow us to track anyone under 18, so live location stays off for your account. Voice SOS, your circle alerts and one-tap 112 all work exactly as normal.",
+        );
+      }
+      if (ok) {
+        void logConsentEvent('location_share', true, { method: 'toggle' });
+        void logConsentEvent('location_history', true, { method: 'toggle' });
+      }
       setSharing(ok);
     } finally {
       setBusy(false);
@@ -193,7 +251,7 @@ export function CircleMapScreen() {
     id: m.userId,
     coordinate: { latitude: m.lat, longitude: m.lng },
     // A member who turned sharing off shows greyed at their LAST known spot.
-    html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale),
+    html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale, m.photoUri),
   }));
   // Accuracy rings, "precise to ~Xm". Only for people actually sharing now.
   const rings: OSMCircle[] = shown
@@ -206,12 +264,51 @@ export function CircleMapScreen() {
       fillColor: colorFor(m.userId),
       fillOpacity: 0.1,
     }));
-  // History trail of the selected member.
-  const trailLines: OSMPolyline[] =
-    selectedId && trail.length >= 2
-      ? [{ id: 'trail', coordinates: trail.map((t) => ({ latitude: t.lat, longitude: t.lng })), color: colors.brandDeep, width: 3 }]
-      : [];
+  // Today's paths, one per member, each in that member's colour. When someone is
+  // selected the others dim back so a single day reads clearly.
+  const trailLines: OSMPolyline[] = shown
+    .map((m) => {
+      const pts = trails[m.userId] ?? [];
+      if (pts.length < 2) return null;
+      return {
+        id: `trail-${m.userId}`,
+        coordinates: pts.map((t) => ({ latitude: t.lat, longitude: t.lng })),
+        color: colorFor(m.userId),
+        width: selectedId === m.userId ? 5 : 3,
+      } as OSMPolyline;
+    })
+    .filter((x): x is OSMPolyline => x !== null);
+
   const selectedMember = shown.find((m) => m.userId === selectedId) ?? null;
+
+  // Where the selected member actually stopped, and for how long. A raw trail is
+  // hundreds of jittering dots; these are the handful of places that mean
+  // something. Rendered as sized rings, bigger the longer she stayed.
+  // Where each member actually stopped today, sized by how long they stayed.
+  const stopRings: OSMCircle[] = useMemo(
+    () =>
+      shown.flatMap((m) => {
+        if (selectedId && selectedId !== m.userId) return [];
+        return detectStops(trails[m.userId] ?? []).map((st, i) => ({
+          id: `stop-${m.userId}-${i}`,
+          center: { latitude: st.lat, longitude: st.lng },
+          radiusM: Math.max(35, Math.min(140, 30 + st.minutes * 1.2)),
+          color: colorFor(m.userId),
+          fillColor: colorFor(m.userId),
+          fillOpacity: 0.18,
+        }));
+      }),
+    [shown, trails, selectedId, colorFor],
+  );
+  const selectedStops: Stop[] = useMemo(
+    () => (selectedId ? detectStops(trails[selectedId] ?? []) : []),
+    [selectedId, trails],
+  );
+  // How long the selected member has been sitting where they are right now.
+  const dwell = useMemo(
+    () => (selectedId ? dwellMinutes(trails[selectedId] ?? []) : null),
+    [selectedId, trails],
+  );
 
   return (
     <View style={styles.root}>
@@ -221,7 +318,7 @@ export function CircleMapScreen() {
           center={center}
           zoom={13}
           markers={markers}
-          circles={rings}
+          circles={[...rings, ...stopRings]}
           polylines={trailLines}
           fitAll={markers.length > 0}
         />
@@ -253,7 +350,7 @@ export function CircleMapScreen() {
               return (
                 <Pressable
                   key={c.id}
-                  onPress={() => { setSelectedCircleId(c.id); setSelectedId(null); setTrail([]); }}
+                  onPress={() => { setSelectedCircleId(c.id); setSelectedId(null); setTrails({}); }}
                   style={[styles.chip, on && styles.chipOn]}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
@@ -273,9 +370,13 @@ export function CircleMapScreen() {
           <View style={styles.trailBar}>
             <Ionicons name="time" size={14} color={colors.textInverse} />
             <Text style={styles.trailText} numberOfLines={1}>
-              {selectedMember.name || 'Member'} · last 12h · {trail.length} points
+              {selectedMember.name || 'Member'} · today ·{' '}
+              {selectedStops.length > 0
+                ? `${selectedStops.length} stop${selectedStops.length > 1 ? 's' : ''}`
+                : `${(trails[selectedMember.userId] ?? []).length} points`}
+              {dwell != null ? ` · here ${formatDuration(dwell)}` : ''}
             </Text>
-            <Pressable onPress={() => { setSelectedId(null); setTrail([]); }} hitSlop={8}>
+            <Pressable onPress={() => setSelectedId(null)} hitSlop={8}>
               <Ionicons name="close" size={16} color={colors.textInverse} />
             </Pressable>
           </View>
@@ -373,8 +474,9 @@ export function CircleMapScreen() {
       <VoiceDurationSheet
         visible={durationOpen}
         icon="location"
+        allowAlways
         title="How long should your circle see you?"
-        subtitle="Live location turns off on its own after this, and warns you before it ends. Max 8 hours."
+        subtitle="Pick a window and it turns off on its own, or leave it always on. Your phone shows a permanent notice whenever your circle can see you."
         onConfirm={onPickShareDuration}
         onCancel={() => setDurationOpen(false)}
       />

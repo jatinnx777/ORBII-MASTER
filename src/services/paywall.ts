@@ -11,7 +11,7 @@ export function promptUpgrade(opts: {
   appAlert(
     'ORBII Plus',
     opts.body ??
-      `${opts.feature} is part of ORBII Plus (₹99/month). Upgrade to unlock it and everything else in Plus.`,
+      `${opts.feature} is part of ORBII Plus (₹149/month). Upgrade to unlock it and everything else in Plus.`,
     [
       { text: 'Not now', style: 'cancel' },
       { text: 'Upgrade', onPress: opts.onUpgrade },

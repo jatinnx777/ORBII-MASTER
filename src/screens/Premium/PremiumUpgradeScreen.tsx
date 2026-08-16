@@ -38,8 +38,8 @@ const PLUS: Feature[] = [
 
 type PlanKey = 'weekly' | 'monthly';
 const PLANS: { key: PlanKey; price: string; per: string; tag: string }[] = [
-  { key: 'weekly', price: '₹29', per: '/week', tag: 'FLEXIBLE' },
-  { key: 'monthly', price: '₹99', per: '/month', tag: 'BEST VALUE' },
+  { key: 'weekly', price: '₹49', per: '/week', tag: 'FLEXIBLE' },
+  { key: 'monthly', price: '₹149', per: '/month', tag: 'BEST VALUE' },
 ];
 
 export function PremiumUpgradeScreen() {

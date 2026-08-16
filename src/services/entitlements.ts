@@ -1,4 +1,4 @@
-// Which features need ORBII Plus (₹99/month). Everything not listed here is
+// Which features need ORBII Plus (₹149/month). Everything not listed here is
 // free for all users. `profile.isPremium` flips on after a successful Razorpay
 // purchase (or the launch coupon).
 //
