@@ -1466,8 +1466,6 @@ const styles = StyleSheet.create({
     // `background` fill made them the same colour as the page behind them and
     // the tip amounts vanished into it.
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     ...shadows.icon,
   },
   tipPillHighlight: {

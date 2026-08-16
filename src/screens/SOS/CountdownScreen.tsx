@@ -343,7 +343,7 @@ export function CountdownScreen() {
   // urgency and legibility, no "card floating on a page" look.
   const isReal = !isTest;
   const grad = (isTest
-    ? ['#F7F5FC', '#EFEAF7']
+    ? ['#FAF9EC', '#F3F0DF']
     : ['#FF6B70', '#E23F45']) as [string, string];
   const onColor = isTest ? colors.textPrimary : '#FFFFFF';
   const trackColor = isTest ? colors.creamDeep : 'rgba(255,255,255,0.26)';

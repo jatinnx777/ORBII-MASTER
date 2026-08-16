@@ -203,7 +203,11 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
     }),
   ).current;
 
+  // One action per presentation of the sheet. Reset when a new sheet opens.
+  const firedRef = useRef(false);
+
   const show = useCallback((next: SheetConfig) => {
+    firedRef.current = false;
     setConfig(next);
     setVisible(true);
   }, []);
@@ -307,6 +311,10 @@ export function BrandSheetProvider({ children }: { children: React.ReactNode }) 
                     key={idx}
                     button={btn}
                     onTap={() => {
+                      // Guarded: a second tap during the 200ms close animation
+                      // used to run the action twice.
+                      if (firedRef.current) return;
+                      firedRef.current = true;
                       hide();
                       btn.onPress?.();
                     }}

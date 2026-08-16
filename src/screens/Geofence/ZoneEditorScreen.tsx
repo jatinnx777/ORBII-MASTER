@@ -234,20 +234,39 @@ export function ZoneEditorScreen() {
     step === 'map'
       ? corners.map((c, i) => ({ id: `corner-${i}`, coordinate: { latitude: c.lat, longitude: c.lng }, html: pinHtml(i + 1) }))
       : [];
+  // The boundary is drawn as three stacked strokes so it glows rather than just
+  // sits there: a wide soft halo, a solid brand edge, then a thin dashed white
+  // line on top. On a satellite photo a single hairline disappears entirely, and
+  // you cannot tell whether the gate is inside the zone or outside it.
   const polylines: OSMPolyline[] =
     step === 'map' && corners.length >= 2
-      ? [
-          {
-            id: 'area',
-            coordinates: [...corners, corners[0]].map((c) => ({ latitude: c.lat, longitude: c.lng })),
-            color: '#ffffff',
-            width: 2.5,
-            dashed: true,
-            fill: corners.length >= 3,
-            fillColor: colors.brand,
-            fillOpacity: 0.22,
-          },
-        ]
+      ? (() => {
+          const ring = [...corners, corners[0]].map((c) => ({ latitude: c.lat, longitude: c.lng }));
+          return [
+            {
+              id: 'area-glow',
+              coordinates: ring,
+              color: colors.brand,
+              width: 14,
+              fill: corners.length >= 3,
+              fillColor: colors.brand,
+              fillOpacity: 0.2,
+            },
+            {
+              id: 'area-edge',
+              coordinates: ring,
+              color: colors.brand,
+              width: 5,
+            },
+            {
+              id: 'area',
+              coordinates: ring,
+              color: '#ffffff',
+              width: 2,
+              dashed: true,
+            },
+          ];
+        })()
       : [];
 
   const save = async () => {
@@ -574,7 +593,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(255,255,255,0.94)',
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.card,
@@ -583,7 +604,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: 'rgba(20,18,15,0.85)',
+    backgroundColor: 'rgba(23,22,28,0.88)',
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 9,
@@ -595,7 +616,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.96)',
+    backgroundColor: 'rgba(255,255,255,0.82)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255,255,255,0.88)',
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: 11,

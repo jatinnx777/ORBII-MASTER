@@ -723,10 +723,9 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.1,
     marginBottom: spacing.sm,
   },
   invitesWrap: {

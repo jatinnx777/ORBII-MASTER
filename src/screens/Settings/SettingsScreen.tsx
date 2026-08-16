@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 import {
   Image,
   Linking,
@@ -10,13 +10,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
-  Card,
   Row,
+  RowGroup,
+  RowSection,
   ScreenContainer,
-  SectionHeader,
   useBrandSheet,
 } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
@@ -27,6 +27,10 @@ import {
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { listCircles } from '@/services/circles';
+import { circlesLoaded } from '@/redux/slices/circlesSlice';
+import { loadEmergencyContacts } from '@/services/emergency-contacts';
+import { profileUpdated } from '@/redux/slices/userSlice';
 import { deleteMyData } from '@/services/consent';
 import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
@@ -47,6 +51,30 @@ export function SettingsScreen() {
   const sheet = useBrandSheet();
   const contactsCount = profile?.emergencyContacts?.length ?? 0;
   const circlesCount = useAppSelector((s) => s.circles.circles.length);
+
+  // Settings shows counts (contacts, circles) that are edited on other screens.
+  // Reading them straight from the store meant they only updated if some other
+  // screen happened to have refetched, so the numbers here went stale and the
+  // screen looked out of sync with the rest of the app. Refetch on focus.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      listCircles()
+        .then((cs) => alive && dispatch(circlesLoaded(cs)))
+        .catch(() => undefined);
+      if (profile?.uid) {
+        loadEmergencyContacts(profile.uid)
+          .then((cs) => {
+            if (alive && profile) dispatch(profileUpdated({ ...profile, emergencyContacts: cs }));
+          })
+          .catch(() => undefined);
+      }
+      return () => {
+        alive = false;
+      };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dispatch, profile?.uid]),
+  );
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -97,11 +125,14 @@ export function SettingsScreen() {
       destructive: true,
       confirmLabel: 'Sign out',
       icon: 'log-out',
-      onConfirm: async () => {
-        await signOutFromGoogle();
-        // Device-local PIN: clear it so the next user sets their own.
-        await clearPin().catch(() => undefined);
+      onConfirm: () => {
+        // Sign out of the UI first, then tell the server. Awaiting the network
+        // before dispatching meant a slow connection made this button look
+        // broken, and the fix for a broken-looking button is never "tap harder".
         dispatch(signedOut());
+        // Device-local PIN: clear it so the next user sets their own.
+        void clearPin().catch(() => undefined);
+        void signOutFromGoogle();
       },
     });
   };
@@ -145,52 +176,68 @@ export function SettingsScreen() {
           <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </Pressable>
 
-        <SectionHeader title="Profile" />
-        <Card style={styles.rowsCard}>
+        {/* Four full groups, not eight sparse ones. The screen previously had a
+            box per idea, several holding a single row, which made it read as a
+            long column of near-empty cards. Grouped by what you came here to
+            do instead. */}
+        <RowSection title="Safety" />
+        <RowGroup>
           <Row
-            icon="people"
-            tint="coral"
+            icon="people-outline"
             label="Emergency contacts"
             value={`${contactsCount} ${contactsCount === 1 ? 'contact' : 'contacts'}`}
             onPress={() => navigation.navigate('EmergencyContacts')}
           />
-        </Card>
-
-        <SectionHeader title="Emergency triggers" />
-        <Card style={styles.rowsCard}>
           <Row
             icon="mic-outline"
-            tint="coral"
             label="Voice SOS"
             value={'Shout "help, help" to trigger an SOS, hands-free'}
             onPress={() => navigation.navigate('VoicePhrases')}
           />
-        </Card>
-
-        <SectionHeader title="Privacy" />
-        <Card style={styles.rowsCard}>
           <Row
-            icon="notifications"
-            tint="sage"
-            label="Smart notifications"
+            icon="people-circle-outline"
+            label="Your circles"
+            value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
+            onPress={() => navigation.navigate('Circles')}
+          />
+          {isResponder ? (
+            <Row
+              icon="ribbon-outline"
+              label="Verified helper"
+              value="You're an ORBII responder. Open your Missions dashboard."
+              onPress={() => navigation.navigate('Missions')}
+            />
+          ) : (
+            <Row
+              icon="shield-checkmark-outline"
+              label="Become a verified helper"
+              value="Get verified with Aadhaar and PAN to help people near you"
+              onPress={() => navigation.navigate('ResponderApplication')}
+            />
+          )}
+        </RowGroup>
+
+        <RowSection title="Alerts" />
+        <RowGroup>
+          <Row
+            icon="notifications-outline"
+            label="Push notifications"
             value={
               push
-                ? 'Push for SOS, helpers, and circle activity'
-                : 'Off. You won\'t be notified'
+                ? 'SOS, helpers, and circle activity'
+                : "Off. You won't be notified"
             }
             right={
               <Switch
                 value={push}
                 onValueChange={handlePush}
                 trackColor={{ true: colors.brand, false: colors.border }}
-                thumbColor={push ? colors.brandDeep : colors.background}
+                thumbColor={colors.surface}
               />
             }
           />
-          <Divider />
           <Row
-            icon="phone-portrait"
-            tint="sage"
+            icon="phone-portrait-outline"
             label="Vibrate on nearby alerts"
             value={
               alertVibration
@@ -204,94 +251,52 @@ export function SettingsScreen() {
                   dispatch(alertVibrationToggled(v));
                 }}
                 trackColor={{ true: colors.brand, false: colors.border }}
-                thumbColor={alertVibration ? colors.brandDeep : colors.background}
+                thumbColor={colors.surface}
               />
             }
           />
-          <Divider />
           <Row
-            icon="location"
-            tint="sage"
-            label="Location sharing"
-            value="Always while app is open · only your circle sees you"
-            onPress={() => Linking.openSettings().catch(() => undefined)}
-          />
-        </Card>
-
-        <SectionHeader title="Community" />
-        <Card style={styles.rowsCard}>
-          <Row
-            icon="notifications-outline"
-            tint="gold"
-            label="Notifications"
+            icon="mail-unread-outline"
+            label="Notification inbox"
             value="Alerts, circle requests, and updates"
             onPress={() => navigation.navigate('Notifications')}
           />
-          <Divider />
-          <Row
-            icon="people-circle"
-            tint="peach"
-            label="Manage circles"
-            value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
-            onPress={() => navigation.navigate('Circles')}
-          />
-          <Divider />
-          {isResponder ? (
-            <Row
-              icon="ribbon"
-              tint="sage"
-            label="Verified helper"
-              value="You're an ORBII responder. Open your Missions dashboard."
-              onPress={() => navigation.navigate('Missions')}
-            />
-          ) : (
-            <Row
-              icon="shield-checkmark-outline"
-              tint="sage"
-            label="Register as a verified helper"
-              value="Upload your Aadhaar, PAN and a selfie to get verified and help people nearby"
-              onPress={() => navigation.navigate('ResponderApplication')}
-            />
-          )}
-        </Card>
+        </RowGroup>
 
-        <SectionHeader title="Preferences" />
-        <Card style={styles.rowsCard}>
+        <RowSection title="App" />
+        <RowGroup>
           <Row
-            icon="language"
-            tint="gold"
+            icon="language-outline"
             label="Language"
             value="English, Hindi, Punjabi, Tamil, Bengali"
             onPress={() => navigation.navigate('LanguageSelectorApp')}
           />
-        </Card>
-
-        <SectionHeader title="Help" />
-        <Card style={styles.rowsCard}>
           <Row
-            icon="information-circle"
-            tint="neutral"
+            icon="location-outline"
+            label="Location permissions"
+            value="Opt-in, you pick how long, deleted at midnight"
+            onPress={() => Linking.openSettings().catch(() => undefined)}
+          />
+          <Row
+            icon="information-circle-outline"
             label="About ORBII"
             value="What we do, who we are"
             onPress={() => navigation.navigate('About')}
           />
-        </Card>
+        </RowGroup>
 
-        <SectionHeader title="Data & privacy" />
-        <Card style={styles.rowsCard}>
+        <RowSection title="Your data" />
+        <RowGroup>
           <Row
             icon="document-text-outline"
-            tint="neutral"
             label="Privacy Policy"
             value="What we collect, why, and your rights under the DPDP Act"
             onPress={() =>
               Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
             }
           />
-          <Divider />
           <Row
-            icon="shield-checkmark-outline"
-            tint="sage"
+            icon="shield-half-outline"
             label="Grievance Officer"
             value="Questions or complaints about your data? privacy@orbii.in"
             onPress={() =>
@@ -300,7 +305,6 @@ export function SettingsScreen() {
               ).catch(() => undefined)
             }
           />
-          <Divider />
           <Row
             icon="trash-outline"
             label="Delete my account & data"
@@ -308,17 +312,18 @@ export function SettingsScreen() {
             destructive
             onPress={handleDeleteData}
           />
-        </Card>
+        </RowGroup>
 
-        <SectionHeader title="Account" />
-        <Card style={styles.rowsCard}>
+        <RowSection title="Account" />
+        <RowGroup>
           <Row
             icon="log-out"
             label="Sign out"
             destructive
             onPress={handleSignOut}
+            last
           />
-        </Card>
+        </RowGroup>
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>Version {APP_VERSION}</Text>
@@ -330,10 +335,6 @@ export function SettingsScreen() {
       </ScrollView>
     </ScreenContainer>
   );
-}
-
-function Divider() {
-  return <View style={styles.divider} />;
 }
 
 const styles = StyleSheet.create({
@@ -405,8 +406,6 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.md,
     marginBottom: spacing.md,
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     backgroundColor: colors.surface,
     padding: 0,
     overflow: 'hidden',

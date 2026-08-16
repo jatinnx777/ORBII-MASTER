@@ -42,7 +42,7 @@ export async function tipHelper(
       currency: 'INR',
       name: 'ORBII',
       description: `Thank ${helperName || 'your helper'}`,
-      theme: { color: '#7B5FC7' },
+      theme: { color: '#8672CE' },
       prefill: { email: profile?.email ?? '', contact: profile?.phone ?? '' },
     });
     void supabase.functions

@@ -1,16 +1,27 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { appAlert, OSMMapView, VoiceDurationSheet, type OSMMarker, type OSMPolyline, type OSMCircle } from '@/components/common';
+import {
+  appAlert,
+  AgeCheckSheet,
+  CircleSwitcher,
+  CircleSwitcherTrigger,
+  GlassButton,
+  OSMMapView,
+  VoiceDurationSheet,
+  type OSMMarker,
+  type OSMPolyline,
+  type OSMCircle,
+} from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
 import { useAppSelector } from '@/redux/store';
 import { listCircleMembers } from '@/services/circles';
-import { logConsentEvent, isDeclaredAdult } from '@/services/consent';
+import { logConsentEvent, getAgeStatus } from '@/services/consent';
 import {
   isCircleSharing,
   startCircleSharing,
@@ -20,10 +31,13 @@ import {
   detectStops,
   dwellMinutes,
   formatDuration,
+  sameMemberLocations,
+  circleSharingExpiry,
   type MemberLocation,
   type TrailPoint,
   type Stop,
 } from '@/services/circle-location';
+import { haversineMeters, formatDistance } from '@/utils/geo';
 import type { GeoPoint } from '@/types';
 import { escapeHtml } from '@/utils/html';
 
@@ -35,7 +49,25 @@ const MEMBER_COLORS = ['#6C5CE7', '#00B894', '#E8804A', '#D6467F'] as const;
 function colorAt(index: number): string {
   return MEMBER_COLORS[index % MEMBER_COLORS.length];
 }
+// Marker HTML is rebuilt on every refresh and then JSON-stringified to cross
+// into the WebView, which showed up as jank on a 10-second poll. The strings are
+// pure functions of their inputs, so cache them.
+const avatarCache = new Map<string, string>();
 function avatarHtml(
+  name: string | null,
+  color: string,
+  stale: boolean,
+  photoUri: string | null,
+): string {
+  const key = `${name ?? ''}|${color}|${stale ? 1 : 0}|${photoUri ?? ''}`;
+  const hit = avatarCache.get(key);
+  if (hit) return hit;
+  const built = buildAvatarHtml(name, color, stale, photoUri);
+  if (avatarCache.size > 64) avatarCache.clear();
+  avatarCache.set(key, built);
+  return built;
+}
+function buildAvatarHtml(
   name: string | null,
   color: string,
   stale: boolean,
@@ -56,6 +88,21 @@ function avatarHtml(
     <div style="position:absolute;inset:0;border-radius:50%;background:linear-gradient(160deg,rgba(255,255,255,0.45),rgba(255,255,255,0) 55%);pointer-events:none"></div>
   </div>`;
 }
+// A day's breadcrumbs can run to 500 points per person. Four of those, serialised
+// into the map WebView on every refresh, is what made the screen crawl. Thinning
+// to ~120 points keeps the shape of the route identical at any zoom a phone can
+// show, at a quarter of the cost. Endpoints are always kept.
+const MAX_TRAIL_POINTS = 120;
+function thinTrail(points: TrailPoint[]): TrailPoint[] {
+  if (points.length <= MAX_TRAIL_POINTS) return points;
+  const step = points.length / MAX_TRAIL_POINTS;
+  const out: TrailPoint[] = [];
+  for (let i = 0; i < MAX_TRAIL_POINTS; i++) out.push(points[Math.floor(i * step)]);
+  const last = points[points.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
 /** Hours elapsed since local midnight, so history always means "today". */
 function hoursSinceMidnight(): number {
   const now = new Date();
@@ -85,9 +132,58 @@ export function CircleMapScreen() {
   const [members, setMembers] = useState<MemberLocation[]>([]);
   const [sharing, setSharing] = useState(false);
   const [center, setCenter] = useState<GeoPoint | null>(null);
+  // My own position, kept separate from `center` (which moves when you tap a
+  // member). Needed to answer the only question people actually ask of this
+  // screen: how far away is she?
+  const [myLoc, setMyLoc] = useState<GeoPoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
+  const [ageOpen, setAgeOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [pendingHours, setPendingHours] = useState(2);
+  // When sharing is on with a bounded window, say when it ends. "Until 9:30 PM"
+  // is the thing people actually want to know, and it is the honest counterpart
+  // to a permanent notification.
+  const [shareEnds, setShareEnds] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    if (!sharing) {
+      setShareEnds(null);
+      return;
+    }
+    void circleSharingExpiry().then((ms) => {
+      if (!alive) return;
+      if (!ms) {
+        setShareEnds(null);
+        return;
+      }
+      const d = new Date(ms);
+      setShareEnds(
+        d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }).replace(/\s?([ap])m/i, (_x, p1) => ` ${String(p1).toUpperCase()}M`),
+      );
+    });
+    return () => { alive = false; };
+  }, [sharing]);
+
+  // Slow breathing ring behind the share icon while live, so "on" reads at a
+  // glance without another line of text.
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!sharing) {
+      pulseAnim.setValue(0);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 0.55, duration: 1100, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1100, useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [sharing, pulseAnim]);
+
   // Modern animated toggle (replaces the default Switch).
   const toggleAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -147,12 +243,20 @@ export function CircleMapScreen() {
   }, [shown]);
   const colorFor = useCallback((id: string) => colorByUser[id] ?? MEMBER_COLORS[0], [colorByUser]);
 
+  // How far this member is FROM ME. The row used to show m.accuracyM here, which
+  // is the GPS error radius, not a distance, so someone 3 km away read as "100m".
+  const distanceOf = useCallback(
+    (m: MemberLocation): number | null =>
+      myLoc ? haversineMeters(myLoc, { latitude: m.lat, longitude: m.lng }) : null,
+    [myLoc],
+  );
+
   // Pull today's breadcrumbs for everyone visible, refreshed with the map.
   useEffect(() => {
     if (shown.length === 0) { setTrails({}); return; }
     let alive = true;
     const hrs = hoursSinceMidnight();
-    Promise.all(shown.map(async (m) => [m.userId, await loadMemberTrail(m.userId, hrs)] as const))
+    Promise.all(shown.map(async (m) => [m.userId, thinTrail(await loadMemberTrail(m.userId, hrs))] as const))
       .then((pairs) => { if (alive) setTrails(Object.fromEntries(pairs)); })
       .catch(() => undefined);
     return () => { alive = false; };
@@ -169,13 +273,18 @@ export function CircleMapScreen() {
   };
 
   const refresh = useCallback(async () => {
-    setMembers(await loadCircleMembersLocations());
+    const next = await loadCircleMembersLocations();
+    setMembers((prev) => (sameMemberLocations(prev, next) ? prev : next));
   }, []);
 
   useEffect(() => {
     let alive = true;
     getCurrentLocation()
-      .then((p) => alive && setCenter(p))
+      .then((p) => {
+        if (!alive) return;
+        setCenter(p);
+        setMyLoc(p);
+      })
       .catch(() => alive && setCenter({ latitude: 22.9734, longitude: 78.6569 }));
     isCircleSharing().then((s) => alive && setSharing(s));
     return () => {
@@ -190,7 +299,17 @@ export function CircleMapScreen() {
         if (alive) void refresh().finally(() => alive && setLoading(false));
       };
       run();
-      const poll = setInterval(run, 10000);
+      // Realtime is the live path; this is only a fallback for projects where it
+      // is not enabled (needs sql/70). Polling every 10s on top of realtime meant
+      // the screen was doing the same work twice.
+      const poll = setInterval(run, 45000);
+      // A burst of row changes (four phones reporting at once) used to fire four
+      // full refetches back to back. Coalesce them into one.
+      let debounce: ReturnType<typeof setTimeout> | null = null;
+      const runSoon = () => {
+        if (debounce) clearTimeout(debounce);
+        debounce = setTimeout(run, 400);
+      };
       // Realtime: refetch the instant any visible member's row changes, so the
       // map moves live instead of waiting for the next poll. The poll stays as a
       // fallback in case realtime isn't enabled on the project (needs sql/70).
@@ -199,12 +318,13 @@ export function CircleMapScreen() {
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'circle_locations' },
-          () => run(),
+          () => runSoon(),
         )
         .subscribe();
       return () => {
         alive = false;
         clearInterval(poll);
+        if (debounce) clearTimeout(debounce);
         supabase.removeChannel(channel);
       };
     }, [refresh]),
@@ -226,12 +346,14 @@ export function CircleMapScreen() {
     }
   };
 
-  const onPickShareDuration = async (hours: number) => {
-    setDurationOpen(false);
+  // Shared by the duration picker and the age sheet, so answering the age
+  // question drops the user straight into sharing instead of making them start
+  // the whole flow again.
+  const beginSharing = async (hours: number) => {
     setBusy(true);
     try {
       const ok = await startCircleSharing(hours);
-      if (!ok && !(await isDeclaredAdult())) {
+      if (!ok && (await getAgeStatus()) === 'minor') {
         appAlert(
           'Location sharing is 18+',
           "Indian law does not allow us to track anyone under 18, so live location stays off for your account. Voice SOS, your circle alerts and one-tap 112 all work exactly as normal.",
@@ -245,6 +367,18 @@ export function CircleMapScreen() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const onPickShareDuration = async (hours: number) => {
+    setDurationOpen(false);
+    // Ask for a date of birth once, only if we have genuinely never been told.
+    // Anyone who signed up before that field existed lands here exactly once.
+    if ((await getAgeStatus()) === 'unknown') {
+      setPendingHours(hours);
+      setAgeOpen(true);
+      return;
+    }
+    await beginSharing(hours);
   };
 
   const markers: OSMMarker[] = shown.map((m) => ({
@@ -330,39 +464,14 @@ export function CircleMapScreen() {
         {/* Top bar, floating glass controls. */}
         <View style={styles.topBar} pointerEvents="box-none">
           <GlassButton icon="chevron-back" onPress={() => navigation.goBack()} />
-          <View style={styles.titlePill}>
-            <Ionicons name="people" size={13} color={colors.textPrimary} />
-            <Text style={styles.titleText}>Circle map</Text>
-          </View>
+          <CircleSwitcherTrigger
+            name={selectedCircle?.name ?? 'Circle map'}
+            count={shown.length}
+            onPress={() => setSwitcherOpen(true)}
+          />
           <GlassButton icon="refresh" onPress={() => void refresh()} />
         </View>
 
-        {/* Circle selector, pick whose circle you're looking at. */}
-        {circles.length > 0 ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chipsRow}
-            style={styles.chipsScroll}
-          >
-            {circles.map((c) => {
-              const on = c.id === selectedCircleId;
-              return (
-                <Pressable
-                  key={c.id}
-                  onPress={() => { setSelectedCircleId(c.id); setSelectedId(null); setTrails({}); }}
-                  style={[styles.chip, on && styles.chipOn]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`Show ${c.name}`}
-                >
-                  <Text style={styles.chipEmoji}>{c.emoji || '👥'}</Text>
-                  <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>{c.name}</Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
 
         <View style={{ flex: 1 }} pointerEvents="box-none" />
 
@@ -385,11 +494,25 @@ export function CircleMapScreen() {
         {/* Bottom sheet, frosted glass. */}
         <BlurView intensity={32} tint="light" style={styles.sheet}>
           <View style={styles.handle} />
-          <View style={styles.shareRow}>
+          <View style={[styles.shareRow, sharing && styles.shareRowOn]}>
+            <View style={[styles.shareIcon, sharing && styles.shareIconOn]}>
+              {sharing ? <Animated.View style={[styles.sharePulse, { opacity: pulseAnim }]} /> : null}
+              <Ionicons
+                name={sharing ? 'navigate' : 'navigate-outline'}
+                size={17}
+                color={sharing ? colors.textInverse : colors.brandDeep}
+              />
+            </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.shareTitle}>Share my live location</Text>
+              <Text style={styles.shareTitle}>
+                {sharing ? 'You are sharing' : 'Share my live location'}
+              </Text>
               <Text style={styles.shareSub}>
-                {sharing ? 'Your circle can see you. Turn off any time.' : 'Only your circle can see it, when it’s on.'}
+                {sharing
+                  ? shareEnds
+                    ? `Your circle can see you until ${shareEnds}.`
+                    : 'Your circle can see you until you turn this off.'
+                  : 'Only your circle sees it. Today’s route clears at midnight.'}
               </Text>
             </View>
             <Pressable
@@ -440,30 +563,42 @@ export function CircleMapScreen() {
                     onPress={() => void selectMember(m)}
                     style={[styles.memberRow, i > 0 && styles.memberDivider, sel && styles.memberRowOn]}
                   >
-                    <View style={[styles.memberDot, { backgroundColor: off ? '#9a958c' : colorFor(m.userId) }]}>
-                      <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
+                    <View style={[styles.avatarRing, { borderColor: off ? '#9a958c' : colorFor(m.userId) }]}>
+                      {m.photoUri ? (
+                        <Image source={{ uri: m.photoUri }} style={styles.avatarImg} />
+                      ) : (
+                        <View style={[styles.memberDot, { backgroundColor: off ? '#9a958c' : colorFor(m.userId) }]}>
+                          <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      {!off ? <View style={[styles.liveDot, { backgroundColor: f.color }]} /> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.memberName} numberOfLines={1}>{m.name || 'Circle member'}</Text>
-                      <View style={styles.freshRow}>
-                        {off ? (
-                          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-                        ) : (
-                          <View style={[styles.freshDot, { backgroundColor: f.color }]} />
-                        )}
-                        <Text style={styles.memberMeta} numberOfLines={1}>
-                          {off
-                            ? `Location off · last seen ${ago(m.updatedAt)}`
-                            : `${ago(m.updatedAt)}${m.accuracyM != null ? ` · ~${Math.round(m.accuracyM)}m` : ''}`}
-                        </Text>
-                      </View>
+                      <Text style={styles.memberMeta} numberOfLines={1}>
+                        {off ? `Location off · last seen ${ago(m.updatedAt)}` : ago(m.updatedAt)}
+                      </Text>
                     </View>
-                    {off ? (
-                      <View style={styles.offPill}><Text style={styles.offPillText}>OFF</Text></View>
-                    ) : m.battery != null ? (
-                      <Text style={styles.battery}>{m.battery}%</Text>
-                    ) : null}
-                    <Ionicons name={sel ? 'time' : 'time-outline'} size={18} color={sel ? colors.brandDeep : colors.textMuted} />
+                    <View style={styles.rightCol}>
+                      {distanceOf(m) != null ? (
+                        <Text style={[styles.distance, off && styles.distanceOff]}>
+                          {formatDistance(distanceOf(m) as number)}
+                        </Text>
+                      ) : off ? (
+                        <View style={styles.offPill}><Text style={styles.offPillText}>OFF</Text></View>
+                      ) : null}
+                      {m.battery != null ? (
+                        <View style={styles.batteryRow}>
+                          <Ionicons
+                            name={m.battery <= 20 ? 'battery-dead' : m.battery <= 50 ? 'battery-half' : 'battery-full'}
+                            size={13}
+                            color={m.battery <= 20 ? colors.coralDeep : colors.textMuted}
+                          />
+                          <Text style={[styles.battery, m.battery <= 20 && styles.batteryLow]}>{m.battery}%</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 2 }} />
                   </Pressable>
                 );
               })}
@@ -480,20 +615,38 @@ export function CircleMapScreen() {
         onConfirm={onPickShareDuration}
         onCancel={() => setDurationOpen(false)}
       />
+      <CircleSwitcher
+        visible={switcherOpen}
+        circles={circles}
+        selectedId={selectedCircleId}
+        onSelect={(id) => {
+          setSelectedCircleId(id);
+          setSelectedId(null);
+          setTrails({});
+        }}
+        onCreate={() => navigation.navigate('CircleCreate' as never)}
+        onClose={() => setSwitcherOpen(false)}
+      />
+      <AgeCheckSheet
+        visible={ageOpen}
+        onResolved={async (status) => {
+          setAgeOpen(false);
+          if (status === 'minor') {
+            appAlert(
+              'Location sharing is 18+',
+              "Indian law does not allow us to track anyone under 18, so live location stays off for your account. Voice SOS, your circle alerts and one-tap 112 all work exactly as normal.",
+            );
+            return;
+          }
+          await beginSharing(pendingHours);
+        }}
+        onCancel={() => setAgeOpen(false)}
+      />
     </View>
   );
 }
 
 // A small frosted round control used in the top bar.
-function GlassButton({ icon, onPress }: { icon: React.ComponentProps<typeof Ionicons>['name']; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} hitSlop={10} style={({ pressed }) => [pressed && { opacity: 0.85 }]}>
-      <BlurView intensity={30} tint="light" style={styles.glassBtn}>
-        <Ionicons name={icon} size={20} color={colors.textPrimary} />
-      </BlurView>
-    </Pressable>
-  );
-}
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceMuted },
@@ -551,6 +704,18 @@ const styles = StyleSheet.create({
   },
   handle: { width: 40, height: 4, borderRadius: 2, backgroundColor: 'rgba(20,18,40,0.14)', alignSelf: 'center', marginBottom: spacing.xs },
   shareRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingBottom: spacing.sm, borderBottomWidth: 1, borderBottomColor: 'rgba(20,18,40,0.06)' },
+  shareRowOn: {},
+  shareIcon: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center', justifyContent: 'center',
+    marginRight: spacing.sm,
+  },
+  shareIconOn: { backgroundColor: colors.brand },
+  sharePulse: {
+    position: 'absolute', left: -5, top: -5, right: -5, bottom: -5,
+    borderRadius: 24, backgroundColor: colors.brand,
+  },
   shareTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textPrimary },
   shareSub: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   toggleTrack: { width: 50, height: 28, borderRadius: 14, justifyContent: 'center' },
@@ -568,6 +733,24 @@ const styles = StyleSheet.create({
   memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 11, paddingHorizontal: spacing.xs, borderRadius: radius.md },
   memberDivider: { borderTopWidth: 1, borderTopColor: 'rgba(20,18,40,0.05)' },
   memberRowOn: { backgroundColor: 'rgba(134,114,206,0.10)' },
+  avatarRing: {
+    width: 46, height: 46, borderRadius: 23, borderWidth: 2.5,
+    overflow: 'visible', alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  avatarImg: { width: 39, height: 39, borderRadius: 20 },
+  liveDot: {
+    position: 'absolute', right: -1, bottom: -1,
+    width: 12, height: 12, borderRadius: 6,
+    borderWidth: 2, borderColor: colors.surface,
+  },
+  rightCol: { alignItems: 'flex-end', gap: 3 },
+  distance: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary,
+  },
+  distanceOff: { color: colors.textMuted },
+  batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  batteryLow: { color: colors.coralDeep },
   memberDot: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
   memberInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: '#fff' },
   memberName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },

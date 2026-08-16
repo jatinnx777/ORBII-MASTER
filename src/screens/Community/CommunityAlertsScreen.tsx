@@ -447,8 +447,6 @@ const cardStyles = StyleSheet.create({
     backgroundColor: colors.background,
     padding: spacing.md,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     gap: spacing.sm,
     ...shadows.card,
   },

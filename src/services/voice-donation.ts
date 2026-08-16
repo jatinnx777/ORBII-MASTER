@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import { supabase } from './supabase';
 import { getItem, setItem } from './storage';
-import { isDeclaredAdult, logConsentEvent } from './consent';
+import { getAgeStatus, logConsentEvent } from './consent';
 import { reportError } from './error-reporting';
 
 async function sha256Hex(bytes: Uint8Array): Promise<string | undefined> {
@@ -51,7 +51,7 @@ export async function uploadVoiceSample(opts: {
     // DPDP: a child's biometric data must not be processed on a self-consent
     // basis. Voice donation is optional, so the safe answer for anyone who did
     // not declare adulthood is simply never to collect it.
-    if (!(await isDeclaredAdult())) return 'minor';
+    if ((await getAgeStatus()) === 'minor') return 'minor';
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     if (!uid) return 'error';
 

@@ -559,10 +559,9 @@ const styles = StyleSheet.create({
 
   sectionLabel: {
     ...typography.label,
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.1,
     marginTop: spacing.lg,
     marginBottom: spacing.sm,
   },

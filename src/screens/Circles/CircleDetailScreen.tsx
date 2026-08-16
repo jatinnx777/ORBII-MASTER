@@ -374,10 +374,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     marginBottom: spacing.sm,
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 11,
+    fontSize: 13,
     color: colors.textMuted,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.1,
   },
   memberRow: {
     flexDirection: 'row',

@@ -16,9 +16,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { appAlert } from '@/components/common';
+import { appAlert, CircleSwitcher, CircleSwitcherTrigger, GlassButton } from '@/components/common';
 import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
-import { loadCircleMembersLocations, type MemberLocation } from '@/services/circle-location';
+import { loadCircleMembersLocations, sameMemberLocations, type MemberLocation } from '@/services/circle-location';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
@@ -86,6 +86,7 @@ export function HomeScreen() {
   );
   const [voiceBusy, setVoiceBusy] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
   const voiceOn = voiceStatus === 'listening' || voiceStatus === 'starting';
 
   useEffect(() => subscribeStatus(setVoiceStatus), []);
@@ -153,9 +154,11 @@ export function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       let alive = true;
+      // Keep the previous array when nothing moved, so the map markers are not
+      // rebuilt and re-serialised every 30 seconds for no reason.
       const run = () =>
         loadCircleMembersLocations()
-          .then((l) => alive && setMemberLocs(l))
+          .then((l) => alive && setMemberLocs((prev) => (sameMemberLocations(prev, l) ? prev : l)))
           .catch(() => undefined);
       run();
       const id = setInterval(run, 30_000);
@@ -306,40 +309,32 @@ export function HomeScreen() {
 
       {/* top floating controls */}
       <View style={[styles.topControls, { top: Math.max(insets.top, 12) + 10 }]} pointerEvents="box-none">
-        <Pressable onPress={() => navigation.navigate('Settings')} style={styles.topBtn} accessibilityLabel="Settings">
-          <Ionicons name="settings-outline" size={20} color={colors.brandDeep} />
-        </Pressable>
+        <GlassButton
+          icon="settings-outline"
+          size={42}
+          onPress={() => navigation.navigate('Settings')}
+          accessibilityLabel="Settings"
+        />
 
-        {/* Circle selector, side-scroll to pick which circle to view. The
-            map + members below reflect the chosen circle. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.selectorScroll}
-          contentContainerStyle={styles.selectorRow}
-        >
-          {circles.length === 0 ? (
-            <Pressable onPress={() => navigation.navigate('Circles')} style={styles.chip}>
-              <Ionicons name="add" size={15} color={colors.brandDeep} />
-              <Text style={styles.chipText}>New circle</Text>
-            </Pressable>
-          ) : (
-            circles.map((c) => {
-              const on = c.id === selectedCircle;
-              return (
-                <Pressable key={c.id} onPress={() => setSelectedCircle(c.id)} style={[styles.chip, on && styles.chipOn]}>
-                  <Ionicons name="people" size={14} color={on ? colors.textInverse : colors.brandDeep} />
-                  <Text style={[styles.chipText, on && styles.chipTextOn]} numberOfLines={1}>{c.name}</Text>
-                </Pressable>
-              );
-            })
-          )}
-        </ScrollView>
+        {/* The circle name is the control. Tapping it blurs the map out so the
+            only decision on screen is which group you are looking at. */}
+        <View style={styles.switcherSlot}>
+          <CircleSwitcherTrigger
+            name={circles.length === 0 ? 'New circle' : selectedCircleName}
+            count={members.length}
+            onPress={() => (circles.length === 0 ? navigation.navigate('CircleCreate') : setSwitcherOpen(true))}
+          />
+        </View>
 
-        <Pressable onPress={() => navigation.navigate('Notifications')} style={styles.topBtn} accessibilityLabel="Notifications">
-          <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.brandDeep} />
-          {activeAlerts > 0 ? <View style={styles.ctlDot} /> : null}
-        </Pressable>
+        <View>
+          <GlassButton
+            icon="chatbubble-ellipses-outline"
+            size={42}
+            onPress={() => navigation.navigate('Notifications')}
+            accessibilityLabel="Notifications"
+          />
+          {activeAlerts > 0 ? <View style={styles.ctlDot} pointerEvents="none" /> : null}
+        </View>
       </View>
 
       {/* bottom-of-map floating buttons. They ride WITH the sheet (translateY:
@@ -360,9 +355,14 @@ export function HomeScreen() {
           <Ionicons name="shield-checkmark" size={17} color={colors.brand} />
           <Text style={styles.checkInText}>{sharing ? 'Sharing…' : 'Share location'}</Text>
         </Pressable>
-        <Pressable onPress={loadMe} style={styles.roundCtl} accessibilityLabel="Recenter map">
-          <Ionicons name="locate" size={19} color={colors.brandDeep} />
-        </Pressable>
+        <View style={styles.ctlStack}>
+          <GlassButton
+            icon="expand"
+            onPress={() => navigation.navigate('CircleMap')}
+            accessibilityLabel="Open the full live map"
+          />
+          <GlassButton icon="locate" onPress={loadMe} accessibilityLabel="Recenter map" />
+        </View>
       </Animated.View>
 
       {/* ── LAYER 2: draggable bottom sheet ── */}
@@ -465,7 +465,19 @@ export function HomeScreen() {
           </Pressable>
 
           {/* B. Circle */}
-          <Text style={styles.sectionH}>{selectedCircleName}</Text>
+          <View style={styles.sectionHRow}>
+            <Text style={styles.sectionH}>{selectedCircleName}</Text>
+            {members.length > 0 ? (
+              <Pressable
+                onPress={() => navigation.navigate('CircleMap')}
+                style={({ pressed }) => [styles.liveLink, pressed && styles.pressed]}
+                accessibilityRole="button"
+              >
+                <Ionicons name="map" size={13} color={colors.brandDeep} />
+                <Text style={styles.liveLinkText}>Live map</Text>
+              </Pressable>
+            ) : null}
+          </View>
           {members.length === 0 ? (
             <Pressable onPress={() => navigation.navigate('Circles')} style={({ pressed }) => [styles.emptyCircle, pressed && styles.pressed]}>
               <View style={styles.emptyCircleIcon}>
@@ -484,7 +496,13 @@ export function HomeScreen() {
           ) : (
             <View style={styles.card}>
               {members.map((m, i) => (
-                <View key={m.uid} style={[styles.memberRow, i > 0 && styles.rowDivider]}>
+                <Pressable
+                  key={m.uid}
+                  onPress={() => navigation.navigate('CircleMap')}
+                  style={({ pressed }) => [styles.memberRow, i > 0 && styles.rowDivider, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`See ${m.name} on the live map`}
+                >
                   <View style={[styles.mAvatarRing, { borderColor: m.online ? colors.sage : colors.creamDeep }]}>
                     {m.photoUri ? (
                       <Image source={{ uri: m.photoUri }} style={styles.mAvatar} />
@@ -505,7 +523,8 @@ export function HomeScreen() {
                   ) : (
                     <Ionicons name="ellipse-outline" size={18} color={colors.textMuted} />
                   )}
-                </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 4 }} />
+                </Pressable>
               ))}
             </View>
           )}
@@ -604,6 +623,14 @@ export function HomeScreen() {
           </View>
         </ScrollView>
       </Animated.View>
+      <CircleSwitcher
+        visible={switcherOpen}
+        circles={circles}
+        selectedId={selectedCircle}
+        onSelect={setSelectedCircle}
+        onCreate={() => navigation.navigate('CircleCreate')}
+        onClose={() => setSwitcherOpen(false)}
+      />
       <VoiceDurationSheet
         visible={durationOpen}
         onConfirm={onPickDuration}
@@ -680,7 +707,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...shadows.icon,
   },
-  ctlDot: { position: 'absolute', top: 10, right: 11, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.coral, borderWidth: 1.5, borderColor: colors.surface },
+  // Sits on the rim of the 42px glass button, not inside its old 40px box.
+  ctlDot: { position: 'absolute', top: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.coral, borderWidth: 2, borderColor: colors.surface },
+  switcherSlot: { flex: 1, alignItems: 'center' },
+  ctlStack: { flexDirection: 'row', gap: spacing.sm },
   selectorScroll: { flex: 1, marginHorizontal: 2 },
   // Extra right padding + a small left pad so the first/last circle chips never
   // sit flush against the gear/chat icons or get clipped at the scroll edge.
@@ -803,6 +833,17 @@ const styles = StyleSheet.create({
   barFill: { height: '100%', borderRadius: 5, backgroundColor: colors.brand },
   statusHint: { ...typography.caption, fontSize: 12, color: colors.textSecondary },
 
+  sectionHRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+  },
+  liveLink: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderRadius: radius.pill, backgroundColor: colors.brandSoft,
+  },
+  liveLinkText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.brandDeep,
+  },
   sectionH: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary, letterSpacing: -0.3 },
   emptyCircle: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.md,

@@ -23,18 +23,77 @@ export async function hasLocalConsent(): Promise<boolean> {
   }
 }
 
+const DOB_KEY = 'orbii.consent.dob';
+
 /**
- * Did this user declare they are 18 or older? Used to gate OPTIONAL data
- * collection (the voice-donation programme). Core safety is never gated on this:
- * refusing to protect a 17 year old would be the worse outcome. Defaults to
- * false, so anything optional stays off unless adulthood was actually declared.
+ * Three states, not two. This distinction matters: everyone who signed up
+ * before the date-of-birth field existed has no stored age, and treating that
+ * as "under 18" locked adults out of their own location sharing. Unknown means
+ * "we have not asked yet", so ask once and remember the answer.
+ */
+export type AgeStatus = 'adult' | 'minor' | 'unknown';
+
+export async function getAgeStatus(): Promise<AgeStatus> {
+  try {
+    const flag = await AsyncStorage.getItem(ADULT_KEY);
+    if (flag === '1') return 'adult';
+    if (flag === '0') return 'minor';
+    return 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+/** The stored date of birth, 'YYYY-MM-DD', if we have ever been told. */
+export async function getStoredDob(): Promise<string | null> {
+  try {
+    return await AsyncStorage.getItem(DOB_KEY);
+  } catch {
+    return null;
+  }
+}
+
+/** Whole years between a date of birth and today, or null if the date is junk. */
+export function ageFromDob(day: number, month: number, year: number): number | null {
+  const now = new Date();
+  if (!day || !month || !year) return null;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const d = new Date(year, month - 1, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  let age = now.getFullYear() - year;
+  const beforeBirthday =
+    now.getMonth() < month - 1 || (now.getMonth() === month - 1 && now.getDate() < day);
+  if (beforeBirthday) age -= 1;
+  return age;
+}
+
+/**
+ * Store a declared date of birth once, and derive the adult flag from it, so we
+ * never have to ask the same person twice. Returns the resulting status.
+ */
+export async function setDeclaredDob(day: number, month: number, year: number): Promise<AgeStatus> {
+  const age = ageFromDob(day, month, year);
+  if (age === null || age < 0 || age >= 120) return 'unknown';
+  const adult = age >= 18;
+  try {
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    await AsyncStorage.setItem(DOB_KEY, iso);
+    await AsyncStorage.setItem(ADULT_KEY, adult ? '1' : '0');
+  } catch {
+    /* non-fatal */
+  }
+  void logConsentEvent('core', true, { method: 'dob' });
+  return adult ? 'adult' : 'minor';
+}
+
+/**
+ * True only when the user has actually told us they are 18 or older. Prefer
+ * getAgeStatus() at a gate, so "we have not asked yet" can prompt rather than
+ * silently deny. Core safety is never gated on age: refusing to protect a
+ * 17 year old would be the worse outcome.
  */
 export async function isDeclaredAdult(): Promise<boolean> {
-  try {
-    return (await AsyncStorage.getItem(ADULT_KEY)) === '1';
-  } catch {
-    return false;
-  }
+  return (await getAgeStatus()) === 'adult';
 }
 
 /** Purposes we track consent for, one row per purpose (see sql/72). */

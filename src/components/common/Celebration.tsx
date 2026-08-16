@@ -9,7 +9,7 @@ import { AccessibilityInfo, Animated, Easing, StyleSheet, View } from 'react-nat
 // an SOS, celebrating an emergency would be wrong, and nudging people toward it
 // is exactly the pattern regulators fined Robinhood for.
 
-const COLORS = ['#8672CE', '#C3B4EC', '#FF8FA3', '#FFC46B', '#4FA383', '#FF5A5F'];
+const COLORS = ['#8672CE', '#C0B2E8', '#EF605E', '#D6A64F', '#4FA383', '#F3F0DF'];
 
 type Piece = {
   color: string;

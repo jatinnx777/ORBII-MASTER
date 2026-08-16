@@ -460,7 +460,17 @@ export async function signInWithGoogle(): Promise<SignInResult> {
 export async function signOutFromGoogle(): Promise<void> {
   if (DEV_AUTH_MODE) return;
   try {
-    await supabase.auth.signOut();
+    // Hard timeout. supabase.auth.signOut() is a network round-trip, and on a
+    // weak connection it can hang for many seconds. Callers used to await it
+    // before clearing local state, so the Sign out button looked dead and
+    // people tapped it four or five times before anything happened.
+    //
+    // The local session is what actually signs the user out; telling the server
+    // is a courtesy. Never make someone wait on the courtesy.
+    await Promise.race([
+      supabase.auth.signOut(),
+      new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+    ]);
   } catch {
     // best effort
   }

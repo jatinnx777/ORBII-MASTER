@@ -3,7 +3,7 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { supabase } from './supabase';
 import { getItem, setItem, removeItem } from './storage';
-import { isDeclaredAdult } from './consent';
+import { getAgeStatus } from './consent';
 import { reportError } from './error-reporting';
 
 // Circle live-location sharing (opt-in). While ON, this phone posts its position
@@ -37,6 +37,34 @@ export type MemberLocation = {
 };
 
 export type TrailPoint = { lat: number; lng: number; at: string };
+
+/**
+ * True when two member-location lists are equivalent for display purposes.
+ *
+ * Every poll used to hand React a brand-new array, so markers, rings, trails and
+ * their JSON payloads were all re-derived even when nobody had moved. With four
+ * mostly-stationary people that was almost all wasted work, and it is what made
+ * the map feel heavy. Callers keep the previous array when this returns true.
+ */
+export function sameMemberLocations(a: MemberLocation[], b: MemberLocation[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    if (
+      x.userId !== y.userId ||
+      x.lat !== y.lat ||
+      x.lng !== y.lng ||
+      x.updatedAt !== y.updatedAt ||
+      x.sharing !== y.sharing ||
+      x.battery !== y.battery
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 // Background task: push the latest fix to the server.
 TaskManager.defineTask(CIRCLE_LOCATION_TASK, async ({ data, error }) => {
@@ -83,7 +111,12 @@ export async function startCircleSharing(hours = 2): Promise<boolean> {
     // this wrong is up to Rs 200 crore. Voice SOS and alerts still protect them
     // fully; only continuous location sharing is withheld. This is checked here,
     // in the one function that can start tracking, so no caller can bypass it.
-    if (!(await isDeclaredAdult())) return false;
+    //
+    // Only a DECLARED minor is blocked. 'unknown' means we never asked, which is
+    // true of everyone who signed up before the date-of-birth field existed, and
+    // treating that as under-18 locked adults out of their own feature. Callers
+    // ask once via ensureAgeKnown() and we remember the answer.
+    if ((await getAgeStatus()) === 'minor') return false;
     const fg = await Location.requestForegroundPermissionsAsync();
     if (!fg.granted) return false;
     const always = hours <= 0;
@@ -185,6 +218,16 @@ async function cancelShareReminder(): Promise<void> {
 export async function ensureCircleShareNotExpired(): Promise<void> {
   const exp = await getItem<number>(SHARE_EXPIRES_KEY);
   if (exp && Date.now() >= exp) await stopCircleSharing();
+}
+
+/**
+ * When the current sharing window ends, in epoch ms, or null when sharing is
+ * always-on (or off). Lets the UI say "until 9:30 PM" instead of leaving people
+ * guessing how long they stay visible.
+ */
+export async function circleSharingExpiry(): Promise<number | null> {
+  const exp = await getItem<number>(SHARE_EXPIRES_KEY);
+  return exp && exp > Date.now() ? exp : null;
 }
 
 export async function isCircleSharing(): Promise<boolean> {

@@ -671,8 +671,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 11,
     color: colors.peachDeep,
-    letterSpacing: 1.4,
-    textTransform: 'uppercase',
+    letterSpacing: 0.1,
     marginBottom: spacing.xs,
   },
   h1: {
