@@ -438,8 +438,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
     borderRadius: radius.lg,
     paddingHorizontal: 14,
     paddingVertical: 14,

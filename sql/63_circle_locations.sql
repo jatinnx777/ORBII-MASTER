@@ -41,6 +41,20 @@ create policy circle_hist_read on circle_location_history
   for select to authenticated
   using (user_id = auth.uid() or public.shares_circle_with(user_id));
 
+-- ---------------------------------------------------------------------------
+-- Drop before create.
+--
+-- `create or replace function` cannot change a function's return type, and
+-- these have gained columns since the first version shipped (battery, accuracy,
+-- the sharing/last-known fields). Re-running this file against an older project
+-- therefore failed with 42P13 "cannot change return type of existing function".
+-- Dropping first makes the whole file genuinely idempotent.
+-- ---------------------------------------------------------------------------
+drop function if exists public.circle_members_locations();
+drop function if exists public.circle_member_trail(uuid, int);
+drop function if exists public.set_circle_location(double precision, double precision, double precision, int);
+drop function if exists public.clear_circle_location();
+
 -- Upsert my own position (+ append a breadcrumb).
 create or replace function public.set_circle_location(
   p_lat double precision, p_lng double precision,

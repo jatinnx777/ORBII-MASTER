@@ -162,7 +162,12 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
           'The circles tables are not installed on your Supabase project yet. Open Supabase, go to SQL Editor, paste the contents of sql/09_circles.sql and run it. Then try again.',
         );
       } else {
-        appAlert("Couldn't create the circle", 'Check your connection and try again.');
+        // Say what actually failed. "Check your connection" was masking real
+        // causes (RLS, a missing owner-membership trigger, a phone-bypass
+        // session with no real account), and sent people to reboot their wifi
+        // over a server-side problem.
+        const why = err instanceof Error ? err.message : String(err);
+        appAlert("Couldn't create the circle", why || 'Something went wrong. Please try again.');
       }
     } finally {
       setSubmitting(false);
@@ -186,7 +191,7 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
   return (
     <View style={styles.root}>
       <LinearGradient
-        colors={['#201F27', '#17161C', '#100F14']}
+        colors={['#FDFCF4', '#FAF9EC', '#F5F2E0']}
         start={{ x: 0.1, y: 0 }}
         end={{ x: 0.9, y: 1 }}
         style={StyleSheet.absoluteFill}
@@ -198,7 +203,7 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View style={styles.topBar}>
           <Pressable onPress={back} hitSlop={12} style={styles.backBtn} accessibilityLabel="Go back">
-            <Ionicons name="chevron-back" size={24} color={colors.textOnInk} />
+            <Ionicons name="chevron-back" size={24} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.progress}>
             {STEPS.map((s, i) => (
@@ -233,7 +238,7 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
                   value={name}
                   onChangeText={setName}
                   placeholder="Family"
-                  placeholderTextColor="rgba(243,240,228,0.32)"
+                  placeholderTextColor={colors.textMuted}
                   style={styles.bigInput}
                   maxLength={28}
                   autoFocus
@@ -272,14 +277,14 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
                           <Ionicons
                             name={k.icon}
                             size={17}
-                            color={on ? colors.brandDeep : colors.textOnInk}
+                            color={on ? colors.textInverse : colors.brandDeep}
                           />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={[styles.kindLabel, on && styles.kindLabelOn]}>{k.label}</Text>
                           <Text style={[styles.kindHint, on && styles.kindHintOn]}>{k.hint}</Text>
                         </View>
-                        {on ? <Ionicons name="checkmark-circle" size={20} color={colors.brandDeep} /> : null}
+                        {on ? <Ionicons name="checkmark-circle" size={20} color={colors.textInverse} /> : null}
                       </Pressable>
                     );
                   })}
@@ -300,7 +305,7 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
                       <Image source={{ uri: photoUri }} style={styles.photoImg} />
                     ) : (
                       <View style={styles.photoEmpty}>
-                        <Ionicons name="camera" size={26} color={colors.textInverse} />
+                        <Ionicons name="camera" size={26} color={colors.brandDeep} />
                       </View>
                     )}
                   </View>
@@ -412,7 +417,7 @@ function CirclePreview({ photoUri }: { photoUri: string | null }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.dark },
+  root: { flex: 1, backgroundColor: colors.cream },
   bloom: {
     position: 'absolute',
     top: -110,
@@ -420,7 +425,7 @@ const styles = StyleSheet.create({
     width: 340,
     height: 340,
     borderRadius: 170,
-    backgroundColor: 'rgba(134,114,206,0.20)',
+    backgroundColor: 'rgba(134,114,206,0.13)',
   },
 
   topBar: {
@@ -436,7 +441,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 3,
     borderRadius: 2,
-    backgroundColor: 'rgba(243,240,228,0.20)',
+    backgroundColor: colors.creamDeep,
   },
   progressSegOn: { backgroundColor: colors.brand },
 
@@ -445,14 +450,14 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 30,
     lineHeight: 38,
-    color: colors.textOnInk,
+    color: colors.textPrimary,
     letterSpacing: -0.5,
   },
   lead: {
     fontFamily: fontFamilies.poppinsRegular,
     fontSize: 14.5,
     lineHeight: 22,
-    color: 'rgba(243,240,228,0.72)',
+    color: colors.textSecondary,
     marginTop: spacing.md,
   },
 
@@ -460,9 +465,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.xl,
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 34,
-    color: colors.textOnInk,
+    color: colors.textPrimary,
     borderBottomWidth: 2,
-    borderBottomColor: 'rgba(243,240,228,0.26)',
+    borderBottomColor: colors.border,
     paddingBottom: spacing.sm,
   },
 
@@ -475,27 +480,29 @@ const styles = StyleSheet.create({
     paddingVertical: 13,
     paddingHorizontal: 14,
     borderRadius: radius.xl,
-    backgroundColor: 'rgba(243,240,228,0.10)',
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  kindPillOn: { backgroundColor: colors.cream },
+  kindPillOn: { backgroundColor: colors.brand, borderColor: colors.brand },
   kindIcon: {
     width: 34,
     height: 34,
     borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(243,240,228,0.12)',
+    backgroundColor: colors.brandSoft,
   },
-  kindIconOn: { backgroundColor: colors.brandSoft },
-  kindLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textOnInk },
-  kindLabelOn: { color: colors.textPrimary },
+  kindIconOn: { backgroundColor: 'rgba(255,255,255,0.22)' },
+  kindLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textPrimary },
+  kindLabelOn: { color: colors.textInverse },
   kindHint: {
     fontFamily: fontFamilies.poppinsRegular,
     fontSize: 12.5,
-    color: 'rgba(243,240,228,0.55)',
+    color: colors.textMuted,
     marginTop: 1,
   },
-  kindHintOn: { color: colors.textSecondary },
+  kindHintOn: { color: 'rgba(255,255,255,0.82)' },
 
   preview: { height: 210, marginTop: spacing.xl, alignSelf: 'center', width: 232 },
   previewDisc: {
@@ -505,7 +512,7 @@ const styles = StyleSheet.create({
     width: 200,
     height: 190,
     borderRadius: 100,
-    backgroundColor: colors.cream,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
   },
   road: { position: 'absolute', backgroundColor: '#E9E2CF' },
@@ -538,7 +545,7 @@ const styles = StyleSheet.create({
     height: 132,
     borderRadius: 66,
     borderWidth: 4,
-    backgroundColor: 'rgba(243,240,228,0.10)',
+    backgroundColor: colors.brandSoft,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -548,7 +555,7 @@ const styles = StyleSheet.create({
   photoCta: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 14.5,
-    color: colors.textOnInk,
+    color: colors.brandDeep,
     marginTop: spacing.md,
   },
 
@@ -557,7 +564,7 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsRegular,
     fontSize: 12,
     lineHeight: 18,
-    color: 'rgba(243,240,228,0.5)',
+    color: colors.textMuted,
     textAlign: 'center',
     marginBottom: spacing.md,
   },
@@ -570,5 +577,5 @@ const styles = StyleSheet.create({
   ctaOff: { opacity: 0.42 },
   ctaText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 16, color: colors.textInverse },
   skip: { height: 40, alignItems: 'center', justifyContent: 'center' },
-  skipText: { fontFamily: fontFamilies.poppinsRegular, fontSize: 14, color: 'rgba(243,240,228,0.7)' },
+  skipText: { fontFamily: fontFamilies.poppinsRegular, fontSize: 14, color: colors.textSecondary },
 });

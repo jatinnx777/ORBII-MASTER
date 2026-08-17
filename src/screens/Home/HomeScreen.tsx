@@ -779,8 +779,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
     padding: spacing.md,
-    borderWidth: 1,
-    borderColor: colors.border,
     ...shadows.card,
   },
   shareEye: {

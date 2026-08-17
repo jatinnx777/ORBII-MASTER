@@ -750,11 +750,10 @@ const styles = StyleSheet.create({
   lockBold: { fontFamily: fontFamilies.poppinsBold },
   relationLabel: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
-    letterSpacing: 0.4,
+    letterSpacing: 0.1,
     marginBottom: spacing.sm,
-    textTransform: 'uppercase',
   },
   relationGrid: {
     flexDirection: 'row',

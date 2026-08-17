@@ -371,3 +371,89 @@ export async function loadMemberTrail(userId: string, hours = 12): Promise<Trail
     at: r.at as string,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// A day, as a readable timeline.
+//
+// detectStops() answers "where did they pause". A person reading a history
+// wants the whole day in order: arrived here, stayed this long, travelled this
+// far, arrived there. So the timeline interleaves stops with the journeys
+// between them, oldest first, the way a day is actually lived.
+// ---------------------------------------------------------------------------
+
+export type TimelineStop = {
+  kind: 'stop';
+  lat: number;
+  lng: number;
+  from: string;
+  to: string;
+  minutes: number;
+};
+
+export type TimelineMove = {
+  kind: 'move';
+  from: string;
+  to: string;
+  minutes: number;
+  metres: number;
+  /** The points travelled, so the map can highlight just this leg. */
+  path: TrailPoint[];
+};
+
+export type TimelineEntry = TimelineStop | TimelineMove;
+
+/**
+ * Build the day. `trail` arrives newest-first (as loadMemberTrail returns it);
+ * the result is oldest-first, because that is reading order for a day.
+ *
+ * Journeys shorter than 200 m are dropped: GPS drift between two stops in the
+ * same building is not a trip anywhere, and showing it as one makes the whole
+ * timeline look wrong.
+ */
+export function buildDayTimeline(trail: TrailPoint[]): TimelineEntry[] {
+  if (trail.length < 2) return [];
+  const stops = detectStops(trail).slice().reverse(); // oldest first
+  if (stops.length === 0) return [];
+
+  const chrono = trail.slice().reverse(); // oldest first
+  const out: TimelineEntry[] = [];
+
+  for (let i = 0; i < stops.length; i++) {
+    const s = stops[i];
+    out.push({ kind: 'stop', lat: s.lat, lng: s.lng, from: s.from, to: s.to, minutes: s.minutes });
+
+    const next = stops[i + 1];
+    if (!next) continue;
+
+    // Everything recorded between leaving this stop and reaching the next one.
+    const legStart = Date.parse(s.to);
+    const legEnd = Date.parse(next.from);
+    const path = chrono.filter((p) => {
+      const t = Date.parse(p.at);
+      return t >= legStart && t <= legEnd;
+    });
+
+    let metres = 0;
+    for (let j = 1; j < path.length; j++) {
+      metres += metresBetween(path[j - 1].lat, path[j - 1].lng, path[j].lat, path[j].lng);
+    }
+    // Straight-line floor, so a leg with sparse points is not reported as 0 m.
+    metres = Math.max(metres, metresBetween(s.lat, s.lng, next.lat, next.lng));
+    if (metres < 200) continue;
+
+    out.push({
+      kind: 'move',
+      from: s.to,
+      to: next.from,
+      minutes: Math.max(1, Math.round((legEnd - legStart) / 60000)),
+      metres: Math.round(metres),
+      path,
+    });
+  }
+  return out;
+}
+
+/** '9:05 AM' */
+export function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}

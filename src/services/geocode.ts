@@ -82,3 +82,57 @@ export async function searchPlaces(query: string, near?: Near): Promise<Place[]>
     }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Reverse geocoding: a coordinate -> a name a person recognises.
+//
+// A location history that reads "28.6139, 77.2090 for 40 minutes" is useless.
+// "Connaught Place, 40 minutes" is the whole point of the feature, so every stop
+// on the timeline gets a real label.
+//
+// Cached in memory and keyed to ~100m, because a day's stops cluster and the
+// free providers are rate-limited. Never throws: an unnamed stop still shows its
+// time and duration, which is most of the value.
+// ---------------------------------------------------------------------------
+
+const reverseCache = new Map<string, string>();
+const cacheKey = (lat: number, lng: number) => `${lat.toFixed(3)},${lng.toFixed(3)}`;
+
+/** Short, human label for a coordinate. Falls back to a coarse coordinate. */
+export async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  const key = cacheKey(lat, lng);
+  const hit = reverseCache.get(key);
+  if (hit) return hit;
+
+  const fallback = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+  try {
+    const res = await fetch(
+      `https://photon.komoot.io/reverse?lat=${lat}&lon=${lng}&lang=en`,
+      { headers: { Accept: 'application/json' } },
+    );
+    const data = (await res.json()) as {
+      features?: { properties?: Record<string, unknown> }[];
+    };
+    const props = data.features?.[0]?.properties;
+    if (props) {
+      // Prefer the specific over the administrative: a college name beats the
+      // district it sits in.
+      const pick = (k: string) => (typeof props[k] === 'string' ? (props[k] as string).trim() : '');
+      const name = pick('name');
+      const street = pick('street') || pick('district');
+      const city = pick('city') || pick('county') || pick('state');
+      const label = [name, street && street !== name ? street : '', city && city !== name ? city : '']
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(', ');
+      if (label) {
+        reverseCache.set(key, label);
+        return label;
+      }
+    }
+  } catch {
+    // offline, rate-limited, or blocked: fall through
+  }
+  reverseCache.set(key, fallback);
+  return fallback;
+}

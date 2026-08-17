@@ -3,6 +3,7 @@ export { BatteryWarning } from './BatteryWarning';
 export { Celebration } from './Celebration';
 export { VoiceDurationSheet } from './VoiceDurationSheet';
 export { AgeCheckSheet } from './AgeCheckSheet';
+export { MemberHistorySheet } from './MemberHistorySheet';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { Button } from './Button';
 export { Card } from './Card';

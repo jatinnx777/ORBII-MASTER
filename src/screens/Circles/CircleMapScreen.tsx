@@ -10,6 +10,7 @@ import {
   CircleSwitcher,
   CircleSwitcherTrigger,
   GlassButton,
+  MemberHistorySheet,
   OSMMapView,
   VoiceDurationSheet,
   type OSMMarker,
@@ -141,6 +142,7 @@ export function CircleMapScreen() {
   const [durationOpen, setDurationOpen] = useState(false);
   const [ageOpen, setAgeOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [pendingHours, setPendingHours] = useState(2);
   // When sharing is on with a bounded window, say when it ends. "Until 9:30 PM"
   // is the thing people actually want to know, and it is the honest counterpart
@@ -434,6 +436,22 @@ export function CircleMapScreen() {
       }),
     [shown, trails, selectedId, colorFor],
   );
+  // Every recorded fix as a small dot, so the day reads as a trail of pings
+  // rather than a smooth line that implies more precision than we have. Only for
+  // the selected member: four people's worth at once is unreadable.
+  const breadcrumbs: OSMCircle[] = useMemo(() => {
+    if (!selectedId) return [];
+    const pts = trails[selectedId] ?? [];
+    return pts.map((pt, i) => ({
+      id: `crumb-${selectedId}-${i}`,
+      center: { latitude: pt.lat, longitude: pt.lng },
+      radiusM: 8,
+      color: colorFor(selectedId),
+      fillColor: colorFor(selectedId),
+      fillOpacity: 0.85,
+    }));
+  }, [selectedId, trails, colorFor]);
+
   const selectedStops: Stop[] = useMemo(
     () => (selectedId ? detectStops(trails[selectedId] ?? []) : []),
     [selectedId, trails],
@@ -452,7 +470,7 @@ export function CircleMapScreen() {
           center={center}
           zoom={13}
           markers={markers}
-          circles={[...rings, ...stopRings]}
+          circles={[...rings, ...stopRings, ...breadcrumbs]}
           polylines={trailLines}
           fitAll={markers.length > 0}
         />
@@ -464,7 +482,16 @@ export function CircleMapScreen() {
         {/* Top bar, floating glass controls. */}
         <View style={styles.topBar} pointerEvents="box-none">
           <GlassButton icon="chevron-back" onPress={() => navigation.goBack()} />
-          <CircleSwitcherTrigger
+          <MemberHistorySheet
+        visible={historyOpen && !!selectedMember}
+        name={selectedMember?.name ?? null}
+        photoUri={selectedMember?.photoUri ?? null}
+        color={selectedMember ? colorFor(selectedMember.userId) : MEMBER_COLORS[0]}
+        trail={selectedId ? trails[selectedId] ?? [] : []}
+        onFocus={(lat, lng) => setCenter({ latitude: lat, longitude: lng })}
+        onClose={() => setHistoryOpen(false)}
+      />
+      <CircleSwitcherTrigger
             name={selectedCircle?.name ?? 'Circle map'}
             count={shown.length}
             onPress={() => setSwitcherOpen(true)}
@@ -476,19 +503,24 @@ export function CircleMapScreen() {
         <View style={{ flex: 1 }} pointerEvents="box-none" />
 
         {selectedMember ? (
-          <View style={styles.trailBar}>
-            <Ionicons name="time" size={14} color={colors.textInverse} />
+          <Pressable
+            onPress={() => setHistoryOpen(true)}
+            style={({ pressed }) => [styles.trailBar, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`See ${selectedMember.name || 'their'} day`}
+          >
+            <Ionicons name="footsteps" size={15} color={colors.textInverse} />
             <Text style={styles.trailText} numberOfLines={1}>
-              {selectedMember.name || 'Member'} · today ·{' '}
+              {(selectedMember.name || 'Member').split(' ')[0]}'s day
               {selectedStops.length > 0
-                ? `${selectedStops.length} stop${selectedStops.length > 1 ? 's' : ''}`
-                : `${(trails[selectedMember.userId] ?? []).length} points`}
-              {dwell != null ? ` · here ${formatDuration(dwell)}` : ''}
+                ? ` · ${selectedStops.length} place${selectedStops.length > 1 ? 's' : ''}`
+                : ''}
             </Text>
-            <Pressable onPress={() => setSelectedId(null)} hitSlop={8}>
-              <Ionicons name="close" size={16} color={colors.textInverse} />
-            </Pressable>
-          </View>
+            <View style={styles.trailCta}>
+              <Text style={styles.trailCtaText}>See history</Text>
+              <Ionicons name="chevron-forward" size={13} color={colors.textInverse} />
+            </View>
+          </Pressable>
         ) : null}
 
         {/* Bottom sheet, frosted glass. */}
@@ -598,7 +630,19 @@ export function CircleMapScreen() {
                         </View>
                       ) : null}
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.textMuted} style={{ marginLeft: 2 }} />
+                    <Pressable
+                      onPress={() => {
+                        setSelectedId(m.userId);
+                        setCenter({ latitude: m.lat, longitude: m.lng });
+                        setHistoryOpen(true);
+                      }}
+                      hitSlop={8}
+                      style={styles.historyBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`See ${m.name || 'their'} location history`}
+                    >
+                      <Ionicons name="footsteps-outline" size={17} color={colors.brandDeep} />
+                    </Pressable>
                   </Pressable>
                 );
               })}
@@ -761,6 +805,14 @@ const styles = StyleSheet.create({
   offPill: { backgroundColor: 'rgba(20,18,40,0.06)', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   offPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, color: colors.textMuted, letterSpacing: 0.6 },
 
+  historyBtn: {
+    width: 32, height: 32, borderRadius: 16, marginLeft: 2,
+    backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center',
+  },
+  trailCta: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  trailCtaText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textInverse, opacity: 0.85,
+  },
   trailBar: {
     flexDirection: 'row',
     alignItems: 'center',

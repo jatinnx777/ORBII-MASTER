@@ -37,7 +37,15 @@ export async function setDonationConsent(on: boolean): Promise<void> {
  * No-op (returns false) if the user hasn't consented or isn't signed in, so it
  * is impossible to upload a clip without an explicit yes.
  */
-export type DonationResult = 'ok' | 'duplicate' | 'no-consent' | 'minor' | 'error';
+export type DonationResult = 'ok' | 'duplicate' | 'no-consent' | 'minor' | 'not-installed' | 'error';
+
+// The last error message from an upload, so the UI can say what actually went
+// wrong instead of blaming the user's connection. Blaming the network for a
+// missing storage bucket sends people to reset their router for an hour.
+let lastError: string | null = null;
+export function lastDonationError(): string | null {
+  return lastError;
+}
 
 export async function uploadVoiceSample(opts: {
   uri: string;
@@ -68,10 +76,12 @@ export async function uploadVoiceSample(opts: {
       upsert: true,
     });
     if (upErr) {
-      // Surface the REAL reason (e.g. "Bucket not found" = sql/71 not run yet),
-      // instead of only telling the user it's their connection.
+      // "Bucket not found" means sql/71 has not been run. That is a setup
+      // problem, not a connectivity one, and saying so saves an hour of
+      // pointless troubleshooting.
+      lastError = upErr.message;
       reportError(upErr, { category: 'voice.donation', message: `storage upload failed: ${upErr.message}` });
-      return 'error';
+      return /bucket|not found|does not exist/i.test(upErr.message ?? '') ? 'not-installed' : 'error';
     }
 
     const { error: insErr } = await supabase.from('voice_samples').insert({
@@ -87,11 +97,13 @@ export async function uploadVoiceSample(opts: {
     if (insErr) {
       // Unique-violation on sha256 => we already have this exact clip.
       if (insErr.code === '23505') return 'duplicate';
+      lastError = insErr.message;
       reportError(insErr, { category: 'voice.donation', message: `insert failed: ${insErr.message}` });
-      return 'error';
+      return /relation|does not exist|schema cache/i.test(insErr.message ?? '') ? 'not-installed' : 'error';
     }
     return 'ok';
   } catch (err) {
+    lastError = err instanceof Error ? err.message : String(err);
     reportError(err, { category: 'voice.donation', message: 'voice sample upload failed' });
     return 'error';
   }

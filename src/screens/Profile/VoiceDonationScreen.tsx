@@ -8,7 +8,7 @@ import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } fr
 import { appAlert, Celebration } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { getItem, setItem } from '@/services/storage';
-import { hasDonationConsent, setDonationConsent, uploadVoiceSample } from '@/services/voice-donation';
+import { hasDonationConsent, lastDonationError, setDonationConsent, uploadVoiceSample } from '@/services/voice-donation';
 import { setSosSuppressed } from '@/services/voice-test';
 
 // "Voice Quests", a gamified, opt-in voice-donation game. Each round you're
@@ -159,8 +159,22 @@ export function VoiceDonationScreen() {
           appAlert('Already got that one', 'We already have a clip just like it. Try a different mission.');
         } else if (res === 'no-consent') {
           setConsent(false);
+        } else if (res === 'minor') {
+          appAlert(
+            'Voice Quests are 18+',
+            'A voice recording is biometric data, and Indian law does not let us collect it from anyone under 18. Everything else in ORBII works exactly the same.',
+          );
+        } else if (res === 'not-installed') {
+          appAlert(
+            'Voice Quests are not set up yet',
+            'The voice-training storage is missing on the server, so there is nowhere to send the clip. This is our setup to fix, not your connection. Run sql/71_voice_training.sql in Supabase.',
+          );
         } else {
-          appAlert("Couldn't save that clip", 'It did not go through. Check you are online, then try again in a moment.');
+          const why = lastDonationError();
+          appAlert(
+            "Couldn't save that clip",
+            why ? `The server said: ${why}` : 'It did not go through. Please try again in a moment.',
+          );
         }
         newPair();
       }, RECORD_MS);

@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
@@ -20,6 +21,7 @@ import { ResolvedModal } from './components/ResolvedModal';
 import {
   appAlert,
   Mascot,
+  GlassPanel,
   MLMapView,
   useBrandSheet,
   HelplinesCard,
@@ -32,6 +34,7 @@ import { stopMeshSos } from '@/services/mesh';
 import { stopHelperPing } from '@/services/mesh-helper-alert';
 import { openSMSComposer } from '@/services/sms';
 import { buildSOSMessage } from '@/services/whatsapp-sos';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchRoute, formatEta } from '@/services/osrm';
 import { upsertSOSRecord } from '@/services/sos-history';
 import { critical, degraded } from '@/services/failures';
@@ -64,11 +67,20 @@ import {
 } from '@/services/sos-location-task';
 import { RewardService } from '@/services/rewards';
 import { mintArrivalCodes, type ArrivalCode } from '@/services/arrival-codes';
-import { etaSeconds, formatElapsed, haversineMeters } from '@/utils/geo';
+import { etaSeconds, formatDistance, formatElapsed, haversineMeters } from '@/utils/geo';
 import type { GeoPoint, Responder as HelperSummary } from '@/types';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
+
+// Half the screen is map.
+//
+// The map used to be a 280px card buried three scrolls down, under the codes
+// and the 112 button. During an actual emergency the two questions are "where
+// is my helper" and "how far away", and both were below the fold. Now the map
+// is the screen and everything else reads underneath it.
+const { height: SCREEN_H } = Dimensions.get('window');
+const SOS_MAP_H = Math.round(SCREEN_H * 0.52);
 
 // Auto-resolve when the nearest responder closes to within 40m of the user.
 const ARRIVAL_RADIUS_M = 40;
@@ -674,11 +686,22 @@ export function ActiveSOSScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.headerRow}>
+      {/* ── Layer 1: the map, top half, always visible ── */}
+      <View style={[styles.mapLayer, { height: SOS_MAP_H }]}>
+        <MLMapView
+          style={styles.map}
+          center={primary ? primary.point : userLocation}
+          zoom={16}
+          fitAll={responderList.length > 0}
+          fitPadding={64}
+          markers={mapMarkers}
+          route={route}
+        />
+      </View>
+
+      {/* ── Layer 2: floating controls over the map ── */}
+      <SafeAreaView style={styles.mapOverlay} edges={['top']} pointerEvents="box-none">
+        <View style={styles.floatHeader} pointerEvents="box-none">
           <Pressable
             onPress={handleCancel}
             hitSlop={12}
@@ -688,31 +711,72 @@ export function ActiveSOSScreen() {
           >
             <Ionicons name="arrow-back" size={20} color={colors.textPrimary} />
           </Pressable>
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <Text style={styles.headerSub}>{headerSub}</Text>
-            <Text style={styles.headerTitle}>{headerTitle}</Text>
-          </View>
-          <View style={styles.elapsedPill}>
-            <View style={styles.liveDot} />
-            <LiveElapsed startAt={activeSOS.timestamp} style={styles.elapsedText} />
-          </View>
+          <GlassPanel radius={radius.pill} style={styles.titleGlass}>
+            <View style={styles.titleGlassInner}>
+              <View style={styles.liveDot} />
+              <Text style={styles.floatTitle} numberOfLines={1}>{headerTitle}</Text>
+              <LiveElapsed startAt={activeSOS.timestamp} style={styles.floatElapsed} />
+            </View>
+          </GlassPanel>
         </View>
 
-        {/* Broadcasting hero, the focal moment before a helper accepts. */}
-        {!primary && !resolved ? (
-          <View style={styles.broadcastHero}>
-            <BroadcastPulse />
-            <Text style={styles.broadcastTitle}>Broadcasting your SOS</Text>
-            <Text style={styles.broadcastSub}>
-              Alerting every ORBII helper and your circle nearby. Stay on this screen.
-            </Text>
-            <View style={styles.livePill}>
-              <View style={styles.livePillDot} />
-              <Text style={styles.livePillText}>LIVE</Text>
-              <LiveElapsed startAt={activeSOS.timestamp} style={styles.livePillTime} />
-            </View>
-          </View>
-        ) : null}
+        <View style={{ flex: 1 }} pointerEvents="none" />
+
+        {/* The live answer: who is coming, how far, how long. */}
+        <View style={styles.liveStrip} pointerEvents="box-none">
+          <GlassPanel radius={radius.xl}>
+            {primary ? (
+              <View style={styles.liveInner}>
+                <View style={styles.liveAvatar}>
+                  <Ionicons name="person" size={19} color={colors.textInverse} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liveName} numberOfLines={1}>{primary.name}</Text>
+                  <Text style={styles.liveMeta} numberOfLines={1}>
+                    {primaryDistance != null ? formatDistance(primaryDistance) + ' away' : 'Locating'}
+                    {' · '}
+                    {liveEtaSeconds != null
+                      ? formatEta(liveEtaSeconds)
+                      : primaryEta != null
+                        ? formatEta(primaryEta)
+                        : 'ETA soon'}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={handleCallHelper}
+                  style={styles.liveCall}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Call ${primary.name}`}
+                >
+                  <Ionicons name="call" size={19} color={colors.textInverse} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.liveInner}>
+                <View style={styles.liveSearching}>
+                  <ActivityIndicator color={colors.coralDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.liveName}>Broadcasting your SOS</Text>
+                  <Text style={styles.liveMeta} numberOfLines={1}>
+                    Alerting helpers and your circle nearby
+                  </Text>
+                </View>
+              </View>
+            )}
+          </GlassPanel>
+        </View>
+      </SafeAreaView>
+
+      {/* ── Layer 3: everything else, scrolling under the map ── */}
+      <ScrollView
+        style={[styles.sheet, { marginTop: SOS_MAP_H - 22 }]}
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.grabber} />
+        <Text style={styles.sheetSub}>{headerSub}</Text>
+
 
         {primary ? (
           <View style={styles.statusBanner}>
@@ -790,18 +854,6 @@ export function ActiveSOSScreen() {
             </Text>
           </Pressable>
         ) : null}
-
-        <View style={styles.mapCard}>
-          <MLMapView
-            style={styles.map}
-            center={primary ? primary.point : userLocation}
-            zoom={16}
-            fitAll={responderList.length > 0}
-            fitPadding={64}
-            markers={mapMarkers}
-            route={route}
-          />
-        </View>
 
         {primary ? (
           <View style={styles.helperCard}>
@@ -1125,9 +1177,80 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  mapLayer: { position: 'absolute', top: 0, left: 0, right: 0 },
+  mapOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: SOS_MAP_H },
+  floatHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
+  titleGlass: { flex: 1 },
+  titleGlassInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  floatTitle: {
+    flex: 1,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
+  },
+  floatElapsed: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13,
+    color: colors.coralDeep,
+  },
+  liveStrip: { paddingHorizontal: spacing.md, paddingBottom: spacing.lg + 14 },
+  liveInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm + 2,
+  },
+  liveAvatar: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: colors.brand,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  liveSearching: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: colors.coralSoft,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  liveName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textPrimary },
+  liveMeta: { fontFamily: fontFamilies.poppinsRegular, fontSize: 12.5, color: colors.textSecondary, marginTop: 1 },
+  liveCall: {
+    width: 42, height: 42, borderRadius: 21,
+    backgroundColor: colors.sage,
+    alignItems: 'center', justifyContent: 'center',
+  },
+
+  sheet: {
+    flex: 1,
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+  },
+  grabber: {
+    width: 40, height: 4, borderRadius: 2,
+    backgroundColor: colors.creamDeep,
+    alignSelf: 'center', marginBottom: spacing.sm,
+  },
+  sheetSub: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 13,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
   scroll: {
     paddingHorizontal: spacing.md,
-    paddingTop: 56,
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
     gap: spacing.md,
   },
