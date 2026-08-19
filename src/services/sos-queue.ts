@@ -56,7 +56,13 @@ async function deliver(item: QueuedSOS): Promise<boolean> {
       kind: record.kind ?? 'real',
       user_name: user.name,
       user_photo: user.photoUri,
-      circle_only: !user.isPremium,
+      // Must match the online path in sos.ts. This used to be
+      // `!user.isPremium`, which meant the SAME emergency was visible to
+      // nearby helpers if it sent immediately and hidden from them if it went
+      // through the offline queue. The queue is used when there is no network,
+      // which is when she is most isolated, so the queued path was the more
+      // restrictive of the two. That is backwards.
+      circle_only: false,
     },
     { onConflict: 'id' },
   );
