@@ -115,7 +115,13 @@ Deno.serve(async () => {
 
     // Behaviour first, opinions second. If a ring is detected now, its ratings
     // must already be down-weighted by the time the bridge is fitted.
-    await admin.rpc('bdsm_score_all').catch(() => undefined);
+    // supabase-js returns a thenable builder, not a Promise, so it has no
+    // .catch(). Await it inside a try instead.
+    try {
+      await admin.rpc('bdsm_score_all');
+    } catch {
+      // integrity scoring is best-effort; the bridge still fits without it
+    }
 
     const { data, error } = await admin.rpc('community_rating_matrix');
     if (error) return json({ error: error.message }, 500);
