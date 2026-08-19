@@ -47,8 +47,6 @@ import { SafetyPinScreen } from '@/screens/Settings/SafetyPinScreen';
 import { VoicePhrasesScreen } from '@/screens/Settings/VoicePhrasesScreen';
 import { VoiceReliabilityScreen } from '@/screens/Settings/VoiceReliabilityScreen';
 import { VoiceDebugScreen } from '@/screens/Debug/VoiceDebugScreen';
-import { ResponderApplicationScreen } from '@/responder/ResponderApplicationScreen';
-import { ResponderVerificationScreen } from '@/responder/ResponderVerificationScreen';
 import { ResponderRecognitionScreen } from '@/responder/ResponderRecognitionScreen';
 import { ResponderEarningsScreen } from '@/responder/ResponderEarningsScreen';
 import { CoinsWalletScreen } from '@/screens/Responder/CoinsWalletScreen';
@@ -364,16 +362,6 @@ export function AppNavigator() {
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       {/* Responder onboarding (Missions itself is a role-gated tab) */}
-      <Stack.Screen
-        name="ResponderApplication"
-        component={ResponderApplicationScreen}
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
-      <Stack.Screen
-        name="ResponderVerification"
-        component={ResponderVerificationScreen}
-        options={{ headerShown: false, animation: 'slide_from_right' }}
-      />
       <Stack.Screen
         name="ResponderRecognition"
         component={ResponderRecognitionScreen}

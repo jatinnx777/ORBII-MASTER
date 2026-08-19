@@ -291,12 +291,6 @@ export function ProfileScreen() {
                   label="Community Guardian, help people nearby"
                   onPress={() => navigation.navigate('CommunityGuardian')}
                 />
-                <View style={styles.divider} />
-                <SettingRow
-                  icon="shield-checkmark-outline"
-                  label="Become an ORBII Responder"
-                  onPress={() => navigation.navigate('ResponderApplication')}
-                />
               </>
             )}
           </View>

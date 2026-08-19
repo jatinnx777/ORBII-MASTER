@@ -42,7 +42,12 @@ function configure() {
       bypassDnd: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       lightColor: '#FF0000',
-      sound: 'default',
+      // Its OWN tone, not the system default. This is the one alert a helper
+      // must be able to identify without looking at the screen: two tones a
+      // fourth apart alternating at 5 Hz, which reads as urgent and carries
+      // through a pocket. res/raw/helper_alert.wav, referenced without the
+      // extension as Android requires.
+      sound: 'helper_alert',
     }).catch(() => undefined);
     // Safe zone crossed. Important, but NOT an emergency: someone leaving their
     // college is worth knowing, not worth a siren. Default importance, no DND
@@ -89,7 +94,12 @@ function configure() {
       bypassDnd: true,
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       lightColor: '#FF0000',
-      sound: 'default',
+      // Its OWN tone, not the system default. This is the one alert a helper
+      // must be able to identify without looking at the screen: two tones a
+      // fourth apart alternating at 5 Hz, which reads as urgent and carries
+      // through a pocket. res/raw/helper_alert.wav, referenced without the
+      // extension as Android requires.
+      sound: 'helper_alert',
     }).catch(() => undefined);
     // Lower-priority "ongoing" channel for the persistent SOS shortcut. We
     // want it visible on the lock screen and impossible to dismiss by swipe,

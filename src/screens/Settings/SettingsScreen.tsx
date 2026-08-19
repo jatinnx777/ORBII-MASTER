@@ -200,21 +200,12 @@ export function SettingsScreen() {
             value={`${circlesCount} ${circlesCount === 1 ? 'circle' : 'circles'}`}
             onPress={() => navigation.navigate('Circles')}
           />
-          {isResponder ? (
-            <Row
-              icon="ribbon-outline"
-              label="Verified helper"
-              value="You're an ORBII responder. Open your Missions dashboard."
-              onPress={() => navigation.navigate('Missions')}
-            />
-          ) : (
-            <Row
-              icon="shield-checkmark-outline"
-              label="Become a verified helper"
-              value="Get verified with Aadhaar and PAN to help people near you"
-              onPress={() => navigation.navigate('ResponderApplication')}
-            />
-          )}
+          <Row
+            icon="hand-left-outline"
+            label="Help people near you"
+            value="Get alerted when someone close by fires an SOS. No signup, no verification."
+            onPress={() => navigation.navigate('CommunityAlerts')}
+          />
         </RowGroup>
 
         <RowSection title="Alerts" />

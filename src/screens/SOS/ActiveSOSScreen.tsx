@@ -36,6 +36,7 @@ import { openSMSComposer } from '@/services/sms';
 import { buildSOSMessage } from '@/services/whatsapp-sos';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { fetchRoute, formatEta } from '@/services/osrm';
+import { answerSafetyCheck, getSafetyCheck, type SafetyCheck } from '@/services/sos';
 import { upsertSOSRecord } from '@/services/sos-history';
 import { critical, degraded } from '@/services/failures';
 import {
@@ -160,6 +161,29 @@ export function ActiveSOSScreen() {
   // in plain sight tell him help is coming. She reveals them deliberately, at
   // the moment her helper is in front of her.
   const [codeShown, setCodeShown] = useState(false);
+  // The server raises this once helpers have provably arrived and the SOS is
+  // still open. Polled rather than pushed as well, because the push that asks
+  // the question is the one most likely to be missed by someone in trouble.
+  const [safetyCheck, setSafetyCheck] = useState<SafetyCheck | null>(null);
+  useEffect(() => {
+    if (resolved || !activeSOS?.id) return;
+    let alive = true;
+    const run = () => {
+      void getSafetyCheck(activeSOS.id).then((c) => alive && setSafetyCheck(c));
+    };
+    run();
+    const t = setInterval(run, 15000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [activeSOS?.id, resolved]);
+
+  const answerSafety = async (safe: boolean) => {
+    if (!activeSOS?.id) return;
+    setSafetyCheck((c) => (c ? { ...c, pending: false } : c));
+    await answerSafetyCheck(activeSOS.id, safe);
+  };
   const allDoneRef = useRef(false);
   useEffect(() => {
     if (!activeSOS?.id || activeSOS.kind === 'test') return;
@@ -775,6 +799,35 @@ export function ActiveSOSScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.grabber} />
+
+        {safetyCheck?.pending && !resolved ? (
+          <View style={styles.safetyCheck}>
+            <Text style={styles.safetyTitle}>Are you safe?</Text>
+            <Text style={styles.safetyBody}>
+              {safetyCheck.arrived === 1
+                ? 'Someone reached you and this is still open.'
+                : `${safetyCheck.arrived} people reached you and this is still open.`}
+              {' '}Tell us, or we will send more people.
+            </Text>
+            <View style={styles.safetyBtns}>
+              <Pressable
+                onPress={() => void answerSafety(false)}
+                style={({ pressed }) => [styles.safetyBtn, styles.safetyNo, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.safetyNoText}>I still need help</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void answerSafety(true)}
+                style={({ pressed }) => [styles.safetyBtn, styles.safetyYes, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.safetyYesText}>I'm safe</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
+
         <Text style={styles.sheetSub}>{headerSub}</Text>
 
 
@@ -1352,6 +1405,40 @@ const styles = StyleSheet.create({
     width: 40, height: 4, borderRadius: 2,
     backgroundColor: colors.creamDeep,
     alignSelf: 'center', marginBottom: spacing.sm,
+  },
+  safetyCheck: {
+    backgroundColor: colors.coralSoft,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  safetyTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 17,
+    color: colors.coralDeep,
+  },
+  safetyBody: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary,
+  },
+  safetyBtns: { flexDirection: 'row', gap: spacing.sm },
+  safetyBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+  },
+  safetyNo: { backgroundColor: colors.coralDeep },
+  safetyNoText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textInverse,
+  },
+  safetyYes: { backgroundColor: colors.surface },
+  safetyYesText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14.5, color: colors.textPrimary,
   },
   sheetSub: {
     fontFamily: fontFamilies.poppinsRegular,

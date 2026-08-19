@@ -10,6 +10,8 @@ const { HelperOverlay } = NativeModules as {
     requestOverlayPermission(): Promise<boolean>;
     showOverlay(data: { alertId: string; name?: string; distance?: string }): Promise<boolean>;
     dismissOverlay(): Promise<boolean>;
+    showEdgeGlow(): Promise<boolean>;
+    dismissEdgeGlow(): Promise<boolean>;
   };
 };
 
@@ -68,4 +70,30 @@ export function formatOverlayDistance(meters: number): string | undefined {
   if (meters < 0) return undefined;
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters / 1000).toFixed(1)} km`;
+}
+
+/**
+ * Pulse the screen edges red over whatever app the helper is using.
+ *
+ * Peripheral by design, and taps pass straight through to the app underneath.
+ * The card overlay demands a decision; this is for the far more common failure,
+ * a helper scrolling something else who never glances at the notification
+ * shade. Catching it in the corner of the eye is the whole point.
+ */
+export async function showEdgeGlow(): Promise<boolean> {
+  if (!available || !HelperOverlay!.showEdgeGlow) return false;
+  try {
+    return await HelperOverlay!.showEdgeGlow();
+  } catch {
+    return false;
+  }
+}
+
+export async function dismissEdgeGlow(): Promise<void> {
+  if (!available || !HelperOverlay!.dismissEdgeGlow) return;
+  try {
+    await HelperOverlay!.dismissEdgeGlow();
+  } catch {
+    /* already gone */
+  }
 }

@@ -12,6 +12,7 @@ import android.media.RingtoneManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
+import android.animation.ValueAnimator
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -43,6 +44,8 @@ class HelperOverlayModule(private val ctx: ReactApplicationContext) :
   ReactContextBaseJavaModule(ctx) {
 
   private var overlayView: View? = null
+  private var glowView: View? = null
+  private var glowAnim: ValueAnimator? = null
   private var player: MediaPlayer? = null
 
   override fun getName() = "HelperOverlay"
@@ -88,6 +91,100 @@ class HelperOverlayModule(private val ctx: ReactApplicationContext) :
       }
     }
     promise.resolve(true)
+  }
+
+  /**
+   * Edge glow: the screen borders pulse red over whatever app is in front.
+   *
+   * Lighter than the full card overlay and used for a different moment. The
+   * card demands a decision ("I'll help" / "I'm busy"). The glow is peripheral,
+   * something you catch while scrolling reels, and it exists because the most
+   * common way a nearby helper misses an SOS is simply not looking at the
+   * notification shade.
+   *
+   * Deliberately NOT touchable: FLAG_NOT_TOUCHABLE means every tap passes
+   * straight through to the app underneath. An overlay that eats input during
+   * an emergency would be worse than no overlay at all.
+   */
+  @ReactMethod
+  fun showEdgeGlow(promise: Promise) {
+    if (!canDraw()) {
+      promise.resolve(false)
+      return
+    }
+    UiThreadUtil.runOnUiThread {
+      try {
+        addEdgeGlow()
+      } catch (e: Exception) {
+        // best effort
+      }
+    }
+    promise.resolve(true)
+  }
+
+  @ReactMethod
+  fun dismissEdgeGlow(promise: Promise) {
+    UiThreadUtil.runOnUiThread { removeEdgeGlow() }
+    promise.resolve(true)
+  }
+
+  private fun addEdgeGlow() {
+    if (glowView != null) return
+    val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+
+    // A rectangle stroked in red with a transparent centre: only the borders
+    // paint, so the app underneath stays fully readable.
+    val frame = View(ctx).apply {
+      background = GradientDrawable().apply {
+        shape = GradientDrawable.RECTANGLE
+        setColor(Color.TRANSPARENT)
+        setStroke(dp(14), Color.parseColor("#FF3B30"))
+      }
+    }
+
+    val type =
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+      else
+        @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
+
+    val lp = WindowManager.LayoutParams(
+      WindowManager.LayoutParams.MATCH_PARENT,
+      WindowManager.LayoutParams.MATCH_PARENT,
+      type,
+      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+        WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+      PixelFormat.TRANSLUCENT,
+    )
+
+    wm.addView(frame, lp)
+    glowView = frame
+
+    // Breathing rather than blinking. A hard flash is easy to tune out and
+    // reads as a glitch; a slow pulse keeps drawing the eye back.
+    glowAnim = ValueAnimator.ofFloat(0.35f, 1f).apply {
+      duration = 750
+      repeatMode = ValueAnimator.REVERSE
+      repeatCount = ValueAnimator.INFINITE
+      addUpdateListener { a -> frame.alpha = a.animatedValue as Float }
+      start()
+    }
+  }
+
+  private fun removeEdgeGlow() {
+    try {
+      glowAnim?.cancel()
+      glowAnim = null
+      glowView?.let {
+        val wm = ctx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+        wm.removeView(it)
+      }
+    } catch (e: Exception) {
+      // already gone
+    }
+    glowView = null
   }
 
   @ReactMethod

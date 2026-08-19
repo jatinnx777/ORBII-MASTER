@@ -105,6 +105,8 @@ import {
   hasOverlayPermission,
   requestOverlayPermission,
   overlayAvailable,
+  showEdgeGlow,
+  dismissEdgeGlow,
 } from '@/services/helper-overlay';
 import { colors } from '@/theme';
 
@@ -454,6 +456,7 @@ function RootNavigator() {
         const m = url.match(/[?&]alertId=([^&]+)/);
         const alertId = m ? decodeURIComponent(m[1]) : undefined;
         void dismissHelperOverlay();
+        void dismissEdgeGlow();
         if (alertId && navigationRef.isReady()) {
           // @ts-expect-error HelperAlert lives in the AppStack only.
           navigationRef.navigate('HelperAlert', { alertId });
@@ -831,6 +834,18 @@ export default function App() {
         Vibration.vibrate(pattern);
       }
       presentAlert(alert);
+
+      // Surface it over whatever app they are in. The most common way a nearby
+      // helper misses an SOS is simply not looking at the notification shade,
+      // so the card demands a decision and the edge glow catches the eye of
+      // someone mid-scroll. Both are no-ops without the overlay permission, and
+      // both are best-effort: neither may delay or break the alert itself.
+      void showHelperOverlay({
+        alertId: alert.id,
+        name: alert.victim.name || 'Someone nearby',
+        distance: formatOverlayDistance(alert.distanceMeters),
+      }).catch(() => undefined);
+      void showEdgeGlow().catch(() => undefined);
     };
 
     const handleExpand = (sosId: string, radiusKm: number) => {
@@ -861,6 +876,7 @@ export default function App() {
       store.dispatch(alertDismissed(sosId));
       // Tear down the over-other-apps overlay if it's showing this SOS.
       void dismissHelperOverlay();
+      void dismissEdgeGlow();
       // If a helper is staring at the full-screen alert for this SOS, kick
       // them back to the app — the emergency is over.
       if (

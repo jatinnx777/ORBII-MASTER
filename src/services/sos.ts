@@ -249,3 +249,40 @@ async function persistSOS(
     });
   }
 }
+
+// ── Escalation safety check (sql/78) ────────────────────────────────────────
+//
+// When helpers have provably arrived and the SOS is still open, the server asks
+// her directly whether she is safe. Answering stops the escalation ladder;
+// silence deliberately does NOT, because someone who cannot reach her phone is
+// exactly who the next wave is for.
+//
+// Answering "safe" never resolves the SOS by itself. Closing an emergency stays
+// a separate, deliberate act so a mis-tap can't call off help.
+
+export type SafetyCheck = { pending: boolean; wave: number; arrived: number };
+
+export async function getSafetyCheck(sosId: string): Promise<SafetyCheck | null> {
+  try {
+    const { data, error } = await supabase.rpc('my_safety_check', { p_sos: sosId });
+    if (error || !data) return null;
+    const row = (data as Record<string, unknown>[])[0];
+    if (!row) return null;
+    return {
+      pending: Boolean(row.pending),
+      wave: Number(row.wave ?? 1),
+      arrived: Number(row.arrived ?? 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function answerSafetyCheck(sosId: string, safe: boolean): Promise<void> {
+  try {
+    await supabase.rpc('sos_answer_safety_check', { p_sos: sosId, p_safe: safe });
+  } catch {
+    // best effort: if this fails the ladder simply continues, which is the
+    // safe direction to fail in
+  }
+}
