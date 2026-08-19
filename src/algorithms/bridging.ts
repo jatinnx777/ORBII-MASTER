@@ -1,30 +1,10 @@
-// score-community — bridging-based ranking for the community feed.
+// Bridging fit, extracted so it can be tested.
 //
-// Fits the matrix factorization X publishes for Community Notes:
-//
-//     r̂_un = μ + i_u + i_n + f_u · f_n
-//
-// and writes each post's intercept (i_n) and factor (f_n) back, from which SQL
-// derives the helpful / needs-more / not-helpful verdict.
-//
-// The point of the model, in one line: a post scores well only if raters who
-// normally DISAGREE with each other both found it helpful. Net upvotes reward
-// whatever the biggest group already believes, which on a safety feed means a
-// real warning can be voted down by the people it inconveniences.
-//
-// Why the regularisation is lopsided (λ_i = 0.15, λ_f = 0.03): the intercept is
-// penalised five times harder than the factors, so when the model can explain a
-// rating either as "this post is good" (i) or "this post appeals to one camp"
-// (f), it prefers the camp explanation. A post therefore has to be genuinely
-// cross-cutting before its intercept can climb. That asymmetry is the bridge.
-//
-// Fit by plain gradient descent. The dataset here is a campus feed, thousands
-// of ratings at most, so this runs in well under a second and needs no
-// libraries.
-//
-// Deploy:  supabase functions deploy score-community
+// The edge function (supabase/functions/score-community) is the deployment
+// target, but the maths is pure and belongs somewhere a test can reach it.
+// Keep the two in sync: this file is the reference.
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+export type Rating = { post_id: string; user_id: string; value: number; weight?: number };
 
 const LAMBDA_I = 0.15; // intercept regularisation
 const LAMBDA_F = 0.03; // factor regularisation
@@ -35,6 +15,7 @@ const LR = 0.2;
 // is a few thousand ratings at most, so this still runs in well under a second.
 const EPOCHS = 1000;
 
+
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -42,9 +23,9 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-type Rating = { post_id: string; user_id: string; value: number; weight?: number };
 
-function fit(ratings: Rating[]) {
+
+export function fit(ratings: Rating[]) {
   const posts = [...new Set(ratings.map((r) => r.post_id))];
   const users = [...new Set(ratings.map((r) => r.user_id))];
   const pIdx = new Map(posts.map((p, i) => [p, i]));
@@ -117,38 +98,3 @@ function fit(ratings: Rating[]) {
 
   return posts.map((id, i) => ({ id, intercept: iN[i], factor: fN[i] }));
 }
-
-Deno.serve(async () => {
-  try {
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
-
-    // Behaviour first, opinions second. If a ring is detected now, its ratings
-    // must already be down-weighted by the time the bridge is fitted.
-    // supabase-js returns a thenable builder, not a Promise, so it has no
-    // .catch(). Await it inside a try instead.
-    try {
-      await admin.rpc('bdsm_score_all');
-    } catch {
-      // integrity scoring is best-effort; the bridge still fits without it
-    }
-
-    const { data, error } = await admin.rpc('community_rating_matrix');
-    if (error) return json({ error: error.message }, 500);
-
-    const ratings = (data ?? []) as Rating[];
-    if (ratings.length === 0) return json({ scored: 0, reason: 'no ratings' });
-
-    const scores = fit(ratings);
-    const { data: applied, error: applyErr } = await admin.rpc('community_apply_scores', {
-      p_scores: scores,
-    });
-    if (applyErr) return json({ error: applyErr.message }, 500);
-
-    return json({ scored: applied, ratings: ratings.length });
-  } catch (e) {
-    return json({ error: String(e) }, 500);
-  }
-});

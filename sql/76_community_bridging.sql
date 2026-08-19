@@ -83,9 +83,19 @@ create index if not exists community_posts_bridge_idx
 -- 3. Thresholds, kept in one place so they are auditable rather than buried.
 --
 --    MIN_RATINGS  5    below this a post is never given a verdict at all
---    HELPFUL      i_n >= 0.40 AND abs(f_n) < 0.50
---                      the factor bound is what stops a post that one camp
---                      loves from being called helpful
+--    HELPFUL      i_n >= 0.40 AND abs(f_n) < 0.25
+--                      The factor bound is what stops a post that one camp
+--                      loves from being called helpful, and it is the ONLY
+--                      thing that does. A brigaded post legitimately earns a
+--                      HIGHER intercept than a cross-camp one (more ratings is
+--                      more evidence), so the intercept can never catch it.
+--
+--                      X publishes 0.50. Tightened to 0.25 here because their
+--                      figure is calibrated for millions of raters, where a
+--                      partisan post pushes much further out on the viewpoint
+--                      axis. On a two-camp campus fixture the same brigading
+--                      lands around 0.30, which 0.50 would wave through.
+--                      See src/algorithms/bridging.test.ts.
 --    NOT_HELPFUL  i_n < -0.05 - 0.8 * abs(f_n)
 --                      the sliding bar means a divisive post needs a much
 --                      worse intercept before we call it unhelpful, so we do
@@ -100,7 +110,7 @@ returns text
 language sql immutable as $$
   select case
     when p_ratings < 5 or p_intercept is null then 'needs_more'
-    when p_intercept >= 0.40 and abs(coalesce(p_factor, 0)) < 0.50 then 'helpful'
+    when p_intercept >= 0.40 and abs(coalesce(p_factor, 0)) < 0.25 then 'helpful'
     when p_intercept < -0.05 - 0.8 * abs(coalesce(p_factor, 0)) then 'not_helpful'
     else 'needs_more'
   end;
