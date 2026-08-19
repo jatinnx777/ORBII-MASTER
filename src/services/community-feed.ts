@@ -41,7 +41,21 @@ export type FeedPost = {
   myVote: -1 | 0 | 1;
   isFollowing: boolean;
   isMine: boolean;
+  /** Bridging verdict. See sql/76 and the score-community function. */
+  bridgeStatus: BridgeStatus;
+  ratedCount: number;
+  helpfulCount: number;
+  myRating: PostRating | null;
 };
+
+/**
+ * How the bridging algorithm judged a post.
+ *
+ * 'needs_more' is the honest default and where most posts live. A verdict needs
+ * at least five ratings, and it needs them from people who normally disagree.
+ */
+export type BridgeStatus = 'needs_more' | 'helpful' | 'not_helpful';
+export type PostRating = 'helpful' | 'somewhat' | 'not_helpful';
 
 export type FeedComment = {
   id: string;
@@ -102,6 +116,10 @@ export async function loadFeed(
     myVote: Number(r.my_vote ?? 0) as -1 | 0 | 1,
     isFollowing: Boolean(r.is_following),
     isMine: Boolean(r.is_mine),
+    bridgeStatus: ((r.bridge_status as BridgeStatus) ?? 'needs_more'),
+    ratedCount: Number(r.rated_count ?? 0),
+    helpfulCount: Number(r.helpful_count ?? 0),
+    myRating: ((r.my_rating as PostRating) ?? null),
   }));
 }
 
@@ -124,7 +142,56 @@ export async function createPost(
       : error.message;
     return { ok: false, error: msg };
   }
+  logAction('post', data as string, 'composer');
   return { ok: true, id: data as string };
+}
+
+/**
+ * Record one action in the behavioural sequence BDSM reads (sql/77).
+ *
+ * Content-free by design: the action type, a timestamp and a target id, never
+ * the text. The detector must be able to learn "this account behaves like a
+ * script" and must NOT be able to learn "this account keeps posting about a
+ * particular person". Judging behaviour is integrity work; judging topics on a
+ * safety app is censorship.
+ *
+ * Never awaited and never surfaced. A failure here must not slow down or break
+ * the thing the user actually asked for.
+ */
+export function logAction(action: string, targetId?: string, surface?: string): void {
+  void (async () => {
+    try {
+      await supabase.rpc('log_community_action', {
+        p_action: action,
+        p_target: targetId ?? null,
+        p_surface: surface ?? null,
+      });
+    } catch {
+      /* never let telemetry break the action it is describing */
+    }
+  })();
+}
+
+/**
+ * Rate a post's helpfulness. Re-tapping the same rating clears it.
+ *
+ * This is not a like. The bridging model reads these ratings looking for posts
+ * that people who normally disagree BOTH found helpful, so a rating from
+ * someone who usually rates differently to you counts for far more than another
+ * vote from your own camp. That is why there is no simple upvote here.
+ *
+ * Rescoring is kicked off afterwards, fire-and-forget: the fit is over the whole
+ * rating matrix, so one person's rating can legitimately move other posts too.
+ */
+export async function ratePost(post: FeedPost, rating: PostRating): Promise<void> {
+  const next = post.myRating === rating ? null : rating;
+  try {
+    await supabase.rpc('community_rate', { p_post: post.id, p_rating: next });
+    logAction('rate', post.id, 'feed');
+    void supabase.functions.invoke('score-community').catch(() => undefined);
+  } catch {
+    // best-effort; the UI reconciles on the next load
+  }
 }
 
 /** Toggle-aware vote: pass +1 / -1; re-tapping the same value clears it. */
@@ -132,6 +199,7 @@ export async function votePost(post: FeedPost, value: 1 | -1): Promise<void> {
   const next = post.myVote === value ? 0 : value;
   try {
     await supabase.rpc('community_vote', { p_post: post.id, p_value: next });
+    logAction('react', post.id, 'feed');
   } catch {
     // best-effort; UI reconciles on next load
   }
@@ -216,6 +284,7 @@ export async function upsertProfile(p: {
     p_bio: p.bio ?? null,
   });
   if (error) return { ok: false, error: error.message };
+  logAction('post', data as string, 'composer');
   return { ok: true, id: data as string };
 }
 
@@ -284,6 +353,10 @@ export async function loadUserPosts(
     myVote: Number(r.my_vote ?? 0) as -1 | 0 | 1,
     isFollowing: Boolean(r.is_following),
     isMine: Boolean(r.is_mine),
+    bridgeStatus: ((r.bridge_status as BridgeStatus) ?? 'needs_more'),
+    ratedCount: Number(r.rated_count ?? 0),
+    helpfulCount: Number(r.helpful_count ?? 0),
+    myRating: ((r.my_rating as PostRating) ?? null),
   }));
 }
 

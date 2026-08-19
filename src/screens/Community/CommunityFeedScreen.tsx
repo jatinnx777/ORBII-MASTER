@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Share,
   FlatList,
   KeyboardAvoidingView,
   Modal,
@@ -31,6 +32,9 @@ import {
   reportPost,
   unfollow,
   votePost,
+  ratePost,
+  logAction,
+  type PostRating,
   type CommunityCategory,
   type FeedComment,
   type FeedPost,
@@ -183,6 +187,43 @@ export function CommunityFeedScreen() {
       }),
     );
     await votePost(post, 1);
+  };
+
+  // Rating drives the bridging model, so the optimistic update only touches
+  // this user's own rating. The verdict itself is a property of everyone's
+  // ratings together and arrives on the next load, which is honest: one tap
+  // should not be able to stamp a post "helpful" on its own.
+  const rate = async (post: FeedPost, rating: PostRating) => {
+    const cleared = post.myRating === rating;
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id !== post.id) return p;
+        const wasHelpful = p.myRating === 'helpful';
+        const nowHelpful = !cleared && rating === 'helpful';
+        return {
+          ...p,
+          myRating: cleared ? null : rating,
+          helpfulCount: Math.max(0, p.helpfulCount + (nowHelpful ? 1 : 0) - (wasHelpful ? 1 : 0)),
+          ratedCount: Math.max(0, p.ratedCount + (p.myRating ? 0 : 1) - (cleared ? 1 : 0)),
+        };
+      }),
+    );
+    await ratePost(post, rating);
+  };
+
+  const sharePost = async (post: FeedPost) => {
+    const title = post.title ? `${post.title}\n\n` : '';
+    const verdict =
+      post.bridgeStatus === 'helpful'
+        ? '\n\nRated helpful by people who usually disagree, on ORBII.'
+        : '\n\nShared from ORBII, a safety app for women in India.';
+    try {
+      await Share.share({
+        message: `${title}${post.body}${verdict}\nhttps://orbii.in`,
+      });
+    } catch {
+      // user dismissed the sheet
+    }
   };
 
   const remove = (post: FeedPost) => {
@@ -339,6 +380,8 @@ export function CommunityFeedScreen() {
               canInteract={hasProfile}
               onToggleComments={() => setOpenId(openId === p.id ? null : p.id)}
               onVote={() => vote(p)}
+              onRate={(r) => rate(p, r)}
+              onShare={() => sharePost(p)}
               onDelete={() => remove(p)}
               onMore={() => setActionFor(p)}
               onOpenAuthor={() => openProfile(p.authorProfileId)}
@@ -442,6 +485,8 @@ function PostCardBase({
   canInteract,
   onToggleComments,
   onVote,
+  onRate,
+  onShare,
   onDelete,
   onMore,
   onOpenAuthor,
@@ -451,6 +496,8 @@ function PostCardBase({
   canInteract: boolean;
   onToggleComments: () => void;
   onVote: () => void;
+  onRate: (rating: PostRating) => void;
+  onShare: () => void;
   onDelete: () => void;
   onMore: () => void;
   onOpenAuthor: () => void;
@@ -480,6 +527,20 @@ function PostCardBase({
         </Pressable>
       </View>
 
+      {post.bridgeStatus === 'helpful' ? (
+        <View style={styles.verdictHelpful}>
+          <Ionicons name="people" size={13} color={colors.sageDeep} />
+          <Text style={styles.verdictHelpfulText}>
+            Found helpful by people who usually disagree
+          </Text>
+        </View>
+      ) : post.bridgeStatus === 'not_helpful' ? (
+        <View style={styles.verdictWeak}>
+          <Ionicons name="alert-circle-outline" size={13} color={colors.textSecondary} />
+          <Text style={styles.verdictWeakText}>Rated unhelpful by readers</Text>
+        </View>
+      ) : null}
+
       {post.title ? <Text style={styles.postTitle}>{post.title}</Text> : null}
       {post.body ? <Text style={styles.body}>{post.body}</Text> : null}
 
@@ -496,12 +557,50 @@ function PostCardBase({
           <Ionicons name="chatbubble-outline" size={18} color={colors.textPrimary} />
           <Text style={styles.actCount}>{post.commentCount}</Text>
         </Pressable>
+        <Pressable onPress={onShare} hitSlop={6} style={styles.actBtn}>
+          <Ionicons name="share-social-outline" size={19} color={colors.textPrimary} />
+        </Pressable>
         {post.isFollowing && !post.isMine ? (
           <View style={styles.followingTag}>
             <Text style={styles.followingText}>Following</Text>
           </View>
         ) : null}
       </View>
+
+      {/* Helpfulness. Deliberately separate from the heart above: a heart says
+          "I liked this", these say "this is worth someone else's time", and only
+          the second one should decide what the feed surfaces. */}
+      {!post.isMine ? (
+        <View style={styles.rateRow}>
+          <Text style={styles.rateLabel}>
+            {post.ratedCount >= 5
+              ? `Is this helpful? ${post.helpfulCount} of ${post.ratedCount} said yes`
+              : post.ratedCount > 0
+                ? `Is this helpful? ${post.ratedCount} of 5 ratings so far`
+                : 'Is this helpful?'}
+          </Text>
+          <View style={styles.rateBtns}>
+            {([
+              ['helpful', 'Yes'],
+              ['somewhat', 'Somewhat'],
+              ['not_helpful', 'No'],
+            ] as [PostRating, string][]).map(([key, label]) => {
+              const on = post.myRating === key;
+              return (
+                <Pressable
+                  key={key}
+                  onPress={canInteract ? () => onRate(key) : onMore}
+                  style={[styles.rateBtn, on && styles.rateBtnOn]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.rateBtnText, on && styles.rateBtnTextOn]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
 
       {open ? <Comments postId={post.id} canInteract={canInteract} /> : null}
     </View>
@@ -699,6 +798,51 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, borderTopWidth: 1, borderTopColor: colors.divider, paddingTop: spacing.sm },
   actBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.creamDeep },
   actCount: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
+  verdictHelpful: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.sageSoft,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10, paddingVertical: 5,
+    marginBottom: spacing.sm,
+  },
+  verdictHelpfulText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, color: colors.sageDeep,
+  },
+  verdictWeak: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.creamDeep,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10, paddingVertical: 5,
+    marginBottom: spacing.sm,
+  },
+  verdictWeakText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 11.5, color: colors.textSecondary,
+  },
+  rateRow: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.divider,
+    gap: 7,
+  },
+  rateLabel: {
+    fontFamily: fontFamilies.poppinsRegular, fontSize: 12, color: colors.textSecondary,
+  },
+  rateBtns: { flexDirection: 'row', gap: 7 },
+  rateBtn: {
+    paddingHorizontal: 13, paddingVertical: 6,
+    borderRadius: radius.pill,
+    backgroundColor: colors.cream,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+  },
+  rateBtnOn: { backgroundColor: colors.brand, borderColor: colors.brand },
+  rateBtnText: {
+    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textPrimary,
+  },
+  rateBtnTextOn: { color: colors.textInverse },
   followingTag: { marginLeft: 'auto', backgroundColor: colors.brandSoft, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 3 },
   followingText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10.5, color: colors.brandDeep },
 

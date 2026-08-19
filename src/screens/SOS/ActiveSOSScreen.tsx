@@ -823,7 +823,14 @@ export function ActiveSOSScreen() {
           </Pressable>
         ) : null}
 
-        {!resolved ? <DeliverySummary delivery={delivery} /> : null}
+        {!resolved ? (
+          <DeliverySummary
+            delivery={delivery}
+            onTextContacts={textContacts}
+            onDial112={dial112}
+            contactCount={contactCount}
+          />
+        ) : null}
 
         <Pressable
           onPress={dial112}
@@ -1104,10 +1111,52 @@ function MissingRecord({ navigation }: { navigation: Nav }) {
 }
 
 // Honest "who did we actually reach" line, instead of an optimistic "sent".
-function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
+/**
+ * Delivery state, and what to do when it has not landed.
+ *
+ * "Your SOS is on hold, we will send it when you reconnect" is a promise the
+ * phone cannot keep. If there is no data at the roadside at 11pm, there may not
+ * be any for an hour, and a queued alert that arrives then is a notification,
+ * not a rescue.
+ *
+ * So an undelivered SOS never sits and waits. After a few seconds it escalates
+ * to the two routes that need no internet at all: an SMS to the emergency
+ * contacts (one tap, rides the cell signal, works with mobile data fully off)
+ * and 112. The queue and the Bluetooth mesh keep working underneath; this is
+ * about giving the person in trouble something to press right now.
+ */
+function DeliverySummary({
+  delivery,
+  onTextContacts,
+  onDial112,
+  contactCount,
+}: {
+  delivery: SOSDelivery | null;
+  onTextContacts: () => void;
+  onDial112: () => void;
+  contactCount: number;
+}) {
   const push = delivery?.pushSent;
+  // Give the network a moment before crying wolf, then stop waiting.
+  const [waited, setWaited] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setWaited(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
-  if (push === undefined) {
+  const landed = typeof push === 'number' && push > 0;
+  if (landed) {
+    return (
+      <View style={[dstyles.card, dstyles.ok]}>
+        <Ionicons name="checkmark-circle" size={16} color={colors.textInverse} />
+        <Text style={dstyles.text}>
+          Notified {push} {push === 1 ? 'person' : 'people'} on ORBII
+        </Text>
+      </View>
+    );
+  }
+
+  if (!waited && push === undefined) {
     return (
       <View style={dstyles.card}>
         <ActivityIndicator size="small" color={colors.textInverse} />
@@ -1115,21 +1164,42 @@ function DeliverySummary({ delivery }: { delivery: SOSDelivery | null }) {
       </View>
     );
   }
-  if (push === 0) {
-    return (
-      <View style={[dstyles.card, dstyles.warn]}>
-        <Ionicons name="warning" size={16} color={colors.textInverse} />
-        <Text style={dstyles.text}>
-          No one on ORBII reached yet, text or call your contacts directly to be sure.
-        </Text>
-      </View>
-    );
-  }
+
+  // Nothing has confirmed. Say so plainly and offer the ways out.
   return (
-    <View style={[dstyles.card, dstyles.ok]}>
-      <Ionicons name="checkmark-circle" size={16} color={colors.textInverse} />
-      <Text style={dstyles.text}>
-        Notified {push} {push === 1 ? 'person' : 'people'} on ORBII
+    <View style={dstyles.escalate}>
+      <View style={dstyles.escalateHead}>
+        <Ionicons name="cloud-offline" size={17} color={colors.textInverse} />
+        <Text style={dstyles.escalateTitle}>Your SOS has not reached anyone yet</Text>
+      </View>
+      <Text style={dstyles.escalateBody}>
+        ORBII keeps trying in the background, and nearby ORBII phones can still relay it over
+        Bluetooth. Do not wait for that. These two work with no internet:
+      </Text>
+      <Pressable
+        onPress={onDial112}
+        style={({ pressed }) => [dstyles.escalateBtn, dstyles.escalatePrimary, pressed && { opacity: 0.9 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Call 112 now"
+      >
+        <Ionicons name="call" size={18} color={colors.textInverse} />
+        <Text style={dstyles.escalateBtnText}>Call 112 now</Text>
+      </Pressable>
+      {contactCount > 0 ? (
+        <Pressable
+          onPress={onTextContacts}
+          style={({ pressed }) => [dstyles.escalateBtn, pressed && { opacity: 0.9 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Text my emergency contacts"
+        >
+          <Ionicons name="chatbubble-ellipses" size={17} color={colors.textInverse} />
+          <Text style={dstyles.escalateBtnText}>
+            Text my contacts ({contactCount})
+          </Text>
+        </Pressable>
+      ) : null}
+      <Text style={dstyles.escalateFoot}>
+        A text rides the phone signal, so it goes through even with mobile data off.
       </Text>
     </View>
   );
@@ -1145,6 +1215,48 @@ const dstyles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     marginBottom: spacing.sm,
+  },
+  escalate: {
+    backgroundColor: colors.coralDeep,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  escalateHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  escalateTitle: {
+    flex: 1,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15,
+    color: colors.textInverse,
+  },
+  escalateBody: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 12.5,
+    lineHeight: 18,
+    color: 'rgba(255,255,255,0.88)',
+  },
+  escalateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    borderRadius: radius.pill,
+    paddingVertical: 13,
+  },
+  escalatePrimary: { backgroundColor: 'rgba(0,0,0,0.28)' },
+  escalateBtnText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14.5,
+    color: colors.textInverse,
+  },
+  escalateFoot: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: 'rgba(255,255,255,0.72)',
+    textAlign: 'center',
   },
   ok: { backgroundColor: 'rgba(46,125,50,0.35)' },
   warn: { backgroundColor: 'rgba(216,27,27,0.4)' },

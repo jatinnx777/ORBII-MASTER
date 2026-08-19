@@ -74,7 +74,7 @@ TaskManager.defineTask(CIRCLE_LOCATION_TASK, async ({ data, error }) => {
     // app is closed. The task fires ~every minute, so it self-stops promptly.
     const exp = await getItem<number>(SHARE_EXPIRES_KEY);
     if (exp && Date.now() >= exp) {
-      await stopCircleSharing();
+      await stopCircleSharing({ notify: false });
       return;
     }
     const { locations } = (data as { locations?: Location.LocationObject[] }) ?? {};
@@ -168,8 +168,33 @@ export async function startCircleSharing(hours = 2): Promise<boolean> {
   }
 }
 
-/** Stop sharing and forget my last position. */
-export async function stopCircleSharing(): Promise<void> {
+/**
+ * Stop sharing, keep the last known position, and tell the circle.
+ *
+ * `notify` defaults to true because turning sharing off is exactly the moment
+ * the people who care about you most need to hear something. Nothing prevents
+ * anyone switching this off, and nothing should: a safety app you can be locked
+ * into is a tracking device. What we guarantee instead is that it is never
+ * silent. Everyone in the circle gets the time it went off and the last place
+ * that person was seen, which is information they can act on rather than a dot
+ * that quietly stopped moving.
+ *
+ * Pass notify: false only for the automatic window expiry, where the circle was
+ * already warned an hour ahead and a second alarm would be noise.
+ */
+export async function stopCircleSharing(opts: { notify?: boolean } = {}): Promise<void> {
+  const notify = opts.notify !== false;
+  // Grab the last fix BEFORE clearing, so the alert can say where they were.
+  let last: { lat: number; lng: number } | null = null;
+  if (notify) {
+    try {
+      const pos = await Location.getLastKnownPositionAsync();
+      if (pos) last = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    } catch {
+      // no fix available, the alert still carries the time
+    }
+  }
+
   try {
     if (await Location.hasStartedLocationUpdatesAsync(CIRCLE_LOCATION_TASK)) {
       await Location.stopLocationUpdatesAsync(CIRCLE_LOCATION_TASK);
@@ -185,6 +210,25 @@ export async function stopCircleSharing(): Promise<void> {
   await setItem(SHARING_KEY, false);
   await removeItem(SHARE_EXPIRES_KEY);
   await cancelShareReminder();
+
+  if (notify) {
+    // Fire-and-forget. A failed push must never make turning sharing off feel
+    // broken, and the map still shows "location off, last seen ..." regardless.
+    void (async () => {
+      try {
+        let place: string | undefined;
+        if (last) {
+          const { reverseGeocode } = await import('./geocode');
+          place = await reverseGeocode(last.lat, last.lng);
+        }
+        await supabase.functions.invoke('notify-sharing-off', {
+          body: { lat: last?.lat, lng: last?.lng, place },
+        });
+      } catch {
+        /* best effort */
+      }
+    })();
+  }
 }
 
 // Warn her an hour before live sharing auto-stops, so it never lapses as a
@@ -217,7 +261,7 @@ async function cancelShareReminder(): Promise<void> {
 /** Foreground backup for the auto-off: if the window has passed, stop now. */
 export async function ensureCircleShareNotExpired(): Promise<void> {
   const exp = await getItem<number>(SHARE_EXPIRES_KEY);
-  if (exp && Date.now() >= exp) await stopCircleSharing();
+  if (exp && Date.now() >= exp) await stopCircleSharing({ notify: false });
 }
 
 /**

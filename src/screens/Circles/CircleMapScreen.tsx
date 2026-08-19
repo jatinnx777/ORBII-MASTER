@@ -10,6 +10,7 @@ import {
   CircleSwitcher,
   CircleSwitcherTrigger,
   GlassButton,
+  useBrandSheet,
   MemberHistorySheet,
   OSMMapView,
   VoiceDurationSheet,
@@ -130,6 +131,7 @@ export function CircleMapScreen() {
   const circles = useAppSelector((s) => s.circles.circles);
   const activeCircleId = useAppSelector((s) => s.circles.activeCircleId);
 
+  const sheet = useBrandSheet();
   const [members, setMembers] = useState<MemberLocation[]>([]);
   const [sharing, setSharing] = useState(false);
   const [center, setCenter] = useState<GeoPoint | null>(null);
@@ -338,14 +340,25 @@ export function CircleMapScreen() {
       setDurationOpen(true); // turning ON always picks a duration first
       return;
     }
-    setBusy(true);
-    try {
-      await stopCircleSharing();
-      void logConsentEvent('location_share', false, { method: 'toggle' });
-      setSharing(false);
-    } finally {
-      setBusy(false);
-    }
+    // Confirm, and say plainly what happens next. The circle is told either
+    // way; hiding that from the person turning it off would make ORBII report
+    // on people behind their backs, which is the opposite of the point.
+    sheet.confirm({
+      title: 'Turn off location sharing?',
+      body: "Your circle will be told that you turned it off, along with the time and the last place you were seen. They will not see where you go after that.",
+      confirmLabel: 'Turn it off',
+      icon: 'location-outline',
+      onConfirm: async () => {
+        setBusy(true);
+        try {
+          await stopCircleSharing();
+          void logConsentEvent('location_share', false, { method: 'toggle' });
+          setSharing(false);
+        } finally {
+          setBusy(false);
+        }
+      },
+    });
   };
 
   // Shared by the duration picker and the age sheet, so answering the age

@@ -34,6 +34,11 @@ export class SOSRateLimitedError extends Error {
 //
 // Rate-limited at 15s between fires + 5 fires per hour for `kind='real'`.
 // Test fires are NOT rate-limited so users can practice freely.
+// How long we wait for proof the SOS actually reached someone before assuming
+// it did not. Long enough that a slow-but-working network is not treated as a
+// failure, short enough that nobody is standing in the dark waiting.
+const DELIVERY_GRACE_MS = 4000;
+
 export async function createSOS(
   user: UserProfile,
   location: SOSLocation,
@@ -120,25 +125,7 @@ export async function createSOS(
   // the network returns, so the circle still gets alerted. Only on the offline
   // path, so an online SOS is never double-sent.
   if (!store.getState().app.isOnline) {
-    void enqueueSOS(record, user);
-    // Also relay over the Bluetooth mesh: a nearby ORBII phone that DOES have
-    // signal can catch this and bridge it to the server. Sealed end-to-end.
-    if (location) {
-      void armOfflineSos(user.uid, location.latitude, location.longitude, record.timestamp);
-    }
-    // Offline helper alert (Premium): also broadcast a location-free "someone
-    // near me needs help" ping so nearby ORBII helpers can home in by signal
-    // strength when there's no internet at all. Carries no coordinates. Helper
-    // dispatch is a Premium perk, so this is too; free users still get the SMS +
-    // circle-mesh bridge above.
-    if (user.isPremium) {
-      void armHelperPing();
-    }
-    // SMS lifeline: text emergency contacts directly with the SOS + location.
-    // SMS rides the cell signal, so it works even with mobile data fully off.
-    // Silent if SEND_SMS was granted ahead of time; the ActiveSOS screen still
-    // offers the one-tap composer as a fallback.
-    void sendSosSmsDirect(user.emergencyContacts, buildSOSMessage({ user, location }));
+    armOfflineFallbacks(record, user, location);
   }
 
   // Server-side push fan-out so the victim's circle + emergency contacts are
@@ -164,7 +151,62 @@ export async function createSOS(
       );
   }, 600);
 
+  // ── Delivery watchdog ──────────────────────────────────────────────────
+  //
+  // `isOnline` lies, and it lies in exactly the situations that matter. NetInfo
+  // reports isInternetReachable as null when it cannot tell, and net.ts treats
+  // "cannot tell" as online. So on café wifi behind a captive portal, or on a
+  // data connection showing full bars with no throughput, ORBII took the online
+  // path, the broadcast vanished into the void, and NOT ONE offline fallback
+  // was armed. Silent failure, in the one feature the whole app exists for.
+  //
+  // So stop asking "are we online" and start asking "did it actually land". If
+  // nothing has confirmed by the time this fires, arm every offline path
+  // regardless of what the connectivity flag claims.
+  //
+  // A duplicate alert is a non-event: the circle gets told twice and someone is
+  // mildly annoyed. Silence is the failure that gets a person hurt.
+  setTimeout(() => {
+    const delivered = store.getState().sos.delivery?.pushSent;
+    if (typeof delivered === 'number' && delivered > 0) return;
+    addBreadcrumb({
+      category: 'sos',
+      severity: 'warn',
+      message: 'SOS unconfirmed after grace, arming offline fallbacks',
+      data: { id: record.id, delivered: delivered ?? null },
+    });
+    armOfflineFallbacks(record, user, location);
+  }, DELIVERY_GRACE_MS);
+
   return record;
+}
+
+/**
+ * Every route out of the phone that does not need our server.
+ *
+ * Safe to run twice: enqueueSOS de-dupes by id, and the mesh is keyed by the
+ * same message id, so a second call is a no-op rather than a second alarm.
+ */
+function armOfflineFallbacks(
+  record: SOSRecord,
+  user: UserProfile,
+  location: SOSLocation,
+): void {
+  void enqueueSOS(record, user);
+  // Bluetooth mesh: a nearby ORBII phone that DOES have signal catches this and
+  // bridges it to the server. Sealed end-to-end, so the relay never reads it.
+  if (location) {
+    void armOfflineSos(user.uid, location.latitude, location.longitude, record.timestamp);
+  }
+  // Location-free "someone near me needs help" beacon, so helpers can home in by
+  // signal strength with no internet at all. Premium, like helper dispatch.
+  if (user.isPremium) {
+    void armHelperPing();
+  }
+  // Rides the cell signal, so it works with mobile data fully off. Only fires if
+  // SEND_SMS was granted ahead of time, which on Play it currently is not, so
+  // the ActiveSOS screen escalates to the one-tap composer instead.
+  void sendSosSmsDirect(user.emergencyContacts, buildSOSMessage({ user, location }));
 }
 
 async function persistSOS(
