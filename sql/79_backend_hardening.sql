@@ -203,25 +203,42 @@ grant execute on function public.nearest_helpers(
 -- The reason to do it is consistency of return type across 129 RPCs, so an
 -- edge function never has to care which of two JSON types it got back, and so
 -- callers can use ->> and @> uniformly.
+--
+-- Changing a function's return type from json to jsonb is NOT a replace: it
+-- fails with 42P13 "cannot change return type of existing function". The old
+-- signature has to be dropped first. Anything holding a reference to it (a
+-- view, another function) would break, so this is done one function at a time
+-- rather than in bulk.
 
-create or replace function public.helper_dispatch_status()
+drop function if exists public.helper_help_status();
+
+create or replace function public.helper_help_status()
 returns jsonb
-language sql security definer set search_path = public stable as $$
+language sql
+stable
+security definer
+set search_path = public
+as $$
   select jsonb_build_object(
-    'used',      coalesce(u.used, 0),
-    'cap',       public.helper_dispatch_cap(auth.uid()),
-    'unlimited', public.helper_dispatch_cap(auth.uid()) is null,
-    'period',    to_char(date_trunc('month', now() at time zone 'Asia/Kolkata'), 'YYYY-MM')
-  )
-  from (
-    select sum(d.used) as used
-    from helper_dispatch_usage d
-    where d.user_id = auth.uid()
-      and d.period = to_char(date_trunc('month', now() at time zone 'Asia/Kolkata'), 'YYYY-MM')
-  ) u;
+    'cap',       helper_monthly_cap(auth.uid()),
+    'used',      helper_helps_this_month(auth.uid()),
+    'remaining', greatest(0, helper_monthly_cap(auth.uid()) - helper_helps_this_month(auth.uid()))
+  );
 $$;
 
-grant execute on function public.helper_dispatch_status() to authenticated;
+grant execute on function public.helper_help_status() to authenticated;
+
+-- rescue_claim (sql/69, lines 150 and 192) is DELIBERATELY left on json.
+--
+-- It is a ~90 line plpgsql function with slot-assignment logic, and converting
+-- it means dropping the signature and reproducing the entire body here, where
+-- it would then exist in two files and drift. The gain is a re-parse of a
+-- three-key object, measured in microseconds, on a call that already does
+-- several row locks.
+--
+-- That is a bad trade. If rescue_claim is ever edited for a real reason, change
+-- json_build_object to jsonb_build_object in sql/69 at the same time and move
+-- the return type there.
 
 
 -- ---------------------------------------------------------------------------
@@ -599,6 +616,13 @@ begin
                       where proname = 'sos_escalation_tick' limit 1)
                      like '%skip locked%'
                 then 'ok' else 'NOT LOCKED' end
+    union all
+    select 'helper_help_status on jsonb',
+           case when exists (
+                  select 1 from pg_proc p
+                  join pg_type t on t.oid = p.prorettype
+                  where p.proname = 'helper_help_status' and t.typname = 'jsonb')
+                then 'ok' else 'STILL json' end
   ) checks;
   raise notice e'\n%', msg;
 end $$;
