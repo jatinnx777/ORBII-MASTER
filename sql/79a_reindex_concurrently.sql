@@ -1,0 +1,54 @@
+-- 79a_reindex_concurrently.sql
+-- ============================================================================
+-- DO NOT PASTE THIS INTO THE SUPABASE SQL EDITOR. It will fail.
+--
+-- CREATE INDEX CONCURRENTLY cannot run inside a transaction block (ERROR
+-- 25001), and the Supabase dashboard editor wraps every submission in one with
+-- no way to turn it off. Isolating the statement at the top of a file does not
+-- help: the whole submission is still one transaction.
+--
+-- This file exists for the day helpers_live is large enough that the plain
+-- CREATE INDEX in sql/79 would block writes for a noticeable time. Until then
+-- sql/79 is sufficient and this file does nothing you need.
+--
+-- WHEN TO RUN IT: when helpers_live is past roughly ten thousand rows. Below
+-- that the plain build is sub-millisecond and locking is a non-issue.
+--
+-- HOW TO RUN IT: from a real Postgres client, which is not transaction-wrapped.
+--
+--   1. Supabase dashboard, Project Settings, Database, Connection string.
+--      Take the "URI" one and export it:
+--
+--        export DATABASE_URL='postgresql://postgres:[PASSWORD]@db.<ref>.supabase.co:5432/postgres'
+--
+--   2. Run each statement SEPARATELY with -c. One -c per statement: psql sends
+--      each as its own implicit transaction, which is what CONCURRENTLY needs.
+--
+--        psql "$DATABASE_URL" -c "drop index concurrently if exists public.idx_helpers_live_active_location;"
+--        psql "$DATABASE_URL" -c "create index concurrently if not exists idx_helpers_live_active_location on public.helpers_live using gist (location) where is_online = true;"
+--        psql "$DATABASE_URL" -c "drop index concurrently if exists public.idx_helpers_live_active_fresh;"
+--        psql "$DATABASE_URL" -c "create index concurrently if not exists idx_helpers_live_active_fresh on public.helpers_live (updated_at desc) where is_online = true;"
+--
+--      Do NOT put them in one -f file: psql -f runs the file as a single
+--      transaction unless every statement is separated by explicit COMMITs,
+--      and CONCURRENTLY is illegal even then.
+--
+--   3. Verify:
+--
+--        psql "$DATABASE_URL" -c "select indexname, indexdef from pg_indexes where tablename = 'helpers_live';"
+--
+-- IF A CONCURRENT BUILD FAILS: it leaves an INVALID index behind, which is
+-- still maintained on every write but never used for reads, so you pay the
+-- write cost for nothing. Postgres does not clean this up for you. Check for
+-- it and drop it:
+--
+--   psql "$DATABASE_URL" -c "select c.relname from pg_class c join pg_index i on i.indexrelid = c.oid where not i.indisvalid;"
+--   psql "$DATABASE_URL" -c "drop index concurrently <name>;"
+--
+-- ============================================================================
+-- Kept as a comment block on purpose. There is nothing here to execute, and a
+-- file that fails when someone runs it out of habit is worse than one that
+-- cannot.
+-- ============================================================================
+
+select 'Read the comments. This file is instructions for psql, not SQL to run here.' as note;

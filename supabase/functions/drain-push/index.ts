@@ -17,6 +17,7 @@
 // Deploy:  supabase functions deploy drain-push --no-verify-jwt
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { report } from '../_shared/report.ts';
 
 const EXPO_PUSH = 'https://exp.host/--/api/v2/push/send';
 const EXPO_CHUNK = 100;
@@ -50,7 +51,13 @@ Deno.serve(async (req) => {
     while (drained < limit) {
       const want = Math.min(EXPO_CHUNK, limit - drained);
       const { data, error } = await admin.rpc('push_claim', { p_limit: want });
-      if (error) return json({ error: error.message }, 500);
+      if (error) {
+        // The drain cannot claim work. This is the silent-failure case: no
+        // pushes go out and nothing else in the system notices.
+        await report(admin, 'drain-push', `push_claim failed: ${error.message}`,
+          { drained, sent, failed }, 'fatal');
+        return json({ error: error.message }, 500);
+      }
 
       const rows = (data ?? []) as Claimed[];
       if (rows.length === 0) break; // queue empty
@@ -74,6 +81,13 @@ Deno.serve(async (req) => {
             p_error: `expo ${res.status}`,
           });
           failed += rows.length;
+          // A 401 or 403 here means credentials stopped being accepted, which
+          // silently kills every push in the product. Report the whole class,
+          // not just the batch: counts only, never a token.
+          await report(admin, 'drain-push',
+            `Expo rejected a batch with HTTP ${res.status}`,
+            { status: res.status, batch: rows.length },
+            res.status === 401 || res.status === 403 ? 'fatal' : 'error');
           continue;
         }
 
@@ -112,6 +126,16 @@ Deno.serve(async (req) => {
 
     return json({ ok: true, drained, sent, failed });
   } catch (err) {
-    return json({ error: err instanceof Error ? err.message : String(err) }, 500);
+    const msg = err instanceof Error ? err.message : String(err);
+    try {
+      const admin = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+      );
+      await report(admin, 'drain-push', `unhandled: ${msg}`, undefined, 'fatal');
+    } catch {
+      // nothing left to try
+    }
+    return json({ error: msg }, 500);
   }
 });

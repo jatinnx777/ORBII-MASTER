@@ -93,11 +93,27 @@ async function fanOut(
     // One row per token. The payload differs only by `to`, but storing it whole
     // keeps the drain dumb, which is what you want in the component that runs
     // unattended.
-    const { data } = await admin.rpc('push_enqueue', {
+    const { data, error } = await admin.rpc('push_enqueue', {
       p_tokens: tail.map((m) => m.to as string),
       p_payload: { ...tail[0], to: undefined },
       p_priority: priority,
     });
+
+    if (error) {
+      // The outbox is unavailable: sql/79 has not been run yet, or the table
+      // is gone. Fall back to sending the tail inline, exactly as this function
+      // did before the queue existed.
+      //
+      // Without this branch, deploying this function ahead of its migration
+      // silently DROPS every recipient past the first hundred. That failure is
+      // invisible from the outside and it is the people at the end of a large
+      // circle who lose their alert. A slow send is recoverable; a silent one
+      // is not, so degrade to slow.
+      console.error('push_enqueue unavailable, sending tail inline:', error.message);
+      const alsoSent = await sendExpo(tail);
+      return { inline: inline + alsoSent, queued: 0 };
+    }
+
     queued = Number(data ?? 0);
 
     // Kick the drain now rather than waiting for a timer. Fire-and-forget: if
