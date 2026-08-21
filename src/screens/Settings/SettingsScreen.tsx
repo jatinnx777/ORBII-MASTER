@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Image,
   Linking,
@@ -32,6 +32,8 @@ import { circlesLoaded } from '@/redux/slices/circlesSlice';
 import { loadEmergencyContacts } from '@/services/emergency-contacts';
 import { profileUpdated } from '@/redux/slices/userSlice';
 import { deleteMyData } from '@/services/consent';
+import { isMeshRelayEnabled, setMeshRelayEnabled } from '@/services/mesh-consent';
+import { startMeshListening, stopMeshListening } from '@/services/mesh';
 import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
@@ -75,6 +77,39 @@ export function SettingsScreen() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dispatch, profile?.uid]),
   );
+
+  // Offline mesh relay consent. DPDP Act 2023 §6(4): consent may be withdrawn
+  // at any time and withdrawal must be as easy as giving it, so this is a
+  // one-tap switch that takes effect immediately rather than on next launch.
+  const [meshRelay, setMeshRelay] = useState(true);
+  useEffect(() => {
+    let alive = true;
+    void isMeshRelayEnabled().then((v) => {
+      if (alive) setMeshRelay(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const handleMeshRelay = async (next: boolean) => {
+    setMeshRelay(next); // optimistic: the switch must feel instant
+    await setMeshRelayEnabled(next);
+    if (next) {
+      await startMeshListening();
+    } else {
+      // Tear the service down now. A setting that only applies after a restart
+      // is not a withdrawal of consent, it is a promise of one.
+      await stopMeshListening();
+    }
+    sheet.notify({
+      title: next ? 'Relay on' : 'Relay off',
+      body: next
+        ? 'Your phone can now carry a nearby emergency to the internet. It stays sealed, so you can never read what you carry.'
+        : "Your phone will not carry anyone else's emergency. Your own SOS still works exactly as before.",
+      tone: next ? 'success' : 'neutral',
+    });
+  };
 
   const handlePush = async (next: boolean) => {
     if (next) {
@@ -251,6 +286,32 @@ export function SettingsScreen() {
             label="Notification inbox"
             value="Alerts, circle requests, and updates"
             onPress={() => navigation.navigate('Notifications')}
+          />
+        </RowGroup>
+
+        {/* Emergency Network.
+            Its own section because this is the only setting in the app that
+            governs what ORBII does with SOMEONE ELSE'S data on this phone,
+            rather than what it does with the user's own. Burying that in "App"
+            would misrepresent what is being asked. */}
+        <RowSection title="Emergency Network" />
+        <RowGroup>
+          <Row
+            icon="git-network-outline"
+            label="Offline mesh relay"
+            value={
+              meshRelay
+                ? 'On. Your phone can carry a nearby SOS to the internet when theirs has no signal. You cannot read what you carry.'
+                : "Off. Your phone will not carry anyone else's emergency. Your own SOS is unaffected."
+            }
+            right={
+              <Switch
+                value={meshRelay}
+                onValueChange={(v) => void handleMeshRelay(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
           />
         </RowGroup>
 

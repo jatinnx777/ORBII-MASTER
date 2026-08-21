@@ -2,6 +2,7 @@ import { NativeModules, Platform, PermissionsAndroid } from 'react-native';
 import { getItem, setItem } from './storage';
 import { trackEvent } from './analytics';
 import { sealSosForMesh } from './mesh-crypto';
+import { isMeshRelayEnabled } from './mesh-consent';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
 
 // Offline mesh, Phase 0: read what mesh radios each phone can offer, and report
@@ -81,15 +82,48 @@ export async function disarmMesh(): Promise<void> {
  * Start listen-only relay: this phone scans for nearby SOS beacons and bridges
  * them to the server. This is what makes the mesh work, every open ORBII becomes
  * a potential relay for someone offline nearby. Best-effort; needs BT permission.
+ *
+ * DPDP Act 2023 §6(4), consent revocation. This is the only place ORBII
+ * processes a THIRD PARTY's personal data on this user's device, so it is
+ * gated on an explicit setting the user can revoke at any time from
+ * Settings → Emergency Network. Withdrawal has to be as easy as consent, so
+ * the check sits here, at the single entry point, rather than being sprinkled
+ * across the call sites where one could be missed.
+ *
+ * Note this gates only the RELAY role. armMeshSos and armOfflineSos, which
+ * broadcast this user's own emergency, are deliberately not gated: a privacy
+ * setting must never make its owner harder to rescue.
  */
 export async function startMeshListening(): Promise<boolean> {
   if (!available) return false;
+  if (!(await isMeshRelayEnabled())) return false;
   try {
     if (!(await hasMeshPermissions())) return false;
     const bridgeUrl = `${SUPABASE_URL}/functions/v1/mesh-bridge`;
     return await OrbiiMesh!.startListening(bridgeUrl, SUPABASE_ANON_KEY);
   } catch {
     return false;
+  }
+}
+
+/**
+ * Stop relaying for other people, now, without waiting for a restart.
+ *
+ * DPDP Act 2023 §6(4) again: revocation that only takes effect next launch is
+ * not revocation. Toggling the setting off calls this, and the foreground
+ * service is torn down so the device stops scanning and stops carrying other
+ * people's packets immediately.
+ *
+ * This tears down the whole mesh service, which is correct here because the
+ * relay role is the only long-running use of it. An SOS in flight re-arms the
+ * service through armMeshSos, which does not consult the setting.
+ */
+export async function stopMeshListening(): Promise<void> {
+  if (!available) return;
+  try {
+    await OrbiiMesh!.disarm();
+  } catch {
+    // Already stopped, or the service was never up.
   }
 }
 
