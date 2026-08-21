@@ -92,6 +92,8 @@ class VoiceGuardService : Service() {
     // BEFORE she spoke. 15s @ 16k mono 16-bit ≈ 470 KB.
     private const val PREROLL_SECONDS = 15
     private const val PREROLL_DIR = "sos-preroll"
+    /** Encrypted evidence packages. Never contains plaintext audio. */
+    private const val EVIDENCE_DIR = "sos-evidence"
 
     // Fusion. These words are far too common to fire an SOS alone — but paired
     // with a weak distress sound (a scream YAMNet scored below its own firing
@@ -198,6 +200,20 @@ class VoiceGuardService : Service() {
   /** When a weak (non-firing) distress sound was last heard — fusion input. */
   @Volatile private var lastWeakDangerAt = 0L
   @Volatile private var lastWeakLabel = ""
+
+  // ── evidence packaging ──
+  /** Where encrypted evidence lands. Separate from PREROLL_DIR, which is raw. */
+  private val evidenceDirName = EVIDENCE_DIR
+  /**
+   * Post-trigger capture target. Non-null between a trigger and the moment the
+   * encoder takes it. The audio loop fills it from frames it is already
+   * reading, so no second AudioRecord is ever opened.
+   */
+  @Volatile private var postTrigger: ShortArray? = null
+  @Volatile private var postTriggerWritten = 0
+  /** One thread, so two triggers queue rather than fight over the codec. */
+  private val evidenceExec: java.util.concurrent.ExecutorService =
+    java.util.concurrent.Executors.newSingleThreadExecutor()
   /** Liveness beacon. The loop stamps this into prefs every ~30s; if the OS
    *  kills us (aggressive OEM battery managers), it goes stale, and the app can
    *  detect the silent death on next foreground and re-arm. */
@@ -396,6 +412,19 @@ class VoiceGuardService : Service() {
         // denoiser/gain mutate the buffer). The seconds before she speaks are
         // the ones the old recording threw away, and evidence must stay real.
         preRoll?.write(buffer, n)
+        // Feed the post-trigger window from the frames we are ALREADY reading.
+        // This is the whole reason no second AudioRecord is opened: on several
+        // OEM audio HALs the newcomer wins the stream, which would leave Voice
+        // SOS deaf in the middle of a live emergency. Raw, like the pre-roll,
+        // so evidence is never the denoised version of events.
+        postTrigger?.let { dst ->
+          val room = dst.size - postTriggerWritten
+          if (room > 0) {
+            val take = minOf(room, n)
+            System.arraycopy(buffer, 0, dst, postTriggerWritten, take)
+            postTriggerWritten += take
+          }
+        }
         // Band-pass to the voice range BEFORE the gate, so rumble/hiss can't
         // pass the VAD as "speech" and the recognizer hears a cleaner shout.
         denoiser?.process(buffer, n)
@@ -733,7 +762,94 @@ class VoiceGuardService : Service() {
       Log.w(TAG, "pre-roll dump failed", e)
       null
     }
+    // Fire FIRST, encode after. The SOS is the product; the recording is
+    // evidence for afterwards, and nothing about producing it is allowed to sit
+    // between her shouting and the countdown appearing.
     fireSos(hit, preRollPath)
+    encodeEvidenceAsync(now)
+  }
+
+  /**
+   * Package the audio around this trigger, off the audio thread.
+   *
+   * THREADING. A single-threaded executor, not coroutines: adding
+   * kotlinx-coroutines for one background job is APK weight for nothing, and
+   * one thread is also a queue, so two triggers in quick succession encode in
+   * order instead of fighting over the codec.
+   *
+   * THE MICROPHONE. This deliberately does NOT open an AudioRecord. The listen
+   * loop above still owns the mic and is still listening for a second trigger,
+   * and a second AudioRecord is unreliable across OEMs, with some HALs handing
+   * the stream to the newcomer and leaving Voice SOS deaf during a live
+   * emergency. So the post-trigger seconds are collected by the loop itself
+   * into `postTrigger` and handed over when full.
+   *
+   * FAILURE. Every path swallows. The SOS has already gone out by the time this
+   * runs, so the worst case is an emergency with no recording, which is
+   * survivable. An exception here reaching the audio thread would not be.
+   */
+  private fun encodeEvidenceAsync(stamp: Long) {
+    val buf = preRoll ?: return
+    // Start collecting the post-trigger window on the audio thread. The loop
+    // checks this on every frame and fills it as the audio arrives.
+    val post = ShortArray(SAMPLE_RATE * AudioEvidenceEncoder.POST_TRIGGER_MS / 1000)
+    postTrigger = post
+    postTriggerWritten = 0
+
+    evidenceExec.execute {
+      try {
+        // Wait for the loop to fill the window, with a ceiling so a service
+        // that stops mid-capture cannot pin this thread forever.
+        val deadline = System.currentTimeMillis() + AudioEvidenceEncoder.POST_TRIGGER_MS + 5000
+        while (running && postTriggerWritten < post.size &&
+          System.currentTimeMillis() < deadline
+        ) {
+          Thread.sleep(250)
+        }
+        val captured = postTriggerWritten
+        postTrigger = null // stop the loop writing before we read
+
+        val evidence = AudioEvidenceEncoder.encode(
+          dir = File(filesDir, EVIDENCE_DIR),
+          baseName = "evidence_$stamp",
+          sampleRate = SAMPLE_RATE,
+          preRoll = buf.readPcm(),
+          post = if (captured >= post.size) post else post.copyOf(captured),
+        ) ?: return@execute
+
+        // Hand the metadata to JS through the same SharedPreferences channel the
+        // download progress uses, rather than the event emitter, which behaves
+        // differently across the old and new RN architectures and would be a
+        // second thing to get right during an emergency.
+        //
+        // The key crosses as base64 because the sealing happens in JS. See
+        // EvidenceKeyManager: minSdk is 24 and Java's X25519 starts at API 33,
+        // so the only zero-dependency sealed-box available to this app is the
+        // tweetnacl one already shipping for the mesh.
+        getSharedPreferences("voiceguard", Context.MODE_PRIVATE).edit()
+          .putString("evidence_uri", evidence.file.absolutePath)
+          .putString("evidence_sha256", evidence.sha256)
+          .putString("evidence_iv", evidence.ivB64())
+          .putString(
+            "evidence_key",
+            android.util.Base64.encodeToString(evidence.key, android.util.Base64.NO_WRAP),
+          )
+          .putInt("evidence_duration_ms", evidence.durationMs)
+          .putLong("evidence_stamp", stamp)
+          .apply()
+
+        // Wipe our copy. This clears the Kotlin heap only: the base64 above is
+        // an immutable String and there is a second copy in SharedPreferences
+        // until JS consumes and clears it. Stated plainly because pretending
+        // otherwise is worse than the exposure.
+        AudioEvidenceEncoder.wipeKey(evidence.key)
+        Log.i(TAG, "evidence packaged: ${evidence.durationMs}ms")
+      } catch (e: Exception) {
+        Log.w(TAG, "evidence encode failed", e)
+      } finally {
+        postTrigger = null
+      }
+    }
   }
 
   // Voice trigger → bring up the SOS countdown SCREEN over the lock screen, so
