@@ -317,7 +317,11 @@ cd android; .\gradlew.bat assembleRelease --console=plain
    SQL editor: `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
    (needs sql/27). Then approve applicants through the admin portal, which sets
    all three flags at once. Do not hand-edit the flags.
-3. Run `sql/71` (Voice Quests storage) and `D:\ORBII-HELPER\sql\03`.
+3. Run `sql/79_backend_hardening.sql` (app) and `D:\ORBII-HELPER\sql\03_dispatch_debug.sql`.
+   Verified applied against the live project on 22 Aug: sql/71 (`voice_samples`
+   exists), helper sql/01 and sql/02. Verified NOT applied: sql/79
+   (`push_outbox`, `rate_ok` missing), helper sql/03 (`helper_dispatch_debug`
+   missing).
 4. Play **Data Safety** declaration before any AAB upload: audio, location, date
    of birth. Plus a separate declaration for `in.orbii.helper`.
 5. File a provisional patent on hands-free + on-device + offline-mesh before
