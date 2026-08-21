@@ -18,6 +18,10 @@
 -- That column does not exist. helpers_live has `is_online` (sql/12 line 23) and
 -- all nine references in the schema use that name, so the index below uses
 -- is_online. An index on is_on_duty would have failed at migration time.
+--
+-- HOW TO RUN: paste the whole file into the Supabase SQL editor and run it once.
+-- No CONCURRENTLY anywhere, so it is safe inside the editor's transaction. See
+-- the note in section 1 for when that stops being the right choice.
 -- ============================================================================
 
 
@@ -43,17 +47,36 @@
 -- reject it. That filter stays in the query and is applied after the index
 -- scan, which is correct anyway since it changes every second.
 --
--- CONCURRENTLY so this does not take an ACCESS EXCLUSIVE lock on a table that
--- is on the emergency read path. That means it cannot run inside a transaction
--- block: if your client wraps statements in one, run this file's section 1 on
--- its own.
-create index concurrently if not exists idx_helpers_live_active_location
+-- ON THE MISSING `CONCURRENTLY`.
+--
+-- The textbook version of this is CREATE INDEX CONCURRENTLY, so building the
+-- index does not hold an ACCESS EXCLUSIVE lock on a table that sits on the
+-- emergency read path. It is omitted here for one practical reason: the
+-- Supabase SQL editor wraps every submission in a transaction, and
+-- CONCURRENTLY is illegal inside one (ERROR 25001). There is no toggle for it
+-- in the dashboard.
+--
+-- Plain CREATE INDEX is the right call at ORBII's current size. helpers_live
+-- holds one row per helper who has ever gone on duty, and the verified pool is
+-- not seeded yet, so the table is in the tens of rows. Building a GiST over
+-- that is sub-millisecond and the lock is over before anything could queue
+-- behind it.
+--
+-- WHEN THIS STOPS BEING TRUE: once helpers_live is into the tens of thousands,
+-- a plain CREATE INDEX will block location pings for the duration of the
+-- build. At that point rebuild it properly from a real Postgres client, which
+-- is not wrapped in a transaction:
+--
+--   psql "$DATABASE_URL" -c "create index concurrently ..."
+--
+-- (Connection string: Supabase dashboard, Project Settings, Database.)
+create index if not exists idx_helpers_live_active_location
   on public.helpers_live using gist (location)
   where is_online = true;
 
 -- Composite partial for the freshness filter, so the planner can satisfy
 -- "online AND fresh" without visiting the heap for stale rows.
-create index concurrently if not exists idx_helpers_live_active_fresh
+create index if not exists idx_helpers_live_active_fresh
   on public.helpers_live (updated_at desc)
   where is_online = true;
 
