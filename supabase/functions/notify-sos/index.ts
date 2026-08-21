@@ -34,11 +34,14 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
+// Expo accepts 100 messages per request. One chunk is one round trip.
+const EXPO_CHUNK = 100;
+
 // Send Expo push messages, chunked at Expo's 100-per-request limit.
 async function sendExpo(messages: Record<string, unknown>[]): Promise<number> {
   let sent = 0;
-  for (let i = 0; i < messages.length; i += 100) {
-    const chunk = messages.slice(i, i + 100);
+  for (let i = 0; i < messages.length; i += EXPO_CHUNK) {
+    const chunk = messages.slice(i, i + EXPO_CHUNK);
     const r = await fetch(EXPO_PUSH, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -47,6 +50,64 @@ async function sendExpo(messages: Record<string, unknown>[]): Promise<number> {
     if (r.ok) sent += chunk.length;
   }
   return sent;
+}
+
+/**
+ * Hybrid fan-out: send the first chunk inline, queue the rest.
+ *
+ * The problem with sending everything inline is that a victim with a large
+ * circle plus five waves of helpers is N sequential round trips to a third
+ * party inside a function with a wall-clock budget. If Expo is slow, the
+ * function dies partway and the people at the END of the list are silently
+ * dropped. Nobody finds out, because a push that was never attempted looks
+ * exactly like a push that was delivered and ignored.
+ *
+ * The problem with queueing everything is the opposite, and worse: the first
+ * alert now waits for a drain cycle. On an emergency that is the wrong
+ * direction, and "we made the SOS slower to make the architecture cleaner" is
+ * not a trade worth making.
+ *
+ * So: the first 100 recipients go out inline, in one round trip, on the same
+ * latency as today. Recipients are ordered so that chunk is the people who
+ * matter most. Everything past it lands in push_outbox and is drained
+ * out-of-band, which is precisely the unbounded part that was causing the
+ * timeouts.
+ *
+ * Returns what actually happened, so the caller can log the split rather than
+ * a single misleading "sent" count.
+ */
+async function fanOut(
+  admin: Admin,
+  messages: Record<string, unknown>[],
+  priority = 0,
+): Promise<{ inline: number; queued: number }> {
+  if (messages.length === 0) return { inline: 0, queued: 0 };
+
+  const head = messages.slice(0, EXPO_CHUNK);
+  const tail = messages.slice(EXPO_CHUNK);
+
+  const inline = await sendExpo(head);
+
+  let queued = 0;
+  if (tail.length > 0) {
+    // One row per token. The payload differs only by `to`, but storing it whole
+    // keeps the drain dumb, which is what you want in the component that runs
+    // unattended.
+    const { data } = await admin.rpc('push_enqueue', {
+      p_tokens: tail.map((m) => m.to as string),
+      p_payload: { ...tail[0], to: undefined },
+      p_priority: priority,
+    });
+    queued = Number(data ?? 0);
+
+    // Kick the drain now rather than waiting for a timer. Fire-and-forget: if
+    // it fails, the rows are still in the outbox and the next drain takes them.
+    void admin.functions
+      .invoke('drain-push', { body: { limit: 300 } })
+      .catch(() => undefined);
+  }
+
+  return { inline, queued };
 }
 
 // Push nearby ONLINE VERIFIED helpers within `radiusKm`, skipping anyone in
@@ -168,17 +229,26 @@ Deno.serve(async (req) => {
     }
 
     // 3. Emergency contacts who are themselves ORBII users (matched by phone).
+    //
+    // This was a loop issuing one round trip per contact. Ten contacts meant
+    // ten sequential queries on the SOS critical path, before a single push
+    // went out. One `.in()` is one round trip regardless of how many contacts
+    // she has.
     const { data: contacts } = await admin
       .from('emergency_contacts')
       .select('phone')
       .eq('user_id', victim);
-    for (const c of contacts ?? []) {
-      const { data: u } = await admin
+    const phones = (contacts ?? [])
+      .map((c: { phone: string }) => c.phone)
+      .filter(Boolean);
+    if (phones.length > 0) {
+      const { data: users } = await admin
         .from('users_public')
         .select('id')
-        .eq('phone', c.phone)
-        .maybeSingle();
-      if (u?.id && u.id !== victim) recipients.add(u.id);
+        .in('phone', phones);
+      (users ?? []).forEach((u: { id: string }) => {
+        if (u.id && u.id !== victim) recipients.add(u.id);
+      });
     }
 
     const name = sos.user_name ?? 'Someone';
@@ -193,7 +263,8 @@ Deno.serve(async (req) => {
       const tokens = (toks ?? [])
         .map((t: { token: string }) => t.token)
         .filter((t: string) => !!t && t.startsWith('ExponentPushToken'));
-      circleSent = await sendExpo(
+      const split = await fanOut(
+        admin,
         tokens.map((to: string) => ({
           to,
           title: `🆘 ${name} needs help`,
@@ -203,7 +274,9 @@ Deno.serve(async (req) => {
           channelId: 'sos',
           data: { kind: 'sos_push', sosId, lat: sos.lat, lng: sos.lng },
         })),
+        0, // highest drain priority: this is an emergency
       );
+      circleSent = split.inline + split.queued;
     }
 
     // 5. VERIFIED HELPERS — a PAID-ONLY feature (anti-abuse model).

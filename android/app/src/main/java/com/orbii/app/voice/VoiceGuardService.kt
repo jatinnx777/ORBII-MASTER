@@ -376,6 +376,7 @@ class VoiceGuardService : Service() {
       // Voice SOS deaf.
       preferBuiltInMic(record)
       record.startRecording()
+      calibrateNoiseFloor(record, buffer)
       while (running) {
         val n = record.read(buffer, 0, buffer.size)
         if (n <= 0) continue
@@ -549,6 +550,58 @@ class VoiceGuardService : Service() {
     } catch (e: Exception) {
       Log.w(TAG, "could not pin built-in mic", e)
     }
+  }
+
+  /**
+   * Seed the ambient noise floor from ~500 ms of real audio before the first
+   * frame is ever judged.
+   *
+   * Why this matters. `noiseFloor` starts at a hardcoded 150.0 and converges
+   * toward reality only through the per-frame leak, which is deliberately slow
+   * (FLOOR_LEAK = 0.0015, roughly 0.15% of the gap per 200 ms frame). Arming
+   * Voice SOS on a noisy road therefore leaves the gate far too low for the
+   * first several seconds: every passing truck clears it, the recognizer runs
+   * on rumble, and the CPU cost we designed the gate to avoid is paid anyway.
+   * Arming in a quiet room has the mirror problem in the other direction.
+   *
+   * Those first seconds are not a nice-to-have. Someone arming the app is
+   * frequently doing it *because* they have just walked into a situation, so
+   * the window where the floor is wrong is exactly the window that matters.
+   *
+   * Median, not mean, over the calibration frames. A door slamming or a single
+   * car horn during calibration would drag a mean far above the true ambient
+   * level and leave the gate deaf; a median ignores it.
+   *
+   * Runs before the pre-roll buffer starts filling, so nothing captured here is
+   * kept: this audio is measured for its loudness and discarded.
+   */
+  private fun calibrateNoiseFloor(record: AudioRecord, scratch: ShortArray) {
+    val frames = 3                       // 3 x 200 ms = 600 ms
+    val levels = ArrayList<Double>(frames)
+    val deadline = System.currentTimeMillis() + 1500L   // never hang on a bad mic
+    try {
+      while (levels.size < frames && System.currentTimeMillis() < deadline) {
+        val n = record.read(scratch, 0, scratch.size)
+        if (n <= 0) continue
+        // Band-pass first, so the floor is measured on the same signal the gate
+        // will actually see. Measuring raw would include rumble the denoiser
+        // removes, and set the floor too high.
+        denoiser?.process(scratch, n)
+        levels.add(rms(scratch, n))
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "noise calibration failed, using default floor", e)
+      return
+    }
+    if (levels.isEmpty()) return
+
+    levels.sort()
+    val median = levels[levels.size / 2]
+    // Clamp to the same bounds the gate uses. A mic returning garbage must not
+    // be able to set a floor that deafens us or one that fires on silence.
+    noiseFloor = median.coerceIn(gateMin, MAX_GATE)
+    VoiceMetrics.rms = median
+    Log.i(TAG, "calibrated noise floor=$noiseFloor from ${levels.size} frames")
   }
 
   private fun rms(buf: ShortArray, n: Int): Double {
