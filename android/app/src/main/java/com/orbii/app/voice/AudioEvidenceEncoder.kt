@@ -77,12 +77,43 @@ object AudioEvidenceEncoder {
     val file: File,
     /** SHA-256 of the PLAINTEXT m4a, hex. Proves the audio, not the ciphertext. */
     val sha256: String,
-    /** Base64 AES-256 key. Send with the dispatch; never write beside the file. */
-    val keyB64: String,
-    /** Base64 GCM IV. Safe to store, useless alone. */
-    val ivB64: String,
+    /**
+     * Raw AES-256 key, 32 bytes. Seal it for the recipients, then call
+     * [wipeKey] on it.
+     *
+     * A ByteArray rather than a base64 String on purpose. A String is immutable
+     * and interned by the JVM: once the key exists as one there is no way to
+     * erase it, and it stays in the heap until a GC that may never come during
+     * the emergency. Bytes can be overwritten in place, which is the only
+     * version of "wipe the key from memory" that is not theatre.
+     */
+    val key: ByteArray,
+    /** GCM IV, 12 bytes. Safe to store beside the file, useless on its own. */
+    val iv: ByteArray,
     val durationMs: Int,
-  )
+  ) {
+    /** Base64 IV, for putting in a payload. The IV is not a secret. */
+    fun ivB64(): String = android.util.Base64.encodeToString(iv, android.util.Base64.NO_WRAP)
+
+    // Value semantics on arrays, so equals/hashCode do not compare references.
+    override fun equals(other: Any?): Boolean =
+      this === other || (other is Evidence && file == other.file && sha256 == other.sha256)
+
+    override fun hashCode(): Int = 31 * file.hashCode() + sha256.hashCode()
+  }
+
+  /**
+   * Overwrite a key in place. Call as soon as the envelopes are sealed.
+   *
+   * Honest about the limit: this erases THIS array. It cannot erase a copy the
+   * runtime made behind your back, and SecretKey.getEncoded() hands out a clone
+   * every call, so the discipline is to take the bytes once and never convert
+   * them to a String.
+   */
+  @JvmStatic
+  fun wipeKey(key: ByteArray) {
+    java.util.Arrays.fill(key, 0.toByte())
+  }
 
   // ---------------------------------------------------------------------------
   // Public entry points
@@ -113,8 +144,8 @@ object AudioEvidenceEncoder {
       Evidence(
         file = enc.first,
         sha256 = sha,
-        keyB64 = enc.second,
-        ivB64 = enc.third,
+        key = enc.second,
+        iv = enc.third,
         durationMs = total,
       )
     } catch (e: Exception) {
@@ -342,9 +373,12 @@ object AudioEvidenceEncoder {
    * A fresh random IV per file. Reusing an IV under one key with GCM is
    * catastrophic, not merely weak, so it is generated here and never derived.
    */
-  private fun encryptInPlace(plain: File, dest: File): Triple<File, String, String>? {
+  private fun encryptInPlace(plain: File, dest: File): Triple<File, ByteArray, ByteArray>? {
     return try {
       val key: SecretKey = KeyGenerator.getInstance("AES").apply { init(256) }.generateKey()
+      // Taken ONCE. getEncoded() returns a fresh clone on every call, so asking
+      // twice would leave a second copy on the heap that nobody can wipe.
+      val keyBytes = key.encoded
       val iv = ByteArray(GCM_IV_BYTES).also { SecureRandom().nextBytes(it) }
 
       val cipher = Cipher.getInstance("AES/GCM/NoPadding").apply {
@@ -370,11 +404,7 @@ object AudioEvidenceEncoder {
         plain.delete()
       }
 
-      Triple(
-        dest,
-        android.util.Base64.encodeToString(key.encoded, android.util.Base64.NO_WRAP),
-        android.util.Base64.encodeToString(iv, android.util.Base64.NO_WRAP),
-      )
+      Triple(dest, keyBytes, iv)
     } catch (e: Exception) {
       Log.w(TAG, "encryption failed", e)
       // Never leave plaintext behind because the encryption step failed.
