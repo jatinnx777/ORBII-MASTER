@@ -20,6 +20,7 @@ import com.orbii.app.voice.VoiceGuardPackage
 import com.orbii.app.overlay.HelperOverlayPackage
 import com.orbii.app.mesh.OrbiiMeshPackage
 import com.orbii.app.sms.OrbiiSmsPackage
+import com.orbii.app.oem.OemSettingsPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -36,6 +37,9 @@ class MainApplication : Application(), ReactApplication {
               add(OrbiiMeshPackage())
               // Hands-free SMS lifeline (offline, no data needed).
               add(OrbiiSmsPackage())
+              // Deep links into vendor autostart / battery pages, so a task
+              // killer cannot quietly stop Voice SOS overnight.
+              add(OemSettingsPackage())
             }
 
           override fun getJSMainModuleName(): String = ".expo/.virtual-metro-entry"

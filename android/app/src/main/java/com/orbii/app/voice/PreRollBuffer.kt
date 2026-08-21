@@ -56,6 +56,24 @@ class PreRollBuffer(private val sampleRate: Int, seconds: Int) {
     written += remaining
   }
 
+  /**
+   * Snapshot of the window, oldest sample first.
+   *
+   * Public so AudioEvidenceEncoder can feed the pre-trigger seconds straight
+   * into MediaCodec instead of round-tripping through a WAV on disk. The WAV
+   * path (dumpWav) stays for the debug screen, which wants a file it can play.
+   *
+   * Returns a copy, so the caller can hold it while the ring keeps filling.
+   * 15 s is 480,000 samples, a 960 KB allocation. That is worth it once, at the
+   * moment of an SOS, to avoid encoding from a buffer that is being overwritten
+   * underneath us.
+   */
+  @Synchronized
+  fun readPcm(): ShortArray = snapshot()
+
+  /** Sample rate this buffer was created with, for the encoder's format. */
+  fun sampleRate(): Int = sampleRate
+
   /** Snapshot of the window, oldest sample first. */
   @Synchronized
   private fun snapshot(): ShortArray {

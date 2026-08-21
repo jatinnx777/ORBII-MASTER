@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   Linking,
+  NativeModules,
   Platform,
   Pressable,
   ScrollView,
@@ -218,20 +219,66 @@ const DISPLAY_NAME: Record<Manufacturer, string> = {
   other: 'your phone',
 };
 
+/**
+ * Open the actual vendor page rather than the generic app-info screen.
+ *
+ * This used to be three calls to Linking.openSettings(), which drops the user
+ * on app details and leaves them to find the rest. On MIUI the autostart list
+ * is four more taps through a menu most people have never opened, and a step
+ * somebody abandons halfway is a phone whose task killer stops Voice SOS
+ * overnight.
+ *
+ * OemSettingsModule tries the vendor-private components in order and falls back
+ * to app details on its own, so the worst case here is exactly the behaviour we
+ * had before. The module is Android-only and may be absent in Expo Go, hence
+ * the guard: this screen must still render on a JS-only build.
+ */
 async function openIntent(intent: Step['intent']): Promise<void> {
   if (!intent) return;
-  if (intent === 'battery') {
-    // Generic battery optimization screen.
+
+  const native = NativeModules.OemSettingsModule as
+    | {
+        requestIgnoreBatteryOptimizations(): Promise<string>;
+        openOemAutostartSettings(): Promise<string>;
+        openAppSettings(): Promise<string>;
+      }
+    | undefined;
+
+  if (!native || Platform.OS !== 'android') {
     await Linking.openSettings().catch(() => undefined);
     return;
   }
-  if (intent === 'autostart') {
-    // No universal deep-link for autostart. Best we can do is the
-    // generic app settings, the user takes one tap from there.
+
+  try {
+    if (intent === 'battery') {
+      // Resolves 'already' when the exemption is in place, so we do not throw
+      // a system dialog at someone who has nothing to fix.
+      await native.requestIgnoreBatteryOptimizations();
+      return;
+    }
+    if (intent === 'autostart') {
+      await native.openOemAutostartSettings();
+      return;
+    }
+    await native.openAppSettings();
+  } catch {
+    // The bridge itself failed. Fall back to the old behaviour rather than
+    // leaving the button dead.
     await Linking.openSettings().catch(() => undefined);
-    return;
   }
-  await Linking.openSettings().catch(() => undefined);
+}
+
+/** True when this app is already exempt from Doze. Used to pre-tick the step. */
+export async function isBatteryUnrestricted(): Promise<boolean> {
+  const native = NativeModules.OemSettingsModule as
+    | { isIgnoringBatteryOptimizations(): Promise<boolean> }
+    | undefined;
+  if (!native || Platform.OS !== 'android') return false;
+  try {
+    return await native.isIgnoringBatteryOptimizations();
+  } catch {
+    return false;
+  }
 }
 
 export function OEMHelpScreen() {
