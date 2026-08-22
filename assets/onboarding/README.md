@@ -1,16 +1,7 @@
-# Onboarding Orbi artwork
+Drop the six generated onboarding images here.
 
-Drop the four onboarding illustrations here as **transparent PNGs** (the Orbi
-bee plus its scene props, e.g. speech bubble / phone+map / SOS button), sized
-roughly **800–1000px square**:
+  voice.png  handsfree.png  offline.png  helpers.png  private.png  ready.png
 
-| File | Screen | Pose in your design |
-|------|--------|---------------------|
-| `orbi-1.png` | "Your safety. Always with you." | Orbi waving, heart glow |
-| `orbi-2.png` | "AI that listens. Protection that acts." | Orbi listening, "I've got your back!" bubble |
-| `orbi-3.png` | "Real-time protection. Every step of the way." | Orbi with phone + map trail |
-| `orbi-4.png` | "Help when you need it most." | Orbi with the red SOS button |
-
-Once these are in, uncomment the `require()`s in
-`src/screens/Onboarding/OnboardingScreen.tsx` (the `ORBI` map) and rebuild —
-they'll render in place of the placeholder icon hero.
+Prompts and the style block are in ONBOARDING_ART.md at the repo root.
+Until they exist, the app renders the SVG placeholder scenes in
+src/screens/Onboarding/illustrations/.
