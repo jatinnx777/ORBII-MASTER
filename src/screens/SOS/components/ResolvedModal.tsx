@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { appAlert, Button, Mascot, StarRating } from '@/components/common';
@@ -41,6 +41,21 @@ export function ResolvedModal({
   const [tipping, setTipping] = useState<number | null>(null);
   const [tipped, setTipped] = useState(false);
   const hasHelper = helperName.length > 0;
+
+  // Opens the OS share sheet. The text carries no location, no timestamp, no
+  // helper name and no description of the incident, on purpose. See the comment
+  // at the call site.
+  const shareSafe = async () => {
+    try {
+      await Share.share({
+        message:
+          "I'm safe. I had a scare tonight and used ORBII to get help — it worked. " +
+          'If you walk home alone, get it: orbii.in',
+      });
+    } catch {
+      // She dismissed the sheet, or no target app. Nothing to report.
+    }
+  };
 
   const sendTip = async (amount: number) => {
     if (tipping) return;
@@ -97,6 +112,48 @@ export function ResolvedModal({
               ) : null}
             </View>
           ) : null}
+
+          {/* The line that matters most.
+              Everything above is a report; this is the only part addressed to
+              her as a person. Deliberately short and not cheerful: somebody who
+              has just been frightened does not want to be congratulated, she
+              wants to know she is not on her own. */}
+          <View style={styles.standWith}>
+            <Ionicons name="heart" size={16} color={colors.coralDeep} />
+            <Text style={styles.standWithText}>
+              That took courage. You are not on your own, and reaching for help
+              was exactly the right thing to do.
+            </Text>
+          </View>
+
+          {/* Sharing.
+              One button, not a row of platform logos, because the OS share
+              sheet already contains Instagram, X, WhatsApp, Telegram, Messages
+              and everything else she actually uses, and it stays correct when
+              those apps change.
+
+              WHAT IT SHARES IS THE CAREFUL PART. No location, no time, no
+              helper's name, no mention of what happened. A message written in
+              the minutes after an emergency is written under the worst possible
+              conditions for judgement, and it is permanent and public. So the
+              default says only that she is safe, which is the thing the people
+              who love her actually need, and leaves the story hers to tell if
+              and when she wants to. She can edit it in the share sheet before
+              it goes anywhere. */}
+          <View style={styles.shareBlock}>
+            <Pressable
+              onPress={() => void shareSafe()}
+              style={({ pressed }) => [styles.shareBtn, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Let people know you are safe"
+            >
+              <Ionicons name="share-social-outline" size={17} color={colors.brandDeep} />
+              <Text style={styles.shareBtnText}>Let people know I'm safe</Text>
+            </Pressable>
+            <Text style={styles.shareHint}>
+              Sends only that you're okay. Never your location or what happened.
+            </Text>
+          </View>
 
           {hasHelper ? (
             <>
@@ -210,6 +267,49 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     color: colors.textPrimary,
   },
+  standWith: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    backgroundColor: colors.coralSoft,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginTop: spacing.md,
+    alignSelf: 'stretch',
+  },
+  standWithText: {
+    ...typography.body,
+    flex: 1,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textPrimary,
+  },
+  shareBlock: { alignSelf: 'stretch', marginTop: spacing.md, gap: 6 },
+  shareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    paddingVertical: 13,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.brandSoft,
+    backgroundColor: colors.surface,
+  },
+  shareBtnText: {
+    ...typography.button,
+    fontSize: 14.5,
+    color: colors.brandDeep,
+  },
+  shareHint: {
+    ...typography.caption,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  pressed: { opacity: 0.9 },
   rateHint: {
     ...typography.caption,
     fontSize: 13,
