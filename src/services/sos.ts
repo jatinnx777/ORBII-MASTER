@@ -1,4 +1,5 @@
 import type { SOSKind, SOSLocation, SOSRecord, UserProfile } from '@/types';
+import * as Crypto from 'expo-crypto';
 import { supabase } from './supabase';
 import { broadcastAlert, type AlertBroadcast } from './community';
 import { checkRateLimit, rateLimitMessage } from './rate-limit';
@@ -51,7 +52,21 @@ export async function createSOS(
     }
   }
 
-  const localId = `sos_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+  // MUST be a real UUID. sos_events.id is uuid in the database, and the old
+  // `sos_${Date.now()}_${rand}` format is not parseable as one, so every single
+  // insert was rejected with 22P02 invalid_text_representation.
+  //
+  // Nobody noticed for two weeks because persistSOS is deliberately
+  // fire-and-forget (a slow database must never delay the alert), so the
+  // rejection was logged to client_errors and the UI carried on showing
+  // "Broadcasting your SOS". The broadcast and the countdown were real; the row
+  // behind them never existed, which meant no nearby query could return it, no
+  // helper was ever dispatched, and mint_arrival_codes failed on every retry
+  // because it had no SOS to attach a code to.
+  //
+  // expo-crypto's randomUUID is v4 and available offline, which matters: this
+  // line runs on the SOS critical path with no network.
+  const localId = Crypto.randomUUID();
   const record: SOSRecord = {
     id: localId,
     userId: user.uid,
