@@ -239,7 +239,23 @@ class VoiceGuardService : Service() {
     // resurrect the mic — stop immediately and stay dead. Only an explicit start
     // (real intent) or a self-heal while still enabled may listen. This is the
     // fix for "the mic is on even though I switched Voice SOS off".
+    // PROMOTE FIRST, DECIDE SECOND.
+    //
+    // Android gives a service started with startForegroundService() about five
+    // seconds to call startForeground(), and kills the whole process with
+    // ForegroundServiceDidNotStartInTimeException if it does not. That applies
+    // even when the service is about to stop itself: "I decided not to run" is
+    // not an accepted answer.
+    //
+    // Both bail-outs below (the hard off gate, and the expired-window check)
+    // returned without ever promoting, so a START_STICKY restart or a watchdog
+    // wake on a disabled guard crashed the app rather than quietly doing
+    // nothing. Promoting first costs one notification that is removed
+    // milliseconds later, and removes the crash entirely.
+    startForegroundCompat()
+
     if (intent == null && !prefs.getBoolean("enabled", false)) {
+      stopForegroundCompat()
       stopSelf()
       return START_NOT_STICKY
     }
@@ -298,6 +314,7 @@ class VoiceGuardService : Service() {
             // The window closed while we were dead. Do not resurrect the mic.
             prefs.edit().putBoolean("enabled", false).apply()
             VoiceGuardWatchdog.cancel(this)
+            stopForegroundCompat()
             stopSelf()
             return START_NOT_STICKY
           }
@@ -1060,6 +1077,20 @@ class VoiceGuardService : Service() {
   }
 
   // ── foreground notification plumbing ──────────────────────
+  /** Drop the foreground notification before stopping, so it never lingers. */
+  private fun stopForegroundCompat() {
+    try {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        stopForeground(STOP_FOREGROUND_REMOVE)
+      } else {
+        @Suppress("DEPRECATION")
+        stopForeground(true)
+      }
+    } catch (e: Exception) {
+      Log.w(TAG, "stopForeground failed", e)
+    }
+  }
+
   private fun startForegroundCompat() {
     ensureChannels()
     val open = packageManager.getLaunchIntentForPackage(packageName)
