@@ -3,11 +3,13 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Image,
   Pressable,
   StatusBar,
   StyleSheet,
   Text,
   View,
+  type ImageSourcePropType,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +18,6 @@ import { useAppDispatch } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
 import {
   SceneHandsFree,
-  SceneHelpers,
   SceneOffline,
   ScenePrivate,
   SceneReady,
@@ -56,14 +57,17 @@ const C = {
   sheet: '#FFFFFF',
   btn: '#141527',
   btnText: '#FFFFFF',
-  track: 'rgba(255,255,255,0.45)',
-  trackFill: '#FFFFFF',
+  track: 'rgba(32,20,42,0.14)',
+  trackFill: '#3A2A46',
   chrome: '#3A2A46',
 };
 
 type Step = {
   key: string;
-  scene: () => React.ReactElement;
+  /** Generated artwork. Preferred: real illustration beats anything drawn in code. */
+  image?: ImageSourcePropType;
+  /** SVG fallback, used only where no artwork exists yet. */
+  scene?: () => React.ReactElement;
   title: string;
   body: string;
   cta: string;
@@ -72,42 +76,48 @@ type Step = {
 const STEPS: Step[] = [
   {
     key: 'voice',
-    scene: SceneVoice,
+    image: require('../../../assets/onboarding/voice.png'),
     title: 'Just say the word',
     body: 'Say "help, help" out loud and ORBII fires an SOS. No unlocking, no buttons, no searching for an app.',
     cta: "Let's Start!",
   },
   {
     key: 'hands',
-    scene: SceneHandsFree,
+    image: require('../../../assets/onboarding/handsfree.png'),
     title: 'Works from your pocket',
     body: 'It keeps listening with the screen off and the phone in your bag, which is where it usually is.',
     cta: 'Next',
   },
   {
     key: 'offline',
-    scene: SceneOffline,
+    image: require('../../../assets/onboarding/offline.png'),
     title: 'No signal? Still sent',
     body: 'Your alert goes out over SMS and hops phone to phone over Bluetooth when the network is gone.',
     cta: 'Next',
   },
   {
     key: 'helpers',
-    scene: SceneHelpers,
+    // Founder's call, made explicitly after I flagged it. This image shows the
+    // attack rather than the arrival: a woman on the ground being restrained,
+    // with the helper running in. Worth knowing what that trades. Onboarding is
+    // seen by every new user, some of whom have lived it, and Play's content
+    // review is stricter on depicted violence than on most things. Recorded
+    // here so the decision is visible rather than accidental.
+    image: require('../../../assets/onboarding/helpers.png'),
     title: 'Someone actually comes',
     body: 'Your circle sees you live, and ID-verified helpers nearby are sent to you in waves until one arrives.',
     cta: 'Next',
   },
   {
     key: 'private',
-    scene: ScenePrivate,
+    image: require('../../../assets/onboarding/private.png'),
     title: 'Your voice never leaves',
     body: 'Listening happens on this phone. No audio is uploaded, stored on a server, or sold. Not ever.',
     cta: 'Next',
   },
   {
     key: 'ready',
-    scene: SceneReady,
+    image: require('../../../assets/onboarding/ready.png'),
     title: 'Two things and you’re set',
     body: 'ORBII needs your microphone to hear you and your location to send help to the right place.',
     cta: 'Allow & finish',
@@ -170,7 +180,11 @@ export function OnboardingScreen() {
 
       {/* ART */}
       <View style={styles.art}>
-        <Art />
+        {step.image ? (
+          <Image source={step.image} style={styles.artImg} resizeMode="cover" />
+        ) : Art ? (
+          <Art />
+        ) : null}
       </View>
 
       {/* CHROME, floating over the art */}
@@ -232,7 +246,11 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.9 },
 
   // 58% so the sheet's rounded top can overlap it without clipping the figures.
-  art: { position: 'absolute', left: 0, right: 0, top: 0, height: '58%' },
+  art: { position: 'absolute', left: 0, right: 0, top: 0, height: '64%' },
+  // cover, not contain: the art is 2:3 and the slot is nearer 3:4, so a little
+  // is cropped top and bottom. The prompts kept the figure in the middle 60%
+  // precisely so that crop is safe.
+  artImg: { width: '100%', height: '100%' },
 
   chrome: {
     position: 'absolute',
@@ -253,14 +271,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   trackFill: { height: '100%', borderRadius: 2, backgroundColor: C.trackFill },
-  skip: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: '#FFFFFF' },
+  skip: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: C.chrome },
 
   sheet: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    minHeight: '44%',
+    minHeight: '38%',
     backgroundColor: C.sheet,
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
@@ -287,7 +305,7 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
   cta: {
-    marginTop: 'auto',
+    marginTop: 28,
     alignSelf: 'stretch',
     height: 56,
     borderRadius: 28,
