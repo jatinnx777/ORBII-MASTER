@@ -113,6 +113,10 @@ class VoiceGuardService : Service() {
     // recover, and the recognizer needs it near TARGET_RMS to transcribe well.
     private const val TARGET_RMS = 3000.0
     private const val MAX_GAIN = 12.0 // ~ +21.5 dB
+    // Used only while the phone reads as enclosed (pocket, bag, face down).
+    // ~ +27 dB. Higher than this and the noise floor comes up with the speech
+    // and nothing is gained.
+    private const val ENCLOSED_MAX_GAIN = 22.0
 
     // Emergency phrases, matched whole-word in maybeTrigger. Bare "help" is
     // deliberately NOT here — it's too common in normal conversation. Instead
@@ -200,6 +204,8 @@ class VoiceGuardService : Service() {
   /** When a weak (non-firing) distress sound was last heard — fusion input. */
   @Volatile private var lastWeakDangerAt = 0L
   @Volatile private var lastWeakLabel = ""
+  /** Proximity, light and accelerometer. Adds confidence, never vetoes. */
+  private var sensors: SensorContext? = null
 
   // ── evidence packaging ──
   /** Where encrypted evidence lands. Separate from PREROLL_DIR, which is raw. */
@@ -427,6 +433,7 @@ class VoiceGuardService : Service() {
     val buffer = ShortArray(FRAME_SAMPLES)
     preRoll = PreRollBuffer(SAMPLE_RATE, PREROLL_SECONDS)
     denoiser = VoiceDenoiser(SAMPLE_RATE)
+    sensors = SensorContext(this).also { it.start() }
     prunePreRolls()
     VoiceMetrics.running = true
     var speechStart = 0L
@@ -537,6 +544,8 @@ class VoiceGuardService : Service() {
       screamDetector?.close()
       screamDetector = null
       denoiser = null
+      sensors?.stop()
+      sensors = null
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
@@ -688,7 +697,17 @@ class VoiceGuardService : Service() {
   // that already passed the VAD gate, so silence/noise isn't boosted.
   private fun applyGain(buf: ShortArray, n: Int, level: Double) {
     if (level < 1.0) return
-    val desired = (TARGET_RMS / level).coerceIn(1.0, MAX_GAIN)
+    // A buried phone gets a higher ceiling, not a lower gate.
+    //
+    // Fabric attenuates speech more than the +21.5 dB the normal ceiling can
+    // recover, which is why the zipped-handbag case is the worst row in the
+    // test matrix. The tempting fix is to drop the VAD gate when enclosed, and
+    // it is the wrong one: a lower gate admits fabric rustle and traffic to the
+    // recognizer, costing CPU and inviting exactly the false positives that
+    // took SINGLE_CONF from 0.62 to 0.88. Raising the gain ceiling instead
+    // lifts genuine speech toward TARGET_RMS without opening the gate at all.
+    val ceiling = if (sensors?.isEnclosed() == true) ENCLOSED_MAX_GAIN else MAX_GAIN
+    val desired = (TARGET_RMS / level).coerceIn(1.0, ceiling)
     smoothedGain += (desired - smoothedGain) * 0.25
     VoiceMetrics.gain = smoothedGain
     if (smoothedGain <= 1.02) return
@@ -747,12 +766,28 @@ class VoiceGuardService : Service() {
     // a score too weak to fire on its own, the pair is strong evidence and both
     // thresholds can safely be lower than either could be alone.
     val now = System.currentTimeMillis()
-    if (now - lastWeakDangerAt <= FUSION_WINDOW_MS) {
-      val soft = SOFT_WORDS.firstOrNull { t.contains(" $it ") }
-      if (soft != null) {
-        triggerNow("$lastWeakLabel+$soft", speechStart)
-        lastWeakDangerAt = 0L // consume it; don't re-fire on the next partial
-      }
+    val soft = SOFT_WORDS.firstOrNull { t.contains(" $it ") }
+    if (now - lastWeakDangerAt <= FUSION_WINDOW_MS && soft != null) {
+      triggerNow("$lastWeakLabel+$soft", speechStart)
+      lastWeakDangerAt = 0L // consume it; don't re-fire on the next partial
+      return
+    }
+
+    // SECOND CORROBORATOR: a hard knock, drop or snatch.
+    //
+    // Same logic as the scream fusion above and the same safety property. A
+    // soft word never fires alone, and a motion spike never fires alone either
+    // — a dropped phone is not an emergency. Together, inside five seconds,
+    // they are the signature of being grabbed, and both thresholds can sit
+    // lower than either could alone.
+    //
+    // This can only ADD a trigger. There is no branch anywhere that suppresses
+    // a detection because the sensors were quiet, because every one of these
+    // sensors fails in the direction that looks like "she is fine": a cased
+    // proximity sensor reads near forever, a phone held still against a wall
+    // produces no spike at all. Letting that veto costs a rescue.
+    if (soft != null && sensors?.recentMotionSpike() == true) {
+      triggerNow("motion+$soft", speechStart)
     }
   }
 
