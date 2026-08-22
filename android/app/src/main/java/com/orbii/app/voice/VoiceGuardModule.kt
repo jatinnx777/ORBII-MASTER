@@ -120,6 +120,12 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
       // I turned it off" fix.
       ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
         .edit().putBoolean("enabled", false).apply()
+      // Stand the watchdog down too, for the same reason and in the same order.
+      // A watchdog that keeps checking after the user turned Voice SOS off
+      // would eventually try to restart the microphone, which is exactly the
+      // bug the gate above exists to prevent.
+      VoiceGuardWatchdog.cancel(ctx)
+      VoiceGuardNotifications.clearProtectionStopped(ctx)
       ctx.stopService(Intent(ctx, VoiceGuardService::class.java))
       promise.resolve(true)
     } catch (e: Exception) {

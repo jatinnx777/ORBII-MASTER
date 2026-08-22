@@ -257,16 +257,59 @@ class VoiceGuardService : Service() {
       gateMargin = NOISE_MARGIN
       gateMin = MIN_GATE
     }
+    // Timed arming has to survive a restart, and it did not.
+    //
+    // The expiry below is a main.postDelayed, which dies with the process. On a
+    // START_STICKY resurrection this block used to re-read the full duration and
+    // post it again from scratch, so an hour of protection killed at minute 55
+    // came back for another full hour. The user asked for one hour and could get
+    // several, with the microphone on for all of them.
+    //
+    // So the ARM TIME is persisted and the remaining window is computed from it.
+    // A fresh user-initiated start (real intent carrying a duration) resets the
+    // clock; a restart continues the original one.
     val durationMs = if (intent != null && intent.hasExtra(EXTRA_DURATION_MS)) {
       val d = intent.getLongExtra(EXTRA_DURATION_MS, 0L)
-      prefs.edit().putLong("duration", d).apply()
+      prefs.edit()
+        .putLong("duration", d)
+        .putLong("armed_at", System.currentTimeMillis())
+        .apply()
       d
     } else {
-      prefs.getLong("duration", 0L)
+      val total = prefs.getLong("duration", 0L)
+      if (total <= 0L) {
+        0L // "until stopped", nothing to compute
+      } else {
+        val armedAt = prefs.getLong("armed_at", 0L)
+        if (armedAt <= 0L) {
+          // Armed before this key existed. Treat as a fresh window rather than
+          // expiring instantly on somebody who is relying on it right now.
+          prefs.edit().putLong("armed_at", System.currentTimeMillis()).apply()
+          total
+        } else {
+          val left = armedAt + total - System.currentTimeMillis()
+          if (left <= 0L) {
+            // The window closed while we were dead. Do not resurrect the mic.
+            prefs.edit().putBoolean("enabled", false).apply()
+            VoiceGuardWatchdog.cancel(this)
+            stopSelf()
+            return START_NOT_STICKY
+          }
+          left
+        }
+      }
     }
 
     startForegroundCompat()
     acquireWakeLock(durationMs)
+
+    // Something outside this process has to notice when an OEM force-stops us,
+    // because a force-stopped app gets no callback, no broadcast and no
+    // START_STICKY restart. Idempotent, so calling it on every start is fine.
+    VoiceGuardWatchdog.ensureScheduled(this)
+    // We are demonstrably alive, so clear any "protection stopped" notice the
+    // watchdog raised earlier.
+    VoiceGuardNotifications.clearProtectionStopped(this)
 
     if (!running) {
       running = true

@@ -207,6 +207,11 @@ dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
+    // Watchdog that restarts Voice SOS after an OEM force-stop. Already on the
+    // runtime classpath transitively at 2.9.1, so declaring it explicitly costs
+    // no APK size and just makes the dependency visible.
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
+
     // Instrumented tests. androidTestImplementation, so none of this is in the
     // shipped APK: these artefacts are compiled into the separate test APK that
     // connectedAndroidTest installs alongside it.
