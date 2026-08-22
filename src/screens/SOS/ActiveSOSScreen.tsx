@@ -194,8 +194,22 @@ export function ActiveSOSScreen() {
       const list = await mintArrivalCodes(sid);
       if (!alive) return;
       setCodes(list);
-      // Every code entered = every helper on record physically confirmed. Close.
-      if (list.length > 0 && list.every((c) => c.entered) && !allDoneRef.current) {
+      // When is it over?
+      //
+      // This used to require EVERY code to be entered. sql/81 made the shared
+      // code unconditional so her screen is never empty, which means there is
+      // now always one code nobody owns — and requiring it left the resolved
+      // screen unreachable for the commonest case of all: one verified helper
+      // arriving and entering their own code. sql/82 fixed the same rule on the
+      // server; this is the client's copy of it.
+      //
+      // Two ways it closes, mirroring the server:
+      //   * every personal code is in (each belongs to a named responder), or
+      //   * every code including the shared one is in (a bystander turned up).
+      const verified = list.filter((c) => c.kind === 'verified');
+      const allPersonalIn = verified.length > 0 && verified.every((c) => c.entered);
+      const allIn = list.length > 0 && list.every((c) => c.entered);
+      if ((allPersonalIn || allIn) && !allDoneRef.current) {
         allDoneRef.current = true;
         setResolved(true);
       }
