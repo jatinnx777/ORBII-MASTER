@@ -344,7 +344,7 @@ export function SettingsScreen() {
             label="Privacy Policy"
             value="What we collect, why, and your rights under the DPDP Act"
             onPress={() =>
-              Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
+              Linking.openURL('https://www.orbii.in/privacy-policy').catch(() => undefined)
             }
           />
           <Row

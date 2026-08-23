@@ -451,7 +451,7 @@ export async function acceptInvite(invite: CircleInvite): Promise<void> {
 }
 
 // Accept an invite by its share token (the `<token>` in
-// orbii://join/<token> or https://orbii.in/join/<token>). Bypasses
+// orbii://join/<token> or https://www.orbii.in/join/<token>). Bypasses
 // the username check used by the in-app invite list since the user is
 // "claiming" the invite directly from the link.
 export async function acceptInviteByToken(

@@ -64,7 +64,7 @@ export function AboutScreen() {
           </Pressable>
           <Pressable
             onPress={() =>
-              Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)
+              Linking.openURL('https://www.orbii.in/privacy-policy').catch(() => undefined)
             }
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
           >
@@ -73,7 +73,7 @@ export function AboutScreen() {
           </Pressable>
           <Pressable
             onPress={() =>
-              Linking.openURL('https://orbii.in/terms-of-service').catch(() => undefined)
+              Linking.openURL('https://www.orbii.in/terms-of-service').catch(() => undefined)
             }
             style={({ pressed }) => [styles.linkRow, pressed && styles.pressed]}
           >

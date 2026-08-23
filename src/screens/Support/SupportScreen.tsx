@@ -36,7 +36,7 @@ export function SupportScreen() {
     try {
       await Share.share({
         message:
-          'ORBII gets a woman help before she can even reach her phone. Download: https://orbii.in',
+          'ORBII gets a woman help before she can even reach her phone. Download: https://www.orbii.in',
       });
     } catch {
       // user dismissed the sheet

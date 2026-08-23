@@ -11,7 +11,6 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import {
@@ -132,12 +131,6 @@ export function PhoneVerifyScreen({
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={[colors.brandSoft, '#FFFFFF']}
-        start={{ x: 0.3, y: 0 }}
-        end={{ x: 0.7, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView
           style={styles.flex}
@@ -240,7 +233,7 @@ export function PhoneVerifyScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, backgroundColor: '#FFFFFF' },
   flex: { flex: 1 },
   safe: { flex: 1, paddingHorizontal: spacing.lg },
   headerRow: { paddingTop: spacing.sm, flexDirection: 'row' },
@@ -260,19 +253,20 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xl,
   },
   title: {
-    ...typography.h2,
-    color: colors.textPrimary,
-    letterSpacing: -0.4,
-    textAlign: 'center',
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 28,
+    lineHeight: 36,
+    letterSpacing: -0.5,
+    color: '#141527',
   },
   subtitle: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.textSecondary,
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 13.5,
+    lineHeight: 21,
+    color: '#6B6B7B',
     textAlign: 'center',
-    marginTop: 8,
-    paddingHorizontal: spacing.md,
-    lineHeight: 20,
+    marginTop: 10,
+    marginBottom: 26,
   },
   target: {
     fontFamily: fontFamilies.poppinsBold,
@@ -292,22 +286,22 @@ const styles = StyleSheet.create({
   box: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
+    borderColor: '#E6E4EE',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   boxFilled: {
-    borderColor: colors.brandDeep,
-    backgroundColor: colors.brandSoft,
+    borderColor: '#141527',
   },
   boxActive: {
-    borderColor: colors.brandDeep,
+    borderColor: '#141527',
+    borderWidth: 1.8,
   },
   boxText: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 22,
-    color: colors.textPrimary,
+    fontSize: 20,
+    color: '#141527',
   },
   errorText: {
     fontFamily: fontFamilies.interMedium,
@@ -316,26 +310,19 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   primaryBtn: {
-    alignSelf: 'stretch',
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#141527',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: touchTarget.comfortable,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    backgroundColor: colors.brandDeep,
-    marginTop: spacing.xl,
-    shadowColor: colors.brandDeep,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.30,
-    shadowRadius: 12,
-    elevation: 6,
+    alignSelf: 'stretch',
+    marginTop: 26,
   },
-  primaryBtnDisabled: { opacity: 0.5 },
+  primaryBtnDisabled: { opacity: 0.45 },
   primaryBtnLabel: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 15,
-    color: colors.textInverse,
-    letterSpacing: 0.3,
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15.5,
+    color: '#FFFFFF',
   },
   resendBtn: {
     marginTop: spacing.md,

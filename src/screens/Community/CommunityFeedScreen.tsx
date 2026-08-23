@@ -219,7 +219,7 @@ export function CommunityFeedScreen() {
         : '\n\nShared from ORBII, a safety app for women in India.';
     try {
       await Share.share({
-        message: `${title}${post.body}${verdict}\nhttps://orbii.in`,
+        message: `${title}${post.body}${verdict}\nhttps://www.orbii.in`,
       });
     } catch {
       // user dismissed the sheet

@@ -145,7 +145,7 @@ export function CircleInviteScreen({
     try {
       const e164 = toE164India(phoneDigits);
       const invite = await inviteByPhone(circleId, e164);
-      const link = `https://orbii.in/join/${invite.token}`;
+      const link = `https://www.orbii.in/join/${invite.token}`;
       try {
         const { Share } = await import('react-native');
         await Share.share({

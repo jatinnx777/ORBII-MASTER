@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { Button, Input, Mascot, ScreenContainer } from '@/components/common';
+import { Input, Mascot, ScreenContainer } from '@/components/common';
 import type { MascotPose } from '@/components/common/Mascot';
 import {
   colors,
@@ -30,6 +30,7 @@ import { updateProfile } from '@/services/auth';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { isUsernameAvailable } from '@/services/users-public';
+import { A, PrimaryButton } from './authKit';
 import {
   formatPhoneForDisplay,
   isValidIndianPhone,
@@ -249,10 +250,10 @@ export function ProfileSetupScreen() {
 
 
           <View style={styles.footer}>
-            <Button
+            <PrimaryButton
               label={step === 'phone' ? 'Finish setup' : 'Continue'}
               onPress={goNext}
-              loading={isSaving}
+              busy={isSaving}
               disabled={!stepReady}
             />
             <View style={styles.footerRow}>
@@ -365,22 +366,22 @@ function ConsentGate({ onAccept }: { onAccept: (isAdult: boolean) => Promise<voi
         onToggle={() => setAgree((v) => !v)}
         label="I have read and agree to the Privacy Policy and Terms."
         linkLabel="Read the Privacy Policy"
-        onLink={() => Linking.openURL('https://orbii.in/privacy-policy').catch(() => undefined)}
+        onLink={() => Linking.openURL('https://www.orbii.in/privacy-policy').catch(() => undefined)}
       />
 
       <View style={styles.footer}>
-        <Button
+        <PrimaryButton
           label="Agree & continue"
           disabled={!ready || busy}
-          loading={busy}
-          onPress={async () => {
+          busy={busy}
+          onPress={() => void (async () => {
             setBusy(true);
             try {
               await onAccept(adult);
             } finally {
               setBusy(false);
             }
-          }}
+          })()}
         />
         <Text style={[styles.muted, { textAlign: 'center' }]}>
           You can delete all your data any time from Settings.
@@ -648,13 +649,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     borderRadius: 2,
-    backgroundColor: colors.border,
+    backgroundColor: '#E6E4EE',
   },
   progressDotDone: {
-    backgroundColor: colors.peach,
+    backgroundColor: A.ink,
   },
   progressDotActive: {
-    backgroundColor: colors.peachDeep,
+    backgroundColor: A.ink,
   },
   titleBlock: {
     marginBottom: spacing.lg,
@@ -668,24 +669,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   eyebrow: {
-    fontFamily: fontFamilies.poppinsBold,
+    fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 11,
-    color: colors.peachDeep,
-    letterSpacing: 0.1,
-    marginBottom: spacing.xs,
+    letterSpacing: 1.1,
+    color: A.body,
+    marginBottom: 8,
   },
   h1: {
-    ...typography.h1,
-    color: colors.textPrimary,
-    letterSpacing: -0.4,
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 26,
+    lineHeight: 34,
+    letterSpacing: -0.5,
+    color: A.ink,
     textAlign: 'center',
   },
   sub: {
-    ...typography.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-    marginTop: 4,
-    lineHeight: 20,
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 13.5,
+    lineHeight: 21,
+    color: A.body,
+    marginTop: 10,
     textAlign: 'center',
     paddingHorizontal: spacing.md,
   },
@@ -718,9 +721,9 @@ const styles = StyleSheet.create({
     color: colors.brandDeep,
   },
   linkText: {
-    fontFamily: fontFamilies.poppinsBold,
+    fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 13.5,
-    color: colors.brandDeep,
+    color: A.ink,
   },
   muted: {
     fontFamily: fontFamilies.interMedium,

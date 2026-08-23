@@ -30,6 +30,14 @@ import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
+/**
+ * Voice donation is switched off for now.
+ *
+ * Not deleted: VoiceDonationScreen, the voice-quest service and the
+ * navigator route are all untouched, so turning it back on is this one line.
+ */
+const SHOW_VOICE_DONATION = false;
+
 export function ProfileScreen() {
   const navigation = useNavigation<Nav>();
   const insets = useSafeAreaInsets();
@@ -93,7 +101,7 @@ export function ProfileScreen() {
     try {
       await Share.share({
         message:
-          'ORBII gets a woman help before she can even reach her phone. Download: https://orbii.in',
+          'ORBII gets a woman help before she can even reach her phone. Download: https://www.orbii.in',
       });
     } catch {
       // dismissed
@@ -174,22 +182,29 @@ export function ProfileScreen() {
             )}
           </Pressable>
 
-          {/* ── Help train ORBII (opt-in voice donation) ── */}
-          <Pressable
-            onPress={() => navigation.navigate('VoiceDonation')}
-            style={({ pressed }) => [styles.planCard, pressed && styles.pressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Help train ORBII"
-          >
-            <View style={[styles.planIcon, { backgroundColor: colors.brandSoft }]}>
-              <Ionicons name="mic" size={18} color={colors.brandDeep} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.planTitle}>Help train ORBII</Text>
-              <Text style={styles.planSub}>Donate a few voice clips to help it hear more women. Optional.</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-          </Pressable>
+          {/* Help train ORBII. HIDDEN, not deleted.
+              Founder's call: the screen, the service and the route in
+              AppNavigator all stay, so nothing has to be rebuilt. This entry
+              point is the only way a user could reach it, so gating it here
+              removes the feature from the product without removing it from
+              the codebase. Flip SHOW_VOICE_DONATION to true to bring it back. */}
+          {SHOW_VOICE_DONATION ? (
+            <Pressable
+              onPress={() => navigation.navigate('VoiceDonation')}
+              style={({ pressed }) => [styles.planCard, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Help train ORBII"
+            >
+              <View style={[styles.planIcon, { backgroundColor: colors.brandSoft }]}>
+                <Ionicons name="mic" size={18} color={colors.brandDeep} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.planTitle}>Help train ORBII</Text>
+                <Text style={styles.planSub}>Donate a few voice clips to help it hear more women. Optional.</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
 
           {/* ── Responder Missions (golden, just below the plan; responders only) ── */}
           {isResponder ? (

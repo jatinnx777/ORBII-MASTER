@@ -12,7 +12,13 @@ import { Platform } from 'react-native';
 // the app's persisted state (history, settings) does not. AsyncStorage is
 // fine for cache; SecureStore is the right home for credentials.
 
-const SECURE_KEY_PREFIXES = ['sb-', 'orbii:secure:'];
+// NOTE: SecureStore only accepts keys of alphanumerics, '.', '-' and '_'.
+// The original prefix here was 'orbii:secure:', whose colons are illegal, so
+// every key using it threw on write, hit the catch below and silently landed
+// in plain AsyncStorage instead. The prefix is underscore-separated now so it
+// is actually a legal key. 'sb-' was always fine, so Supabase tokens really
+// were in the keystore. See safety-pin.ts for the migration off the old key.
+const SECURE_KEY_PREFIXES = ['sb-', 'orbii_secure_'];
 
 function isSensitive(key: string): boolean {
   return SECURE_KEY_PREFIXES.some((p) => key.startsWith(p));
