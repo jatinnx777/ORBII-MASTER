@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { appAlert, CircleSwitcher, CircleSwitcherTrigger, GlassButton } from '@/components/common';
+import { appAlert, CircleSwitcher, CircleSwitcherTrigger, GlassButton, CoverageBanner } from '@/components/common';
 import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
 import { loadCircleMembersLocations, sameMemberLocations, type MemberLocation } from '@/services/circle-location';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -380,6 +380,12 @@ export function HomeScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.sheetScroll, { paddingBottom: insets.bottom + range + 150 }]}
         >
+          {/* Which shield is live here, stated before it matters rather than
+              discovered during an emergency. Tapping explains the difference. */}
+          <View style={styles.coverageRow}>
+            <CoverageBanner />
+          </View>
+
           {/* Consent-first sharing state, who can see you, right now. The
               opposite of silent tracking: always visible, always yours to
               change, and we say plainly that we never sell it. */}
@@ -770,6 +776,7 @@ const styles = StyleSheet.create({
   },
   handleZone: { alignItems: 'center', paddingTop: 4, paddingBottom: spacing.sm },
   handle: { width: 44, height: 5, borderRadius: 3, backgroundColor: colors.creamDeep },
+  coverageRow: { marginBottom: spacing.md },
   sheetScroll: { paddingHorizontal: spacing.lg, gap: spacing.md, paddingBottom: spacing.md },
 
   shareState: {

@@ -13,6 +13,7 @@ import {
   createNavigationContainerRef,
 } from '@react-navigation/native';
 import { Provider } from 'react-redux';
+import { CoverageProvider } from '@/context/CoverageContext';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import {
   useFonts,
@@ -908,6 +909,8 @@ export default function App() {
     <Provider store={store}>
       <SafeAreaProvider>
         <BrandSheetProvider>
+          {/* Inside BrandSheetProvider: the coverage pill opens a brand sheet. */}
+          <CoverageProvider>
           <View style={styles.root} onLayout={onReady}>
             <StatusBar style="dark" />
             <OfflineBanner />
@@ -917,6 +920,7 @@ export default function App() {
           </View>
           {showLaunch ? <LaunchOverlay onDone={() => setShowLaunch(false)} /> : null}
           <AppDialogHost />
+          </CoverageProvider>
         </BrandSheetProvider>
       </SafeAreaProvider>
     </Provider>
