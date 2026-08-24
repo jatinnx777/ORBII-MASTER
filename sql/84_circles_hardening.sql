@@ -236,6 +236,64 @@ grant execute on function public.circle_add_member(uuid, uuid, text) to authenti
 --
 -- A partial unique index makes the second one impossible at the storage layer,
 -- which is the only place a race can actually be won.
+-- FIRST RUN FAILED HERE, AND THAT FAILURE WAS THE POINT.
+--
+--   ERROR: could not create unique index "sos_events_one_active_uq"
+--   DETAIL: Key (user_id)=(8ee693c9-...) is duplicated.
+--
+-- The constraint could not be added because the thing it prevents had already
+-- happened: at least one account is carrying more than one SOS in 'active'.
+-- That is not a migration problem, it is a live data problem, and it means the
+-- escalation engine may still be ticking on abandoned events, dispatching
+-- helpers to emergencies that ended days ago.
+--
+-- So the duplicates are closed before the index goes on, keeping the NEWEST
+-- active event per user and cancelling the older ones. Newest, because if any
+-- of them is a real emergency in progress it is the most recent one; closing
+-- that and keeping a stale one would be the one genuinely dangerous outcome.
+--
+-- CANCELLED, not RESOLVED. 'resolved' means somebody reached her and it ended.
+-- These were abandoned, and recording an abandonment as a resolution would put
+-- a lie in the incident history, which is the record we would rely on if an
+-- SOS were ever disputed.
+do $$
+declare
+  n_users int;
+  n_rows  int;
+begin
+  select count(*), coalesce(sum(c) - count(*), 0)
+    into n_users, n_rows
+  from (
+    select user_id, count(*) as c
+    from sos_events
+    where status = 'active'
+    group by user_id
+    having count(*) > 1
+  ) d;
+
+  if n_users > 0 then
+    raise notice E'
+  % account(s) carry more than one active SOS; closing % stale row(s).', n_users, n_rows;
+
+    with ranked as (
+      select id,
+             row_number() over (partition by user_id order by created_at desc, id desc) as rn
+      from sos_events
+      where status = 'active'
+    )
+    update sos_events e
+       set status      = 'cancelled',
+           resolved_at = coalesce(e.resolved_at, now()),
+           updated_at  = now()
+      from ranked r
+     where e.id = r.id
+       and r.rn > 1;
+  else
+    raise notice E'
+  No duplicate active SOS events. Nothing to clean.';
+  end if;
+end $$;
+
 drop index if exists sos_events_one_active_uq;
 create unique index sos_events_one_active_uq
   on sos_events (user_id)
