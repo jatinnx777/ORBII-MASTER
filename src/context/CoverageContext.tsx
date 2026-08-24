@@ -39,6 +39,16 @@ import {
 
 type CoverageState = Coverage & {
   isChecking: boolean;
+  /**
+   * Human-readable place, e.g. "Rai, Sonipat". Null until resolved.
+   *
+   * Reverse geocoding runs through the OS, not a paid API, so it costs nothing
+   * and works without our servers. It also fails silently and often, which is
+   * why every consumer must handle null rather than assuming an address.
+   */
+  placeLabel: string | null;
+  /** Raw coordinates, for the "not in your area" state to show precisely. */
+  point: { lat: number; lng: number } | null;
   /** Force a re-check. Pull-to-refresh, or after granting location. */
   refresh: () => void;
 };
@@ -68,6 +78,8 @@ const MIN_INTERVAL_MS = 60_000;
 export function CoverageProvider({ children }: { children: React.ReactNode }) {
   const [coverage, setCoverage] = useState<Coverage>(INITIAL_COVERAGE);
   const [isChecking, setIsChecking] = useState(false);
+  const [placeLabel, setPlaceLabel] = useState<string | null>(null);
+  const [point, setPoint] = useState<{ lat: number; lng: number } | null>(null);
 
   const lastPoint = useRef<{ lat: number; lng: number } | null>(null);
   const lastCheckAt = useRef(0);
@@ -121,7 +133,42 @@ export function CoverageProvider({ children }: { children: React.ReactNode }) {
       const result = await checkCoverage(point.lat, point.lng);
       lastPoint.current = point;
       lastCheckAt.current = Date.now();
-      if (mounted.current) setCoverage(result);
+      if (mounted.current) {
+        setCoverage(result);
+        setPoint(point);
+        // CLEAR THE OLD ADDRESS THE MOMENT THE POINT MOVES.
+        //
+        // Found by moving the emulator from Sonipat to Mumbai: coverage
+        // correctly flipped to "not in your area yet" while the line beneath it
+        // still read "Rohtak Division, Patla", because the geocode below only
+        // ever WROTE on success. A stale place under a coverage verdict is the
+        // worst of both worlds: it looks authoritative and it is wrong, and
+        // somebody checking why they are unserviceable would be reading another
+        // city's name. Falling back to raw coordinates is uglier and honest.
+        setPlaceLabel(null);
+      }
+
+      // Address is cosmetic and must never delay or block the coverage answer,
+      // so it is resolved after and failure is swallowed. On many devices the
+      // OS geocoder is simply absent and returns nothing at all.
+      void Location.reverseGeocodeAsync({
+        latitude: point.lat,
+        longitude: point.lng,
+      })
+        .then((places) => {
+          const p = places?.[0];
+          if (!p || !mounted.current) return;
+          // Neighbourhood then city is what people recognise. Street numbers
+          // are noise here and, on a shared screen, needlessly precise.
+          const parts = [
+            p.district || p.subregion || p.name,
+            p.city || p.region,
+          ].filter(Boolean) as string[];
+          const seen = new Set<string>();
+          const label = parts.filter((x) => !seen.has(x) && seen.add(x)).join(', ');
+          setPlaceLabel(label || null);
+        })
+        .catch(() => undefined);
     } catch {
       // Never let a coverage check surface as an error to the user. The whole
       // point is that it degrades to "Personal Shield active" silently.
@@ -186,8 +233,8 @@ export function CoverageProvider({ children }: { children: React.ReactNode }) {
   }, [run]);
 
   const value = useMemo<CoverageState>(
-    () => ({ ...coverage, isChecking, refresh: () => void run(true) }),
-    [coverage, isChecking, run],
+    () => ({ ...coverage, isChecking, placeLabel, point, refresh: () => void run(true) }),
+    [coverage, isChecking, placeLabel, point, run],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -204,7 +251,13 @@ export function CoverageProvider({ children }: { children: React.ReactNode }) {
 export function useCoverage(): CoverageState {
   const ctx = useContext(Ctx);
   if (ctx) return ctx;
-  return { ...INITIAL_COVERAGE, isChecking: false, refresh: () => {} };
+  return {
+    ...INITIAL_COVERAGE,
+    isChecking: false,
+    placeLabel: null,
+    point: null,
+    refresh: () => {},
+  };
 }
 
 /** Convenience aliases matching the field names used in the product spec. */

@@ -17,8 +17,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. SOFT DELETES
 -- ---------------------------------------------------------------------------
--- Why membership needs one, and circles do not.
---
+no emojies --
 -- A hard DELETE on circle_members destroys the answer to "was B in A's circle
 -- when this SOS fired". That question matters twice: for an incident review,
 -- and for a helper accused of turning up somewhere they had no business being.

@@ -16,7 +16,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { appAlert, CircleSwitcher, CircleSwitcherTrigger, GlassButton, CoverageBanner } from '@/components/common';
+import { appAlert, CircleSwitcher, CircleSwitcherTrigger, GlassButton, CoverageHeader } from '@/components/common';
 import { MLMapView, type AvatarMarker } from '@/components/common/MLMapView';
 import { loadCircleMembersLocations, sameMemberLocations, type MemberLocation } from '@/services/circle-location';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -383,7 +383,7 @@ export function HomeScreen() {
           {/* Which shield is live here, stated before it matters rather than
               discovered during an emergency. Tapping explains the difference. */}
           <View style={styles.coverageRow}>
-            <CoverageBanner />
+            <CoverageHeader />
           </View>
 
           {/* Consent-first sharing state, who can see you, right now. The

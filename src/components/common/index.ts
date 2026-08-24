@@ -6,6 +6,7 @@ export { AgeCheckSheet } from './AgeCheckSheet';
 export { MemberHistorySheet } from './MemberHistorySheet';
 export { BrandSheetProvider, useBrandSheet } from './BrandSheet';
 export { CoverageBanner } from './CoverageBanner';
+export { CoverageHeader } from './CoverageHeader';
 export { Button } from './Button';
 export { Card } from './Card';
 export { GlassCard } from './GlassCard';
