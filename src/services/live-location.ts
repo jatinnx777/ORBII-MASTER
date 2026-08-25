@@ -1,5 +1,12 @@
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import type { GeoPoint } from '@/types';
+import {
+  resolveEpoch,
+  topicFor,
+  watchEpoch,
+  type SosChannelKind,
+} from './sos-channel';
 
 // Live location pub/sub for in-progress SOS responses. Uses Supabase
 // Realtime's broadcast channel, no database row per ping, no writes, no
@@ -32,26 +39,97 @@ export type LiveLocationHandle = {
   unsubscribe: () => void;
 };
 
-function channelName(sosId: string): string {
-  return `sos-live:${sosId}`;
+
+// ── Epoch-aware channel plumbing ──────────────────────────────────────────
+// A removed circle member's socket stays open after they lose access, because
+// Realtime authorises at JOIN time (sql/88 explains this at length). The epoch
+// in the topic is how the conversation moves somewhere they cannot follow.
+//
+// THE CHANNEL OPENS SYNCHRONOUSLY, ON THE CACHED EPOCH, BEFORE THE LOOKUP
+// RETURNS. An SOS must never wait on a network round trip to start streaming a
+// position. The epoch is resolved immediately afterwards and the channel hops if
+// it moved, so the security tightens a moment after the stream is already up
+// rather than delaying it.
+type HoppingChannel = {
+  /** The live channel, or null between a hop being started and finished. */
+  channel: () => RealtimeChannel | null;
+  ready: () => boolean;
+  close: () => void;
+};
+
+function openHoppingChannel(
+  kind: SosChannelKind,
+  sosId: string,
+  bind: (channel: RealtimeChannel) => RealtimeChannel,
+): HoppingChannel {
+  let epoch = 0;
+  let channel: RealtimeChannel | null = null;
+  let subscribed = false;
+  let closed = false;
+  let stopWatch: (() => void) | null = null;
+
+  const join = (next: number) => {
+    if (closed) return;
+    const previous = channel;
+    epoch = next;
+    subscribed = false;
+    // config.private keeps Realtime Authorization in play; without it the topic
+    // is public and sql/39 never runs.
+    const fresh = bind(
+      supabase.channel(topicFor(kind, sosId, next), {
+        config: { private: true, broadcast: { ack: false, self: false } },
+      }),
+    );
+    channel = fresh;
+    fresh.subscribe((status) => {
+      subscribed = status === 'SUBSCRIBED';
+      // Only tear the old channel down once the new one is actually up, so a
+      // failed hop leaves us on a working topic instead of no topic at all.
+      if (subscribed && previous) {
+        try {
+          void supabase.removeChannel(previous);
+        } catch {
+          // ignore
+        }
+      }
+    });
+  };
+
+  join(0);
+
+  void resolveEpoch(sosId).then((found) => {
+    if (closed) return;
+    if (found !== epoch) join(found);
+    stopWatch = watchEpoch(sosId, found, (next) => join(next));
+  });
+
+  return {
+    channel: () => channel,
+    ready: () => subscribed,
+    close: () => {
+      closed = true;
+      stopWatch?.();
+      if (channel) {
+        try {
+          void supabase.removeChannel(channel);
+        } catch {
+          // ignore
+        }
+      }
+      channel = null;
+    },
+  };
 }
 
 export function publishLiveLocation(
   sosId: string,
   responder: Responder,
 ): LiveLocationHandle {
-  const channel = supabase.channel(channelName(sosId), {
-    // private: Realtime Authorization gates this topic (sql/39) so only the
-    // SOS's real participants can join. Requires an authenticated session.
-    config: { private: true, broadcast: { ack: false, self: false } },
-  });
-  let subscribed = false;
-  channel.subscribe((status) => {
-    subscribed = status === 'SUBSCRIBED';
-  });
+  const hop = openHoppingChannel('sos-live', sosId, (c) => c);
 
   const send = (point: GeoPoint, arrived: boolean) => {
-    if (!subscribed) return;
+    const channel = hop.channel();
+    if (!channel || !hop.ready()) return;
     try {
       channel.send({
         type: 'broadcast',
@@ -66,13 +144,7 @@ export function publishLiveLocation(
   return {
     publish: (point: GeoPoint) => send(point, false),
     announceArrived: (point: GeoPoint) => send(point, true),
-    unsubscribe: () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch {
-        // ignore
-      }
-    },
+    unsubscribe: () => hop.close(),
   };
 }
 
@@ -81,10 +153,6 @@ export function publishLiveLocation(
 // realtime allows one channel per topic per client). The victim's device
 // publishes its live position here during an active SOS; the responder's
 // tracking screen subscribes so a MOVING victim is followed, not a stale pin.
-function victimChannelName(sosId: string): string {
-  return `sos-victim:${sosId}`;
-}
-
 export type VictimLocationPayload = { point: GeoPoint; at: number };
 
 export type VictimPublishHandle = {
@@ -93,17 +161,11 @@ export type VictimPublishHandle = {
 };
 
 export function publishVictimLocation(sosId: string): VictimPublishHandle {
-  const channel = supabase.channel(victimChannelName(sosId), {
-    // private: gated by Realtime Authorization (sql/39), participants only.
-    config: { private: true, broadcast: { ack: false, self: false } },
-  });
-  let subscribed = false;
-  channel.subscribe((status) => {
-    subscribed = status === 'SUBSCRIBED';
-  });
+  const hop = openHoppingChannel('sos-victim', sosId, (c) => c);
   return {
     publish: (point: GeoPoint) => {
-      if (!subscribed) return;
+      const channel = hop.channel();
+      if (!channel || !hop.ready()) return;
       try {
         channel.send({
           type: 'broadcast',
@@ -114,13 +176,7 @@ export function publishVictimLocation(sosId: string): VictimPublishHandle {
         console.warn('[live-location] victim publish failed', err);
       }
     },
-    unsubscribe: () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch {
-        // ignore
-      }
-    },
+    unsubscribe: () => hop.close(),
   };
 }
 
@@ -128,51 +184,29 @@ export function subscribeVictimLocation(
   sosId: string,
   onUpdate: (payload: VictimLocationPayload) => void,
 ): { unsubscribe: () => void } {
-  const channel = supabase
-    .channel(victimChannelName(sosId), {
-      // private: gated by Realtime Authorization (sql/39), participants only.
-      config: { private: true, broadcast: { ack: false, self: false } },
-    })
-    .on('broadcast', { event: 'vpos' }, (msg) => {
+  // The handler is re-bound on every hop, which is why bind takes the channel
+  // and returns it rather than the caller wiring it up once outside.
+  const hop = openHoppingChannel('sos-victim', sosId, (c) =>
+    c.on('broadcast', { event: 'vpos' }, (msg) => {
       const payload = msg.payload as VictimLocationPayload | undefined;
       if (!payload?.point) return;
       onUpdate(payload);
-    })
-    .subscribe();
-  return {
-    unsubscribe: () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch {
-        // ignore
-      }
-    },
-  };
+    }),
+  );
+  return { unsubscribe: () => hop.close() };
 }
 
 export function subscribeLiveLocation(
   sosId: string,
   onUpdate: (payload: LiveLocationPayload) => void,
 ): { unsubscribe: () => void } {
-  const channel = supabase
-    .channel(channelName(sosId), {
-      // private: gated by Realtime Authorization (sql/39), participants only.
-      config: { private: true, broadcast: { ack: false, self: false } },
-    })
-    .on('broadcast', { event: 'pos' }, (msg) => {
+  const hop = openHoppingChannel('sos-live', sosId, (c) =>
+    c.on('broadcast', { event: 'pos' }, (msg) => {
       const payload = msg.payload as LiveLocationPayload | undefined;
       if (!payload || !payload.point || !payload.responder) return;
       onUpdate(payload);
-    })
-    .subscribe();
+    }),
+  );
 
-  return {
-    unsubscribe: () => {
-      try {
-        supabase.removeChannel(channel);
-      } catch {
-        // ignore
-      }
-    },
-  };
+  return { unsubscribe: () => hop.close() };
 }
