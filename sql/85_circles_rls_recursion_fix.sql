@@ -125,29 +125,47 @@ create policy "members update self"
 -- ---------------------------------------------------------------------------
 -- VERIFY
 -- ---------------------------------------------------------------------------
+-- Prints every policy on circle_members with its expression, then fails only on
+-- a GENUINE self-reference.
+--
+-- The first version of this check flagged any policy whose expression contained
+-- the string 'circle_members', and raised on its own first run. That was too
+-- blunt: Postgres renders a qualified column as `circle_members.circle_id`, so
+-- a perfectly safe policy matches the substring. Only a subquery that SELECTs
+-- FROM or JOINs the table recurses, so that is what is tested now.
 do $$
 declare
-  n_policies int;
-  recursive_left int;
+  r record;
+  bad int := 0;
   helper_ok boolean;
 begin
-  select count(*) into n_policies
-  from pg_policies where tablename = 'circle_members';
+  raise notice '--- policies on circle_members ---';
+  for r in
+    select policyname, cmd, coalesce(qual, '') as q, coalesce(with_check, '') as w
+    from pg_policies
+    where tablename = 'circle_members'
+    order by cmd, policyname
+  loop
+    raise notice '  [%] %  USING: %  CHECK: %',
+      r.cmd, r.policyname,
+      coalesce(nullif(r.q, ''), '(none)'),
+      coalesce(nullif(r.w, ''), '(none)');
 
-  -- Any remaining policy whose expression reads circle_members directly is a
-  -- recursion waiting to happen.
-  select count(*) into recursive_left
-  from pg_policies
-  where tablename = 'circle_members'
-    and coalesce(qual, '') || coalesce(with_check, '') like '%circle_members%';
+    -- Recursion requires reading the table, not merely naming a column of it.
+    if (r.q || ' ' || r.w) ~* '(from|join)\s+(public\.)?circle_members' then
+      bad := bad + 1;
+      raise notice E'      ^^ SELF-REFERENCING: this policy reads circle_members';
+    end if;
+  end loop;
 
   select prosrc like '%deleted_at is null%' into helper_ok
   from pg_proc where proname = 'is_circle_member' limit 1;
 
-  raise notice E'\npolicies on circle_members : %\nself-referencing policies  : % (must be 0)\nis_circle_member honours soft delete : %',
-    n_policies, recursive_left, coalesce(helper_ok, false);
+  raise notice 'is_circle_member honours soft delete : %', coalesce(helper_ok, false);
+  raise notice E'self-referencing policies           : %', bad;
 
-  if recursive_left > 0 then
-    raise exception 'a policy on circle_members still reads circle_members directly; recursion will return';
+  if bad > 0 then
+    raise exception
+      'A policy on circle_members still SELECTs FROM circle_members; that recurses (42P17). See the notices above for which one.';
   end if;
 end $$;

@@ -689,17 +689,21 @@ const styles = StyleSheet.create({
     right: spacing.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    // Space-between, not a shared bar. Each control now carries its own glass
+    // and sizes to its own content.
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     zIndex: 5,
-    // One unified translucent bar holding the gear, circle tabs and alerts,
-    // so they anchor cleanly over the map instead of floating separately.
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 26,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
-    ...shadows.icon,
+    // NO background here any more.
+    //
+    // This used to be one translucent capsule spanning the full width with the
+    // three controls inside it. That bar was ~92% of the screen width, so it
+    // read as a solid header rather than as floating controls, and it hid a
+    // strip of the map that is the most useful thing on this screen.
+    //
+    // Three separate pills, each only as wide as it needs to be, let the map
+    // show through between them and make each control look tappable in its own
+    // right instead of like a segment of a toolbar.
   },
   topBtn: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   roundCtl: {
@@ -715,7 +719,10 @@ const styles = StyleSheet.create({
   },
   // Sits on the rim of the 42px glass button, not inside its old 40px box.
   ctlDot: { position: 'absolute', top: 1, right: 1, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.coral, borderWidth: 2, borderColor: colors.surface },
-  switcherSlot: { flex: 1, alignItems: 'center' },
+  // Was flex: 1, which made the circle switcher eat every pixel the two icon
+  // buttons did not. It now sizes to its label and simply stops growing past
+  // the point where it would crowd the notification button.
+  switcherSlot: { flexShrink: 1, alignItems: 'center' },
   ctlStack: { flexDirection: 'row', gap: spacing.sm },
   selectorScroll: { flex: 1, marginHorizontal: 2 },
   // Extra right padding + a small left pad so the first/last circle chips never
