@@ -509,3 +509,68 @@ export async function loadZoneEvents(uid: string): Promise<ZoneEvent[]> {
     };
   });
 }
+
+/**
+ * A visit: an enter paired with its matching exit.
+ *
+ * The activity feed used to render raw crossings, which answers the wrong
+ * question. "Left Hostel" tells you nothing on its own; people want to know who
+ * was where, from when, and for how long. Pairing happens in Postgres
+ * (circle_visits, sql/86) rather than on the phone, because doing it client-side
+ * means shipping every crossing down and rebuilding the pairs on every render.
+ */
+export type Visit = {
+  id: string;
+  memberId: string;
+  memberName: string | null;
+  zoneLabel: string;
+  enteredAt: string | null;
+  /** Null means they are still inside. */
+  leftAt: string | null;
+  /** Seconds. Null when the entry was never recorded, e.g. history predates it. */
+  durationS: number | null;
+  /** For exits: true confirmed intentional, false flagged, null pending. */
+  authorized: boolean | null;
+};
+
+export async function loadVisits(limit = 50): Promise<Visit[]> {
+  const { data, error } = await supabase.rpc('circle_visits', { p_limit: limit });
+  if (error || !data) return [];
+  return (data as Record<string, unknown>[]).map((r) => ({
+    id: String(r.visit_id),
+    memberId: String(r.member_id ?? ''),
+    memberName: r.member_name ? String(r.member_name) : null,
+    zoneLabel: String(r.zone_label ?? 'Safe zone'),
+    enteredAt: r.entered_at ? String(r.entered_at) : null,
+    leftAt: r.left_at ? String(r.left_at) : null,
+    durationS: r.duration_s == null ? null : Number(r.duration_s),
+    authorized: r.authorized == null ? null : Boolean(r.authorized),
+  }));
+}
+
+/** "2h 14m", "45m", "under a minute". Written to be read at a glance. */
+export function formatDuration(seconds: number | null): string {
+  if (seconds == null) return 'Unknown';
+  if (seconds < 60) return 'Under a minute';
+  const m = Math.floor(seconds / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (h < 24) return rem ? `${h}h ${rem}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return `${d}d ${h % 24}h`;
+}
+
+/** "9:41 AM, 25 Aug". Absolute, because a duration needs real endpoints. */
+export function formatStamp(iso: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-IN', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+    day: 'numeric',
+    month: 'short',
+  });
+}

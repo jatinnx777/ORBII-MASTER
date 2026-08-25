@@ -103,6 +103,9 @@ export type AppStackParamList = {
   OEMHelp: undefined;
   LanguageSelectorApp: undefined;
   CircleDetail: { circleId: string };
+  // The whole Visit is passed rather than an id: circle_visits pairs rows on
+  // the fly, so a visit has no stable row of its own to refetch by.
+  ActivityDetail: { visit: import('@/services/geofence').Visit };
   CircleCreate: undefined;
   CircleInvite: { circleId: string };
   SafetyPin: undefined;

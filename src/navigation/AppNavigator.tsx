@@ -40,6 +40,7 @@ import { DeadmanStartScreen } from '@/screens/Safety/Deadman/StartScreen';
 import { DeadmanActiveScreen } from '@/screens/Safety/Deadman/ActiveScreen';
 import { OEMHelpScreen } from '@/screens/OEMHelp/OEMHelpScreen';
 import { LanguageSelectorScreen } from '@/screens/Auth/LanguageSelectorScreen';
+import { ActivityDetailScreen } from '@/screens/Activity/ActivityDetailScreen';
 import { CircleDetailScreen } from '@/screens/Circles/CircleDetailScreen';
 import { CircleCreateScreen } from '@/screens/Circles/CircleCreateScreen';
 import { CircleInviteScreen } from '@/screens/Circles/CircleInviteScreen';
@@ -329,6 +330,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="CircleDetail"
         component={CircleDetailScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="ActivityDetail"
+        component={ActivityDetailScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen

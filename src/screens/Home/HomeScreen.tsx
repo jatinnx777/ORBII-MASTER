@@ -24,7 +24,7 @@ import { useAppSelector } from '@/redux/store';
 import { useReadiness, READINESS_CAP } from '@/services/readiness';
 import { subscribePresence, type PresencePeer } from '@/services/community';
 import { listCircles, listCircleMembers, type Circle } from '@/services/circles';
-import { loadZoneEvents, type ZoneEvent } from '@/services/geofence';
+import { formatDuration, loadVisits, type Visit } from '@/services/geofence';
 import {
   isListening,
   armVoiceSos,
@@ -75,7 +75,7 @@ export function HomeScreen() {
   const [circles, setCircles] = useState<Circle[]>([]);
   const [selectedCircle, setSelectedCircle] = useState<string | null>(null);
   const [circleMemberUids, setCircleMemberUids] = useState<Set<string>>(new Set());
-  const [zoneEvents, setZoneEvents] = useState<ZoneEvent[]>([]);
+  const [visits, setVisits] = useState<Visit[]>([]);
   const [sharing, setSharing] = useState(false);
   // Last-known location of circle members who share it, survives them going
   // offline (from circle_locations), so the map isn't empty when nobody's live.
@@ -144,7 +144,7 @@ export function HomeScreen() {
       })
       .catch(() => undefined);
     if (profile?.uid) {
-      loadZoneEvents(profile.uid).then(setZoneEvents).catch(() => undefined);
+      loadVisits(50).then(setVisits).catch(() => undefined);
     }
   }, [loadMe, profile?.uid]);
   useFocusEffect(useCallback(() => { void loadMe(); }, [loadMe]));
@@ -535,28 +535,67 @@ export function HomeScreen() {
             </View>
           )}
 
-          {/* B2. Recent activity, real safe-zone crossings, the calm ambient
-              feed. Only shows when there's something to show. */}
-          {zoneEvents.length > 0 ? (
+          {/* B2. Recent activity.
+              Was rendering raw crossings, which all read identically because
+              the member name was fetched and then never displayed: four rows of
+              "Arrived at Home" with no indication of WHO, which is exactly why
+              it looked hardcoded. Now shows visits, paired enter/exit with a
+              duration, and each row opens the full detail. */}
+          {visits.length > 0 ? (
             <>
-              <Text style={styles.sectionH}>Recent activity</Text>
+              <View style={styles.activityHead}>
+                <Text style={styles.sectionH}>Recent activity</Text>
+                {visits.length > 4 ? (
+                  <Text style={styles.activityCount}>{visits.length}</Text>
+                ) : null}
+              </View>
               <View style={styles.card}>
-                {zoneEvents.slice(0, 4).map((e, i) => (
-                  <View key={e.id} style={[styles.activityRow, i > 0 && styles.rowDivider]}>
-                    <View style={[styles.activityIcon, { backgroundColor: e.kind === 'enter' ? colors.sageSoft : colors.creamDeep }]}>
-                      <Ionicons
-                        name={e.kind === 'enter' ? 'enter-outline' : 'exit-outline'}
-                        size={17}
-                        color={e.kind === 'enter' ? colors.sageDeep : colors.brandDeep}
-                      />
-                    </View>
-                    <Text style={styles.activityText}>
-                      {e.kind === 'enter' ? 'Arrived at ' : 'Left '}
-                      <Text style={styles.activityPlace}>{e.label}</Text>
-                    </Text>
-                    <Text style={styles.activityTime}>{timeAgo(e.createdAt)}</Text>
-                  </View>
-                ))}
+                {visits.slice(0, 4).map((v, i) => {
+                  const ongoing = v.leftAt == null;
+                  return (
+                    <Pressable
+                      key={v.id}
+                      onPress={() => navigation.navigate('ActivityDetail', { visit: v })}
+                      style={({ pressed }) => [
+                        styles.activityRow,
+                        i > 0 && styles.rowDivider,
+                        pressed && styles.pressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${v.memberName ?? 'A circle member'} ${
+                        ongoing ? 'is at' : 'visited'
+                      } ${v.zoneLabel}. Tap for details.`}
+                    >
+                      <View
+                        style={[
+                          styles.activityIcon,
+                          { backgroundColor: ongoing ? colors.sageSoft : colors.creamDeep },
+                        ]}
+                      >
+                        <Ionicons
+                          name={ongoing ? 'location' : 'time-outline'}
+                          size={17}
+                          color={ongoing ? colors.sageDeep : colors.brandDeep}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.activityText} numberOfLines={1}>
+                          <Text style={styles.activityPlace}>
+                            {v.memberName ?? 'A circle member'}
+                          </Text>
+                          {ongoing ? ' is at ' : ' visited '}
+                          <Text style={styles.activityPlace}>{v.zoneLabel}</Text>
+                        </Text>
+                        <Text style={styles.activitySub}>
+                          {ongoing ? 'There for ' : 'Stayed '}
+                          {formatDuration(v.durationS)}
+                          {v.authorized === false ? '  ·  Flagged' : ''}
+                        </Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+                    </Pressable>
+                  );
+                })}
               </View>
             </>
           ) : null}
@@ -723,6 +762,9 @@ const styles = StyleSheet.create({
   // buttons did not. It now sizes to its label and simply stops growing past
   // the point where it would crowd the notification button.
   switcherSlot: { flexShrink: 1, alignItems: 'center' },
+  activityHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  activityCount: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted },
+  activitySub: { fontFamily: fontFamilies.interRegular, fontSize: 12.5, color: colors.textSecondary, marginTop: 1 },
   ctlStack: { flexDirection: 'row', gap: spacing.sm },
   selectorScroll: { flex: 1, marginHorizontal: 2 },
   // Extra right padding + a small left pad so the first/last circle chips never
