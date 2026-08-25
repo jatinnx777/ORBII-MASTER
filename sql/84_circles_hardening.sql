@@ -339,26 +339,23 @@ revoke all on function public.sos_trigger_allowed() from public, anon;
 grant execute on function public.sos_trigger_allowed() to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 6. RLS ON MEMBERSHIP: TOMBSTONES ARE NOT VISIBLE
+-- 6. RLS ON MEMBERSHIP -> MOVED TO sql/85
 -- ---------------------------------------------------------------------------
--- Existing policies (sql/10, sql/14) predate deleted_at, so a removed member
--- could still read the circle through their tombstoned row. Scope every read to
--- live rows.
-drop policy if exists circle_members_sel on circle_members;
-create policy circle_members_sel on circle_members
-  for select to authenticated
-  using (
-    deleted_at is null
-    and (
-      user_id = auth.uid()
-      or exists (
-        select 1 from circle_members me
-        where me.circle_id = circle_members.circle_id
-          and me.user_id = auth.uid()
-          and me.deleted_at is null
-      )
-    )
-  );
+-- This section originally added a policy on circle_members whose USING clause
+-- ran `exists (select 1 from circle_members ...)`. A policy on a table that
+-- reads that same table recurses, and Postgres rejects every read with:
+--
+--   42P17: infinite recursion detected in policy for relation "circle_members"
+--
+-- which took the whole Circles feature down. This project had already solved
+-- that twice, in sql/10 and sql/61, with the SECURITY DEFINER helper
+-- is_circle_member(); I did not use it and reintroduced the bug those files
+-- exist to prevent.
+--
+-- The policy now lives in sql/85_circles_rls_recursion_fix.sql, with the
+-- soft-delete rule pushed into the helper where it belongs. Deliberately left
+-- as a comment rather than deleted, so the next person reading this file in
+-- order does not wonder why section 6 is missing.
 
 -- ---------------------------------------------------------------------------
 -- VERIFY
