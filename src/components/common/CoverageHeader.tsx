@@ -123,6 +123,12 @@ export function CoverageHeader() {
       style={({ pressed }) => [styles.wrap, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={`${headline}. ${place}. Tap to see what is active in your area.`}
+      // AGENTS.md: dynamic state must be ANNOUNCED, not only shown. This
+      // headline changes on its own as she moves, and a blind user who is not
+      // currently focused here would never learn the helper network dropped out.
+      // 'polite' rather than 'assertive': it is a status change, not an
+      // emergency, and it must not cut across an SOS announcement.
+      accessibilityLiveRegion="polite"
     >
       <View style={styles.row}>
         <View style={{ flex: 1 }}>
