@@ -302,6 +302,12 @@ $$;
 -- Each exit is matched to the most recent preceding enter for the same person
 -- and zone. An enter with no exit yet is an ongoing visit and returns a null
 -- left_at, which the UI shows as "still there".
+-- Dropped, not replaced. An earlier run of this file installed a SECURITY
+-- DEFINER version of this function; dropping it removes that definition and its
+-- grants outright rather than relying on REPLACE to reset the security
+-- attribute. The grant is re-issued below, against the INVOKER version.
+drop function if exists public.circle_visits(int);
+
 create or replace function public.circle_visits(p_limit int default 50)
 returns table (
   visit_id     text,
