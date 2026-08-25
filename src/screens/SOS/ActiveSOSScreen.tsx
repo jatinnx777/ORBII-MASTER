@@ -49,6 +49,7 @@ import {
 } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { isPinSet, verifyPin } from '@/services/safety-pin';
+import { startSosHaptics, stopSosHaptics } from '@/services/sos-haptics';
 import { useSOSRecorder } from '@/services/sos-recording';
 import { PinPrompt } from '@/components/common';
 import {
@@ -111,6 +112,7 @@ export function ActiveSOSScreen() {
   const activeSOS = useAppSelector((s) => s.sos.activeSOS);
   const delivery = useAppSelector((s) => s.sos.delivery);
   const profile = useAppSelector((s) => s.user.profile);
+  const alertVibration = useAppSelector((s) => s.app.alertVibration);
   const contactCount = profile?.emergencyContacts?.length ?? 0;
 
   // Accessibility: a screen-reader user must HEAR that the SOS went out, not
@@ -254,6 +256,24 @@ export function ActiveSOSScreen() {
       void stopHelperPing();
     }
   }, [resolved]);
+
+  // Continuous pulse for as long as the SOS is live.
+  //
+  // Honours the alert-vibration setting rather than overriding it "because this
+  // is an emergency". Someone who turned vibration off did it for a reason, and
+  // on this product the likeliest reason is that a buzzing phone gives away
+  // where she is. Overriding that is not a safety feature, it is a way of
+  // deciding we know her situation better than she does.
+  //
+  // The cleanup is what actually guarantees silence: it runs on unmount, on
+  // resolve, and on cancel, so there is no path off this screen that leaves the
+  // phone buzzing.
+  useEffect(() => {
+    if (!activeSOS?.id || resolved || !alertVibration) return undefined;
+    startSosHaptics();
+    return () => stopSosHaptics();
+  }, [activeSOS?.id, resolved, alertVibration]);
+
   const lastPromptRef = useRef(0);
 
   const promptArrival = useCallback(
@@ -471,6 +491,7 @@ export function ActiveSOSScreen() {
       icon: 'close-circle',
       onConfirm: async () => {
         const runCancel = () => {
+          stopSosHaptics();
           // Note: in-flight audio recording stops automatically via
           // `useSOSRecorder`'s cleanup when this screen unmounts during
           // the navigation.reset below.
@@ -1042,6 +1063,10 @@ export function ActiveSOSScreen() {
             setPinError('Wrong PIN. Try again.');
             return;
           }
+          // Before the sheet closes and before runCancel touches the network.
+          // A correct PIN is proof the phone is hers; the buzzing stops there,
+          // not after a request that may be retrying on bad signal.
+          stopSosHaptics();
           setPinPromptOpen(false);
           setPinError(null);
           const run = pendingCancelRef.current;

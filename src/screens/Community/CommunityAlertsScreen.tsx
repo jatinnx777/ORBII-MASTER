@@ -133,12 +133,19 @@ export function CommunityAlertsScreen() {
           style: 'default',
           onPress: async () => {
             if (!profile) return;
-            dispatch(respondingStarted(alertItem.id));
-            await respondToAlert(alertItem.id, {
+            const slot = await respondToAlert(alertItem.id, {
               userId: profile.uid,
               name: profile.name ?? 'Responder',
               photoUri: profile.photoUri,
             });
+            // Claim the slot BEFORE marking ourselves as responding. The old
+            // order set local state first and ignored the result, so a helper
+            // turned away by the cap still saw themselves as on the way.
+            if (!slot.ok) {
+              appAlert('Thank you for saying yes', slot.message);
+              return;
+            }
+            dispatch(respondingStarted(alertItem.id));
             trackEvent('community_responded', {
               alertId: alertItem.id,
               distanceMeters: Math.round(alertItem.distanceMeters),

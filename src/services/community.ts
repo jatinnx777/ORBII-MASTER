@@ -376,24 +376,85 @@ export async function listNearbyAlerts(
   }
 }
 
-// Record that the current user is responding to this alert. Best-effort , 
-// if it fails we still allow the local flow to proceed so the victim isn't
-// left waiting on a network hiccup.
+export type AcceptResult = {
+  ok: boolean;
+  /** 'accepted' | 'already_accepted' | 'wave_full' | 'sos_closed' | ... */
+  reason: string;
+  /** A sentence to show the helper. Always present, always human. */
+  message: string;
+  active: number;
+  cap: number;
+};
+
+/**
+ * Take a slot on somebody's SOS.
+ *
+ * WHY THIS STOPPED BEING FIRE-AND-FORGET. It used to insert into sos_responders
+ * and swallow every error, on the reasoning that a network hiccup should not
+ * block a helper from setting off. That reasoning does not survive a cap: with
+ * three slots, "it probably worked" is a helper driving across town to an
+ * emergency that already has three people, and a victim watching a count that
+ * does not match who is actually coming.
+ *
+ * The RPC takes a row lock on the incident, so simultaneous accepts are ordered
+ * rather than raced, and it answers with a sentence rather than an error code.
+ * Being told the wave is full is a normal outcome, not a failure.
+ */
 export async function respondToAlert(
   alertId: string,
-  responder: { userId: string; name: string; photoUri: string | null },
-): Promise<void> {
+  _responder: { userId: string; name: string; photoUri: string | null },
+): Promise<AcceptResult> {
   try {
-    const { error } = await supabase.from('sos_responders').insert({
-      sos_id: alertId,
-      user_id: responder.userId,
-      name: responder.name,
-      photo_url: responder.photoUri,
-      created_at: new Date().toISOString(),
+    const { data, error } = await supabase.rpc('accept_sos_dispatch', {
+      p_sos: alertId,
     });
     if (error) throw error;
+    const r = (data ?? {}) as Partial<AcceptResult>;
+    return {
+      ok: r.ok === true,
+      reason: String(r.reason ?? 'unknown'),
+      message: String(r.message ?? 'Could not confirm. Go if you can.'),
+      active: Number(r.active ?? 0),
+      cap: Number(r.cap ?? 0),
+    };
   } catch (err) {
     console.warn('[community] respondToAlert failed', err);
+    // Unreachable server. Do NOT claim a slot we could not confirm, and do not
+    // tell her to stay home either: the honest answer is that we do not know,
+    // and a person deciding whether to walk toward an emergency deserves that
+    // stated plainly rather than a false green tick.
+    return {
+      ok: false,
+      reason: 'offline',
+      message: 'Could not reach the network to confirm your place. Go only if you are sure.',
+      active: 0,
+      cap: 0,
+    };
+  }
+}
+
+/**
+ * Give the slot back.
+ *
+ * The database asks for a replacement the moment this lands, so a helper who
+ * cannot make it costs the victim seconds rather than the whole wave. Nobody is
+ * told who left; the victim sees a count, not a name.
+ */
+export async function withdrawFromAlert(
+  alertId: string,
+  reason?: string,
+): Promise<{ ok: boolean; active: number }> {
+  try {
+    const { data, error } = await supabase.rpc('drop_sos_dispatch', {
+      p_sos: alertId,
+      p_reason: reason ?? null,
+    });
+    if (error) throw error;
+    const r = (data ?? {}) as { ok?: boolean; active?: number };
+    return { ok: r.ok === true, active: Number(r.active ?? 0) };
+  } catch (err) {
+    console.warn('[community] withdrawFromAlert failed', err);
+    return { ok: false, active: 0 };
   }
 }
 

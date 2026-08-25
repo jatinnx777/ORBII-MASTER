@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { IconBadge, Mascot, MLMapView, type MLMarker } from '@/components/common';
+import { appAlert, IconBadge, Mascot, MLMapView, type MLMarker } from '@/components/common';
 import { colors, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { respondToAlert } from '@/services/community';
@@ -101,11 +101,21 @@ export function HelperAlertScreen() {
     setResponding(true);
     Vibration.cancel();
     trackEvent('helper_alert_accepted', { alertId, distanceMeters: Math.round(alert.distanceMeters) });
-    await respondToAlert(alert.id, {
+    const slot = await respondToAlert(alert.id, {
       userId: profile.uid,
       name: profile.name ?? 'A helper',
       photoUri: profile.photoUri ?? null,
     });
+    // The wave is capped, so accepting can legitimately fail. Navigating anyway
+    // would send somebody across town to an emergency that already has its
+    // three people, which is the exact thing the cap exists to prevent.
+    if (!slot.ok) {
+      setResponding(false);
+      appAlert('Thank you for saying yes', slot.message, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+      return;
+    }
     // In-app live navigation to the person in need, no bouncing out to
     // Google Maps. `replace` so the alert screen is removed from the stack.
     navigation.replace('HelperNavigation', {
