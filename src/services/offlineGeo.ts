@@ -198,7 +198,18 @@ function distanceToSegmentM(p: LatLng, a: LatLng, b: LatLng): number {
 // The zone registry
 // ---------------------------------------------------------------------------
 
-type CompiledZone = ZoneDefinition & { bounds: Bounds; centroid: LatLng };
+type CompiledZone = ZoneDefinition & {
+  bounds: Bounds;
+  centroid: LatLng;
+  /**
+   * Circumscribed radius: the furthest any vertex sits from the centroid.
+   *
+   * Used as the triangle-inequality bound in the nearest-landmark search. It has
+   * to be the polygon's OWN radius; the previous code used a fixed 150 m, which
+   * silently assumed no building is wider than 300 m.
+   */
+  radiusM: number;
+};
 
 const zones: CompiledZone[] = [];
 
@@ -224,10 +235,19 @@ function compile(zone: ZoneDefinition): CompiledZone {
       throw new InvalidZoneError(`zone ${zone.id} has an out-of-range vertex`);
     }
   }
+  const centroid = centroidOf(zone.polygonCoordinates);
+  // reduce, not Math.max(...spread). A spread of a few thousand vertices, which
+  // a traced campus outline can reach, overflows the argument limit and throws
+  // at load time.
+  const radiusM = zone.polygonCoordinates.reduce(
+    (max, p) => Math.max(max, distanceToSegmentM(centroid, p, p)),
+    0,
+  );
   return {
     ...zone,
     bounds: boundsOf(zone.polygonCoordinates),
-    centroid: centroidOf(zone.polygonCoordinates),
+    centroid,
+    radiusM,
   };
 }
 
@@ -390,7 +410,12 @@ export function resolveOfflineLocation(lat: number, lng: number): OfflineLocatio
         { latitude: lat, longitude: lng },
         { latitude: z.centroid.lat, longitude: z.centroid.lng },
       );
-      if (rough - NEAR_LANDMARK_MAX_M > nearestM) continue;
+      // Triangle inequality: the perimeter cannot be nearer than the centroid
+      // distance minus the polygon's own radius. The constant that used to sit
+      // here assumed every building fits inside a 150 m radius, so anything
+      // wider than 300 m was skipped and a smaller, genuinely farther landmark
+      // was reported as nearest. On a campus that is the wrong building.
+      if (rough - z.radiusM > nearestM) continue;
 
       const d = distanceToPerimeterM(point, z.polygonCoordinates);
       if (d < nearestM) {

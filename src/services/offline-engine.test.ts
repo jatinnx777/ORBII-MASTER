@@ -158,6 +158,69 @@ describe('resolveOfflineLocation', () => {
   });
 });
 
+describe('nearest landmark, large-polygon bound', () => {
+  beforeEach(() => clearCampusZones());
+
+  // ~780 m by ~400 m, so its circumscribed radius is 438 m, far beyond the
+  // fixed 150 m the reject used to assume.
+  const BIG: ZoneDefinition = {
+    id: 'academic-block',
+    name: 'Main Academic Block',
+    zoneType: 'academic',
+    surveyed: true,
+    polygonCoordinates: [
+      { lat: 28.9900, lng: 77.0100 },
+      { lat: 28.9900, lng: 77.0180 },
+      { lat: 28.9936, lng: 77.0180 },
+      { lat: 28.9936, lng: 77.0100 },
+    ],
+  };
+
+  // A few metres across, sitting 40 m north of the probe point.
+  const SMALL: ZoneDefinition = {
+    id: 'kiosk',
+    name: 'Canteen Kiosk',
+    zoneType: 'canteen',
+    surveyed: true,
+    polygonCoordinates: [
+      { lat: 28.99399, lng: 77.01398 },
+      { lat: 28.99399, lng: 77.01402 },
+      { lat: 28.99403, lng: 77.01402 },
+      { lat: 28.99403, lng: 77.01398 },
+    ],
+  };
+
+  // 5.6 m north of the big block's top edge, 38 m from the kiosk.
+  const PROBE = { lat: 28.99365, lng: 77.0140 };
+
+  it('does not skip a large building whose centroid is far but edge is near', () => {
+    // LOAD ORDER IS THE POINT. The kiosk is examined first and sets nearestM to
+    // 38 m. The old reject then computed 205 (centroid distance) minus a fixed
+    // 150 = 55, decided 55 > 38, and skipped the block entirely, reporting the
+    // kiosk 38 m away instead of the building 6 m away.
+    //
+    // With the polygon's own 438 m radius the bound goes negative and the block
+    // is measured properly. Verified to fail against the old constant.
+    loadCampusZones([SMALL, BIG]);
+    const r = resolveOfflineLocation(PROBE.lat, PROBE.lng);
+    expect(r.basis).toBe('near_landmark');
+    expect(r.zoneId).toBe('academic-block');
+    expect(r.nearestDistanceM).toBeLessThan(15);
+  });
+
+  it('still picks the small zone when it genuinely is nearest', () => {
+    // The bound must not overcorrect into always preferring large polygons.
+    loadCampusZones([SMALL, BIG]);
+    const r = resolveOfflineLocation(28.99396, 77.0140); // 1 m from the kiosk
+    expect(r.zoneId).toBe('kiosk');
+  });
+
+  it('is unaffected by vertex winding order', () => {
+    loadCampusZones([SMALL, { ...BIG, polygonCoordinates: [...BIG.polygonCoordinates].reverse() }]);
+    expect(resolveOfflineLocation(PROBE.lat, PROBE.lng).zoneId).toBe('academic-block');
+  });
+});
+
 describe('SMS payload', () => {
   const base: SOSPayloadObject = {
     sosId: '8ee693c9-1f2a-4b3c-9d4e-5f6a7b8c9d0e',
@@ -360,6 +423,37 @@ describe('SMS text', () => {
     expect(text).toContain('28.99391');
     expect(text).toContain('77.01604');
     expect(extractPayloadFromSms(text)).not.toBeNull();
+  });
+
+  it('never exceeds one part even when the name budget goes negative', () => {
+    // The old fallback forced a 3-character slice via Math.max(3, room) and
+    // returned WITHOUT re-measuring, so the branch whose only job is guaranteeing
+    // a single part could emit two.
+    for (const len of [0, 1, 5, 200, 2000]) {
+      const text = buildOfflineSmsText({
+        senderName: 'x'.repeat(len),
+        placeName: 'y'.repeat(len),
+        lat: -33.86880,
+        lng: -151.20930, // widest coordinates: two signs, six integer digits
+        payload,
+      });
+      expect(gsm7Length(text)).toBeLessThanOrEqual(SINGLE_SMS_LIMIT);
+      expect(text).toContain('-33.86880');
+      expect(extractPayloadFromSms(text)).not.toBeNull();
+    }
+  });
+
+  it('keeps coordinates and payload even in the atomic minimum form', () => {
+    const text = buildOfflineSmsText({
+      senderName: 'z'.repeat(5000),
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(gsm7Length(text)).toBeLessThanOrEqual(SINGLE_SMS_LIMIT);
+    expect(text).toContain('ORBII SOS');
+    expect(extractPayloadFromSms(text)!.sosId).toBe(payload.sosId);
   });
 
   it('strips characters that would force UCS-2 and halve the limit', () => {

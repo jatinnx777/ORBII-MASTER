@@ -142,9 +142,24 @@ object MeshVault {
     synchronized(lock) {
       val p = prefs(ctx)
       val now = System.currentTimeMillis()
-      val entries = prune(parse(p.getString(KEY, null)), now)
-      // Write back so expiry actually reclaims space on a read-only path too.
-      p.edit().putString(KEY, serialize(entries)).commit()
+      val parsed = parse(p.getString(KEY, null))
+      val entries = prune(parsed, now)
+
+      // Only write when pruning actually removed something, and use apply()
+      // rather than commit().
+      //
+      // read() is reached from the readVault and vaultSize @ReactMethods, which
+      // run on the React Native module thread, and vaultStatusLine() calls it at
+      // app start. commit() is synchronous disk I/O, so every status read blocked
+      // the bridge on flash, and it wrote even when nothing had changed, which is
+      // pointless wear on a cheap device.
+      //
+      // Durability matters for hold(), which is the write path and keeps
+      // commit(). It does not matter for reclaiming space: if the process dies
+      // before this lands, the next read prunes again.
+      if (entries.size != parsed.size) {
+        p.edit().putString(KEY, serialize(entries)).apply()
+      }
       entries.toList()
     }
   } catch (e: Exception) {

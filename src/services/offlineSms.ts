@@ -314,8 +314,22 @@ export function buildOfflineSmsText(ctx: OfflineSmsContext): string {
   // core is about 60), but a pathological name must never push us into a second
   // part. Truncate the name, never the coordinates.
   const room = SINGLE_SMS_LIMIT - gsm7Length(` At ${coords} ${tag}`) - 'ORBII SOS:  needs help now.'.length;
-  const shortName = name.slice(0, Math.max(3, room));
-  return `ORBII SOS: ${shortName} needs help now. At ${coords} ${tag}`;
+
+  // Math.max(3, room) used to force three characters even when room was
+  // negative, then returned WITHOUT re-measuring. The one branch whose entire
+  // job is guaranteeing a single part could therefore emit two. Unreachable with
+  // today's constants, but PAYLOAD_TAG and the header text are exactly the
+  // things that change, and a guard that only works for the current constants
+  // is not a guard.
+  const shortName = room >= 3 ? name.slice(0, room) : '';
+  const withName = shortName
+    ? `ORBII SOS: ${shortName} needs help now. At ${coords} ${tag}`
+    : `ORBII SOS: someone needs help now. At ${coords} ${tag}`;
+  if (gsm7Length(withName) <= SINGLE_SMS_LIMIT) return withName;
+
+  // Atomic minimum. Coordinates and payload are what dispatch help; the prose
+  // is what gets cut. Still one part, which is the promise this function makes.
+  return `ORBII SOS. At ${coords} ${tag}`;
 }
 
 // ---------------------------------------------------------------------------
