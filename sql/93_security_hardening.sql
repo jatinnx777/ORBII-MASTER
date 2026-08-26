@@ -190,8 +190,27 @@ select 'realtime authoriser honours soft delete',
        coalesce((select (prosrc like '%a.deleted_at is null%')::text from pg_proc
                  where proname = 'orbii_can_access_sos' limit 1), 'MISSING')
 union all
-select 'tables with NO RLS (want 0)',
+-- WANT 1, NOT 0, AND THE 1 IS spatial_ref_sys.
+--
+-- It is the PostGIS system table holding the EPSG catalogue: about 8,500 rows
+-- of coordinate-system definitions, no user data, published publicly by EPSG.
+-- RLS cannot be enabled on it because the extension owns it and Supabase does
+-- not grant superuser, so `alter table ... enable row level security` errors.
+--
+-- This is the most common finding in Supabase's own linter and their guidance
+-- is to ignore it. Recorded here so nobody re-investigates it in six months.
+--
+-- The DATA is worthless to an attacker. WRITE access would not be: coverage
+-- gating and dispatch use ST_Distance and ST_Covers on geography, which resolve
+-- SRID 4326 through this table. Corrupt that row and distance maths across the
+-- app returns nonsense with no error anywhere. Checked below.
+select 'tables with NO RLS (want 1: spatial_ref_sys, a PostGIS system table)',
        (select count(*)::text from public.security_audit where rls_status = 'NO RLS')
+union all
+select 'anon can write spatial_ref_sys (want false)',
+       (has_table_privilege('anon', 'public.spatial_ref_sys', 'insert')
+        or has_table_privilege('anon', 'public.spatial_ref_sys', 'update')
+        or has_table_privilege('anon', 'public.spatial_ref_sys', 'delete'))::text
 union all
 -- CORRECTED. The first version of this line counted tables where anon holds a
 -- write PRIVILEGE and expected 2. It returned 69, and 69 was right: Supabase
