@@ -212,6 +212,9 @@ Notable ones:
 | 87 | one-line hotfix revoking a leaking `circle_visits` |
 | 88 | teaches the realtime authoriser about soft deletes |
 | 89 | responder cap of 3 per SOS, drop-out and backfill |
+| 93 | revokes direct insert on sos_responders; `security_audit` view |
+| 95 | SRID 4326 tamper guard on pg_cron, `security_events` table |
+| 96 | bounds `circle_visits` to 30 days, adds two geofence indexes |
 
 `sql/55_whats_missing.sql` is read-only; zero rows means fully migrated.
 
@@ -364,11 +367,11 @@ cd android; .\gradlew.bat assembleRelease --console=plain
    SQL editor: `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
    (needs sql/27). Then approve applicants through the admin portal, which sets
    all three flags at once. Do not hand-edit the flags.
-3. **Run `sql/checks/health.sql`.** Read-only, returns a table. It is the only
-   confirmation that `circle_visits` is SECURITY INVOKER on the live database and
-   therefore that the location-history leak is actually closed. sql/85 to sql/89
-   were all run on 25 and 26 Aug and all reported "Success. No rows returned",
-   which proves they committed and nothing more.
+3. ~~Run `sql/checks/health.sql`~~ **DONE 27 Aug.** All migrations through sql/96
+   are applied and verified against the live database. Six vulnerabilities closed
+   and confirmed, not merely committed. The one that cannot be fixed
+   (`spatial_ref_sys`, owned by supabase_admin) has a pg_cron guard and an open
+   Supabase support ticket.
 4. Run `sql/79_backend_hardening.sql` (app) and `D:\ORBII-HELPER\sql\03_dispatch_debug.sql`.
    Verified applied against the live project on 22 Aug: sql/71 (`voice_samples`
    exists), helper sql/01 and sql/02. Verified NOT applied: sql/79
