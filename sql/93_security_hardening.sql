@@ -193,6 +193,18 @@ union all
 select 'tables with NO RLS (want 0)',
        (select count(*)::text from public.security_audit where rls_status = 'NO RLS')
 union all
-select 'tables anon can write (want 2: client_errors, app_events)',
-       (select count(*)::text from public.security_audit
-        where anon_can like '%insert%' or anon_can like '%update%' or anon_can like '%delete%');
+-- CORRECTED. The first version of this line counted tables where anon holds a
+-- write PRIVILEGE and expected 2. It returned 69, and 69 was right: Supabase
+-- ships `grant all on all tables in schema public to anon, authenticated`, so
+-- privilege is broad by design and RLS is what filters rows. Counting
+-- privileges alone counts the wrong thing and produces a frightening number
+-- that means nothing.
+--
+-- Exposure needs BOTH the privilege AND the absence of a row filter, so this
+-- now counts policies that name anon or public on a write command. Those are
+-- reachable by anybody holding the key shipped inside the APK, with no account.
+select 'anon-writable POLICIES (want 0, telemetry uses grants not policies)',
+       (select count(*)::text from pg_policies
+        where schemaname = 'public'
+          and cmd in ('INSERT', 'UPDATE', 'DELETE', 'ALL')
+          and ('anon' = any(roles) or 'public' = any(roles)));
