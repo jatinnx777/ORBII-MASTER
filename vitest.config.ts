@@ -24,6 +24,7 @@ export default defineConfig({
       'react-native': path.resolve(__dirname, 'test/stubs/react-native.ts'),
       '@react-native-async-storage/async-storage': path.resolve(__dirname, 'test/stubs/empty.ts'),
       'expo-location': path.resolve(__dirname, 'test/stubs/empty.ts'),
+      'expo-sms': path.resolve(__dirname, 'test/stubs/expo-sms.ts'),
       'expo-notifications': path.resolve(__dirname, 'test/stubs/empty.ts'),
       'expo-task-manager': path.resolve(__dirname, 'test/stubs/task-manager.ts'),
       // supabase.ts pulls react-native-url-polyfill, which is Flow-typed too.
