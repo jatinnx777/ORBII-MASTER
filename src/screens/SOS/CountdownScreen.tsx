@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { appAlert, PinPrompt } from '@/components/common';
 import { isPinSet, verifyPin } from '@/services/safety-pin';
+import { getConnection } from '@/services/net';
+import { dispatchOfflineSMSFallback } from '@/services/offlineSms';
 import { uploadPreRoll } from '@/services/sos-audio';
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from 'expo-audio';
 import {
@@ -296,6 +298,48 @@ export function CountdownScreen() {
         () => undefined,
       );
       navigation.replace('ActiveSOS');
+
+      // OFFLINE: put the pre-filled SMS in front of her instead of making her
+      // find it.
+      //
+      // WHY THIS IS NOT IN A CATCH BLOCK. createSOS does not throw when the
+      // network is down, deliberately: it mints a local UUID, fires the
+      // broadcast fire-and-forget, and returns. The only thing it throws is the
+      // rate limiter. So there is no rejection to hang this on, and the trigger
+      // has to be connectivity itself.
+      //
+      // PURELY ADDITIVE. armOfflineFallbacks in sos.ts still runs untouched:
+      // enqueueSOS retries on reconnect, armOfflineSos seeds the BLE mesh, and
+      // armHelperPing beacons for premium. This only surfaces the one route
+      // that needs a human hand, because SEND_SMS is Play-restricted and the
+      // composer cannot send itself.
+      //
+      // After the navigate, so the composer opens over ActiveSOS and closing it
+      // returns her to the live SOS screen rather than a dead countdown.
+      if (!isTest && profile.emergencyContacts.length > 0) {
+        void (async () => {
+          try {
+            const conn = await getConnection();
+            if (conn.isConnected) return;
+            await dispatchOfflineSMSFallback(
+              {
+                sosId: record.id,
+                timestamp: record.timestamp,
+                lat: location.latitude,
+                lng: location.longitude,
+                batteryLevel: NaN, // unknown; encoder marks it rather than lying
+                triggerType: isVoice ? 'voice' : 'manual',
+              },
+              profile.emergencyContacts.map((c) => c.phone),
+              { senderName: profile.name ?? '', placeName: null },
+            );
+          } catch (e) {
+            // Never let the SMS convenience disturb an SOS that already fired.
+            console.warn('[countdown] offline SMS surface failed', e);
+          }
+        })();
+      }
+
       // Fire-and-forget WhatsApp broadcast to every emergency contact.
       // Push + realtime channel still fire on the critical path; WhatsApp
       // is the high-deliverability secondary that catches contacts who
