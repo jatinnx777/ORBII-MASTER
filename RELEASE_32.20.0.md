@@ -155,7 +155,7 @@ testing"**, on the website, in the deck, and in the room.
 
 ## Deployment
 
-1. `sql/84` through `sql/96` — **already applied and verified 27 Aug**
+1. `sql/84` through `sql/96`: **already applied and verified 27 Aug**
 2. Upload `ORBII-v32.20.0.aab` to Play Console
 3. Check the rollout percentage. A staged rollout below 100 percent means most
    users never receive this
