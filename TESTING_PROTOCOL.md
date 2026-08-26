@@ -262,6 +262,135 @@ Do not ship a build claiming offline capability until every box holds:
 - [ ] 2.4 relaying phone provably cannot read the payload
 - [ ] 3.3 double-invoked escalation advances the wave exactly once
 - [ ] 4.3 a deliberately broken drain produces a `fatal` row
+- [ ] 6.1 the offline SMS composer appears by itself and sends in one tap
+- [ ] 6.2 impact detection is off and cannot self-trigger
 
 Until 2.1, 2.3 and 2.4 pass, the honest description of the mesh remains
 **"built, in hardware testing"**, on the website, in the deck, and in the room.
+
+---
+
+## Part 6 — The offline engine
+
+Added Aug 2026. All of it is written, tested in Node, and unproven on a phone.
+
+You need two phones and about twenty minutes. Nothing here needs a developer.
+Write down what actually happened, including "nothing happened", which is a
+result.
+
+---
+
+### 6.1 The offline SMS appears by itself
+
+**What this proves.** When her phone has no internet, the text to her emergency
+contacts is put in front of her instead of sitting behind a button on another
+screen.
+
+**Read this before you start, or the test will fail for the wrong reason.**
+
+- **Do NOT use Airplane Mode.** Airplane mode switches off the SMS radio too, so
+  the message could never send even if everything worked. Turn off **Wi-Fi** and
+  **mobile data** instead, and leave the SIM working. That is also the real
+  situation this feature is for: signal, no data.
+- **Do NOT use a Test SOS.** A test SOS deliberately skips this, so that
+  practising never texts anyone by accident. You have to fire a real one.
+- **Set your own second phone as the ONLY emergency contact first.** A real SOS
+  texts whoever is in that list. Put everyone else back afterwards.
+
+**Steps**
+
+- [ ] On phone A, open Settings and remove every emergency contact except phone B
+- [ ] Turn off Wi-Fi on phone A
+- [ ] Turn off mobile data on phone A (leave the SIM on, you should still see bars)
+- [ ] Go outside or near a window so it has a GPS fix
+- [ ] Fire a real SOS and let the countdown run to zero
+
+**What should happen**
+
+- [ ] The app moves to the live SOS screen
+- [ ] Within a second or two, the phone's own messaging app slides up on top
+- [ ] The message is already written, addressed to phone B
+- [ ] It says `ORBII SOS:` then your name, then `needs help now`
+- [ ] It contains two numbers separated by a comma, like `28.99391,77.01604`
+- [ ] It ends with a code starting `OB1:`
+- [ ] You tap send **once** and it goes
+- [ ] Closing the messaging app puts you back on the live SOS screen, not a blank one
+
+**What each failure means**
+
+| What you see | What it means |
+|---|---|
+| No composer at all | Either no emergency contacts, or the phone still had data |
+| Composer appears but is empty | The message builder failed; capture a logcat |
+| Your name is missing, it says "Someone" | Expected if your name is not written in English letters |
+| Message splits into 2 or 3 parts | A real bug. Report it. It must always be one message |
+
+- [ ] **Put your real emergency contacts back afterwards**
+
+---
+
+### 6.2 Fall detection is switched off
+
+**What this proves.** The impact detector cannot start a countdown by accident,
+because it is not running at all in this build.
+
+It is off on purpose. Every threshold in it was worked out from published
+research, not measured on the phones ORBII actually ships to, and until somebody
+has dropped a real phone we do not trust it near an SOS.
+
+**Steps**
+
+- [ ] Open `src/services/volumetricShock.ts` (**not** `App.tsx`)
+- [ ] Find the line `export const ENABLE_IMPACT_DETECTION`
+- [ ] Confirm it says `false`
+
+**Then check it behaves**
+
+- [ ] Put the phone in your pocket and walk around for five minutes
+- [ ] Set the phone down hard on a table, three times
+- [ ] Drop the phone onto a bed or sofa from waist height, twice
+- [ ] Confirm **no** countdown ever starts
+
+Any countdown starting here is a serious bug. Note exactly what you were doing.
+
+---
+
+### 6.3 The app survives sitting offline
+
+**What this proves.** The part of the app that carries other people's emergency
+messages does not leak memory or crash while it waits for a connection.
+
+**Steps**
+
+- [ ] Turn off Wi-Fi and mobile data
+- [ ] Open ORBII, sign in, then press home so it runs in the background
+- [ ] Leave it for at least 10 minutes, longer if you can
+- [ ] Come back to the app
+
+**What should happen**
+
+- [ ] The app is still running and opens instantly, not a fresh loading screen
+- [ ] Nothing has crashed
+- [ ] Turn Wi-Fi back on and leave it for a minute
+- [ ] The app is still fine
+
+If you can run `adb logcat -s ReactNativeJS`, you should see a line like
+`[vault] js=0 native=0 cap=100 ttlMs=21600000 fromNative=true` when the app
+starts.
+
+- [ ] `fromNative=true` (if it says `false`, tell an engineer, nothing is broken
+      but a setting is not crossing over correctly)
+- [ ] No lines containing `Unhandled` or `Possible unhandled promise rejection`
+
+---
+
+### 6.4 Release gate for the offline engine
+
+- [ ] 6.1 composer appears pre-filled, sends in one tap, stays one message
+- [ ] 6.2 `ENABLE_IMPACT_DETECTION` is `false` and no countdown ever self-starts
+- [ ] 6.3 ten minutes backgrounded and offline with no crash
+
+Until 6.1 passes on a real phone, the honest description of the offline SMS
+remains **"built, in hardware testing"**. The same rule as the mesh.
+
+---
