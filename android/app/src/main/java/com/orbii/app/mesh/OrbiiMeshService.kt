@@ -71,6 +71,12 @@ class OrbiiMeshService : Service() {
     // same way, so the helper's UI can show a warmer/colder homing meter.
     const val HELPER_PING_RX_ACTION = "com.orbii.app.mesh.HELPER_PING_RX"
 
+    // A packet we caught but could not hand to the server. Broadcast so JS can
+    // take it into services/hotPotatoVault.ts, which owns the retry policy and
+    // the connectivity subscription. Also written to MeshVault first, because
+    // the JS side may not be alive to hear this.
+    const val UNBRIDGED_ACTION = "com.orbii.app.mesh.UNBRIDGED"
+
     // Fixed ORBII mesh identifiers (valid hex UUIDs).
     val SERVICE_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000500")
     val PAYLOAD_UUID: UUID = UUID.fromString("0ab11000-0000-4000-8000-000000000501")
@@ -495,10 +501,36 @@ class OrbiiMeshService : Service() {
     }
   }
 
+  /**
+   * Hand the packet to the server, or keep it.
+   *
+   * WHAT THIS USED TO DO. The catch was empty, with the comment "someone else
+   * bridges". Usually someone does. When nobody in range has internet, an SOS
+   * that physically reached a stranger's phone died on it, and that relay very
+   * often walks into wifi four minutes later still carrying the answer.
+   *
+   * The response code is now read explicitly rather than inferred from whether
+   * inputStream threw. A 4xx counts as delivered: the usual 4xx here is the
+   * bridge rejecting a duplicate it already holds, which means the SOS arrived by
+   * another route and retrying it forever is noise. A 5xx is the server having a
+   * bad day and IS worth carrying.
+   */
   private fun tryBridge(msgId: String, blob: ByteArray) {
-    val url = bridgeUrl ?: return
+    val sealedB64 = try {
+      android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
+    } catch (e: Exception) {
+      return // cannot encode it, cannot store it, nothing useful left to do
+    }
+
+    val url = bridgeUrl
+    if (url == null) {
+      vaultUnbridged(msgId, sealedB64)
+      return
+    }
+
+    var conn: java.net.HttpURLConnection? = null
     try {
-      val conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
+      conn = (java.net.URL(url).openConnection() as java.net.HttpURLConnection).apply {
         requestMethod = "POST"
         connectTimeout = 8000
         readTimeout = 8000
@@ -506,13 +538,54 @@ class OrbiiMeshService : Service() {
         setRequestProperty("Content-Type", "application/json")
         bearer?.let { setRequestProperty("Authorization", "Bearer $it") }
       }
-      val sealedB64 = android.util.Base64.encodeToString(blob, android.util.Base64.NO_WRAP)
       val body = "{\"msgId\":\"$msgId\",\"sealed\":\"$sealedB64\"}"
       conn.outputStream.use { it.write(body.toByteArray()) }
-      conn.inputStream.use { it.readBytes() } // drain; 2xx = bridged
-      conn.disconnect()
+
+      val code = conn.responseCode
+      if (code in 200..299) {
+        try { conn.inputStream.use { it.readBytes() } } catch (e: Exception) {}
+        return
+      }
+      if (code in 400..499) {
+        // Already have it, or it will never be accepted. Either way, done.
+        try { conn.errorStream?.use { it.readBytes() } } catch (e: Exception) {}
+        return
+      }
+      try { conn.errorStream?.use { it.readBytes() } } catch (e: Exception) {}
+      vaultUnbridged(msgId, sealedB64)
     } catch (e: Exception) {
-      // No internet on this phone (expected for most relays) — someone else bridges.
+      // No internet on this phone, which is the expected state for most relays.
+      vaultUnbridged(msgId, sealedB64)
+    } finally {
+      try { conn?.disconnect() } catch (e: Exception) {}
+    }
+  }
+
+  /**
+   * Keep an undelivered packet, and tell JS about it if JS is listening.
+   *
+   * Both, not either. The broadcast is the fast path for a live app, which can
+   * flush the moment connectivity returns. MeshVault is the slow path for a
+   * service running with the RN instance torn down or started on boot, where the
+   * emit reaches nobody.
+   *
+   * Fails silently by design. This is called from the middle of the relay loop,
+   * and losing one packet must never take the radio layer down with it.
+   */
+  private fun vaultUnbridged(msgId: String, sealedB64: String) {
+    try {
+      MeshVault.hold(applicationContext, msgId, sealedB64)
+    } catch (e: Exception) {
+      // Storage unavailable. The broadcast below may still save it.
+    }
+    try {
+      val i = Intent(UNBRIDGED_ACTION)
+        .setPackage(packageName)
+        .putExtra(EXTRA_MSG_ID, msgId)
+        .putExtra(EXTRA_SEALED, sealedB64)
+      sendBroadcast(i)
+    } catch (e: Exception) {
+      // No JS bridge, or the context is going away. MeshVault has it.
     }
   }
 

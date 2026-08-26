@@ -7,5 +7,11 @@
 // NativeModules at the top level.
 export const Platform = { OS: 'android', select: (o: Record<string, unknown>) => o.android };
 export const NativeModules: Record<string, unknown> = {};
+export const DeviceEventEmitter = {
+  addListener(_e: string, _cb: (...args: unknown[]) => void) {
+    return { remove: () => undefined };
+  },
+  emit(_e: string, ..._args: unknown[]) {},
+};
 export const Share = { share: async () => ({ action: 'dismissedAction' }), sharedAction: 'sharedAction' };
-export default { Platform, NativeModules, Share };
+export default { Platform, NativeModules, Share, DeviceEventEmitter };

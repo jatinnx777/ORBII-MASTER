@@ -1,3 +1,4 @@
+import { DeviceEventEmitter, NativeModules } from 'react-native';
 import { getItem, setItem } from './storage';
 import { getConnection, subscribeConnection } from './net';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
@@ -35,30 +36,132 @@ import { SUPABASE_URL, SUPABASE_ANON_KEY } from './supabase';
  * server's public key with crypto_box_seal: relays carry ciphertext they cannot
  * read, and only the mesh-bridge function holds the secret. The vault stores
  * exactly what the mesh already carries and never learns what is inside.
+ *
+ * TWO WAYS A PACKET GETS IN. The native service broadcasts OrbiiMeshUnbridged
+ * the moment an upload fails, which is the fast path while the app is alive. It
+ * ALSO writes to MeshVault (Kotlin) first, because Android will keep a
+ * foreground service running while tearing down the React Native instance, and
+ * an emit into a dead bridge reaches nobody. drainNativeVault() picks those up
+ * on next launch. Belt and braces, because the thing being dropped is somebody's
+ * emergency.
  */
+
+type NativeVaultEntry = { msgId: string; sealed: string; heldSince: number };
+
+type OrbiiMeshNativeModule = {
+  readVault?(): Promise<NativeVaultEntry[]>;
+  ackVault?(msgIds: string[]): Promise<number>;
+  vaultSize?(): Promise<number>;
+  getConstants?(): unknown;
+};
+
+/**
+ * Looked up on every call, never captured at import time.
+ *
+ * `const m = NativeModules.OrbiiMesh` at module scope resolves once, when this
+ * file is first imported. Under the new architecture a TurboModule is created on
+ * first property access, so importing this early enough would bind undefined and
+ * the vault would stay permanently deaf to native, with no error anywhere. The
+ * lookup is a property read on an object; doing it per call costs nothing.
+ */
+function nativeModule(): OrbiiMeshNativeModule | undefined {
+  return (NativeModules as { OrbiiMesh?: OrbiiMeshNativeModule }).OrbiiMesh;
+}
 
 const VAULT_KEY = 'orbii_mesh_vault_v1';
 
 /**
- * Cap on held packets.
+ * The bounds come from MeshVault.kt, which is the single source of truth.
  *
- * A bound is required: a phone left scanning in a crowd could otherwise collect
- * indefinitely and this lives in AsyncStorage. When full, the OLDEST is dropped,
- * because a fresher emergency is the one still worth relaying.
+ * WHY NATIVE OWNS THEM. Both sides enforce these numbers, and a packet is first
+ * written on the Kotlin side before any JS is guaranteed to be running. Two
+ * independent copies of a number that must agree is drift waiting to happen:
+ * raise the cap in Kotlin alone and the native store holds 200 while JS quietly
+ * discards half of them on the next drain, which on this product means throwing
+ * away somebody's emergency and logging nothing.
+ *
+ * These literals are the LAST RESORT, not a second definition. They apply only
+ * where the native module genuinely does not exist: unit tests, and iOS if it is
+ * ever built. In __DEV__ a disagreement is reported rather than absorbed, so
+ * drift is visible while somebody is looking at it.
  */
-export const VAULT_MAX_ENTRIES = 100;
+const FALLBACK_MAX_ENTRIES = 100;
+const FALLBACK_TTL_MS = 21_600_000; // six hours
+
+/** Give up on a packet after this many failed attempts. JS-only, so JS owns it. */
+export const MAX_ATTEMPTS = 12;
+
+export type VaultLimits = { maxEntries: number; ttlMs: number; fromNative: boolean };
+
+let cachedLimits: VaultLimits | null = null;
+
+function readNativeConstants(): Record<string, unknown> {
+  const mod = nativeModule();
+  if (!mod) return {};
+  try {
+    // New architecture exposes getConstants() as a callable method. The legacy
+    // bridge instead merges the map onto the module object itself. Both shapes
+    // are checked because which one you get depends on the interop layer, not on
+    // anything this file controls.
+    if (typeof mod.getConstants === 'function') {
+      const c = mod.getConstants();
+      if (c && typeof c === 'object') return c as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to reading properties directly.
+  }
+  return mod as unknown as Record<string, unknown>;
+}
+
+function positiveNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
 
 /**
- * How long a packet is worth carrying.
+ * Resolved once, then cached.
  *
- * Six hours. Past that, either it was bridged by somebody else or the emergency
- * has resolved one way or another, and delivering it would summon a response to
- * something that is over. An SOS is not a letter.
+ * Not resolved at module load: under the new architecture a TurboModule is
+ * created on first access, and importing this file during early startup could
+ * otherwise freeze the fallbacks in before the native side exists.
  */
-export const VAULT_TTL_MS = 6 * 60 * 60 * 1000;
+export function vaultLimits(): VaultLimits {
+  if (cachedLimits) return cachedLimits;
 
-/** Give up on a packet after this many failed attempts. */
-export const MAX_ATTEMPTS = 12;
+  const constants = readNativeConstants();
+  const nativeMax = positiveNumber(constants.VAULT_MAX_ENTRIES);
+  const nativeTtl = positiveNumber(constants.VAULT_TTL_MS);
+
+  const limits: VaultLimits = {
+    maxEntries: nativeMax ?? FALLBACK_MAX_ENTRIES,
+    ttlMs: nativeTtl ?? FALLBACK_TTL_MS,
+    fromNative: nativeMax !== null && nativeTtl !== null,
+  };
+
+  // typeof guard, not a bare __DEV__. It is a React Native global injected by
+  // Metro and it does not exist in the Node test environment, where a bare
+  // reference is a ReferenceError, not undefined. TypeScript will not catch this
+  // because the RN types declare it globally.
+  const dev = typeof __DEV__ !== 'undefined' && __DEV__;
+  if (dev && limits.fromNative) {
+    if (nativeMax !== FALLBACK_MAX_ENTRIES || nativeTtl !== FALLBACK_TTL_MS) {
+      // Native still wins. This is a nudge to update the literals so the two
+      // agree, because the fallbacks are what tests and iOS will use.
+      console.warn(
+        `[vault] fallback constants have drifted from MeshVault.kt: ` +
+          `maxEntries ${FALLBACK_MAX_ENTRIES} vs ${nativeMax}, ` +
+          `ttlMs ${FALLBACK_TTL_MS} vs ${nativeTtl}`,
+      );
+    }
+  }
+
+  cachedLimits = limits;
+  return limits;
+}
+
+/** Test seam. Forces the next vaultLimits() to re-read the native module. */
+export function resetVaultLimits(): void {
+  cachedLimits = null;
+}
 
 export type VaultEntry = {
   /** Mesh message id. The dedupe key end to end. */
@@ -112,12 +215,12 @@ async function write(vault: Vault): Promise<void> {
 }
 
 function prune(entries: VaultEntry[], now: number): VaultEntry[] {
-  const live = entries.filter(
-    (e) => now - e.heldSince < VAULT_TTL_MS && e.attempts < MAX_ATTEMPTS,
-  );
-  // Oldest first, so the slice keeps the newest when over capacity.
+  const { maxEntries, ttlMs } = vaultLimits();
+  const live = entries.filter((e) => now - e.heldSince < ttlMs && e.attempts < MAX_ATTEMPTS);
+  // Oldest first, so the slice keeps the newest when over capacity. A fresher
+  // emergency is the one still worth relaying.
   live.sort((a, b) => a.heldSince - b.heldSince);
-  return live.length > VAULT_MAX_ENTRIES ? live.slice(live.length - VAULT_MAX_ENTRIES) : live;
+  return live.length > maxEntries ? live.slice(live.length - maxEntries) : live;
 }
 
 /**
@@ -157,6 +260,42 @@ export async function vaultSize(): Promise<number> {
 
 export async function vaultClear(): Promise<void> {
   await write(EMPTY);
+}
+
+/**
+ * Move anything the native service stored into the JS vault.
+ *
+ * ORDER MATTERS AND IS NOT NEGOTIABLE: hold first, acknowledge second. Reading
+ * does not clear the native store, so a crash between the two costs us a
+ * duplicate delivery, which the bridge deduplicates. Acknowledging first would
+ * cost us the packet, which nothing recovers.
+ *
+ * Returns how many were taken over. Never throws.
+ */
+export async function drainNativeVault(): Promise<number> {
+  const mod = nativeModule();
+  if (!mod?.readVault) return 0;
+  try {
+    const entries = await mod.readVault();
+    if (!Array.isArray(entries) || entries.length === 0) return 0;
+
+    const taken: string[] = [];
+    for (const e of entries) {
+      if (!e?.msgId || !e?.sealed) continue;
+      // vaultHold returns false for a duplicate. Still acknowledged: a packet
+      // already in the JS vault is one the native side can stop carrying.
+      await vaultHold(e.msgId, e.sealed);
+      taken.push(e.msgId);
+    }
+
+    if (taken.length > 0) {
+      await mod.ackVault?.(taken)?.catch(() => 0);
+    }
+    return taken.length;
+  } catch (err) {
+    console.warn('[vault] could not drain the native store', err);
+    return 0;
+  }
 }
 
 function bridgeUrl(): string {
@@ -275,7 +414,9 @@ export function initVaultAutoFlush(): () => void {
     // Explicitly not awaited, and explicitly caught. An unhandled rejection from
     // a connectivity callback is the kind that surfaces minutes later attached
     // to nothing.
-    void flushVault().catch((err) => console.warn('[vault] auto flush failed', err));
+    void drainNativeVault()
+      .then(() => flushVault())
+      .catch((err) => console.warn('[vault] auto flush failed', err));
   };
 
   run();
@@ -289,10 +430,35 @@ export function initVaultAutoFlush(): () => void {
     console.warn('[vault] could not subscribe to connectivity', err);
   }
 
+  // The live path: the mesh service failed an upload just now. Held immediately
+  // rather than waiting for the next connectivity change, because this phone may
+  // already be online and simply have hit a 5xx.
+  let nativeSub: { remove: () => void } | null = null;
+  try {
+    nativeSub = DeviceEventEmitter.addListener(
+      'OrbiiMeshUnbridged',
+      (e: { msgId?: string; sealed?: string }) => {
+        if (stopped || !e?.msgId || !e?.sealed) return;
+        void vaultHold(e.msgId, e.sealed)
+          .then((held) => {
+            if (held) run();
+          })
+          .catch((err) => console.warn('[vault] could not hold a caught packet', err));
+      },
+    );
+  } catch (err) {
+    console.warn('[vault] could not subscribe to mesh events', err);
+  }
+
   return () => {
     stopped = true;
     try {
       unsubscribe?.();
+    } catch {
+      // ignore
+    }
+    try {
+      nativeSub?.remove();
     } catch {
       // ignore
     }

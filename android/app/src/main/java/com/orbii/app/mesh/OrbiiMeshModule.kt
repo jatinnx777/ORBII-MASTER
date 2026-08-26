@@ -41,6 +41,26 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
             ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
               .emit("OrbiiHelperPing", m)
           }
+
+          // A caught SOS the service could not upload. JS takes it into
+          // hotPotatoVault and flushes it when this phone next has a connection.
+          //
+          // Dropping this event is SAFE, unlike dropping a helper ping: the
+          // service already wrote the packet to MeshVault before broadcasting,
+          // and drainNativeVault picks it up on the next launch. The emit is the
+          // fast path, not the only one.
+          OrbiiMeshService.UNBRIDGED_ACTION -> {
+            val msgId = intent.getStringExtra(OrbiiMeshService.EXTRA_MSG_ID) ?: ""
+            val sealed = intent.getStringExtra(OrbiiMeshService.EXTRA_SEALED) ?: ""
+            if (msgId.isNotEmpty() && sealed.isNotEmpty()) {
+              val m = Arguments.createMap()
+              m.putString("msgId", msgId)
+              m.putString("sealed", sealed)
+              m.putDouble("at", System.currentTimeMillis().toDouble())
+              ctx.getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter::class.java)
+                .emit("OrbiiMeshUnbridged", m)
+            }
+          }
         }
       } catch (e: Exception) {
         // JS bridge not ready; drop the event
@@ -52,6 +72,7 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
     try {
       val filter = IntentFilter().apply {
         addAction(OrbiiMeshService.HELPER_PING_RX_ACTION)
+        addAction(OrbiiMeshService.UNBRIDGED_ACTION)
       }
       if (Build.VERSION.SDK_INT >= 33) {
         ctx.registerReceiver(meshRx, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -66,6 +87,87 @@ class OrbiiMeshModule(private val ctx: ReactApplicationContext) :
   override fun invalidate() {
     try { ctx.unregisterReceiver(meshRx) } catch (e: Exception) {}
     super.invalidate()
+  }
+
+  /**
+   * The vault bounds, as the single source of truth.
+   *
+   * These numbers govern how many of other people's emergencies this phone will
+   * carry and for how long, and they are enforced in BOTH MeshVault.kt and
+   * services/hotPotatoVault.ts. Two copies of a number that must agree is a
+   * drift waiting to happen: raise the cap in Kotlin alone and the native store
+   * holds 200 while JS silently discards half of them on the next drain.
+   *
+   * Kotlin owns them because Kotlin is where the packet is first written, before
+   * any JS is guaranteed to be running. JS reads them from here.
+   *
+   * TTL crosses the bridge as a Double because a JS number IS a double and Long
+   * does not survive the trip. 21,600,000 is far inside the 2^53 range where
+   * doubles are exact, so nothing is lost.
+   *
+   * getConstants runs during module construction on the main thread. It must not
+   * throw, or the whole native module fails to register and every mesh call
+   * disappears, so the map is built defensively.
+   */
+  override fun getConstants(): Map<String, Any> = try {
+    mapOf(
+      "VAULT_MAX_ENTRIES" to MeshVault.MAX_ENTRIES,
+      "VAULT_TTL_MS" to MeshVault.TTL_MS.toDouble(),
+    )
+  } catch (e: Exception) {
+    emptyMap()
+  }
+
+  /**
+   * Read the native store-and-forward queue without emptying it.
+   *
+   * Read and ack are separate on purpose. If reading cleared the store, a JS
+   * crash between reading and persisting would destroy somebody's SOS. JS
+   * acknowledges only after its own durable write, so the worst case is
+   * delivering a packet twice, and the bridge already deduplicates on msgId.
+   *
+   * Resolves an empty array on any failure. A caller must never have to decide
+   * whether an error means "empty" or "broken" while holding an emergency.
+   */
+  @ReactMethod
+  fun readVault(promise: Promise) {
+    try {
+      val arr = Arguments.createArray()
+      for (e in MeshVault.read(ctx)) {
+        val m = Arguments.createMap()
+        m.putString("msgId", e.msgId)
+        m.putString("sealed", e.sealed)
+        m.putDouble("heldSince", e.heldSince.toDouble())
+        arr.pushMap(m)
+      }
+      promise.resolve(arr)
+    } catch (e: Exception) {
+      promise.resolve(Arguments.createArray())
+    }
+  }
+
+  /** Forget packets JS has durably taken over. Resolves the number removed. */
+  @ReactMethod
+  fun ackVault(msgIds: com.facebook.react.bridge.ReadableArray, promise: Promise) {
+    try {
+      val ids = mutableListOf<String>()
+      for (i in 0 until msgIds.size()) {
+        msgIds.getString(i)?.let { if (it.isNotEmpty()) ids.add(it) }
+      }
+      promise.resolve(MeshVault.ack(ctx, ids))
+    } catch (e: Exception) {
+      promise.resolve(0)
+    }
+  }
+
+  /** How many packets this phone is carrying for other people. */
+  @ReactMethod
+  fun vaultSize(promise: Promise) {
+    try {
+      promise.resolve(MeshVault.size(ctx))
+    } catch (e: Exception) {
+      promise.resolve(0)
+    }
   }
 
   @ReactMethod
