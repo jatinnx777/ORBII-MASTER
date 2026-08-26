@@ -399,10 +399,12 @@ export async function flushVault(): Promise<FlushResult> {
     }
 
     const survivors: VaultEntry[] = [];
+    const deliveredIds: string[] = [];
     let delivered = 0;
     let attempted = 0;
 
-    for (const entry of entries) {
+    for (let i = 0; i < entries.length; i += 1) {
+      const entry = entries[i];
       const controller = new AbortController();
       // Per-request deadline. fetch on React Native has no default timeout, and
       // a hung socket on a captive-portal wifi would otherwise stall the whole
@@ -413,18 +415,47 @@ export async function flushVault(): Promise<FlushResult> {
         const ok = await postOne(entry, controller.signal);
         if (ok) {
           delivered += 1;
+          deliveredIds.push(entry.msgId);
         } else {
           survivors.push({ ...entry, attempts: entry.attempts + 1, lastAttemptAt: now });
         }
       } catch {
-        // Network died mid-flush. Keep it and stop trying the rest now.
+        // THE NETWORK DIED. Stop, which is what the comment here always claimed
+        // and the code never did.
+        //
+        // Continuing charged an attempt to every remaining packet against a
+        // connection already known to be down. initVaultAutoFlush runs on each
+        // isConnected transition, and a flapping campus wifi produces many per
+        // minute, so MAX_ATTEMPTS was reached in minutes and prune() deleted
+        // other people's emergencies silently.
+        //
+        // The in-flight packet earns its attempt; the untried ones carry over
+        // untouched.
         survivors.push({ ...entry, attempts: entry.attempts + 1, lastAttemptAt: now });
+        survivors.push(...entries.slice(i + 1));
+        break;
       } finally {
+        // Runs on the break too, so the aborted request's timer is cleared.
         clearTimeout(timer);
       }
     }
 
-    entries = prune(survivors, now);
+    // RE-READ BEFORE WRITING. vaultHold may have landed during the loop above,
+    // which on a slow link is tens of seconds, and it is driven by the native
+    // OrbiiMeshUnbridged event that fires exactly when the mesh is busy. The
+    // previous blind write erased those packets with no error and no log.
+    //
+    // Merge order matters: survivors are applied AFTER latest, so an entry we
+    // just attempted keeps its incremented count rather than being reverted by
+    // the copy that was on disk when the flush started.
+    const latest = await read();
+    const byId = new Map<string, VaultEntry>();
+    for (const e of latest.entries) byId.set(e.msgId, e);
+    for (const sv of survivors) byId.set(sv.msgId, sv);
+    // Anything genuinely delivered must not be resurrected by the re-read.
+    for (const id of deliveredIds) byId.delete(id);
+
+    entries = prune([...byId.values()], now);
     await write({ entries });
     if (attempted > 0) {
       console.log(

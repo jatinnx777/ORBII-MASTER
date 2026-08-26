@@ -283,6 +283,85 @@ describe('SMS text', () => {
     expect(Math.abs(back!.lat - payload.lat)).toBeLessThan(2e-7);
   });
 
+  it('keeps an ordinary ASCII name intact', () => {
+    const text = buildOfflineSmsText({
+      senderName: 'Ananya Sharma',
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(text).toContain('Ananya Sharma');
+    expect(text).not.toContain('Someone');
+  });
+
+  it('falls back to Someone when the name is entirely non-Latin', () => {
+    // Devanagari reduces to a single space under GSM-7. The old code used
+    // `toGsm7(name) || 'Someone'`, and a space is truthy, so the message read
+    // "ORBII SOS:  needs help now" with the name simply gone.
+    const text = buildOfflineSmsText({
+      senderName: 'अनन्या शर्मा',
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(text).toContain('Someone needs help now');
+    expect(text).not.toMatch(/SOS:\s{2,}/); // no double space where a name should be
+    expect(gsm7Length(text)).toBeLessThanOrEqual(SINGLE_SMS_LIMIT);
+  });
+
+  it('falls back rather than sending a mangled fragment of a mixed name', () => {
+    // "Ananya" survives, the surname does not. Emitting "Ananya " reads to the
+    // recipient as a bug, so it is only used when most of the name survives.
+    const text = buildOfflineSmsText({
+      senderName: 'A शर्मा',
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(text).toContain('Someone');
+  });
+
+  it('keeps a mostly-Latin name that only loses an accent or two', () => {
+    // Above the 0.6 survival bar, so it is still her name and still useful.
+    const text = buildOfflineSmsText({
+      senderName: 'Priya Raghunathanॐ',
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(text).toContain('Priya Raghunathan');
+  });
+
+  it('falls back on an empty or whitespace-only name', () => {
+    for (const raw of ['', '   ']) {
+      const text = buildOfflineSmsText({
+        senderName: raw,
+        placeName: null,
+        lat: payload.lat,
+        lng: payload.lng,
+        payload,
+      });
+      expect(text).toContain('Someone needs help now');
+    }
+  });
+
+  it('never loses the coordinates, whatever happens to the name', () => {
+    const text = buildOfflineSmsText({
+      senderName: 'अनन्या',
+      placeName: null,
+      lat: payload.lat,
+      lng: payload.lng,
+      payload,
+    });
+    expect(text).toContain('28.99391');
+    expect(text).toContain('77.01604');
+    expect(extractPayloadFromSms(text)).not.toBeNull();
+  });
+
   it('strips characters that would force UCS-2 and halve the limit', () => {
     // The siren emoji in whatsapp-sos.ts buildSOSMessage is exactly this trap.
     const cleaned = toGsm7('SOS 🚨 help — now’s the time');

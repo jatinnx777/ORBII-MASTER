@@ -280,7 +280,21 @@ export type OfflineSmsContext = {
  *      already knows the campus
  */
 export function buildOfflineSmsText(ctx: OfflineSmsContext): string {
-  const name = toGsm7(ctx.senderName.trim()) || 'Someone';
+  // A HALF-EATEN NAME IS WORSE THAN NO NAME.
+  //
+  // toGsm7 drops anything outside the 7-bit alphabet, which on this user base is
+  // routine rather than exotic. "अनन्या शर्मा" reduces to a single space, and the
+  // old `|| 'Someone'` did not catch it because a space is truthy: the message
+  // read "ORBII SOS:  needs help now". "Ananya शर्मा" became "Ananya ", which
+  // reads to the recipient like a truncation bug.
+  //
+  // So the name has to survive mostly intact to be used at all. When it does
+  // not, "Someone" is at least a sentence, and the coordinates carry the
+  // information that actually dispatches help.
+  const rawName = ctx.senderName.trim();
+  const gsmName = toGsm7(rawName).trim();
+  const survived = rawName.length === 0 ? 0 : gsmName.length / rawName.length;
+  const name = survived >= 0.6 && gsmName.length >= 2 ? gsmName : 'Someone';
   const coords = `${ctx.lat.toFixed(5)},${ctx.lng.toFixed(5)}`;
   const tag = `${PAYLOAD_TAG}${generateEncryptedSMSPayload(ctx.payload)}`;
 

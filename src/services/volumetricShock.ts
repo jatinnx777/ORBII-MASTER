@@ -75,7 +75,7 @@ export const COOLDOWN_MS = 30_000;
 
 export type ShockEvent =
   | { type: 'impact'; magnitudeG: number; at: number }
-  | { type: 'aborted'; reason: 'movement_resumed'; at: number }
+  | { type: 'aborted'; reason: 'movement_resumed' | 'sample_gap'; at: number }
   | { type: 'rejected'; reason: 'no_motion_before_impact' | 'cooling_down'; at: number }
   | { type: 'unresponsive'; magnitudeG: number; at: number };
 
@@ -102,6 +102,16 @@ export class ShockDetector {
    * number is enormous. Null says "never triggered" and is correct under every
    * clock.
    */
+  /**
+   * Timestamp of the previous accepted sample.
+   *
+   * The detector advances only when a sample arrives, which stops it inventing
+   * a trigger from nothing. It did NOT stop it crediting a GAP as stillness:
+   * `at - watching.since` is measured against the newest sample, so if the OS
+   * throttles the sensor mid-watch, the first sample minutes later satisfies the
+   * window instantly. Continuity has to be checked, not assumed.
+   */
+  private lastSampleAt = 0;
   private lastTriggerAt: number | null = null;
   private ringMs: number;
 
@@ -138,6 +148,24 @@ export class ShockDetector {
    */
   push(magnitudeG: number, at: number = this.now()): ShockEvent | null {
     if (!Number.isFinite(magnitudeG) || magnitudeG < 0) return null;
+
+    // CONTINUITY FIRST. A gap in the stream is absence of evidence, not
+    // evidence of stillness. Android throttles sensors in background and in
+    // battery saver, so this is routine rather than exotic: impact, app
+    // backgrounded, phone set down, app resumed, and the first sample would
+    // otherwise satisfy a four-second window that nothing observed.
+    //
+    // Four sample intervals, so ordinary scheduler jitter does not trip it.
+    // Reported even when no watch was running, because "the sensor stopped for
+    // 40 seconds" is worth knowing when tuning thresholds against real phones.
+    const gap = at - this.lastSampleAt;
+    if (this.lastSampleAt > 0 && gap > SAMPLE_INTERVAL_MS * 4) {
+      this.watching = null;
+      this.lastSampleAt = at;
+      this.record(magnitudeG, at);
+      return { type: 'aborted', reason: 'sample_gap', at };
+    }
+    this.lastSampleAt = at;
 
     // Watching for stillness. Checked BEFORE the new sample joins the ring so a
     // violent sample cannot both abort the watch and start a new impact.
@@ -202,6 +230,7 @@ export class ShockDetector {
     this.ring = [];
     this.watching = null;
     this.lastTriggerAt = null;
+    this.lastSampleAt = 0;
   }
 }
 

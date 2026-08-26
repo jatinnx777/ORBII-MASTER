@@ -22,7 +22,7 @@ export default defineConfig({
       '@': path.resolve(__dirname, 'src'),
       // See test/stubs/react-native.ts for why these exist.
       'react-native': path.resolve(__dirname, 'test/stubs/react-native.ts'),
-      '@react-native-async-storage/async-storage': path.resolve(__dirname, 'test/stubs/empty.ts'),
+      '@react-native-async-storage/async-storage': path.resolve(__dirname, 'test/stubs/async-storage.ts'),
       'expo-location': path.resolve(__dirname, 'test/stubs/empty.ts'),
       'expo-sms': path.resolve(__dirname, 'test/stubs/expo-sms.ts'),
       'expo-sensors': path.resolve(__dirname, 'test/stubs/expo-sensors.ts'),

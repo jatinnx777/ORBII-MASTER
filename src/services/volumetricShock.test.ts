@@ -158,11 +158,67 @@ describe('ShockDetector, the false positives that would end the feature', () => 
 describe('ShockDetector, degenerate input', () => {
   it('cannot trigger from a sensor that went silent', () => {
     // The dangerous failure: no samples must never become "she is not moving".
+    //
+    // This assertion used to be toBeNull(), which is what the detector returned
+    // BEFORE the continuity check existed. Returning null happened to avoid a
+    // trigger on this one input, but only because the window had not elapsed
+    // yet; push one millisecond later and it fired. The watch is now abandoned
+    // outright, which is the property the test name always claimed.
     const d = new ShockDetector();
     run(d, [...walking(0, 3000), { m: 5.0, t: 3000 }]);
     expect(d.isWatching()).toBe(true);
-    // Time passes, nothing arrives.
-    expect(d.push(1.0, 3000 + STILLNESS_WINDOW_MS - 1)).toBeNull();
+
+    const late = d.push(1.0, 3000 + STILLNESS_WINDOW_MS - 1);
+    expect(late).toEqual({ type: 'aborted', reason: 'sample_gap', at: 6999 });
+    expect(d.isWatching()).toBe(false);
+  });
+
+  it('does NOT fire when the sensor stops mid-watch and resumes on a still phone', () => {
+    // The regression this guard exists for. Android throttles sensors in
+    // background and in battery saver. Without continuity the first sample after
+    // the gap satisfies a four-second window nothing observed, and strangers are
+    // dispatched because she pocketed her phone after dropping a bag.
+    const d = new ShockDetector();
+    const events = run(d, [...walking(0, 3000), { m: 5.0, t: 3000 }]);
+    expect(types(events)).toContain('impact');
+
+    // Sensor silent for two minutes, then resumes with the phone at rest.
+    const resumed = run(d, still(123_000, STILLNESS_WINDOW_MS + 1000));
+    expect(types(resumed)).not.toContain('unresponsive');
+    expect(resumed.some((e) => e.type === 'aborted' && e.reason === 'sample_gap')).toBe(true);
+  });
+
+  it('tolerates ordinary scheduler jitter without aborting', () => {
+    // A late sample is normal on a busy phone. Aborting on every hiccup would
+    // make the feature useless in exactly the moment it is needed.
+    const d = new ShockDetector();
+    const frames = [...walking(0, 3000), { m: 5.0, t: 3000 }];
+    // Three intervals late, inside the four-interval budget.
+    frames.push({ m: 1.0, t: 3000 + SAMPLE_INTERVAL_MS * 3 });
+    const events = run(d, frames);
+    expect(events.some((e) => e.type === 'aborted' && e.reason === 'sample_gap')).toBe(false);
+    expect(d.isWatching()).toBe(true);
+  });
+
+  it('recovers cleanly after a gap and can still detect a real fall', () => {
+    // Aborting must not wedge the detector. After the gap it has to work again.
+    const d = new ShockDetector();
+    run(d, [...walking(0, 3000), { m: 5.0, t: 3000 }]);
+    run(d, still(200_000, 500)); // gap abort, watch cleared
+
+    const t = 400_000;
+    const second = run(d, [
+      ...walking(t, 3000),
+      { m: 5.4, t: t + 3000 },
+      ...still(t + 3050, STILLNESS_WINDOW_MS + 200),
+    ]);
+    expect(types(second)).toContain('unresponsive');
+  });
+
+  it('does not abort on the very first sample, when there is no history', () => {
+    const d = new ShockDetector();
+    // lastSampleAt is 0, so a huge `at` must not be read as a gap.
+    expect(d.push(1.0, 9_999_999)).toBeNull();
   });
 
   it('ignores NaN and negative magnitudes', () => {
