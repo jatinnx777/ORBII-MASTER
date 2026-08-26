@@ -43,7 +43,17 @@ export const ONLINE_ATTEMPT_TIMEOUT_MS = 3000;
  */
 export const LATE_GRACE_MS = 500;
 
-export type TransportRoute = 'online' | 'sms' | 'none';
+export type TransportRoute =
+  | 'online'
+  /**
+   * The online attempt lost the 3 s race, we fell back, and then it landed
+   * inside the grace window. A distinct route rather than 'sms', because
+   * telemetry that records this as an SMS delivery is recording something that
+   * did not happen.
+   */
+  | 'online_late'
+  | 'sms'
+  | 'none';
 
 export type TransportResult = {
   route: TransportRoute;
@@ -226,7 +236,7 @@ export async function dispatchSOS(req: TransportRequest): Promise<TransportResul
   }
 
   return {
-    route: sms.success ? 'sms' : 'none',
+    route: lateOnlineSuccess ? 'online_late' : sms.success ? 'sms' : 'none',
     // If the online path landed late, the alarm IS out regardless of what the
     // composer did.
     delivered: sms.success || lateOnlineSuccess,

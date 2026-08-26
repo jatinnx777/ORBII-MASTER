@@ -80,6 +80,7 @@ describe('dispatchSOS route reporting', () => {
         },
       }),
     );
+    expect(r.route).toBe('online_late');
     expect(r.lateOnlineSuccess).toBe(true);
     expect(r.delivered).toBe(true);
     // The alarm is out, so she must not be told to go and tap send.

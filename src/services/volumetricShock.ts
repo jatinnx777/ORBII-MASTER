@@ -34,6 +34,20 @@ import type { Subscription } from 'expo-sensors/build/DeviceSensor';
  * without a device. Everything sensor-shaped lives in initVolumetricMonitor.
  */
 
+/**
+ * OFF BY DEFAULT.
+ *
+ * Turning this on runs the accelerometer at 20 Hz for as long as the app is
+ * open, and hands a heuristic the power to start an SOS countdown. Neither has
+ * been through a real phone yet: every threshold in this file was reasoned from
+ * published fall-detection ranges, not measured on the devices this ships to.
+ *
+ * Enable it only after somebody has actually dropped a phone, put one down
+ * hard, and jogged with one in a pocket, and the onEvent log shows the
+ * rejections landing where they should.
+ */
+export const ENABLE_IMPACT_DETECTION = false;
+
 /** 20 Hz. Fast enough to catch a 50 ms impact spike, cheap on battery. */
 export const SAMPLE_HZ = 20;
 export const SAMPLE_INTERVAL_MS = Math.round(1000 / SAMPLE_HZ);
@@ -262,6 +276,13 @@ export function initVolumetricMonitor(
   onTrigger: () => void,
   options: VolumetricMonitorOptions = {},
 ): VolumetricMonitorHandle {
+  if (!ENABLE_IMPACT_DETECTION) {
+    // Reports inactive rather than pretending. A caller showing "impact
+    // detection on" while nothing is listening is the failure this project
+    // keeps hitting: a dead feature that looks alive.
+    return { active: false, stop: () => undefined };
+  }
+
   const detector = new ShockDetector();
   let sub: Subscription | null = null;
   let stopped = false;

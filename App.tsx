@@ -74,6 +74,7 @@ import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue, flushSOSQueue } from '@/services/sos-queue';
 import { initVaultAutoFlush, vaultStatusLine } from '@/services/hotPotatoVault';
+import { initVolumetricMonitor, ENABLE_IMPACT_DETECTION } from '@/services/volumetricShock';
 import { flushPendingSosAudio } from '@/services/sos-audio';
 // Side-effect import: registers the background victim-location task with the OS
 // so a headless invocation (app killed mid-SOS) can still find it.
@@ -429,6 +430,44 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     return initSOSQueue();
+  }, [status]);
+
+  // Impact detection. A hard impact followed by four seconds of stillness looks
+  // like a fall down a stairwell or an assault that ends with her on the ground.
+  //
+  // IT OPENS THE COUNTDOWN, IT DOES NOT FIRE AN SOS. No accelerometer heuristic
+  // is ever certain, and the countdown is the one check that cannot be wrong
+  // because she answers it. Wiring this straight to createSOS would put
+  // strangers at her door because she dropped a bag.
+  //
+  // Gated on authentication, unlike the vault: an SOS needs a profile, and there
+  // is nothing useful to do with a detected fall before sign-in.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    if (!ENABLE_IMPACT_DETECTION) return;
+
+    const handle = initVolumetricMonitor(
+      () => {
+        // Already counting down, or already live. Re-entering would restart a
+        // countdown she is in the middle of cancelling.
+        const st = store.getState();
+        if (st.sos.activeSOS) return;
+        if (!navigationRef.isReady()) return;
+        // Already counting down. Re-navigating would restart a countdown she may
+        // be halfway through cancelling, which is the opposite of a safeguard.
+        if (navigationRef.getCurrentRoute()?.name === 'SOSCountdown') return;
+        // @ts-expect-error SOSCountdown lives in the AppStack only, same as the
+        // OfflineHelperAlert navigate above.
+        navigationRef.navigate('SOSCountdown', {});
+      },
+      {
+        // Every rejection is logged, because the thresholds in volumetricShock
+        // were reasoned from published ranges and not measured on the phones
+        // this ships to. Without the rejections there is nothing to tune from.
+        onEvent: (e) => console.log('[impact]', JSON.stringify(e)),
+      },
+    );
+    return () => handle.stop();
   }, [status]);
 
   // Store and forward for OTHER people's SOS packets this phone relayed but
