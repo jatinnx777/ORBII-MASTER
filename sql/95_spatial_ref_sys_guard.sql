@@ -210,9 +210,16 @@ union all
 select 'live 4326 integrity',
        (public.orbii_guard_srid_4326() ->> 'action')
 union all
--- Proves the maths still works after the guard has run. Sonipat to Delhi is
--- about 43 km; a wrong ellipsoid shows up here immediately.
-select 'sanity: Sonipat to Delhi metres (want ~43000)',
+-- Proves the maths still works after the guard has run. A wrong ellipsoid shows
+-- up here immediately.
+--
+-- 46,094 m is the correct answer and was measured on the live database, not
+-- estimated. The first version of this comment said "about 43000" from a rough
+-- mental calculation and was simply wrong: 0.379 degrees of latitude plus 0.194
+-- of longitude at 28.8 N is about 46.1 km. A sanity check carrying a wrong
+-- expected value teaches whoever reads it to distrust a healthy result, which is
+-- worse than having no check.
+select 'sanity: Sonipat to Delhi metres (want ~46094)',
        round(st_distance(
          st_point(77.0151, 28.9931)::geography,
          st_point(77.2090, 28.6139)::geography
