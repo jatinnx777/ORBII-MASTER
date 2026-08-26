@@ -258,6 +258,40 @@ export async function vaultSize(): Promise<number> {
   return (await vaultPeek()).length;
 }
 
+/**
+ * How many packets the NATIVE store is holding.
+ *
+ * Distinct from vaultSize(), which counts the JS side. During hardware testing
+ * they answer different questions: native survives an app kill, JS does the
+ * flushing, and a packet moves from one to the other on drain. A test that only
+ * looked at one would miss the handover entirely.
+ */
+export async function nativeVaultSize(): Promise<number> {
+  const mod = nativeModule();
+  if (!mod?.vaultSize) return 0;
+  try {
+    return await mod.vaultSize();
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Both counts and where the limits came from, as one line for logcat.
+ *
+ * This exists because the vault is otherwise invisible: it has no screen, and
+ * the whole feature is verified by watching a number go 0, 1, 0 across an
+ * airplane-mode cycle. Without this you are testing by faith.
+ */
+export async function vaultStatusLine(): Promise<string> {
+  const limits = vaultLimits();
+  const [js, native] = await Promise.all([vaultSize(), nativeVaultSize()]);
+  return (
+    `[vault] js=${js} native=${native} ` +
+    `cap=${limits.maxEntries} ttlMs=${limits.ttlMs} fromNative=${limits.fromNative}`
+  );
+}
+
 export async function vaultClear(): Promise<void> {
   await write(EMPTY);
 }
@@ -290,6 +324,7 @@ export async function drainNativeVault(): Promise<number> {
 
     if (taken.length > 0) {
       await mod.ackVault?.(taken)?.catch(() => 0);
+      console.log(`[vault] drained ${taken.length} packet(s) from the native store`);
     }
     return taken.length;
   } catch (err) {
@@ -391,6 +426,11 @@ export async function flushVault(): Promise<FlushResult> {
 
     entries = prune(survivors, now);
     await write({ entries });
+    if (attempted > 0) {
+      console.log(
+        `[vault] flush attempted=${attempted} delivered=${delivered} remaining=${entries.length}`,
+      );
+    }
     return { attempted, delivered, remaining: entries.length, skippedOffline: false };
   } catch (err) {
     console.warn('[vault] flush failed', err);
@@ -439,6 +479,7 @@ export function initVaultAutoFlush(): () => void {
       'OrbiiMeshUnbridged',
       (e: { msgId?: string; sealed?: string }) => {
         if (stopped || !e?.msgId || !e?.sealed) return;
+        console.log(`[vault] caught an unbridged packet ${e.msgId}`);
         void vaultHold(e.msgId, e.sealed)
           .then((held) => {
             if (held) run();

@@ -73,6 +73,7 @@ import { premiumTierResolved, signedOut } from '@/redux/slices/userSlice';
 import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue, flushSOSQueue } from '@/services/sos-queue';
+import { initVaultAutoFlush, vaultStatusLine } from '@/services/hotPotatoVault';
 import { flushPendingSosAudio } from '@/services/sos-audio';
 // Side-effect import: registers the background victim-location task with the OS
 // so a headless invocation (app killed mid-SOS) can still find it.
@@ -429,6 +430,20 @@ function RootNavigator() {
     if (status !== 'authenticated') return;
     return initSOSQueue();
   }, [status]);
+
+  // Store and forward for OTHER people's SOS packets this phone relayed but
+  // could not upload. Without this the mesh drops them, and a relay that walks
+  // into wifi four minutes later never knows it was carrying one.
+  //
+  // Deliberately NOT gated on `status`. A relay is carrying somebody else's
+  // emergency, and holding it hostage to whether this user happens to be signed
+  // in would lose it for a reason that has nothing to do with the person in
+  // trouble. The bridge accepts the anon key.
+  useEffect(() => {
+    const stop = initVaultAutoFlush();
+    void vaultStatusLine().then((line) => console.log(line));
+    return stop;
+  }, []);
 
   // Retry any SOS audio evidence that couldn't upload during the emergency
   // itself (the network is exactly what fails when it matters).
