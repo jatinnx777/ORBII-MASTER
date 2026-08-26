@@ -34,6 +34,7 @@ import { HelplinesCard } from '@/components/common';
 import { PinPrompt } from '@/components/common';
 import { appAlert } from '@/components/common';
 import { submitArrivalCode } from '@/services/arrival-codes';
+import { withdrawFromAlert } from '@/services/community';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { startTracking, type TrackingSnapshot, type TrackingHandle, type AccuracyLevel } from '@/services/tracking';
@@ -327,6 +328,39 @@ export function HelperNavigationScreen() {
     setCodeOpen(true);
   };
 
+
+  // LEAVING HAS TO GIVE THE SLOT BACK.
+  //
+  // This used to be a bare popToTop. A helper who could not make it after all
+  // walked out of the screen and kept their place in the wave: the victim's
+  // count still said three were coming, and the server never asked anybody to
+  // replace them. Three slots and a silent exit is worse than no cap, because
+  // the number on her screen is then a lie in the direction that costs most.
+  //
+  // Saying no must also be cheap. If it feels like an admission, people close
+  // the app instead, which is the same dead slot with no signal attached.
+  const handleExit = useCallback(() => {
+    appAlert(
+      'Leaving this rescue?',
+      'If you cannot get there, tell us and we will ask someone else straight away. Nobody is told who stepped back.',
+      [
+        { text: 'I am still going', style: 'cancel' },
+        {
+          text: 'I cannot make it',
+          style: 'destructive',
+          onPress: () => {
+            trackEvent('helper_withdrew', { sosId });
+            // Not awaited: she needs the replacement request to go out, and the
+            // helper needs to leave. Blocking the exit on a network call would
+            // strand somebody on a rescue screen they already left.
+            void withdrawFromAlert(sosId, 'helper_exited');
+            navigation.popToTop();
+          },
+        },
+      ],
+    );
+  }, [sosId, navigation]);
+
   const submitCode = async (code: string) => {
     // Submit YOUR code (verified helpers each have their own; everyone else
     // shares one) with your name. The victim's screen ticks you off, and the
@@ -365,7 +399,13 @@ export function HelperNavigationScreen() {
       {/* ── Top: ETA + status ── */}
       <SafeAreaView edges={['top']} style={styles.topSafe} pointerEvents="box-none">
         <View style={styles.topRow}>
-          <Pressable style={styles.roundBtn} onPress={() => navigation.popToTop()} hitSlop={10}>
+          <Pressable
+            style={styles.roundBtn}
+            onPress={handleExit}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Leave this rescue"
+          >
             <Ionicons name="close" size={20} color={colors.textPrimary} />
           </Pressable>
           <View style={[styles.accChip, { borderColor: acc.color }]}>

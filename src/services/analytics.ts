@@ -45,6 +45,7 @@ type EventName =
   | 'community_responded'
   | 'helper_alert_accepted'
   | 'helper_alert_declined'
+  | 'helper_withdrew'
   | 'helper_alert_ignored'
   | 'sos_dialed_112'
   | 'setup_protection_activated'

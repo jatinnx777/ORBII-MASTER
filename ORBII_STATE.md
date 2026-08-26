@@ -1,6 +1,6 @@
 # ORBII, state of the project (source of truth)
 
-Single handover doc. Read this first in any new session. Last updated **19 Aug 2026**.
+Single handover doc. Read this first in any new session. Last updated **26 Aug 2026**.
 
 Founder: **Jatin**, 19, solo, non-technical, learning to code.
 
@@ -65,6 +65,18 @@ Free for safety. Paid for guaranteed verified response.
   notifications), Safe Journey, geofences, ghost mode, deadman switch, safety
   PIN, single-device login.
 - Location history timeline, half-screen SOS map, place presets.
+- Continuous SOS haptic pulse. Runs for the length of an active SOS, survives a
+  screen lock, stops the instant the safety PIN verifies. Confirmed on hardware
+  26 Aug (32.18.0). Honours the alert-vibration setting rather than overriding
+  it, and OEM battery savers on Xiaomi / Oppo / Vivo can still suppress it.
+- Helper network coverage gating. Delhi-NCR polygon in `service_areas`, checked
+  by `ST_Covers`. Gates the Community Helper Network and NOTHING else: Voice SOS,
+  SMS relay, circle alerts, evidence and 112 are unconditional everywhere on
+  earth. `CoverageContext` deliberately exposes no `canFireSOS` boolean, so no
+  SOS path can consult it by accident.
+- Circle cap of 4 and responder cap of 3, both enforced by database triggers.
+- Circle activity feed shows paired visits (who, where, from when to when) with a
+  detail screen, backed by `circle_visits`.
 - Age gate and under-18 tracking block (DPDP Rule 10).
 - Verified responder **system** end to end in code: apply, KYC, verify, dispatch,
   staged escalation, arrival codes, coins. What is missing is **real humans in
@@ -78,6 +90,15 @@ Free for safety. Paid for guaranteed verified response.
 - Mesh Phase 2, Coded PHY long range, is **code-complete** in
   `OrbiiMeshService.kt`: `boostCapable` detection, `startExtendedAdvertising` on
   `PHY_LE_CODED` with a 1M-PHY fallback, extended scanning. Needs a range test.
+- Responder drop-out and automatic backfill (`drop_sos_dispatch`, sql/89). The
+  path is wired from the helper's exit button through to the escalation tick, but
+  no real helper has ever left a real rescue, so the replacement wave is untested.
+- SOS channel epochs (`services/sos-channel.ts`). Ships behind
+  `SOS_CHANNEL_EPOCH_ENABLED = false`. It closes a narrow residual gap: Realtime
+  authorises at JOIN time, so sql/88 stops a removed member from joining but
+  cannot close a socket they already hold. Topics are per-SOS, so a stale socket
+  can only follow the one SOS running when its owner was removed. Turn it on only
+  after two phones have been through a complete SOS with it enabled.
 
 **Never describe anything in the second list as working.** On a safety app,
 under-claim. This has already caused one website rewrite.
@@ -184,14 +205,40 @@ Notable ones:
 | 76 | community bridging |
 | 77 | BDSM integrity |
 | 78 | SOS escalation waves |
+| 83 | `service_areas` + `check_helper_network_availability` (coverage gating) |
+| 84 | circles hardening: soft deletes, `circle_revocations`, one-active-SOS index |
+| 85 | fixes an RLS recursion sql/84 introduced on `circle_members` |
+| 86 | circle cap of 4, invite rate limit, `circle_visits` |
+| 87 | one-line hotfix revoking a leaking `circle_visits` |
+| 88 | teaches the realtime authoriser about soft deletes |
+| 89 | responder cap of 3 per SOS, drop-out and backfill |
 
 `sql/55_whats_missing.sql` is read-only; zero rows means fully migrated.
+
+**Verify blocks report where nobody looks.** Every migration here ends in
+`do $$ ... raise notice`, and the Supabase editor hides the Notices pane, so
+"Success. No rows returned" is all you ever see and the checks are worth
+nothing. Write checks that RETURN ROWS. `sql/checks/89_check.sql` is the pattern:
+a plain SELECT, read-only, safe to run any time.
 
 **Postgres gotchas that have bitten:** changing a function's return type needs
 `drop function if exists` first (42P13), and if the last statement of a script
 fails, the SQL editor rolls back the whole script, so earlier `create table`s
 silently never happened. plpgsql takes **one** `declare` section per function,
 not one per variable.
+
+**SECURITY DEFINER bypasses RLS.** It runs as the function owner, so a definer
+function with no caller predicate returns every row in the table to anybody who
+can execute it. This shipped once, in `circle_visits` (sql/86), which would have
+handed any signed-in user the location history of every user in the database.
+Default to SECURITY INVOKER and let RLS do the work; use DEFINER only to break a
+policy recursion, and then write the caller predicate by hand.
+
+**A cap enforced only in an RPC is not enforced.** The client writes to these
+tables directly through PostgREST and RLS allows it, so the RPC is a front door
+nothing walks through. Put the rule in a trigger and keep the RPC for the
+readable error message. This has now bitten twice: circle invites (sql/86) and
+responder slots (sql/89).
 
 ---
 
@@ -317,16 +364,21 @@ cd android; .\gradlew.bat assembleRelease --console=plain
    SQL editor: `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
    (needs sql/27). Then approve applicants through the admin portal, which sets
    all three flags at once. Do not hand-edit the flags.
-3. Run `sql/79_backend_hardening.sql` (app) and `D:\ORBII-HELPER\sql\03_dispatch_debug.sql`.
+3. **Run `sql/checks/89_check.sql`.** Read-only, returns a table. It is the only
+   confirmation that `circle_visits` is SECURITY INVOKER on the live database and
+   therefore that the location-history leak is actually closed. sql/85 to sql/89
+   were all run on 25 and 26 Aug and all reported "Success. No rows returned",
+   which proves they committed and nothing more.
+4. Run `sql/79_backend_hardening.sql` (app) and `D:\ORBII-HELPER\sql\03_dispatch_debug.sql`.
    Verified applied against the live project on 22 Aug: sql/71 (`voice_samples`
    exists), helper sql/01 and sql/02. Verified NOT applied: sql/79
    (`push_outbox`, `rate_ok` missing), helper sql/03 (`helper_dispatch_debug`
    missing).
-4. Play **Data Safety** declaration before any AAB upload: audio, location, date
+5. Play **Data Safety** declaration before any AAB upload: audio, location, date
    of birth. Plus a separate declaration for `in.orbii.helper`.
-5. File a provisional patent on hands-free + on-device + offline-mesh before
+6. File a provisional patent on hands-free + on-device + offline-mesh before
    showing it widely.
-6. Two-phone mesh test: deploy `mesh-bridge`, set `MESH_SECRET_KEY`, then test.
+7. Two-phone mesh test: deploy `mesh-bridge`, set `MESH_SECRET_KEY`, then test.
 
 **Engineering**
 - Full-screen notification for an incoming SOS in the Helper app (the main app
@@ -335,6 +387,10 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 - Road-distance re-ranking of top candidates. Everything is straight-line PostGIS
   today, which understates distance across a river or a railway line.
 - iOS. Nothing exists.
+- `min_helpers` for `LOW_COVERAGE` is 3. Deliberate: a higher bar would report
+  "not in your area yet" on our own campus.
+- No UI anywhere for the victim to see that a helper dropped out. She sees the
+  count fall; nothing explains it.
 
 ---
 
@@ -356,7 +412,9 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 
 | File | Keep because |
 |---|---|
-| `AGENTS.md` | accessibility rules, a hard constraint for any UI work |
+| `AGENTS.md` | accessibility rules, a hard constraint for any UI work. It was
+parked out of the repo for a few days in Aug and CoverageHeader shipped without
+a live region as a direct result. Do not move it again. |
 | `MIGRATION.md` | SQL migration ledger |
 | `DEPLOY.md`, `INSTALL.md`, `PUSH_SETUP.md` | deployment runbooks |
 | `PLAY_CONSOLE_ANSWERS.md`, `PLAY_STORE_PERMISSIONS.md`, `PLAY_STORE_SUBMISSION.md` | Play submission answers, needed at every release |
