@@ -1,0 +1,63 @@
+name: CI
+
+# Runs on every push and every pull request.
+#
+# WHY THIS EXISTS. Two of the six bugs found in the August security review would
+# have been caught here rather than by somebody reading code on a Tuesday: the
+# native module captured at import time, and __DEV__ throwing outside Metro.
+# Both were found only because a test happened to be written that week.
+#
+# It is deliberately small. Typecheck and unit tests, nothing else. A slow or
+# flaky pipeline is one people learn to ignore, and an ignored pipeline is worse
+# than none because it looks like coverage.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  # So it can be run by hand from the Actions tab without pushing anything.
+  workflow_dispatch:
+
+# A new push to the same branch cancels the run still going for the old one.
+# Free-tier minutes are finite and nobody reads the result of a superseded run.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Typecheck and tests
+    runs-on: ubuntu-latest
+    # Generous but bounded. This job takes about two minutes; ten means
+    # something hung, and a hung job should fail rather than burn the quota.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Matches the local toolchain (v22.20.0). Pinning the major version
+          # means a Node release cannot break the build on a morning when
+          # nothing was pushed.
+          node-version: '22'
+          cache: 'npm'
+
+      # npm ci, not npm install. It installs exactly what package-lock.json
+      # says and fails if the lockfile disagrees with package.json. The whole
+      # point of CI is that it built the same thing you did.
+      #
+      # Expo SDK 54 has peer ranges npm considers conflicting, and the repo is
+      # installed that way locally too. --legacy-peer-deps keeps CI matching the
+      # working tree rather than passing against a tree nobody develops on.
+      - name: Install
+        run: npm ci --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      # Runs even if the typecheck failed, so one push tells you about both
+      # problems instead of hiding the second behind the first.
+      - name: Tests
+        if: always()
+        run: npm test
