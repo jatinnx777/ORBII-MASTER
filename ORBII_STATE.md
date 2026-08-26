@@ -218,7 +218,7 @@ Notable ones:
 **Verify blocks report where nobody looks.** Every migration here ends in
 `do $$ ... raise notice`, and the Supabase editor hides the Notices pane, so
 "Success. No rows returned" is all you ever see and the checks are worth
-nothing. Write checks that RETURN ROWS. `sql/checks/89_check.sql` is the pattern:
+nothing. Write checks that RETURN ROWS. `sql/checks/health.sql` is the pattern:
 a plain SELECT, read-only, safe to run any time.
 
 **Postgres gotchas that have bitten:** changing a function's return type needs
@@ -364,7 +364,7 @@ cd android; .\gradlew.bat assembleRelease --console=plain
    SQL editor: `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
    (needs sql/27). Then approve applicants through the admin portal, which sets
    all three flags at once. Do not hand-edit the flags.
-3. **Run `sql/checks/89_check.sql`.** Read-only, returns a table. It is the only
+3. **Run `sql/checks/health.sql`.** Read-only, returns a table. It is the only
    confirmation that `circle_visits` is SECURITY INVOKER on the live database and
    therefore that the location-history leak is actually closed. sql/85 to sql/89
    were all run on 25 and 26 Aug and all reported "Success. No rows returned",

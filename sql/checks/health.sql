@@ -1,4 +1,7 @@
--- Verification for sql/89, as a SELECT rather than raise notice.
+-- Health check. NOT A MIGRATION. Changes nothing, writes nothing.
+--
+-- Run this any time to see what is actually installed. It covers sql/86, sql/88
+-- and sql/89 together, which is why it is not named after any one of them.
 --
 -- The Supabase editor hides the Notices pane, so every `do $$ ... raise notice`
 -- verify block in these migrations reports into a place nobody reads. This
