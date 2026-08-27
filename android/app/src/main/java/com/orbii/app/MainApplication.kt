@@ -20,6 +20,7 @@ import com.orbii.app.voice.VoiceGuardPackage
 import com.orbii.app.overlay.HelperOverlayPackage
 import com.orbii.app.mesh.OrbiiMeshPackage
 import com.orbii.app.sms.OrbiiSmsPackage
+import com.orbii.app.referrer.OrbiiReferrerPackage
 import com.orbii.app.oem.OemSettingsPackage
 
 class MainApplication : Application(), ReactApplication {
@@ -37,6 +38,9 @@ class MainApplication : Application(), ReactApplication {
               add(OrbiiMeshPackage())
               // Hands-free SMS lifeline (offline, no data needed).
               add(OrbiiSmsPackage())
+              // Play Install Referrer, read once on first launch to attribute a
+              // campus ambassador. See services/referral.ts.
+              add(OrbiiReferrerPackage())
               // Deep links into vendor autostart / battery pages, so a task
               // killer cannot quietly stop Voice SOS overnight.
               add(OemSettingsPackage())

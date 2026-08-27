@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { appAlert } from '@/components/common';
 import {
   Animated,
@@ -29,6 +29,14 @@ import { contactAdded, profileUpdated } from '@/redux/slices/userSlice';
 import { updateProfile } from '@/services/auth';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
+import {
+  bindReferral,
+  captureInstallReferrer,
+  checkCode,
+  getStoredCode,
+  normaliseCode,
+  setStoredCode,
+} from '@/services/referral';
 import { isUsernameAvailable } from '@/services/users-public';
 import { A, PrimaryButton } from './authKit';
 import {
@@ -73,6 +81,28 @@ export function ProfileSetupScreen() {
   // DPDP consent gate. Must be accepted (18+ and privacy notice) before the
   // user can enter any setup, so we never process data without a lawful basis.
   const [consented, setConsented] = useState(false);
+
+  // Campus ambassador code. Pre-filled from the Play install referrer when the
+  // user arrived through a poster link, and editable either way because the
+  // referrer is missing for sideloads and for anyone who searched the store.
+  const [refCode, setRefCode] = useState('');
+  const [refCollege, setRefCollege] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      // Reads the Play referrer once per install and caches the answer, so this
+      // is a storage hit on every launch after the first.
+      const captured = (await captureInstallReferrer()) ?? (await getStoredCode());
+      if (!alive || !captured) return;
+      setRefCode(captured);
+      const check = await checkCode(captured);
+      if (alive && check.valid) setRefCollege(check.college ?? null);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const usernameValid = /^[a-z0-9_]{3,20}$/.test(username);
   const phoneDigits = phoneInput.replace(/\D/g, '').slice(0, 10);
@@ -210,6 +240,19 @@ export function ProfileSetupScreen() {
               name={name}
               username={username}
               error={error}
+              refCode={refCode}
+              refCollege={refCollege}
+              onRefCode={(v) => {
+                const up = v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 12);
+                setRefCode(up);
+                setRefCollege(null);
+                void setStoredCode(up);
+                if (normaliseCode(up)) {
+                  void checkCode(up).then((c) => {
+                    if (c.valid) setRefCollege(c.college ?? null);
+                  });
+                }
+              }}
               onName={(v) => {
                 setName(v);
                 if (error) setError(null);
@@ -480,14 +523,20 @@ function IdentityStep({
   name,
   username,
   error,
+  refCode,
+  refCollege,
   onName,
   onUsername,
+  onRefCode,
 }: {
   name: string;
   username: string;
   error: string | null;
+  refCode: string;
+  refCollege: string | null;
   onName: (v: string) => void;
   onUsername: (v: string) => void;
+  onRefCode: (v: string) => void;
 }) {
   return (
     <View style={styles.stepBody}>
@@ -518,6 +567,24 @@ function IdentityStep({
         maxLength={20}
         hint="3 to 20 lowercase letters, numbers, or underscores. Friends find you by this."
         error={error ?? undefined}
+        containerStyle={styles.input}
+      />
+      {/* Optional, and it looks optional. A required-looking field here would
+          make somebody without a code think they are doing something wrong on
+          the screen where they are setting up a safety app. */}
+      <Input
+        label="Campus ambassador code (optional)"
+        autoCapitalize="characters"
+        autoCorrect={false}
+        value={refCode}
+        onChangeText={onRefCode}
+        placeholder="e.g. SRMS01"
+        maxLength={12}
+        hint={
+          refCollege
+            ? `Recognised: ${refCollege}`
+            : 'Only if a campus ambassador gave you one. Skip it otherwise.'
+        }
         containerStyle={styles.input}
       />
     </View>

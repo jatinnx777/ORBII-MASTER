@@ -204,6 +204,11 @@ android {
 }
 
 dependencies {
+    // Play Install Referrer. First-party Google library, reads the referrer
+    // string a Play Store install carried with it, which is the only way to
+    // attribute an install that happened before the app was ever opened.
+    implementation("com.android.installreferrer:installreferrer:2.2")
+
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
 
