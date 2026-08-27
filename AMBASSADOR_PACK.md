@@ -60,7 +60,7 @@ They type your code there. That is how you get credit.
 people to enter it while they are setting up, not after.
 
 **Your dashboard is at orbii.in/ambassador.** Sign in with the same email you use
-in the app. It sends you a six digit code, there is no password.
+in the app. It sends you an eight digit code, there is no password.
 
 ---
 
