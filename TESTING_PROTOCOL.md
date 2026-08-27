@@ -1,4 +1,4 @@
-# ORBII — Field Testing Protocol
+# ORBII Field Testing Protocol
 
 Physical tests that cannot be faked in a simulator, plus the observability that
 tells you when something has quietly stopped working in production.
@@ -14,7 +14,7 @@ Record every result. A test with no written outcome did not happen.
 
 ---
 
-## Part 1 — Acoustic: does it hear her
+## Part 1: Acoustic, does it hear her
 
 The trigger is the whole product. Everything else is downstream of a detection
 that either happens or does not.
@@ -61,7 +61,7 @@ record, for each detection, which of these fired:
 fusion never fires, YAMNet is contributing nothing and the second model is
 costing battery for no recall.
 
-### 1.3 False positives — the test that protects the network
+### 1.3 False positives, the test that protects the network
 
 Arm Voice SOS and leave the phone running, doing nothing deliberate, for these
 periods. Count every countdown that starts.
@@ -113,7 +113,7 @@ The service is useless if Android kills it.
 
 ---
 
-## Part 2 — RF: the mesh, which has never run
+## Part 2: RF, the mesh that has never run
 
 **Status: unproven.** Two phones minimum, three to test a relay hop.
 
@@ -138,7 +138,7 @@ last distance at which the packet is received.
 | Coded PHY (long range) | 150–400 m | |
 
 `boostCapable` detection decides which is used. Log which one was actually
-negotiated — do not assume Coded PHY was used just because the device supports
+negotiated, do not assume Coded PHY was used just because the device supports
 it.
 
 ### 2.3 The relay hop
@@ -172,7 +172,7 @@ uninstalled, whatever it does.
 
 ---
 
-## Part 3 — Dispatch and escalation
+## Part 3: Dispatch and escalation
 
 ### 3.1 Two accounts, always
 `sos_events_nearby` excludes `e.user_id <> auth.uid()`. Testing both apps on one
@@ -208,7 +208,7 @@ responder out of a scene.
 
 ---
 
-## Part 4 — Observability
+## Part 4: Observability
 
 ### 4.1 What exists after sql/80
 
@@ -250,7 +250,7 @@ An alarm nobody has ever seen fire is an untested alarm.
 
 ---
 
-## Part 5 — Release gate
+## Part 5: Release gate
 
 Do not ship a build claiming offline capability until every box holds:
 
@@ -270,7 +270,7 @@ Until 2.1, 2.3 and 2.4 pass, the honest description of the mesh remains
 
 ---
 
-## Part 6 — The offline engine
+## Part 6: The offline engine
 
 Added Aug 2026. All of it is written, tested in Node, and unproven on a phone.
 
@@ -397,7 +397,7 @@ remains **"built, in hardware testing"**. The same rule as the mesh.
 
 ---
 
-## Part 7 — Referral attribution
+## Part 7: Referral attribution
 
 Added Aug 2026, build 32.21.0 (26705), the first build that can capture a code
 at all.
