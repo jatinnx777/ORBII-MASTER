@@ -9,7 +9,7 @@ Three repos, three separate git histories. Do not cross-commit.
 | What | Path | Notes |
 |---|---|---|
 | Main app | `D:\ORBII` | React Native / Expo 54, Android first |
-| Website | `D:\ORBII\website` | Astro, its own git repo, deploys to orbii.in on push |
+| Website | `D:\ORBII-WEBSITE` | Astro, its own git repo, deploys to orbii.in on push |
 | Helper app | `D:\ORBII-HELPER` | Separate app, `in.orbii.helper`, shares the Supabase project |
 
 Backend: one Supabase project (`henbkyjefhzmxqozlczd`), Postgres + RLS + edge
@@ -186,7 +186,7 @@ actually deployed before debugging the code.
 throws `TypeError: not a function`. This crashed `score-community` and was only
 caught by invoking the deployed function.
 
-### SQL (`sql/`, 80 files, run in number order)
+### SQL (`sql/`, 83 files, run in number order)
 Notable ones:
 
 | File | What |
@@ -221,6 +221,9 @@ Notable ones:
 | 100 | ambassador activation fixed for email/OAuth auth |
 | 101 | ambassador cannot vouch for their own referral |
 | 102 | fixes a leak: ambassador_summary read any ambassador's earnings |
+| 103 | ambassador admin tools: add, pause, leaderboard, payout queue |
+| 104 | relaxes the code alphabet to full A-Z 0-9. Do NOT re-run 103 after this |
+| 105 | **schedules the activation sweep**, which nothing had ever called. Batch add, manual sweep, blocker diagnostic |
 
 `sql/55_whats_missing.sql` is read-only; zero rows means fully migrated.
 
@@ -247,6 +250,19 @@ policy recursion, and then write the caller predicate by hand.
 its own statement.** Folded into an `OR`, the branch that authorises can be
 skipped by supplying the id. This shipped twice: `circle_visits` (sql/86) and
 `ambassador_summary` (sql/102). Resolve the target first, then query.
+
+**A function that is never called is not a feature.**
+`ambassador_activation_sweep()` was written in sql/97, corrected in sql/100 and
+corrected again in sql/101. Three careful passes over logic that had no cron
+job, no edge function and no client path, with execute revoked from
+`authenticated` so nothing could have called it anyway. The whole ambassador
+economy was inert: nothing activated, nothing cleared, every dashboard read zero.
+Fixed in sql/105. When a migration adds a function that is meant to run on its
+own, the same file schedules it, or it does not ship.
+
+Related: this is the likely explanation for the earlier diagnostic reporting
+eight users qualifying while the pass counters stayed at zero. The qualification
+check and the sweep were different things, and only one of them was a query.
 
 **A cap enforced only in an RPC is not enforced.** The client writes to these
 tables directly through PostgREST and RLS allows it, so the RPC is a front door
@@ -401,10 +417,20 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 - Road-distance re-ranking of top candidates. Everything is straight-line PostGIS
   today, which understates distance across a river or a railway line.
 - iOS. Nothing exists.
-- Campus Ambassador programme. Database, app attribution and the
-  `orbii.in/ambassador` dashboard are built. `AMBASSADOR_PACK.md` is written.
-  Nothing runs until an `ambassadors` row exists and a build ships with the
-  Install Referrer module, which 32.20.0 predates.
+- Campus Ambassador programme. Database (sql/97 to sql/105), app attribution,
+  the `orbii.in/ambassador` dashboard and the `/admin` Ambassadors tab are all
+  built. `AMBASSADOR_PACK.md` and `AMBASSADOR_PROGRAMME.md` are written.
+  ORBII01 exists. Cohort is now planned at 30 to 40, not 9, so `/admin` has
+  batch entry (`email, CODE, College`, one per line, rows independent).
+  **The sweep has still never executed.** sql/105 schedules it hourly and adds
+  a Run sweep now button, and the verify block passes, but plpgsql does not
+  validate query bodies at creation time, so the first real run is the first
+  test of logic that was written three times and executed zero times. Run it by
+  hand from `/admin` before trusting the cron job, because a throw inside cron
+  fails into a log nobody reads.
+  Attribution is manual code entry on `ProfileSetupScreen`. The
+  `orbii.in/ref/SLUG` link route stays unproven until 32.21.0 is published,
+  because Install Referrer returns nothing on a sideload.
 - `min_helpers` for `LOW_COVERAGE` is 3. Deliberate: a higher bar would report
   "not in your area yet" on our own campus.
 - No UI anywhere for the victim to see that a helper dropped out. She sees the
