@@ -71,6 +71,14 @@ returns int language sql immutable as $$ select 7 $$;
 -- ---------------------------------------------------------------------------
 -- 3. THE CORRECTED SWEEP
 -- ---------------------------------------------------------------------------
+-- 42P13: create or replace cannot change a return type, and this adds a fourth
+-- output column (cleared) to the three sql/97 declared. Dropping first is the
+-- documented workaround in ORBII_STATE's Postgres gotchas.
+--
+-- Safe: nothing holds a reference to this function. It is called by a scheduled
+-- job, not by a view or a foreign key.
+drop function if exists public.ambassador_activation_sweep();
+
 create or replace function public.ambassador_activation_sweep()
 returns table (activated int, credited int, bonuses int, cleared int)
 language plpgsql
