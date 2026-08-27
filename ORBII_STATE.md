@@ -1,6 +1,6 @@
 # ORBII, state of the project (source of truth)
 
-Single handover doc. Read this first in any new session. Last updated **26 Aug 2026**.
+Single handover doc. Read this first in any new session. Last updated **28 Aug 2026**.
 
 Founder: **Jatin**, 19, solo, non-technical, learning to code.
 
@@ -215,6 +215,12 @@ Notable ones:
 | 93 | revokes direct insert on sos_responders; `security_audit` view |
 | 95 | SRID 4326 tamper guard on pg_cron, `security_events` table |
 | 96 | bounds `circle_visits` to 30 days, adds two geofence indexes |
+| 97 | campus ambassador schema: referrals, ledger, payouts |
+| 98 | device cap on ambassador activations |
+| 99 | binds a signup to an ambassador code |
+| 100 | ambassador activation fixed for email/OAuth auth |
+| 101 | ambassador cannot vouch for their own referral |
+| 102 | fixes a leak: ambassador_summary read any ambassador's earnings |
 
 `sql/55_whats_missing.sql` is read-only; zero rows means fully migrated.
 
@@ -236,6 +242,11 @@ can execute it. This shipped once, in `circle_visits` (sql/86), which would have
 handed any signed-in user the location history of every user in the database.
 Default to SECURITY INVOKER and let RLS do the work; use DEFINER only to break a
 policy recursion, and then write the caller predicate by hand.
+
+**A SECURITY DEFINER function with an id parameter needs its ownership check as
+its own statement.** Folded into an `OR`, the branch that authorises can be
+skipped by supplying the id. This shipped twice: `circle_visits` (sql/86) and
+`ambassador_summary` (sql/102). Resolve the target first, then query.
 
 **A cap enforced only in an RPC is not enforced.** The client writes to these
 tables directly through PostgREST and RLS allows it, so the RPC is a front door
@@ -390,6 +401,10 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 - Road-distance re-ranking of top candidates. Everything is straight-line PostGIS
   today, which understates distance across a river or a railway line.
 - iOS. Nothing exists.
+- Campus Ambassador programme. Database, app attribution and the
+  `orbii.in/ambassador` dashboard are built. `AMBASSADOR_PACK.md` is written.
+  Nothing runs until an `ambassadors` row exists and a build ships with the
+  Install Referrer module, which 32.20.0 predates.
 - `min_helpers` for `LOW_COVERAGE` is 3. Deliberate: a higher bar would report
   "not in your area yet" on our own campus.
 - No UI anywhere for the victim to see that a helper dropped out. She sees the
