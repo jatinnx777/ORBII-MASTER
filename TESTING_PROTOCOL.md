@@ -394,3 +394,111 @@ Until 6.1 passes on a real phone, the honest description of the offline SMS
 remains **"built, in hardware testing"**. The same rule as the mesh.
 
 ---
+
+---
+
+## Part 7 — Referral attribution
+
+Added Aug 2026, build 32.21.0 (26705), the first build that can capture a code
+at all.
+
+**Two routes in, and only ONE of them is testable before Play.** Read that before
+testing, or you will spend an evening proving a working feature is broken.
+
+| Route | How it arrives | Testable on a sideload |
+|---|---|---|
+| Play Install Referrer | Play Store carries `?referrer=` through the install | **No** |
+| Typed code | Field on the profile setup screen | Yes |
+
+---
+
+### 7.1 Why the referrer route cannot be tested by sideloading
+
+`captureInstallReferrer()` asks the Google Play Store what referrer string came
+with this install. On a sideloaded APK the Play Store never handled the install,
+so there is nothing to hand back. The library returns
+`SERVICE_UNAVAILABLE` or `FEATURE_NOT_SUPPORTED` and the function resolves
+`null`.
+
+**That is correct behaviour, not a bug.** The field stays empty and the tester
+types the code instead.
+
+It also means the flag matters: the function records that it has already asked,
+so it never reconnects on later launches. **If you sideload and then want to test
+the Play route later, uninstall first.** Updating over the top keeps app data,
+keeps the flag, and the referrer is never read.
+
+---
+
+### 7.2 Typed code, on a sideload (test this now)
+
+Two phones. Phone A is the ambassador, phone B is the new user.
+
+**Before you start:** an ambassador must exist. `sql/104` created `ORBII01` for
+jaykumar2470f@gmail.com.
+
+- [ ] Install 32.21.0 on phone B, fresh (not an update)
+- [ ] Start signup, reach the profile setup screen
+- [ ] In **Campus ambassador code (optional)**, type `ORBII01`
+- [ ] Within a second the hint reads **"Recognised: SRM University Sonepat"**
+- [ ] Finish setup and add one emergency contact
+
+That hint is the test. It means the code was checked against the live database
+before signup finished.
+
+**Then, on phone A:**
+
+- [ ] Open `orbii.in/ambassador`, sign in with the ambassador's email
+- [ ] **Still to count** shows 1
+- [ ] **People counted** shows 0
+
+**Both numbers are correct.** A referral only becomes counted when the referred
+user has verified their email, has an emergency contact, has somebody in their
+circle who is NOT the ambassador, and 24 hours have passed.
+
+- [ ] Add a third person to phone B's circle
+- [ ] Wait 24 hours, or run `select public.ambassador_activation_sweep();`
+- [ ] **People counted** becomes 1
+
+---
+
+### 7.3 What each failure means
+
+| What you see | What it means |
+|---|---|
+| No hint under the field | Phone had no network, or the code does not exist |
+| "Recognised" but nothing on the dashboard | `bindReferral` failed. Check logcat for `[referral]` |
+| Counted stays 0 after 24h | Almost always the circle condition. Check `ambassador_activation_gap` |
+| Dashboard says "not an ambassador yet" | Signed in with a different email than the `ambassadors` row |
+
+The third row is the one to expect. **The circle requirement is the strictest
+condition and the least obvious**, and it exists so an ambassador cannot vouch
+for accounts they created themselves (sql/101).
+
+---
+
+### 7.4 Install Referrer, after Play (test post-launch)
+
+Only possible once 32.21.0 is live on Play.
+
+- [ ] Uninstall ORBII completely from the test phone
+- [ ] Open, on that phone:
+      `https://play.google.com/store/apps/details?id=in.orbii.app&referrer=ref%3DORBII01`
+- [ ] Install from that page
+- [ ] Open the app and reach profile setup
+- [ ] The code field is **already filled** with `ORBII01`
+
+If it is empty, check `adb logcat -s ReactNativeJS | grep referral` for
+`captured from install referrer`. Absent means Play did not carry the string,
+which usually means the link was not the route actually used to install.
+
+---
+
+### 7.5 Release gate for referrals
+
+- [ ] 7.2 typed code recognised, and reaches the dashboard as "still to count"
+- [ ] 7.2 converts to "counted" after the circle condition is met
+- [ ] 7.4 install referrer prefills the field, on a real Play install
+
+Until 7.4 passes, the only working route is the typed code, and the poster and
+ambassador pack should tell people to type it rather than relying on the link.

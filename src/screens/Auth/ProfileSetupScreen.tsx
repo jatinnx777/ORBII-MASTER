@@ -93,12 +93,23 @@ export function ProfileSetupScreen() {
     void (async () => {
       // Reads the Play referrer once per install and caches the answer, so this
       // is a storage hit on every launch after the first.
+      //
+      // On a SIDELOADED build this always resolves null: the Play Store never
+      // handled the install, so there is no referrer string to hand back. That
+      // is the expected path in testing, not a failure, and the field simply
+      // stays empty for the tester to type into.
       const captured = (await captureInstallReferrer()) ?? (await getStoredCode());
       if (!alive || !captured) return;
       setRefCode(captured);
       const check = await checkCode(captured);
       if (alive && check.valid) setRefCollege(check.college ?? null);
-    })();
+    })().catch((err) => {
+      // Every function above already swallows its own failures, so this should
+      // be unreachable. It is here because the one thing that must never happen
+      // on this screen is an unhandled rejection during onboarding, and that
+      // guarantee should not depend on three other files staying careful.
+      console.warn('[referral] lookup failed, continuing without a code', err);
+    });
     return () => {
       alive = false;
     };
@@ -261,9 +272,11 @@ export function ProfileSetupScreen() {
                 setRefCollege(null);
                 void setStoredCode(up);
                 if (normaliseCode(up)) {
-                  void checkCode(up).then((c) => {
-                    if (c.valid) setRefCollege(c.college ?? null);
-                  });
+                  void checkCode(up)
+                    .then((c) => {
+                      if (c.valid) setRefCollege(c.college ?? null);
+                    })
+                    .catch(() => undefined);
                 }
               }}
               onName={(v) => {
