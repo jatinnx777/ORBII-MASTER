@@ -14,12 +14,13 @@ describe('normaliseCode', () => {
     expect(normaliseCode('  SRMS01  ')).toBe('SRMS01');
   });
 
-  it('rejects O and I, which sql/97 forbids', () => {
-    // The codes ban them so nobody has to tell O from 0 while reading a poster
-    // in a corridor. A code containing them is not one of ours, and binding it
-    // would fail server-side anyway.
-    expect(normaliseCode('SRMSO1')).toBeNull();
-    expect(normaliseCode('SRMSI1')).toBeNull();
+  it('accepts O and I, which sql/104 allows again', () => {
+    // An earlier constraint banned them to avoid confusing O with 0 on a poster.
+    // It also banned ORBII01, DELHI01 and NOIDA02, which is most of what anybody
+    // would actually pick, so the rule cost more than the ambiguity did.
+    expect(normaliseCode('ORBII01')).toBe('ORBII01');
+    expect(normaliseCode('DELHI01')).toBe('DELHI01');
+    expect(normaliseCode('SONIPAT01')).toBe('SONIPAT01');
   });
 
   it('rejects anything outside 4 to 12 characters', () => {
@@ -68,7 +69,7 @@ describe('parseReferrer', () => {
     // Binding a user to a code that does not exist is worse than binding them
     // to nothing, because it looks attributed and never activates.
     expect(parseReferrer('ref%3DNOT_A_CODE!')).toBeNull();
-    expect(parseReferrer('ref%3DSRMSO1')).toBeNull(); // contains O
+    expect(parseReferrer('ref%3DAB1')).toBeNull(); // too short to be a code
   });
 
   it('survives malformed percent-encoding', () => {

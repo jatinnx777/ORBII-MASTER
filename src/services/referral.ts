@@ -64,12 +64,18 @@ export function parseReferrer(raw: string): string | null {
 /**
  * The code as the database stores it.
  *
- * sql/97 forbids O and I in a code so nobody has to tell them from 0 and 1 while
- * reading a poster in a corridor. Anything containing them is not one of ours.
+ * Full A to Z and 0 to 9, matching the constraint in sql/104. An earlier version
+ * banned O and I to stop anybody confusing them with 0 and 1 on a poster, which
+ * also banned ORBII01, DELHI01 and NOIDA02 and every other code somebody would
+ * naturally pick. The ambiguity costs a person one retry; the rule cost every
+ * code forever.
+ *
+ * A wrong code is harmless anyway: it binds nothing, shows nothing, and the
+ * ambassador just tells them again.
  */
 export function normaliseCode(input: string): string | null {
   const code = (input ?? '').trim().toUpperCase();
-  return /^[A-HJ-NP-Z0-9]{4,12}$/.test(code) ? code : null;
+  return /^[A-Z0-9]{4,12}$/.test(code) ? code : null;
 }
 
 /**
