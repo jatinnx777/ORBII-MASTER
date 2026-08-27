@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import * as Application from 'expo-application';
 import { supabase } from './supabase';
 import { getItem, setItem, removeItem } from './storage';
 
@@ -153,6 +154,45 @@ export async function checkCode(code: string): Promise<CodeCheck> {
   }
 }
 
+/**
+ * A device identifier that survives a reinstall.
+ *
+ * DELIBERATELY NOT getDeviceId() FROM FraudDetectionService. That one is a
+ * random string in AsyncStorage:
+ *
+ *   id = `dev_${Date.now().toString(36)}_${Math.random()...}`
+ *
+ * which clearing app data resets in ten seconds, so a per-device cap built on it
+ * is friction rather than a wall.
+ *
+ * IT IS ALSO NOT SAFE TO REPLACE. getDeviceId backs single-device login: the
+ * eviction guard compares it against user_sessions.device_id and signs the user
+ * out when they differ. Swapping the implementation would make every existing
+ * user's stored id mismatch on the first launch after an update, and the whole
+ * user base would be signed out at once. So this is a second, separate id used
+ * only for referral attribution.
+ *
+ * ANDROID_ID is per app-signing-key and per user since Android 8, survives
+ * reinstall and app-data clear, and changes only on a factory reset. That is
+ * exactly the property the cap needs.
+ *
+ * Returns null rather than a fallback. A random fallback would look like a real
+ * device to the cap and defeat it silently, which is worse than having no id.
+ */
+export async function getHardwareId(): Promise<string | null> {
+  try {
+    if (Platform.OS === 'android') {
+      const id = Application.getAndroidId();
+      return id && id.length > 0 ? `and_${id}` : null;
+    }
+    const idfv = await Application.getIosIdForVendorAsync();
+    return idfv ? `ios_${idfv}` : null;
+  } catch (err) {
+    console.warn('[referral] no hardware id available', err);
+    return null;
+  }
+}
+
 export type BindResult = { ok: boolean; reason?: string; college?: string };
 
 /**
@@ -172,10 +212,14 @@ export async function bindReferral(explicitCode?: string): Promise<BindResult> {
     if (!code) return { ok: false, reason: 'empty' };
 
     const source = explicitCode ? 'signup_code' : 'deep_link';
+    // Feeds sql/98's three-per-device cap. Null when unavailable, and the cap
+    // simply does not apply rather than applying to a fabricated value.
+    const deviceHash = await getHardwareId();
+
     const { data, error } = await supabase.rpc('ambassador_bind_referral', {
       p_code: code,
       p_source: source,
-      p_device_hash: null,
+      p_device_hash: deviceHash,
     });
 
     if (error) {

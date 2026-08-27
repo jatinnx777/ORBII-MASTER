@@ -26,6 +26,7 @@ export default defineConfig({
       'expo-location': path.resolve(__dirname, 'test/stubs/empty.ts'),
       'expo-sms': path.resolve(__dirname, 'test/stubs/expo-sms.ts'),
       'expo-sensors': path.resolve(__dirname, 'test/stubs/expo-sensors.ts'),
+      'expo-application': path.resolve(__dirname, 'test/stubs/expo-application.ts'),
       '@react-native-community/netinfo': path.resolve(__dirname, 'test/stubs/netinfo.ts'),
       'expo-notifications': path.resolve(__dirname, 'test/stubs/empty.ts'),
       'expo-task-manager': path.resolve(__dirname, 'test/stubs/task-manager.ts'),

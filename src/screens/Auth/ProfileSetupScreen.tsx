@@ -204,6 +204,19 @@ export function ProfileSetupScreen() {
           photoChangedAt: photoUri ? now : null,
         }),
       );
+
+      // Bind the campus ambassador, if there is one.
+      //
+      // AFTER the profile is saved and deliberately not awaited. The account
+      // already exists, so auth.uid() is valid, and a marketing attribution must
+      // never sit between a woman and the end of setup on a safety app. Every
+      // failure inside bindReferral is swallowed and returns a reason nobody
+      // shows her: a wrong code is a typo, not something she can fix here.
+      //
+      // The stored code covers the install-referrer route; refCode covers the
+      // field she typed. Passing refCode explicitly makes it win, because what
+      // somebody just typed beats what a poster link guessed weeks ago.
+      void bindReferral(refCode || undefined).catch(() => undefined);
     } catch (err) {
       const message =
         err instanceof Error ? err.message : 'Could not save profile.';
