@@ -82,6 +82,15 @@ Free for safety. Paid for guaranteed verified response.
   staged escalation, arrival codes, coins. What is missing is **real humans in
   the pool**.
 
+**Hardware verification pass, 28 Aug 2026 (32.21.0 on one phone).** Confirmed
+working by the founder: Voice SOS on all three wake words, with the screen off
+and the app closed, and still firing in a noisy corridor. Manual SOS with
+evidence and map. One-tap 112. Safe zones and Safe Journey. Continuous haptic
+pulse. Emergency contacts. The OEM battery and autostart deep links. Separately,
+the whole web and database layer: /admin, /ambassador, the activation sweep, and
+pg_cron firing it unattended. The midnight location wipe was not checked and
+needs a morning.
+
 ### Built but never tested on real hardware (needs two physical phones)
 - SMS lifeline (SOS over cell signal with data off).
 - Offline SOS mesh relay (BLE, sealed end to end, bridges via `mesh-bridge`).
@@ -387,9 +396,18 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 ## 10. Open items
 
 **Founder's side**
-1. **Login:** custom SMTP (Brevo) in Supabase so email OTP actually arrives. The
-   Magic Link template must use `{{ .Token }}`, a code, not a link. The Brevo key
-   is a real secret; the Supabase anon key is public by design and RLS-gated.
+1. **Login:** Brevo SMTP is configured and working; codes arrive in the inbox,
+   not spam, so SPF and DKIM are right. **They arrive late**, sometimes by
+   minutes, which is not acceptable and is not yet diagnosed. Split it in the
+   Brevo transactional log: accepted-late means Brevo is queueing a new free
+   account, delivered-late means Gmail is deferring a new sending domain and a
+   DMARC record is the next thing to try. Resend's free tier is the fallback.
+   Google OAuth needs no email at all, is already the first button on the
+   sign-in screen, and its config is verified correct end to end; it is the path
+   ambassadors should demo. Templates: `{{ .Token }}`, a code, not a link, and
+   **Confirm signup is a different template from Magic Link**, so a new user and
+   a returning one do not get the same email. The Brevo key is a real secret;
+   the Supabase anon key is public by design and RLS-gated.
 2. **Seed verified responders.** One-time, make yourself admin in the Supabase
    SQL editor: `update profiles set role='admin' where email='jaykumar2470f@gmail.com';`
    (needs sql/27). Then approve applicants through the admin portal, which sets
@@ -422,12 +440,15 @@ cd android; .\gradlew.bat assembleRelease --console=plain
   built. `AMBASSADOR_PACK.md` and `AMBASSADOR_PROGRAMME.md` are written.
   ORBII01 exists. Cohort is now planned at 30 to 40, not 9, so `/admin` has
   batch entry (`email, CODE, College`, one per line, rows independent).
-  **The sweep has still never executed.** sql/105 schedules it hourly and adds
-  a Run sweep now button, and the verify block passes, but plpgsql does not
-  validate query bodies at creation time, so the first real run is the first
-  test of logic that was written three times and executed zero times. Run it by
-  hand from `/admin` before trusting the cron job, because a throw inside cron
-  fails into a log nobody reads.
+  **The sweep now runs.** Executed by hand and by pg_cron on 28 Aug, both
+  clean. The economy is live.
+  **What is NOT proven is the bind.** A code typed correctly against a valid
+  active code, from an account that is not the ambassador's, produced no row in
+  `ambassador_referrals`. Every database check passes. sql/106 now logs every
+  attempt and its outcome so the next occurrence is diagnosable in seconds
+  rather than an evening, and App.tsx retries a bind that never landed. Neither
+  has been through a clean test yet. **Do that before handing the code to
+  anybody.**
   Attribution is manual code entry on `ProfileSetupScreen`. The
   `orbii.in/ref/SLUG` link route stays unproven until 32.21.0 is published,
   because Install Referrer returns nothing on a sideload.
