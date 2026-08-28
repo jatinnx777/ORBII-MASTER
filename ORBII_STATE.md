@@ -442,13 +442,17 @@ cd android; .\gradlew.bat assembleRelease --console=plain
   batch entry (`email, CODE, College`, one per line, rows independent).
   **The sweep now runs.** Executed by hand and by pg_cron on 28 Aug, both
   clean. The economy is live.
-  **What is NOT proven is the bind.** A code typed correctly against a valid
-  active code, from an account that is not the ambassador's, produced no row in
-  `ambassador_referrals`. Every database check passes. sql/106 now logs every
-  attempt and its outcome so the next occurrence is diagnosable in seconds
-  rather than an evening, and App.tsx retries a bind that never landed. Neither
-  has been through a clean test yet. **Do that before handing the code to
-  anybody.**
+  **The bind now works, proven 29 Aug.** A typed code produced a real referral
+  row: ORBII01 shows 1 signup, 1 waiting, 1 device. Attribution is end to end
+  for the first time. It failed silently the day before, which is why sql/106
+  logs every attempt and its outcome, and why App.tsx retries a bind that never
+  landed. Keep both: the original failure was never explained, only routed
+  around.
+  **Still unproven: activation.** Turning a waiting signup into a counted one
+  needs an emergency contact, 24 hours, and a circle member who is NOT the
+  ambassador (sql/101). That last condition needs a third account or a real
+  second person, and nobody has been through it yet. The money side of the
+  programme has therefore never run.
   Attribution is manual code entry on `ProfileSetupScreen`. The
   `orbii.in/ref/SLUG` link route stays unproven until 32.21.0 is published,
   because Install Referrer returns nothing on a sideload.
