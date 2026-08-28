@@ -199,6 +199,18 @@ async function bootstrapProfile(
   // account's one active device, evicting whatever device was signed in before.
   void claimThisDevice();
 
+  // Started now, not after the profile is resolved. None of these depend on the
+  // profile row, and awaiting them later added a whole round trip to a sign-in
+  // that already makes several. Kept as one promise so the await below is the
+  // only place that blocks.
+  const sideloads = Promise.all([
+    listFriendsForUser(user.id),
+    // Merges the server list with the durable local cache and repairs any
+    // contact that never uploaded, so a guardian number survives sign-out.
+    loadEmergencyContacts(user.id),
+    fetchSOSHistory(user.id),
+  ]);
+
   let { data: row } = await supabase
     .from('profiles')
     .select(
@@ -221,13 +233,7 @@ async function bootstrapProfile(
     }
   }
 
-  const [friends, emergencyContacts, history] = await Promise.all([
-    listFriendsForUser(user.id),
-    // Merges the server list with the durable local cache and repairs any
-    // contact that never uploaded, so a guardian number survives sign-out.
-    loadEmergencyContacts(user.id),
-    fetchSOSHistory(user.id),
-  ]);
+  const [friends, emergencyContacts, history] = await sideloads;
 
   if (row) {
     let profile = rowToProfile(row, user.email ?? '');
@@ -321,19 +327,22 @@ async function ensureFallbackProfile(user: {
       ? sanitized.slice(0, 16)
       : `orbii_${user.id.replace(/-/g, '').slice(0, 8)}`;
 
-  // Walk a small suffix counter to dodge a duplicate-username collision.
-  for (let i = 0; i < 6; i++) {
-    const tryName = i === 0 ? candidate : `${candidate.slice(0, 14)}_${i}`;
-    const { data: existing } = await supabase
-      .from('users_public')
-      .select('id')
-      .eq('username', tryName)
-      .maybeSingle();
-    if (!existing) {
-      candidate = tryName;
-      break;
-    }
-  }
+  // Dodge a duplicate-username collision. This used to walk the suffixes one
+  // network round trip at a time, up to six of them, in the middle of the
+  // sign-in a brand new user is already waiting on. Ask for all six at once
+  // instead: same answer, one round trip.
+  const candidates = [
+    candidate,
+    ...[1, 2, 3, 4, 5].map((i) => `${candidate.slice(0, 14)}_${i}`),
+  ];
+  const { data: taken } = await supabase
+    .from('users_public')
+    .select('username')
+    .in('username', candidates);
+  const takenNames = new Set((taken ?? []).map((r: { username: string }) => r.username));
+  // Falls back to the first candidate when every suffix is taken, which is what
+  // the loop did, and the upsert below is keyed on id so it still succeeds.
+  candidate = candidates.find((c) => !takenNames.has(c)) ?? candidates[0];
 
   const fullName =
     typeof user.user_metadata?.full_name === 'string'
