@@ -429,6 +429,23 @@ cd android; .\gradlew.bat assembleRelease --console=plain
 7. Two-phone mesh test: deploy `mesh-bridge`, set `MESH_SECRET_KEY`, then test.
 
 **Engineering**
+- **Play quality deadlines, announced 29 Aug 2026.** Not urgent, both are months
+  out, and neither blocks the current submission.
+  - **DEX optimization, Feb 2027: already compliant.** `enableMinifyInReleaseBuilds`
+    and `enableShrinkResources` are both true and mapping.txt is 55 MB, so R8 is
+    doing real work. Nothing to do.
+  - **Memory thresholds, Feb 2027: the one that points at us.** Voice SOS holds a
+    Vosk model in RAM continuously, which is exactly the behaviour these
+    thresholds target. Two things already help: Hindi is downloaded on demand
+    rather than bundled into memory, so English-only users load one recognizer;
+    and the service is a FOREGROUND service, which Google assesses more leniently
+    than cached. SOS video recording adds exposure while active, though only on a
+    visible screen. Do not design around guesses: once 32.25.0 has a few hundred
+    installs, Android vitals reports real memory numbers from real phones.
+  - **Zero-Tap Sign-In, April 2027: real work.** Needs the Restore Credentials
+    API so a user moving phones is signed in without re-authenticating. Interacts
+    with single-device login, which is compatible but needs thought rather than a
+    drop-in.
 - Full-screen notification for an incoming SOS in the Helper app (the main app
   already declares `USE_FULL_SCREEN_INTENT` and handles the Android 14 revoke
   path; needs porting).
