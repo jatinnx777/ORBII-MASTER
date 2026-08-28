@@ -27,6 +27,7 @@ import {
 } from '@/redux/slices/appSlice';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
+import { isVideoEvidenceReady, requestVideoEvidencePermissions } from '@/services/sos-video';
 import { listCircles } from '@/services/circles';
 import { circlesLoaded } from '@/redux/slices/circlesSlice';
 import { loadEmergencyContacts } from '@/services/emergency-contacts';
@@ -82,6 +83,7 @@ export function SettingsScreen() {
   // at any time and withdrawal must be as easy as giving it, so this is a
   // one-tap switch that takes effect immediately rather than on next launch.
   const [meshRelay, setMeshRelay] = useState(true);
+  const [videoEvidence, setVideoEvidence] = useState(false);
   useEffect(() => {
     let alive = true;
     void isMeshRelayEnabled().then((v) => {
@@ -91,6 +93,45 @@ export function SettingsScreen() {
       alive = false;
     };
   }, []);
+
+  // Video evidence is permission-shaped, not a stored preference: the only
+  // thing that decides whether it records is whether Android has granted the
+  // camera. So the switch reflects the OS, and turning it OFF sends her to
+  // system settings rather than flipping a flag we would then have to honour
+  // in two places.
+  // The switch must show what Android actually granted, including a permission
+  // revoked from system settings while the app was closed. Read it on mount
+  // rather than trusting anything we stored.
+  useEffect(() => {
+    let cancelled = false;
+    void isVideoEvidenceReady().then((ok) => {
+      if (!cancelled) setVideoEvidence(ok);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleVideoEvidence = async (next: boolean) => {
+    if (!next) {
+      sheet.notify({
+        title: 'Turn it off in Android settings',
+        body: 'ORBII cannot take back a permission it was given. Open Settings, Permissions, Camera, and choose Deny. Your SOS keeps working either way.',
+        tone: 'neutral',
+      });
+      void Linking.openSettings();
+      return;
+    }
+    const granted = await requestVideoEvidencePermissions();
+    setVideoEvidence(granted);
+    sheet.notify({
+      title: granted ? 'Video evidence on' : 'Not enabled',
+      body: granted
+        ? 'During an SOS, ORBII records video to your own gallery, in an album called ORBII. It is never uploaded to us and there is no way for us to see it.'
+        : 'ORBII needs camera and gallery access to record. Nothing else changed, and your SOS works exactly as before.',
+      tone: granted ? 'success' : 'neutral',
+    });
+  };
 
   const handleMeshRelay = async (next: boolean) => {
     setMeshRelay(next); // optimistic: the switch must feel instant
@@ -294,6 +335,27 @@ export function SettingsScreen() {
             governs what ORBII does with SOMEONE ELSE'S data on this phone,
             rather than what it does with the user's own. Burying that in "App"
             would misrepresent what is being asked. */}
+        <RowSection title="Evidence" />
+        <RowGroup>
+          <Row
+            icon="videocam-outline"
+            label="Record video during an SOS"
+            value={
+              videoEvidence
+                ? 'On. Saved to your own gallery in an ORBII album, in one minute clips. Never uploaded, and we can never see it.'
+                : 'Off. Turn this on and ORBII records video during an SOS, straight to your gallery and nowhere else.'
+            }
+            right={
+              <Switch
+                value={videoEvidence}
+                onValueChange={(v) => void handleVideoEvidence(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+        </RowGroup>
+
         <RowSection title="Emergency Network" />
         <RowGroup>
           <Row

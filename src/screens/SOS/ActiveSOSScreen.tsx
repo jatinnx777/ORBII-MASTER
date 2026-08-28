@@ -244,7 +244,7 @@ export function ActiveSOSScreen() {
   // that must not live on our servers, and footage only she holds is footage
   // nobody at ORBII can be compelled to hand over. The audio clip above is the
   // one that syncs.
-  const { cameraRef, recording: videoOn } = useSOSVideoRecorder({
+  const { cameraRef, onCameraReady, armed: videoArmed } = useSOSVideoRecorder({
     enabled: !!activeSOS && activeSOS.kind !== 'test',
     sosId: activeSOS?.id ?? null,
   });
@@ -762,12 +762,17 @@ export function ActiveSOSScreen() {
           two pixels in a corner rather than hidden outright: Android will not
           reliably record from a zero-sized or display:none preview, and a
           recording that silently never starts is the worst outcome here. */}
-      {videoOn ? (
+      {videoArmed ? (
         <CameraView
           ref={cameraRef}
           style={styles.evidenceCam}
           facing="back"
           mode="video"
+          // The audio recorder already holds the microphone. Two recorders on
+          // one mic is a fight Android does not arbitrate gracefully, and the
+          // audio clip is the one that reaches responders, so video gives it up.
+          mute
+          onCameraReady={onCameraReady}
           pointerEvents="none"
         />
       ) : null}
