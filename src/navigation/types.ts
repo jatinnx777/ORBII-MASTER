@@ -123,6 +123,7 @@ export type AppStackParamList = {
   Missions: undefined;
   CommunityGuardian: undefined;
   WalkWithMe: undefined;
+  HoldSafe: undefined;
 };
 
 export type AppScreenProps<T extends keyof AppStackParamList> =

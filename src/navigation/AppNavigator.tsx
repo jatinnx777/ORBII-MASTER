@@ -54,6 +54,7 @@ import { CoinsWalletScreen } from '@/screens/Responder/CoinsWalletScreen';
 import { AdminRespondersScreen } from '@/screens/Admin/AdminRespondersScreen';
 import { CommunityGuardianScreen } from '@/screens/Guardian/CommunityGuardianScreen';
 import { WalkWithMeScreen } from '@/screens/Safety/WalkWithMeScreen';
+import { HoldSafeScreen } from '@/screens/Safety/HoldSafeScreen';
 import { colors, fontFamilies } from '@/theme';
 import type { AppStackParamList } from './types';
 
@@ -401,6 +402,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="WalkWithMe"
         component={WalkWithMeScreen}
+        options={{ headerShown: false, animation: 'slide_from_bottom' }}
+      />
+      <Stack.Screen
+        name="HoldSafe"
+        component={HoldSafeScreen}
         options={{ headerShown: false, animation: 'slide_from_bottom' }}
       />
     </Stack.Navigator>

@@ -241,6 +241,13 @@ export function EmergencyScreen() {
             />
             <View style={styles.divider} />
             <ModeRow
+              icon="hand-left"
+              title="Hold to stay safe"
+              body="Hold for the walk. Letting go raises the alarm."
+              onPress={() => navigation.navigate('HoldSafe')}
+            />
+            <View style={styles.divider} />
+            <ModeRow
               icon="headset"
               title="Walk with me"
               body="Orbi keeps you company and checks in on the way."
