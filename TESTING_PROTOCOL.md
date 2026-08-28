@@ -494,6 +494,64 @@ which usually means the link was not the route actually used to install.
 
 ---
 
+### 7.3 Activation: turning a signup into money
+
+**Status: the bind is proven (29 Aug, ORBII01 shows 1 signup). Activation has
+never run.** This is the half that decides whether an ambassador is actually
+paid, so it is the half a person will notice.
+
+**What this proves.** That a bound referral survives the four anti-farming gates
+and produces a real ledger credit. Until this passes once, the programme can
+attribute a signup and cannot pay for one.
+
+**You need THREE accounts, or two people.** This is the part that catches
+everyone out, so read it before setting anything up:
+
+| Account | Role |
+|---|---|
+| A | The ambassador. Owns ORBII01. `jaykumar2470f@gmail.com` |
+| B | The referral. Types the code |
+| C | B's circle member. **Must not be A** |
+
+C is the whole point. `sql/101` requires a corroborating circle member who is
+NOT the ambassador being paid, because otherwise one ambassador account vouches
+for every account it created. A borrowed phone or a friend is easier than
+juggling three logins on one handset, and the device cap is 3 per phone anyway.
+
+**Steps**
+
+1. Account B: sign up, type `ORBII01` at profile setup, finish.
+2. Confirm on `/admin` that ORBII01 shows **signups 1, 1 waiting**.
+3. Account B: add **any emergency contact**. A phone number in the box is enough.
+4. Account C: sign up on a second phone.
+5. Account B: invite C to B's circle. **C must accept.** A pending invite is not
+   a membership and will not count.
+6. **Wait 24 hours.** Not negotiable, it is checked against `created_at`.
+7. `/admin` → Ambassadors → **Run sweep now**.
+8. ORBII01 should read **counted 1**, and earned should move to Rs. 4.
+
+**What each failure means**
+
+| Symptom | Cause |
+|---|---|
+| Counted stays 0, waiting stays 1 | Almost always the circle condition. Check C accepted, and that C is not A |
+| Sweep says activated 0 on the same day | 24 hours have not passed. Check B's signup time |
+| Counted 1 but earned Rs. 0 | The ledger insert failed. Read `ambassador_ledger` directly |
+| Referral shows `held_at` | Device cap. More than 3 activations from that phone |
+
+Use the **"Why signups are not counting"** panel on `/admin` before doing any of
+this by hand. It groups every stuck referral by the gate it is failing, in plain
+English, and it will usually answer the question in one look.
+
+**Then test the money.** Once counted is 1, the withdrawal threshold is Rs. 100,
+so a single referral will not let you request a payout. To exercise that path
+without twenty-five real signups, insert ledger rows by hand in SQL, request a
+payout from `/ambassador`, approve it in `/admin`, and reverse the rows
+afterwards. **The payout path has never run either**, and finding out it is
+broken while an ambassador is waiting for money is the worst time.
+
+---
+
 ### 7.5 Release gate for referrals
 
 - [ ] 7.2 typed code recognised, and reaches the dashboard as "still to count"
