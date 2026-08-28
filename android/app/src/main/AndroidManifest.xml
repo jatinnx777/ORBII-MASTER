@@ -56,7 +56,7 @@
     gallery (no camera capture) and write to the app sandbox (no external
     storage). Removing these shrinks the Play Protect "sensitive data" warning.
   -->
-  <uses-permission android:name="android.permission.CAMERA" tools:node="remove"/>
+  <uses-permission android:name="android.permission.CAMERA"/>
   <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" tools:node="remove"/>
   <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" tools:node="remove"/>
   <!-- Force-strip READ_CONTACTS: expo-contacts merges it in, but the opt-in

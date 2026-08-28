@@ -51,6 +51,8 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { isPinSet, verifyPin } from '@/services/safety-pin';
 import { startSosHaptics, stopSosHaptics } from '@/services/sos-haptics';
 import { useSOSRecorder } from '@/services/sos-recording';
+import { useSOSVideoRecorder } from '@/services/sos-video';
+import { CameraView } from 'expo-camera';
 import { PinPrompt } from '@/components/common';
 import {
   sosCancelled,
@@ -234,6 +236,16 @@ export function ActiveSOSScreen() {
   useSOSRecorder({
     enabled: !!activeSOS && activeSOS.kind !== 'test',
     userId: myUid,
+    sosId: activeSOS?.id ?? null,
+  });
+
+  // Video evidence, in sixty second segments, straight to her own gallery.
+  // Deliberately NOT uploaded: a camera pointed at an assault records things
+  // that must not live on our servers, and footage only she holds is footage
+  // nobody at ORBII can be compelled to hand over. The audio clip above is the
+  // one that syncs.
+  const { cameraRef, recording: videoOn } = useSOSVideoRecorder({
+    enabled: !!activeSOS && activeSOS.kind !== 'test',
     sosId: activeSOS?.id ?? null,
   });
 
@@ -744,6 +756,21 @@ export function ActiveSOSScreen() {
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
+
+      {/* The camera has to be mounted for the recorder to hold a ref, but this
+          screen is a map and a list of responders, not a viewfinder. So it is
+          two pixels in a corner rather than hidden outright: Android will not
+          reliably record from a zero-sized or display:none preview, and a
+          recording that silently never starts is the worst outcome here. */}
+      {videoOn ? (
+        <CameraView
+          ref={cameraRef}
+          style={styles.evidenceCam}
+          facing="back"
+          mode="video"
+          pointerEvents="none"
+        />
+      ) : null}
 
       {/* ── Layer 1: the map, top half, always visible ── */}
       <View style={[styles.mapLayer, { height: SOS_MAP_H }]}>
@@ -1381,6 +1408,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
+  evidenceCam: { position: 'absolute', top: 0, left: 0, width: 2, height: 2, opacity: 0.01 },
   mapLayer: { position: 'absolute', top: 0, left: 0, right: 0 },
   mapOverlay: { position: 'absolute', top: 0, left: 0, right: 0, height: SOS_MAP_H },
   floatHeader: {
