@@ -22,6 +22,11 @@ import { A, Field, FootLink, OrDivider, PrimaryButton, SocialButton } from './au
 
 const ICON = require('../../../assets/icon-small.png');
 
+// Long enough that a healthy send resolves first and the user never sees the
+// verify screen without a code already on its way. Short enough that a sick
+// one does not look like a crash.
+const SEND_TIMEOUT_MS = 8000;
+
 /**
  * Sign in. The first screen after onboarding.
  *
@@ -78,8 +83,27 @@ export function WelcomeScreen({ navigation }: AuthScreenProps<'Welcome'>) {
     if (!emailOk || sending) return;
     if (!gate()) return;
     setSending(true);
+    const addr = email.trim().toLowerCase();
     try {
-      const addr = await sendEmailOtp(email);
+      // Supabase does not return from signInWithOtp until it has finished
+      // handing the mail to SMTP, and there is no timeout on that anywhere in
+      // the stack. A slow provider therefore holds this promise open for as
+      // long as it likes, and the spinner it leaves on screen is
+      // indistinguishable from an app that has crashed. Somebody signing up
+      // for a safety app gives that about fifteen seconds.
+      //
+      // So stop waiting. The send is still in flight on the server and the
+      // code will still arrive; the verify screen is simply a better place to
+      // wait, because it can say the code is coming and it has a resend.
+      const send = sendEmailOtp(addr);
+      // Marks the promise handled without consuming it. A rejection that lands
+      // BEFORE the race ends still rejects the race and is caught below; one
+      // that lands after must not become an unhandled rejection.
+      void send.catch(() => undefined);
+      await Promise.race([
+        send,
+        new Promise((resolve) => setTimeout(resolve, SEND_TIMEOUT_MS)),
+      ]);
       navigation.navigate('PhoneVerify', { email: addr });
     } catch (err) {
       appAlert(
