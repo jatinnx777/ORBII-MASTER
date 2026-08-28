@@ -57,6 +57,7 @@ import {
   PermissionDisclosureModal,
 } from '@/components/common';
 import { trackEvent } from '@/services/analytics';
+import { bindReferral } from '@/services/referral';
 import {
   hidePinnedSOSShortcut,
   hideSafeJourneyWidget,
@@ -279,6 +280,23 @@ function RootNavigator() {
     } else if (status === 'idle') {
       store.dispatch(circlesReset());
     }
+  }, [status]);
+
+  // Retry a campus referral that never bound.
+  //
+  // ProfileSetup fires bindReferral unawaited while the screen is being torn
+  // down, because a marketing attribution must never sit between a woman and
+  // the end of setup on a safety app. That is the right priority and it makes
+  // the call the least reliable one in the app: nothing retries it, and the
+  // failure is silent by design, so a lost bind is a lost bind forever.
+  //
+  // The typed code is written to storage as she types it, and bindReferral
+  // clears that store on any conclusive answer from the server, including a
+  // refusal. So this is self-terminating: it runs at most once per outcome,
+  // and only ever while a code is still sitting there unresolved.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    void bindReferral().catch(() => undefined);
   }, [status]);
 
   // Keep circle invites fresh so an Instagram-style "X invited you" alert
