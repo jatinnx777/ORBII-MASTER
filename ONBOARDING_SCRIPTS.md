@@ -1,6 +1,6 @@
 # ORBII onboarding, video scripts
 
-Eleven clips. Two languages. Roughly four minutes of footage per language.
+Twelve clips. Two languages. About four and a half minutes of footage per language.
 
 Read the rules before the scripts. They are why the scripts are written the way
 they are, and getting one wrong costs a reshoot.
@@ -348,6 +348,93 @@ which is true, not about delivery, which would not be.
 **Do not soften it, and do not strengthen it.** The offline mesh is not live.
 It is deliberately absent from this script and must stay absent until it has run
 on real phones.
+
+---
+
+## 12. Done · 20 seconds
+
+The last thing she sees, which is the second most remembered moment in the whole
+flow. Ending on a form submission wastes it.
+
+**English**
+
+> That's it. You're set up.
+>
+> Here's what actually changed: you don't have to reach for your phone any more.
+>
+> Test it once a week. Say the word, then cancel it. Five seconds, and it means
+> you'll know it works before you need it to.
+>
+> And if it ever doesn't work, tell us. We would much rather hear it from you
+> than find out later.
+
+**Hindi**
+
+> बस, हो गया। Setup पूरा।
+>
+> असल में जो बदला है वो यह: अब आपको फ़ोन तक पहुँचना ज़रूरी नहीं।
+>
+> हफ़्ते में एक बार test कर लीजिए। शब्द बोलिए, फिर cancel कर दीजिए। पाँच सेकंड, और
+> आपको पहले से पता होगा कि यह काम करता है।
+>
+> और अगर कभी काम ना करे, तो हमें बताइए। हमें बाद में पता चलने से बेहतर है कि आप
+> बता दें।
+
+**Why it ends here.** The last line asks her to report failures. It is a costly
+signal, it invites her into the thing rather than selling it to her, and it is
+the sentence a company would only write if it meant it.
+
+---
+
+## The psychology, and where the line is
+
+You asked for hooks. These are the ones that work, and they all work because
+they are true. That is not a coincidence: on a product whose entire value is
+trust, a trick that gets noticed costs more than it earns.
+
+**Admit a weakness and everything else becomes credible.** Clip 11 says a
+switched-off phone defeats ORBII. That single admission does more for the
+believability of clips 2 through 10 than any claim could. It is the strongest
+technique available to you and you already have it. Protect it.
+
+**Make her do it, not watch it.** In clip 6 she triggers a real SOS and cancels
+it. That is not a demonstration, it is a commitment. Someone who has made the
+app work once has proof, and has put something in. Both matter, and the second
+one is why she opens it again.
+
+**She built it, so she values it.** Her circle, her safe zones, her word. By the
+end she has assembled something rather than accepted something. Never
+pre-fill these to save her time; the effort is the point.
+
+**End on the peak, not the paperwork.** People remember the most intense moment
+and the last one. The peak is her voice firing the phone in clip 6. The last is
+clip 12. Everything between them is allowed to be ordinary.
+
+**Precision reads as truth.** "Deleted every night at midnight" is believed.
+"Regularly deleted" is not. "Four people" is believed. "A few trusted contacts"
+is not. Every number in these scripts is a real number for this reason.
+
+**Name her once she has told you it.** From clip 5 onward she can be addressed by
+name. Once, not repeatedly.
+
+### What we do not do, and why it is not about morals
+
+**No fake social proof.** "Trusted by thousands" when it is 67 people. One person
+who checks becomes someone who tells other people you lied.
+
+**No fake urgency or scarcity.** No countdowns, no "limited spots". Everyone
+recognises it now, and here it says the alarm might also be theatre.
+
+**No guilt.** No "don't you care about your safety?" Her downloading this is
+already the answer.
+
+**No dark streets, no statistics.** Covered in the rules, and it is the one worth
+repeating: the audience already lives with that. Selling it back to them is what
+makes safety apps feel like an accusation.
+
+**The reason is practical, not moral.** ORBII's product is being believed. A
+manipulation that gets spotted does not cost a conversion, it costs the thing
+the company is made of.
 
 ---
 
