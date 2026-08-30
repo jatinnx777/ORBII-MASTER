@@ -49,33 +49,44 @@ The one that decides whether she finishes. Everything else is detail.
 
 **English**
 
-> Most safety apps need you to find your phone, unlock it, open the app, and
-> press something.
+> Every other safety app asks the same thing of you.
 >
-> ORBII doesn't.
+> Find your phone. Unlock it. Open the app. Press the button.
 >
-> You say one word out loud. Help. Bachao. Madad.
+> At the exact moment you cannot do any of that.
 >
-> And the phone acts. Screen locked, phone in your bag, no internet needed.
+> So we got rid of the button.
+>
+> You say one word. Help. Bachao. Madad.
+>
+> [she says it out loud, the phone fires]
+>
+> Screen locked. Phone in your bag. No internet.
 >
 > Your people get your live location. People nearby are told. 112 stays one tap
 > away.
 >
-> That's the whole idea. Let's set it up, it takes two minutes.
+> Two minutes to set up. Let's go.
 
 **Hindi**
 
-> ज़्यादातर safety apps में पहले फ़ोन ढूँढो, unlock करो, app खोलो, फिर बटन दबाओ।
+> हर safety app आपसे एक ही चीज़ माँगती है।
 >
-> ORBII में ऐसा नहीं है।
+> फ़ोन ढूँढो। Unlock करो। App खोलो। बटन दबाओ।
+>
+> ठीक उसी वक़्त, जब आप यह कुछ नहीं कर सकतीं।
+>
+> तो हमने बटन ही हटा दिया।
 >
 > आप बस एक शब्द बोलिए। Help. बचाओ. मदद.
 >
-> और फ़ोन खुद काम करेगा। Screen lock हो, फ़ोन बैग में हो, internet ना हो, फिर भी।
+> [वो ज़ोर से बोलती है, फ़ोन चालू हो जाता है]
+>
+> Screen lock. फ़ोन बैग में। Internet नहीं।
 >
 > आपके लोगों को live location मिल जाएगी। आस-पास वालों को पता चल जाएगा। 112 एक tap दूर।
 >
-> बस इतनी सी बात है। चलिए setup करते हैं, दो मिनट लगेंगे।
+> दो मिनट का setup है। चलिए।
 
 **Direction.** She says "help" out loud mid-clip and the phone on the table
 lights up. Do not cut away. That single unbroken shot is the most persuasive
@@ -232,43 +243,57 @@ immediately. Control is the thing being demonstrated, not the feature.
 
 ---
 
-## 10. Evidence · 20 seconds
+## 10. Evidence · 25 seconds
 
-Technical, on purpose. This is the clip that makes a sceptical person trust the
-rest, so say the mechanism out loud.
+The clip with the most charge in it. Short sentences, hard stops. Let the pauses
+do the work.
 
 **English**
 
-> The moment your alarm goes out, so does the sound from the seconds before it.
-> Not after. At the same time.
+> Say he takes your phone. Smashes it.
 >
-> That matters, because by the time you're shouting, the part that explains what
-> happened has usually already happened.
+> Too late.
 >
-> It's on our servers within seconds, so it survives your phone. If someone takes
-> it or breaks it, that recording is already gone from their reach.
+> The second your alarm went out, so did the sound from just before it. Not
+> after. The same instant.
 >
-> Video is different. Video stays on your phone, in your gallery, and never
-> reaches us. We can't hand over what we never had.
+> It's already off your phone. Already somewhere he cannot reach.
+>
+> And it's locked to you. Your account opens it. Nobody else. We did not build
+> a way to look.
+>
+> The video? That never leaves your phone at all. It sits in your gallery, and
+> we cannot hand over what we never had.
 
 **Hindi**
 
-> जिस पल आपका alarm जाता है, उसी पल उससे पहले की आवाज़ भी चली जाती है। बाद में
-> नहीं। साथ में।
+> मान लीजिए वो आपका फ़ोन छीन लेता है। तोड़ देता है।
 >
-> यह ज़रूरी है, क्योंकि जब तक आप चिल्ला रही होती हैं, जो समझाता है कि हुआ क्या,
-> वो अक्सर पहले ही हो चुका होता है।
+> देर हो चुकी।
 >
-> कुछ ही seconds में वो हमारे server पर होता है, यानी फ़ोन से आगे बच जाता है। कोई
-> फ़ोन छीन ले या तोड़ दे, वो recording उसकी पहुँच से निकल चुकी होती है।
+> जिस second आपका alarm गया, उससे ठीक पहले की आवाज़ भी चली गई। बाद में नहीं। उसी
+> पल।
 >
-> Video अलग है। Video आपके फ़ोन की gallery में रहता है, हम तक कभी नहीं आता। जो
-> हमारे पास कभी था ही नहीं, वो हम किसी को दे भी नहीं सकते।
+> वो फ़ोन से निकल चुकी है। वहाँ पहुँच चुकी है जहाँ उसका हाथ नहीं जाता।
+>
+> और वो सिर्फ़ आपकी है। आपका account ही खोल सकता है। और कोई नहीं। हमने देखने का
+> रास्ता बनाया ही नहीं।
+>
+> Video? वो तो फ़ोन से बाहर जाता ही नहीं। आपकी gallery में रहता है, और जो हमारे
+> पास कभी था ही नहीं, वो हम किसी को दे भी नहीं सकते।
 
-**Accuracy note, do not drift from it.** The pre-roll genuinely uploads the
-instant the SOS record is created. The full minute follows once it is recorded.
-Video is genuinely never uploaded. Every sentence above is true today; none of
-it can be stretched further without becoming false.
+**Delivery.** "Too late" is the whole clip. Land it, then stop for a full beat
+before the next line. If she rushes past it, the clip is worth half as much.
+
+**Accuracy, checked in the code and the policies.** `uploadPreRoll` fires at the
+moment the SOS record is created, so the pre-trigger audio genuinely leaves with
+the alarm. The `sos-recordings` bucket has owner-only read, write, update and
+delete policies and no admin policy, so "your account opens it, nobody else" is
+literally what is enforced. Video is genuinely never uploaded.
+
+**Do not say "only accessed when our legal team needs it."** It is weaker and
+scarier than the truth: it tells her ORBII does look sometimes, and it invents a
+legal team that does not exist. What is written above is both stronger and true.
 
 ---
 
@@ -323,6 +348,44 @@ which is true, not about delivery, which would not be.
 **Do not soften it, and do not strengthen it.** The offline mesh is not live.
 It is deliberately absent from this script and must stay absent until it has run
 on real phones.
+
+---
+
+## How it should sound
+
+Half of whether this lands is delivery, not words. A script this tight read
+politely is a wasted afternoon.
+
+**Short sentences, hard stops.** "Too late." "So we got rid of the button." Full
+stop, then a beat. The pause is the punch. Most people rush past it because
+silence feels wrong on camera; it is not.
+
+**Certainty, not enthusiasm.** She is not excited about a product. She is
+telling you something she knows. Flat and sure beats bright and friendly, and it
+is the difference between an advert and a person.
+
+**Speed up on the mechanism, slow down on the truth.** Rattle through the setup
+lines. Slow right down for "if your phone is off, nothing works", and for "we did
+not build a way to look". Those are the lines people replay.
+
+**The two demo clips carry the whole thing.** Clip 2 and clip 6, where she speaks
+and the phone fires, are the only moments that prove anything. Everything else is
+her word for it. Shoot them until they are perfect, in one unbroken take, and do
+not let anyone cut them for pace.
+
+**Where the charge comes from.** Not fear. Three other places, and they are
+stronger:
+
+- **Capability.** The phone doing something on a spoken word is genuinely
+  startling the first time. Let it be.
+- **Confrontation with the category, never with her.** "Anyone who tells you
+  otherwise is selling you something" has an edge because of who it is aimed at.
+- **Specificity.** "By the time you're shouting, the part that explains what
+  happened has already happened." That lands because it is a real observation,
+  not a slogan.
+
+If a clip has no charge, the fix is a harder truth or a tighter sentence. Never a
+darker image.
 
 ---
 
