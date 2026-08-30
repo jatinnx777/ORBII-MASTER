@@ -3,6 +3,7 @@
 import 'react-native-get-random-values';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { IntroFlow } from '@/screens/Onboarding/IntroFlow';
+import { OnboardingFlow } from '@/screens/Onboarding/OnboardingFlow';
 import { Animated, AppState, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -136,6 +137,8 @@ function RootNavigator() {
   // Shown once, ever. Null while we read it, so a returning user never sees a
   // flash of the language picker on top of their own app.
   const [introDone, setIntroDone] = useState<boolean | null>(null);
+  const [lang, setLang] = useState<'en' | 'hi'>('en');
+
   useEffect(() => {
     void getItem<boolean>(storageKeys.introDone).then((v) => setIntroDone(!!v));
   }, []);
@@ -671,12 +674,23 @@ function RootNavigator() {
     return (
       <IntroFlow
         onDone={(lang) => {
+          setLang(lang);
           void setItem(storageKeys.onboardingLang, lang);
           void setItem(storageKeys.introDone, true);
           setIntroDone(true);
         }}
       />
     );
+  }
+  // One flow from consent to a working account, replacing WelcomeScreen,
+  // PhoneVerifyScreen and ProfileSetupScreen. AuthNavigator is kept mounted
+  // for its other routes (Login, PhoneSignIn, LanguageSelector), which are
+  // still reachable from settings and from a returning user's deep link.
+  if (introDone === true) {
+    // onDone is a no-op on purpose. Signing in dispatches to redux, which
+    // re-renders this and sends her into the app through the authenticated
+    // branch above. There is nothing for the flow itself to navigate to.
+    return <OnboardingFlow lang={lang} onDone={() => undefined} />;
   }
   return <AuthNavigator />;
 }
