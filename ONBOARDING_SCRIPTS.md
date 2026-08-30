@@ -1,6 +1,6 @@
 # ORBII onboarding, video scripts
 
-Nine clips. Two languages. Roughly three and a half minutes of footage total.
+Eleven clips. Two languages. Roughly four minutes of footage per language.
 
 Read the rules before the scripts. They are why the scripts are written the way
 they are, and getting one wrong costs a reshoot.
@@ -21,7 +21,7 @@ beats every adjective.
 **Second person, present tense.** "You say a word." Not "users can trigger".
 
 **Never claim what is not proven.** The offline mesh is not live. Do not mention
-it in any clip. Where a limit exists, say it. That is the point of clip 9.
+it in any clip. Where a limit exists, say it. That is the point of clip 11.
 
 **Ten seconds is about 25 words.** Thirty is about 75. Count them. A script that
 runs long gets rushed on camera and rushed sounds untrustworthy.
@@ -171,7 +171,7 @@ months. Xiaomi, Realme, Oppo and Vivo close background apps aggressively.
 
 ---
 
-## 8. Your circle · 10 seconds
+## 8. Your circle · 20 seconds
 
 **English**
 
@@ -179,6 +179,12 @@ months. Xiaomi, Realme, Oppo and Vivo close background apps aggressively.
 >
 > In a group of thirty, everyone assumes someone else is going. Four people each
 > know it's them.
+>
+> They don't see where you are all day. They see you when you fire an alarm, or
+> when you choose to share.
+>
+> Your movements are deleted every night at midnight. And you can remove anyone,
+> instantly, without asking us.
 
 **Hindi**
 
@@ -186,51 +192,137 @@ months. Xiaomi, Realme, Oppo and Vivo close background apps aggressively.
 >
 > तीस के group में हर कोई सोचता है कोई और चला जाएगा। चार लोगों को पता होता है कि
 > जाना उन्हीं को है।
+>
+> उन्हें दिन भर आपकी location नहीं दिखती। तब दिखती है जब आप alarm दबाएँ, या खुद
+> share करें।
+>
+> आपकी हर रात बारह बजे मिट जाती है। और किसी को भी हटाना हो तो तुरंत हटा सकती
+> हैं, हमसे पूछे बिना।
+
+**Direction.** She removes someone from a circle on camera and it is gone
+immediately. Control is the thing being demonstrated, not the feature.
 
 ---
 
-## 9. If things fail · 30 seconds
-
-The differentiator. **Nobody else in this category says any of this on camera**,
-and it will buy more trust than every other clip put together.
+## 9. Safe zones · 20 seconds
 
 **English**
 
-> Here's what we won't pretend.
+> Mark the places you go. Home. Hostel. Campus. The office.
 >
-> If your phone is off, nothing works. Not ORBII, not any app. Anyone who tells
-> you otherwise is selling you something.
+> Your circle can be told when you get there and when you leave, so nobody has
+> to text "reached?" every night.
 >
-> If you have signal but no internet, ORBII puts the message in front of you,
-> already written, ready to send in one tap.
+> And ORBII knows the difference between eight in the evening and three in the
+> morning. The same gate is not the same thing at both.
 >
-> If you have nothing at all, your alarm is saved and goes out the second you're
-> connected again.
->
-> And no app brings the police faster than 112 does. That button is always
-> there, and sometimes it's the right one.
->
-> We'd rather you knew.
+> Don't want any of it? Ghost mode turns it off without leaving your circle.
 
 **Hindi**
 
-> जो हम नहीं कहेंगे, पहले वो सुन लीजिए।
+> अपनी जगहें mark कीजिए। घर। Hostel. Campus. Office.
 >
-> फ़ोन बंद है तो कुछ काम नहीं करेगा। ना ORBII, ना कोई और app. जो कहे कि करेगा, वो
-> आपको कुछ बेच रहा है।
+> आपके circle को पता चल जाएगा कि आप पहुँच गईं और कब निकलीं, ताकि रोज़ रात "पहुँच
+> गई?" ना पूछना पड़े।
 >
-> Signal है पर internet नहीं, तो ORBII message तैयार करके सामने रख देगा, एक tap
-> में चला जाएगा।
+> और ORBII को फ़र्क़ पता है शाम आठ बजे और रात तीन बजे में। एक ही gate दोनों वक़्त
+> एक जैसा नहीं होता।
 >
-> कुछ भी नहीं है, तो आपका alarm save हो जाएगा और connection आते ही चला जाएगा।
->
-> और police को 112 से तेज़ कोई app नहीं बुला सकता। वो बटन हमेशा है, और कभी-कभी
-> वही सही है।
->
-> हमें लगा आपको पता होना चाहिए।
+> नहीं चाहिए? Ghost mode बंद कर देगा, circle छोड़े बिना।
 
-**Do not soften this clip.** Every sentence in it is true today, and its whole
-value is that it is the one nobody else would record.
+---
+
+## 10. Evidence · 20 seconds
+
+Technical, on purpose. This is the clip that makes a sceptical person trust the
+rest, so say the mechanism out loud.
+
+**English**
+
+> The moment your alarm goes out, so does the sound from the seconds before it.
+> Not after. At the same time.
+>
+> That matters, because by the time you're shouting, the part that explains what
+> happened has usually already happened.
+>
+> It's on our servers within seconds, so it survives your phone. If someone takes
+> it or breaks it, that recording is already gone from their reach.
+>
+> Video is different. Video stays on your phone, in your gallery, and never
+> reaches us. We can't hand over what we never had.
+
+**Hindi**
+
+> जिस पल आपका alarm जाता है, उसी पल उससे पहले की आवाज़ भी चली जाती है। बाद में
+> नहीं। साथ में।
+>
+> यह ज़रूरी है, क्योंकि जब तक आप चिल्ला रही होती हैं, जो समझाता है कि हुआ क्या,
+> वो अक्सर पहले ही हो चुका होता है।
+>
+> कुछ ही seconds में वो हमारे server पर होता है, यानी फ़ोन से आगे बच जाता है। कोई
+> फ़ोन छीन ले या तोड़ दे, वो recording उसकी पहुँच से निकल चुकी होती है।
+>
+> Video अलग है। Video आपके फ़ोन की gallery में रहता है, हम तक कभी नहीं आता। जो
+> हमारे पास कभी था ही नहीं, वो हम किसी को दे भी नहीं सकते।
+
+**Accuracy note, do not drift from it.** The pre-roll genuinely uploads the
+instant the SOS record is created. The full minute follows once it is recorded.
+Video is genuinely never uploaded. Every sentence above is true today; none of
+it can be stretched further without becoming false.
+
+---
+
+## 11. When the network fails · 40 seconds
+
+The one that wins. It has to do two things at once: give her real reassurance,
+and never say a false word. Both are possible here, because the reassuring
+version happens to be the true one.
+
+**English**
+
+> Here's the part nobody explains.
+>
+> The things that have to work in the moment don't use the internet at all.
+> Hearing you happens on your phone. Starting the alarm happens on your phone.
+> Recording happens on your phone. None of it asks a network for permission.
+>
+> Only sending needs a signal. And there are three ways out.
+>
+> Internet, if you have it. If you have signal but no data, ORBII writes the
+> message and puts it in front of you, ready to go in one tap. And if you have
+> neither, it's saved, and it leaves the second you're connected again.
+>
+> If your phone is off, nothing works. Not us, not anyone, and whoever tells you
+> otherwise is selling you something.
+>
+> Short of that, your phone is doing its job whether or not the network is.
+
+**Hindi**
+
+> यह वाली बात कोई नहीं बताता।
+>
+> जो चीज़ें उस वक़्त होनी ज़रूरी हैं, उनमें internet लगता ही नहीं। आपकी आवाज़ सुनना
+> फ़ोन में होता है। Alarm शुरू होना फ़ोन में होता है। Recording फ़ोन में होती है।
+> किसी network से इजाज़त नहीं माँगनी पड़ती।
+>
+> Internet सिर्फ़ भेजने के लिए चाहिए। और भेजने के तीन रास्ते हैं।
+>
+> Internet है तो उससे। Signal है पर data नहीं, तो ORBII message लिखकर सामने रख
+> देगा, एक tap में चला जाएगा। और अगर दोनों नहीं हैं, तो वो save रहेगा और
+> connection आते ही निकल जाएगा।
+>
+> फ़ोन बंद है तो कुछ नहीं होगा। ना हमसे, ना किसी और से। जो कहे कि होगा, वो आपको
+> कुछ बेच रहा है।
+>
+> इसके अलावा, network चले या ना चले, आपका फ़ोन अपना काम कर रहा है।
+
+**Why this is honest.** On-device recognition genuinely needs no network. The
+three delivery routes genuinely exist. The last line is a claim about the phone,
+which is true, not about delivery, which would not be.
+
+**Do not soften it, and do not strengthen it.** The offline mesh is not live.
+It is deliberately absent from this script and must stay absent until it has run
+on real phones.
 
 ---
 
@@ -248,7 +340,7 @@ are sceptical about.
 **Room tone, not silence.** Phone mic in a normal room. Studio-clean audio makes
 it feel like an ad.
 
-**Film 9 first.** If the honesty clip works, the tone for the other eight
+**Film 11 first.** If the honesty clip works, the tone for the other eight
 follows. If it feels preachy, the whole set needs rewriting, and better to find
 that out on the first day.
 
