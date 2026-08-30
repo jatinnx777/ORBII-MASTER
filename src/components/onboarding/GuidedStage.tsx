@@ -136,7 +136,9 @@ export function GuidedStage({
           </>
         ) : (
           <View style={styles.placeholder}>
-            <Text style={styles.placeholderGlyph}>{'▶'}</Text>
+            {/* No play glyph. It reads as a button she is supposed to press, on
+                a stage that autoplays and has no controls, so it is a promise
+                of an interaction that does not exist. */}
             <Text style={styles.placeholderTitle}>{title}</Text>
           </View>
         )}
@@ -244,7 +246,6 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     gap: spacing.xs,
   },
-  placeholderGlyph: { color: colors.textMuted, fontSize: 30 },
   placeholderTitle: {
     ...typography.body,
     color: colors.textSecondary,

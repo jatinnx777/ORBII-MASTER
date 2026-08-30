@@ -17,6 +17,10 @@ import { isUsernameAvailable } from '@/services/users-public';
 import { bindReferral, checkCode, normaliseCode, setStoredCode } from '@/services/referral';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { toE164India } from '@/utils/validation';
+import { contactAdded } from '@/redux/slices/userSlice';
+import { upsertEmergencyContact } from '@/services/emergency-contacts';
+import { armVoiceSos } from '@/services/voice-detection';
+import { requestBatteryExemption } from '@/services/background-voice';
 
 /**
  * One flow, from language to a working account.
@@ -43,8 +47,38 @@ import { toE164India } from '@/utils/validation';
  * an app that still works. Do not remove it to improve completion.
  */
 
-type Step = 'consent' | 'signin' | 'code' | 'name' | 'photo' | 'phone';
-const STEPS: Step[] = ['consent', 'signin', 'code', 'name', 'photo', 'phone'];
+type Step =
+  | 'consent'
+  | 'signin'
+  | 'code'
+  | 'name'
+  | 'photo'
+  | 'phone'
+  | 'contact'
+  | 'voice'
+  | 'battery'
+  | 'circle'
+  | 'zones'
+  | 'evidence'
+  | 'offline'
+  | 'done';
+
+const STEPS: Step[] = [
+  'consent',
+  'signin',
+  'code',
+  'name',
+  'photo',
+  'phone',
+  'contact',
+  'voice',
+  'battery',
+  'circle',
+  'zones',
+  'evidence',
+  'offline',
+  'done',
+];
 
 function ageFrom(d: number, m: number, y: number): number | null {
   if (!d || !m || !y || y < 1900) return null;
@@ -81,6 +115,11 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
   const [refCollege, setRefCollege] = useState<string | null>(null);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [phoneDigits, setPhoneDigits] = useState('');
+
+  // setup
+  const [cName, setCName] = useState('');
+  const [cPhone, setCPhone] = useState('');
+  const [voiceArmed, setVoiceArmed] = useState(false);
 
   const i = STEPS.indexOf(step);
   const go = (s: Step) => setStep(s);
@@ -427,6 +466,7 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
   }
 
   // ---- phone, and the save ------------------------------------------------
+  if (step === 'phone') {
   return (
     <GuidedStage
       {...common}
@@ -455,7 +495,7 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
           // woman and the end of setup, and App.tsx retries a bind that never
           // landed, so a failure here costs nothing.
           void bindReferral(refCode || undefined).catch(() => undefined);
-          onDone();
+          go('contact');
         } catch (err) {
           Alert.alert(
             hi ? 'सेव नहीं हो पाया' : 'Could not save',
@@ -476,7 +516,284 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
       />
     </GuidedStage>
   );
+  }
+
+  // ---- emergency contact --------------------------------------------------
+  if (step === 'contact') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'एक भरोसेमंद नंबर' : 'One person who picks up'}
+        sheetTitle={hi ? 'पाँच नहीं, एक' : 'ONE, NOT FIVE'}
+        video={src('contact')}
+        nextDisabled={cName.trim().length < 2 || cPhone.length !== 10 || busy}
+        onNext={async () => {
+          if (!profile) return;
+          setBusy(true);
+          try {
+            const contact = {
+              id: `ec_${Date.now()}`,
+              name: cName.trim(),
+              phone: toE164India(cPhone),
+              relation: 'Emergency contact',
+            };
+            const saved = await upsertEmergencyContact(profile.uid, contact);
+            dispatch(contactAdded(saved ?? contact));
+          } finally {
+            setBusy(false);
+            go('voice');
+          }
+        }}
+      >
+        <Text style={s.help}>
+          {hi
+            ? 'एक ऐसा इंसान जो रात दो बजे सच में फ़ोन उठाए। पाँच लोग नहीं जो शायद उठाएँ।'
+            : 'One person who will actually pick up at 2am. Not five people who might.'}
+        </Text>
+        <TextInput
+          value={cName}
+          onChangeText={setCName}
+          placeholder={hi ? 'उनका नाम' : 'Their name'}
+          placeholderTextColor={colors.textMuted}
+          style={s.input}
+          autoCapitalize="words"
+        />
+        <TextInput
+          value={cPhone}
+          onChangeText={(v) => setCPhone(v.replace(/\D/g, '').slice(0, 10))}
+          placeholder="10 digit mobile number"
+          placeholderTextColor={colors.textMuted}
+          keyboardType="number-pad"
+          style={s.input}
+        />
+      </GuidedStage>
+    );
+  }
+
+  // ---- voice --------------------------------------------------------------
+  if (step === 'voice') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'बस एक शब्द' : 'Just say the word'}
+        sheetTitle={hi ? 'यही पूरा ORBII है' : 'THIS IS THE WHOLE THING'}
+        video={src('voice')}
+        nextLabel={
+          voiceArmed ? (hi ? 'आगे' : 'Next') : hi ? 'Voice SOS चालू करें' : 'Turn on Voice SOS'
+        }
+        nextDisabled={busy}
+        onNext={async () => {
+          if (voiceArmed) return go('battery');
+          setBusy(true);
+          try {
+            // 12 hours, the same default the old setup screen armed with.
+            const r = await armVoiceSos(12);
+            if (r.ok) setVoiceArmed(true);
+            else
+              Alert.alert(
+                hi ? 'चालू नहीं हो पाया' : 'Could not turn it on',
+                hi
+                  ? 'ORBII को microphone की अनुमति चाहिए।'
+                  : 'ORBII needs permission to use the microphone.',
+              );
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'कहिए "help", "बचाओ" या "मदद"। Screen lock हो, फ़ोन बैग में हो, internet ना हो, फिर भी।'
+            : 'Say "help", "bachao" or "madad". Screen locked, phone in your bag, no internet.'}
+        </Text>
+        {voiceArmed ? (
+          <Text style={s.ok}>
+            {hi
+              ? 'चालू है। अभी बोलकर देखिए, दस सेकंड में cancel कर सकती हैं।'
+              : 'It is on. Try saying it now, you have ten seconds to cancel.'}
+          </Text>
+        ) : (
+          <Text style={s.help}>
+            {hi
+              ? 'आपकी आवाज़ फ़ोन से बाहर नहीं जाती। पहचान फ़ोन पर ही होती है।'
+              : 'Your voice never leaves the phone. Recognition happens on the device.'}
+          </Text>
+        )}
+      </GuidedStage>
+    );
+  }
+
+  // ---- battery ------------------------------------------------------------
+  // The least glamorous screen here and the one that decides whether ORBII
+  // still works in six months. Xiaomi, Realme, Oppo and Vivo close background
+  // apps aggressively, and a closed app cannot hear her.
+  if (step === 'battery') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'फ़ोन को ORBII बंद करने से रोकिए' : 'Stop your phone closing ORBII'}
+        sheetTitle={hi ? 'यहाँ की सबसे ज़रूरी चीज़' : 'THE MOST IMPORTANT ONE HERE'}
+        video={src('battery')}
+        nextLabel={hi ? 'हो गया' : 'Done'}
+        onNext={() => go('circle')}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'Battery बचाने के लिए फ़ोन background apps बंद कर देता है। ORBII बंद हुआ तो वो आपकी आवाज़ नहीं सुन पाएगा।'
+            : 'Your phone closes background apps to save battery. If it closes ORBII, it cannot hear you.'}
+        </Text>
+        <Pressable style={s.primaryRow} onPress={() => void requestBatteryExemption()}>
+          <Text style={s.primaryText}>{hi ? 'Setting खोलिए' : 'Open the setting'}</Text>
+        </Pressable>
+      </GuidedStage>
+    );
+  }
+
+  // ---- circle -------------------------------------------------------------
+  if (step === 'circle') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'चार लोग' : 'Four people'}
+        sheetTitle={hi ? 'तीस नहीं' : 'NOT THIRTY'}
+        video={src('circle')}
+        nextLabel={hi ? 'बाद में जोड़ूँगी' : 'I will add them later'}
+        onNext={() => go('zones')}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'तीस के group में हर कोई सोचता है कोई और चला जाएगा। चार लोगों को पता होता है कि जाना उन्हीं को है।'
+            : 'In a group of thirty, everyone assumes someone else is going. Four people each know it is them.'}
+        </Text>
+        <Text style={s.help}>
+          {hi
+            ? 'उन्हें दिन भर आपकी location नहीं दिखती, और आपकी history हर रात मिट जाती है। Circle tab से कभी भी जोड़ सकती हैं।'
+            : 'They do not see where you are all day, and your history is deleted every night. Add them any time from the Circle tab.'}
+        </Text>
+      </GuidedStage>
+    );
+  }
+
+  // ---- zones --------------------------------------------------------------
+  if (step === 'zones') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'आपकी जगहें' : 'Your places'}
+        sheetTitle={hi ? 'घर, hostel, campus' : 'HOME, HOSTEL, CAMPUS'}
+        video={src('zones')}
+        onNext={() => go('evidence')}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'अपनी जगहें mark कीजिए और circle को पता चल जाएगा कि आप पहुँच गईं, ताकि रोज़ रात "पहुँच गई?" ना पूछना पड़े।'
+            : 'Mark the places you go and your circle can be told when you arrive, so nobody has to text "reached?" every night.'}
+        </Text>
+        <Text style={s.help}>
+          {hi
+            ? 'और ORBII को फ़र्क़ पता है शाम आठ बजे और रात तीन बजे में। एक ही gate दोनों वक़्त एक जैसा नहीं होता।'
+            : 'And ORBII knows the difference between eight in the evening and three in the morning. The same gate is not the same thing at both.'}
+        </Text>
+      </GuidedStage>
+    );
+  }
+
+  // ---- evidence -----------------------------------------------------------
+  if (step === 'evidence') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'सबूत' : 'Evidence'}
+        sheetTitle={hi ? 'फ़ोन से आगे बच जाता है' : 'IT SURVIVES YOUR PHONE'}
+        video={src('evidence')}
+        onNext={() => go('offline')}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'जिस पल आपका alarm जाता है, उसी पल उससे पहले की आवाज़ भी चली जाती है। बाद में नहीं, साथ में।'
+            : 'The moment your alarm goes out, so does the sound from the seconds before it. Not after. At the same time.'}
+        </Text>
+        <Text style={s.point}>
+          {hi
+            ? 'कोई फ़ोन छीन ले या तोड़ दे, वो recording उसकी पहुँच से निकल चुकी होती है। और खोल सिर्फ़ आपका account सकता है।'
+            : 'If someone takes your phone or breaks it, that recording is already out of reach. And only your account can open it.'}
+        </Text>
+        <Text style={s.help}>
+          {hi
+            ? 'Video अलग है। वो आपकी gallery में रहता है और हम तक कभी नहीं आता।'
+            : 'Video is different. It stays in your gallery and never reaches us.'}
+        </Text>
+      </GuidedStage>
+    );
+  }
+
+  // ---- offline ------------------------------------------------------------
+  // The screen that buys the most trust, because it is the one nobody else
+  // would write. Do not soften it, and do not strengthen it.
+  if (step === 'offline') {
+    return (
+      <GuidedStage
+        {...common}
+        {...skip}
+        title={hi ? 'जब network साथ ना दे' : 'When the network fails'}
+        sheetTitle={hi ? 'जो हम नहीं कहेंगे' : 'WHAT WE WILL NOT PRETEND'}
+        video={src('offline')}
+        onNext={() => go('done')}
+      >
+        <Text style={s.point}>
+          {hi
+            ? 'जो चीज़ें उस वक़्त होनी ज़रूरी हैं, उनमें internet लगता ही नहीं। आवाज़ सुनना, alarm शुरू होना, recording, सब फ़ोन में होता है।'
+            : 'The things that have to work in the moment do not use the internet at all. Hearing you, starting the alarm, recording, all of it happens on your phone.'}
+        </Text>
+        <Text style={s.point}>
+          {hi
+            ? 'Internet सिर्फ़ भेजने के लिए चाहिए, और भेजने के तीन रास्ते हैं।'
+            : 'Only sending needs a signal, and there are three ways out.'}
+        </Text>
+        <Text style={s.warn}>
+          {hi
+            ? 'फ़ोन बंद है तो कुछ नहीं होगा। ना हमसे, ना किसी और से। जो कहे कि होगा, वो आपको कुछ बेच रहा है।'
+            : 'If your phone is off, nothing works. Not us, not anyone. Whoever tells you otherwise is selling you something.'}
+        </Text>
+      </GuidedStage>
+    );
+  }
+
+  // ---- done ---------------------------------------------------------------
+  return (
+    <GuidedStage
+      {...common}
+      title={hi ? 'हो गया' : 'You are set up'}
+      sheetTitle={hi ? 'बस इतना ही' : 'THAT IS IT'}
+      video={src('done')}
+      nextLabel={hi ? 'ORBII खोलिए' : 'Open ORBII'}
+      onNext={onDone}
+    >
+      <Text style={s.point}>
+        {hi
+          ? 'असल में जो बदला है वो यह: अब आपको फ़ोन तक पहुँचना ज़रूरी नहीं।'
+          : 'Here is what actually changed: you do not have to reach for your phone any more.'}
+      </Text>
+      <Text style={s.point}>
+        {hi
+          ? 'हफ़्ते में एक बार test कर लीजिए। शब्द बोलिए, फिर cancel कर दीजिए। पाँच सेकंड।'
+          : 'Test it once a week. Say the word, then cancel it. Five seconds.'}
+      </Text>
+      <Text style={s.help}>
+        {hi
+          ? 'और अगर कभी काम ना करे, तो हमें बताइए। हमें बाद में पता चलने से बेहतर है कि आप बता दें।'
+          : 'And if it ever does not work, tell us. We would much rather hear it from you than find out later.'}
+      </Text>
+    </GuidedStage>
+  );
 }
+
 
 const s = StyleSheet.create({
   point: { ...typography.body, color: colors.textSecondary, lineHeight: 21 },
