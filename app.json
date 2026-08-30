@@ -54,7 +54,8 @@
         {
           "contactsPermission": "ORBII can privately match your contacts on your device (numbers never leave your phone) to help block reward fraud. This is optional."
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

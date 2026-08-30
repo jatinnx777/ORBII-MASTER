@@ -2,6 +2,7 @@
 // the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
 import 'react-native-get-random-values';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { IntroFlow } from '@/screens/Onboarding/IntroFlow';
 import { Animated, AppState, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -132,6 +133,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 function RootNavigator() {
+  // Shown once, ever. Null while we read it, so a returning user never sees a
+  // flash of the language picker on top of their own app.
+  const [introDone, setIntroDone] = useState<boolean | null>(null);
+  useEffect(() => {
+    void getItem<boolean>(storageKeys.introDone).then((v) => setIntroDone(!!v));
+  }, []);
+
   const status = useAppSelector((s) => s.user.status);
   const uid = useAppSelector((s) => s.user.profile?.uid ?? null);
   const onboarded = useAppSelector((s) => s.app.onboarded);
@@ -651,6 +659,23 @@ function RootNavigator() {
         {/* Play "prominent disclosure" — shown once before any permission ask. */}
         <PermissionDisclosureModal />
       </>
+    );
+  }
+  // Language, then thirty seconds on what ORBII is, THEN the email box. Every
+  // other app in this category asks who you are before saying what it does, and
+  // then wonders why people stop at the email.
+  //
+  // introDone === null means we have not read storage yet. Rendering nothing for
+  // that instant is correct: showing the picker and yanking it away is worse.
+  if (introDone === false) {
+    return (
+      <IntroFlow
+        onDone={(lang) => {
+          void setItem(storageKeys.onboardingLang, lang);
+          void setItem(storageKeys.introDone, true);
+          setIntroDone(true);
+        }}
+      />
     );
   }
   return <AuthNavigator />;

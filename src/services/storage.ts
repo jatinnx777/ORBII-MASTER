@@ -27,6 +27,9 @@ const KEYS = {
   overlayAsked: 'orbii:overlay-asked',
   disclosureAck: 'orbii:disclosure-ack',
   guidedSetup: 'orbii:guided-setup-done',
+  // The two screens before sign-in: language, then what ORBII is.
+  introDone: 'orbii:intro-done',
+  onboardingLang: 'orbii:onboarding-lang',
   sosQueue: 'orbii:sos-queue',
 } as const;
 
