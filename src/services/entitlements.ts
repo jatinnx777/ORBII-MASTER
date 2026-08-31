@@ -50,7 +50,14 @@ const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
 // EXTRA of safe-zone geofencing, basic circles stay free). Unlock is via the
 // launch coupon (checkout) until Play Billing is wired.
 const ALWAYS_GATED: ReadonlySet<Feature> = new Set<Feature>([
-  'disaster_mode',
+  // 'disaster_mode' was here, and it was indefensible.
+  //
+  // ALWAYS_GATED overrides EARLY_ACCESS_UNLOCK, so disaster mode was paid-only
+  // for every user. That means during a flood, someone opening ORBII to tell
+  // their family they are alive would have been shown a subscription screen.
+  //
+  // Charge for unlimited responder dispatch. Never charge somebody for saying
+  // "I am safe".
   'community',
   'circle_geofencing',
 ]);

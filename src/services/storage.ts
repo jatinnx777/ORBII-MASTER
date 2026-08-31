@@ -27,6 +27,8 @@ const KEYS = {
   overlayAsked: 'orbii:overlay-asked',
   disclosureAck: 'orbii:disclosure-ack',
   guidedSetup: 'orbii:guided-setup-done',
+  // Survival battery mode. Outlives an app session because a disaster does.
+  survivalMode: 'orbii:survival-mode',
   // The two screens before sign-in: language, then what ORBII is.
   introDone: 'orbii:intro-done',
   onboardingLang: 'orbii:onboarding-lang',

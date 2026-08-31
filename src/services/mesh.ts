@@ -193,6 +193,47 @@ export async function armOfflineSos(
   }
 }
 
+/**
+ * Broadcast a disaster check-in over the mesh.
+ *
+ * WHY THIS EXISTS. Disaster mode sent "I am safe" by SMS and nothing else, which
+ * is the one channel a disaster reliably takes down: towers fall or the network
+ * congests, and the feature built for exactly that moment stops working in it.
+ *
+ * The mesh is the transport that survives, so the check-in rides the same rails
+ * as an SOS: sealed to the server key, carried phone to phone, bridged by
+ * whoever reaches signal first.
+ *
+ * NOT gated on the relay setting, for the same reason armMeshSos is not: a
+ * privacy preference must never make its owner harder to find. That setting
+ * governs carrying OTHER people's traffic, not broadcasting your own.
+ */
+export async function broadcastMeshStatus(
+  uid: string,
+  status: 'safe' | 'help',
+  lat: number,
+  lng: number,
+  ts: number,
+): Promise<boolean> {
+  if (!available) return false;
+  try {
+    if (!(await hasMeshPermissions())) return false;
+    const { msgId, sealed } = sealSosForMesh({
+      v: 1,
+      kind: 'status',
+      status,
+      uid,
+      lat,
+      lng,
+      ts,
+    });
+    const bridgeUrl = `${SUPABASE_URL}/functions/v1/mesh-bridge`;
+    return await armMeshSos(msgId, sealed, bridgeUrl, SUPABASE_ANON_KEY);
+  } catch {
+    return false;
+  }
+}
+
 export async function getMeshCapabilities(): Promise<MeshCapabilities | null> {
   if (!available) return null;
   try {

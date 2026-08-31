@@ -57,6 +57,19 @@ export type MeshSosPayload = {
   lat: number;
   lng: number;
   ts: number; // ms epoch
+  /**
+   * What this packet is. ABSENT MEANS 'sos', deliberately: every phone already
+   * in the field seals SOS packets without this field, and the bridge must keep
+   * reading them. A required field here would have silently broken the mesh for
+   * everyone who had not updated.
+   *
+   * 'status' carries a disaster check-in ("I am safe" / "I need help"), which
+   * matters because in a flood SMS is exactly the channel that fails, and the
+   * mesh is the one that does not.
+   */
+  kind?: 'sos' | 'status';
+  /** Only on kind: 'status'. */
+  status?: 'safe' | 'help';
 };
 
 /** Seal an SOS payload and mint a 4-byte message id (8 hex chars). */
