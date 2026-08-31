@@ -31,6 +31,25 @@
 -- ============================================================================
 
 -- ---------------------------------------------------------------------------
+-- FIRST, CLOSE A GRANT THAT SHOULD NEVER HAVE BEEN THERE
+-- ---------------------------------------------------------------------------
+-- sql/35 says app_events is write-only from the app and gives it an insert
+-- policy and no select policy. That is true at the row level and it is where
+-- the protection actually comes from, but the TABLE privilege was never
+-- revoked: Supabase ships `grant all on all tables in schema public to anon,
+-- authenticated`, so select has been granted this whole time.
+--
+-- Nothing leaks today. RLS is on, there is no select policy, so a client asking
+-- for rows gets none. But that means one layer is doing all the work, and the
+-- day somebody adds a permissive policy for an unrelated reason, the entire
+-- event stream becomes readable by anyone holding the key shipped inside the
+-- APK. Two layers cost nothing here, because no client has ever read this table
+-- and none is meant to.
+revoke select, update, delete on app_events from anon, authenticated;
+-- Insert stays, minus anon, which sql/37 already removed.
+grant insert on app_events to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- VOICE SOS FALSE-POSITIVE RATE
 -- ---------------------------------------------------------------------------
 -- A voice trigger she lets run to zero is a real detection. One she cancels
@@ -252,8 +271,21 @@ select 'funnel rpc', (to_regprocedure('public.admin_pipeline_funnel(int)') is no
 union all
 select 'timings rpc', (to_regprocedure('public.admin_pipeline_timings(int)') is not null)::text
 union all
-select 'app_events still unreadable by the app (must be false)',
+-- TWO CHECKS, NOT ONE. The first version of this asked only for the privilege
+-- and came back true, which read as a leak and was not one: sql/93 already
+-- recorded that Supabase grants broadly and RLS is what filters rows. Asking
+-- about the grant alone tests the wrong layer, in both directions. So ask about
+-- both, and the row filter first, because that is the one that protects data.
+select 'no select POLICY on app_events, so no rows are readable (must be 0)',
+       (select count(*)::text from pg_policies
+         where schemaname = 'public' and tablename = 'app_events'
+           and cmd in ('SELECT', 'ALL'))
+union all
+select 'select privilege now revoked too, second layer (must be false)',
        has_table_privilege('authenticated', 'public.app_events', 'select')::text
+union all
+select 'the app can still WRITE events (must be true, or metrics go blank)',
+       has_table_privilege('authenticated', 'public.app_events', 'insert')::text
 union all
 -- The SQL editor has no auth.uid(), so is_admin() is false here and this call
 -- is a live test of the gate rather than a lookup. If it comes back non-zero,
