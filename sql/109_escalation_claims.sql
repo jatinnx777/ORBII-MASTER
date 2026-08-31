@@ -20,12 +20,39 @@
 -- is doing it and the other three know they are not, which is the entire point
 -- of this file.
 --
+-- ON THE TWO KINDS OF sos_id. This codebase carries both: sos_events.id is
+-- uuid, while sos_responders.sos_id is text (sql/81 documents the split). The
+-- authoriser orbii_can_access_sos() takes uuid, so the column here is uuid and
+-- carries a real foreign key, which is what makes a deleted SOS take its claims
+-- with it. The RPC arguments stay text because that is what every caller
+-- already holds, and they pass through a guard that answers "no" rather than
+-- throwing when the string is not an id at all.
+--
 -- Idempotent. Run after sql/108.
 -- ============================================================================
 
+-- ---------------------------------------------------------------------------
+-- THE GUARD
+-- ---------------------------------------------------------------------------
+-- A malformed id must mean "you cannot see this", never a 500. To the caller an
+-- unexplained server error and a denial look identical, and only one of them is
+-- honest.
+create or replace function public.orbii_uuid_or_null(p text)
+returns uuid
+language plpgsql
+immutable
+as $$
+begin
+  return p::uuid;
+exception when others then
+  return null;
+end $$;
+
+grant execute on function public.orbii_uuid_or_null(text) to authenticated;
+
 create table if not exists sos_escalations (
   id         bigserial primary key,
-  sos_id     text not null references sos_events(id) on delete cascade,
+  sos_id     uuid not null references sos_events(id) on delete cascade,
   claimed_by uuid not null references auth.users(id) on delete cascade,
   -- Deliberately not free text. A claim is a commitment somebody else relies
   -- on, so the set of things you can promise is fixed and readable.
@@ -53,13 +80,14 @@ security definer
 set search_path = public
 as $$
 declare
+  v_sos uuid := public.orbii_uuid_or_null(p_sos);
   taker text;
 begin
   if p_action not in ('calling_112', 'going_there', 'reached') then
     return jsonb_build_object('ok', false, 'message', 'Unknown action.');
   end if;
 
-  if not public.orbii_can_access_sos(p_sos) then
+  if v_sos is null or not public.orbii_can_access_sos(v_sos) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
 
@@ -69,7 +97,7 @@ begin
   select coalesce(u.name, 'Someone')::text into taker
   from sos_escalations e
   left join users_public u on u.id = e.claimed_by
-  where e.sos_id = p_sos
+  where e.sos_id = v_sos
     and e.action = p_action
     and e.released_at is null
     and e.claimed_by <> auth.uid()
@@ -77,7 +105,7 @@ begin
   limit 1;
 
   insert into sos_escalations (sos_id, claimed_by, action)
-  values (p_sos, auth.uid(), p_action)
+  values (v_sos, auth.uid(), p_action)
   on conflict (sos_id, claimed_by, action) do update set released_at = null, at = now();
 
   return jsonb_build_object('ok', true, 'also', taker);
@@ -99,13 +127,15 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  v_sos uuid := public.orbii_uuid_or_null(p_sos);
 begin
-  if not public.orbii_can_access_sos(p_sos) then
+  if v_sos is null or not public.orbii_can_access_sos(v_sos) then
     raise exception 'not permitted' using errcode = '42501';
   end if;
   update sos_escalations
      set released_at = now()
-   where sos_id = p_sos and claimed_by = auth.uid() and action = p_action and released_at is null;
+   where sos_id = v_sos and claimed_by = auth.uid() and action = p_action and released_at is null;
   return jsonb_build_object('ok', true);
 end $$;
 
@@ -131,9 +161,9 @@ as $$
          e.claimed_by = auth.uid()
   from sos_escalations e
   left join users_public u on u.id = e.claimed_by
-  where e.sos_id = p_sos
+  where e.sos_id = public.orbii_uuid_or_null(p_sos)
     and e.released_at is null
-    and public.orbii_can_access_sos(p_sos)
+    and public.orbii_can_access_sos(public.orbii_uuid_or_null(p_sos))
   order by e.at;
 $$;
 
@@ -146,12 +176,20 @@ grant execute on function public.sos_escalation_state(text) to authenticated;
 select 'escalations table' as check,
        (to_regclass('public.sos_escalations') is not null)::text as result
 union all
+select 'sos_id type (must be uuid, to match sos_events.id)',
+       (select data_type from information_schema.columns
+         where table_schema = 'public' and table_name = 'sos_escalations'
+           and column_name = 'sos_id')
+union all
 select 'claim rpc', (to_regprocedure('public.claim_sos_escalation(text,text)') is not null)::text
 union all
 select 'release rpc (must exist, a claim you cannot drop is a lie)',
        (to_regprocedure('public.release_sos_escalation(text,text)') is not null)::text
 union all
 select 'state rpc', (to_regprocedure('public.sos_escalation_state(text)') is not null)::text
+union all
+select 'a bad id is a denial, not a crash (must be null)',
+       coalesce(public.orbii_uuid_or_null('not-an-id')::text, 'null')
 union all
 select 'no direct table access for signed-in users (must be false)',
        has_table_privilege('authenticated', 'public.sos_escalations', 'select')::text
