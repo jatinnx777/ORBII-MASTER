@@ -1,5 +1,6 @@
 import { Accelerometer } from 'expo-sensors';
 import { getItem, setItem, storageKeys } from './storage';
+import { getVoiceMetrics } from './voice-metrics';
 
 /**
  * How long she gets to say "I am fine" before the SOS goes out.
@@ -69,7 +70,44 @@ export const CANCEL_PRONE_RATE = 0.5;
 /** Below this many outcomes there is not enough history to judge anybody. */
 export const MIN_HISTORY = 4;
 
+/**
+ * ASR confidence at or above this is a clean recognition, not a near-miss.
+ * Vosk reports 0..1.
+ */
+export const CONF_STRONG = 0.85;
+
+/** Below this the engine half-heard something. Weak evidence, not no evidence. */
+export const CONF_WEAK = 0.6;
+
+/**
+ * How far above the engine's own speech gate the trigger was, as a ratio.
+ *
+ * Deliberately a RATIO and not an absolute level. The native service's rms is
+ * in whatever units its capture chain produces, and hard-coding a number there
+ * would be a guess that breaks on the next phone. vadThreshold is the level
+ * that service already calls speech, so rms / vadThreshold means the same thing
+ * on every device: 1.0 is ordinary speech, and well above it is a shout.
+ */
+export const SHOUT_RATIO = 2.5;
+
+/** Metrics older than this are from a different trigger. Ignore them. */
+export const SIGNAL_FRESH_MS = 15_000;
+
 export type MotionClass = 'still' | 'ordinary' | 'violent' | 'unknown';
+
+/**
+ * What the voice engine heard, as opposed to what the phone felt.
+ *
+ * Both are null when unavailable, which is the normal case on a build whose
+ * native service predates getVoiceMetrics, and the correct answer then is the
+ * default window.
+ */
+export type VoiceSignal = {
+  /** 0..1 from the recogniser, or null. */
+  confidence: number | null;
+  /** rms divided by the engine's speech gate, or null. */
+  loudnessRatio: number | null;
+};
 
 export type ConfidenceLevel = 'low' | 'normal' | 'high';
 
@@ -114,6 +152,8 @@ export type PlanInput = {
   /** Fraction of recent voice triggers this user cancelled, or null if unknown. */
   cancelRate: number | null;
   historySize: number;
+  /** What the recogniser heard. Optional: absent means unavailable. */
+  voice?: VoiceSignal;
 };
 
 /**
@@ -134,6 +174,20 @@ export type PlanInput = {
  * Anything that argues for longer forbids shortening outright. When the two
  * signals disagree the app takes the cautious side, because a couple of seconds
  * of delay is recoverable and a false SOS at somebody's address is not.
+ *
+ * THE VOICE SIGNALS ARE DELIBERATELY ONE-DIRECTIONAL, and this is the most
+ * important rule in the file.
+ *
+ * Every research report recommends treating a quiet or poorly-recognised
+ * trigger as weak evidence and making the user wait longer. Following that
+ * would be a serious mistake here. A woman hiding in a stairwell whispers. A
+ * woman with a hand near her mouth is half-heard. The native service HAS a
+ * whisper mode precisely because that is a real and important case, and a rule
+ * that punished it would delay exactly the emergencies that are worst.
+ *
+ * So a shout can shorten the window and a whisper can never lengthen it. Weak
+ * recognition does one single thing: it forbids shortening. It withholds
+ * confidence rather than asserting doubt.
  */
 export function resolveCountdown(input: PlanInput): CountdownPlan {
   const reasons: string[] = [];
@@ -163,14 +217,42 @@ export function resolveCountdown(input: PlanInput): CountdownPlan {
     mayShorten = false;
     level = 'low';
     reasons.push('phone_untouched');
-  } else if (input.motion === 'violent') {
-    reasons.push('violent_motion');
-    if (mayShorten) {
-      seconds -= 2;
-      level = 'high';
-    }
   } else if (input.motion === 'unknown') {
     reasons.push('no_motion_data');
+  }
+
+  // Corroboration, counted rather than trusted one at a time.
+  //
+  // Shortening used to happen on violent motion alone. A phone can be shaken
+  // hard for a hundred innocent reasons, so on its own that is not enough to
+  // take time away from somebody's chance to cancel. Two independent signals
+  // agreeing is a different claim, and it is the multi-signal rule the research
+  // is actually reaching for.
+  let corroboration = 0;
+  if (input.motion === 'violent') {
+    corroboration += 1;
+    reasons.push('violent_motion');
+  }
+  const conf = input.voice?.confidence ?? null;
+  const loud = input.voice?.loudnessRatio ?? null;
+
+  if (conf !== null && conf >= CONF_STRONG) {
+    corroboration += 1;
+    reasons.push('clear_recognition');
+  } else if (conf !== null && conf < CONF_WEAK) {
+    // Withholds confidence. Never adds seconds: see the whisper note above.
+    mayShorten = false;
+    reasons.push('half_heard');
+  }
+
+  if (loud !== null && loud >= SHOUT_RATIO) {
+    corroboration += 1;
+    reasons.push('shouted');
+  }
+
+  if (corroboration >= 2 && mayShorten) {
+    seconds -= 2;
+    level = 'high';
   }
 
   seconds = Math.max(FLOOR_SECONDS, Math.min(CEILING_SECONDS, seconds));
@@ -206,6 +288,50 @@ export async function loadCancelRate(): Promise<{ rate: number | null; size: num
     return { rate: cancelled / rows.length, size: rows.length };
   } catch {
     return { rate: null, size: 0 };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// WHAT THE ENGINE HEARD
+// ---------------------------------------------------------------------------
+
+/**
+ * Read the recogniser's own view of the trigger that just fired.
+ *
+ * COSTS NOTHING AND NEEDED NO NATIVE CHANGE. VoiceGuard has been computing rms,
+ * vadThreshold and lastConfidence all along, and exposing them through
+ * getVoiceMetrics for a hidden debug screen. Three numbers that describe how
+ * certain the engine was, sitting one bridge call away from the decision they
+ * should have been informing.
+ *
+ * Returns nulls rather than rejecting on: no native module, an older service
+ * build, a nonsensical threshold, or metrics left over from an earlier trigger.
+ * Every one of those means "no opinion", which resolves to the default window.
+ */
+export async function readVoiceSignal(): Promise<VoiceSignal> {
+  const none: VoiceSignal = { confidence: null, loudnessRatio: null };
+  try {
+    const m = await getVoiceMetrics();
+    if (!m) return none;
+
+    // Stale metrics are worse than none: they describe a DIFFERENT trigger, and
+    // acting on them would shorten this countdown because of the last one.
+    const age = Date.now() - (m.lastTriggerAtMs ?? 0);
+    if (!m.lastTriggerAtMs || age < 0 || age > SIGNAL_FRESH_MS) return none;
+
+    const confidence =
+      typeof m.lastConfidence === 'number' && m.lastConfidence > 0 && m.lastConfidence <= 1
+        ? m.lastConfidence
+        : null;
+
+    const loudnessRatio =
+      typeof m.rms === 'number' && typeof m.vadThreshold === 'number' && m.vadThreshold > 0
+        ? m.rms / m.vadThreshold
+        : null;
+
+    return { confidence, loudnessRatio };
+  } catch {
+    return none;
   }
 }
 

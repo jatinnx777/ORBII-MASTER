@@ -36,6 +36,7 @@ import { recordVoiceSOS } from '@/services/voice-limits';
 import {
   loadCancelRate,
   recordVoiceOutcome,
+  readVoiceSignal,
   resolveCountdown,
   sampleMotion,
   type CountdownPlan,
@@ -138,7 +139,11 @@ export function CountdownScreen() {
     if (isTest || isInstant || !isVoice) return;
     let alive = true;
     void (async () => {
-      const [motion, history] = await Promise.all([sampleMotion(), loadCancelRate()]);
+      const [motion, history, voice] = await Promise.all([
+        sampleMotion(),
+        loadCancelRate(),
+        readVoiceSignal(),
+      ]);
       if (!alive || cancelledRef.current || triggeredRef.current) return;
 
       const plan = resolveCountdown({
@@ -146,6 +151,7 @@ export function CountdownScreen() {
         motion,
         cancelRate: history.rate,
         historySize: history.size,
+        voice,
       });
       planRef.current = plan;
       if (plan.seconds === COUNTDOWN_SECONDS) return;

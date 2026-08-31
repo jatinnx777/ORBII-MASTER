@@ -79,10 +79,66 @@ describe('resolveCountdown', () => {
     expect(p.level).toBe('low');
   });
 
-  it('shortens the window when the phone is being fought over', () => {
+  it('does not shorten on violent motion alone', () => {
+    // A phone can be shaken hard for a hundred innocent reasons. One signal is
+    // not enough to take time away from somebody's chance to cancel.
     const p = resolveCountdown({ ...base, motion: 'violent' });
+    expect(p.seconds).toBe(BASE_SECONDS);
+    expect(p.level).not.toBe('high');
+  });
+
+  it('shortens when two independent signals agree', () => {
+    const p = resolveCountdown({
+      ...base,
+      motion: 'violent',
+      voice: { confidence: 0.93, loudnessRatio: 1.4 },
+    });
     expect(p.seconds).toBeLessThan(BASE_SECONDS);
     expect(p.level).toBe('high');
+  });
+
+  it('counts a shout as corroboration', () => {
+    const p = resolveCountdown({
+      ...base,
+      motion: 'violent',
+      voice: { confidence: null, loudnessRatio: 4.0 },
+    });
+    expect(p.reasons).toContain('shouted');
+    expect(p.seconds).toBeLessThan(BASE_SECONDS);
+  });
+
+  it('NEVER lengthens the window for a whisper', () => {
+    // The rule this project refuses to follow. A woman hiding in a stairwell
+    // whispers, and a woman with a hand near her mouth is half heard. Every
+    // report says treat that as weak evidence and make her wait longer. Doing
+    // so would delay exactly the emergencies that are worst.
+    const p = resolveCountdown({
+      ...base,
+      motion: 'ordinary',
+      voice: { confidence: 0.2, loudnessRatio: 0.4 },
+    });
+    expect(p.seconds).toBeLessThanOrEqual(BASE_SECONDS);
+    expect(p.seconds).toBe(BASE_SECONDS);
+    expect(p.reasons).toContain('half_heard');
+  });
+
+  it('a half-heard trigger blocks shortening even with other signals', () => {
+    const p = resolveCountdown({
+      ...base,
+      motion: 'violent',
+      voice: { confidence: 0.3, loudnessRatio: 5.0 },
+    });
+    expect(p.seconds).toBe(BASE_SECONDS);
+    expect(p.level).not.toBe('high');
+  });
+
+  it('ignores voice signals entirely when they are unavailable', () => {
+    const p = resolveCountdown({
+      ...base,
+      motion: 'ordinary',
+      voice: { confidence: null, loudnessRatio: null },
+    });
+    expect(p.seconds).toBe(BASE_SECONDS);
   });
 
   it('lengthens the window for a user who cancels half their triggers', () => {
@@ -109,14 +165,16 @@ describe('resolveCountdown', () => {
   });
 
   it('refuses to shorten for a user prone to false alarms', () => {
-    // The signals disagree: the phone is moving hard, but this person cancels
-    // most of what they trigger. The cautious side wins, because a delay is
-    // recoverable and strangers sent to an address are not.
+    // The signals disagree: the phone is moving hard AND the trigger was clean,
+    // but this person cancels most of what they trigger. The cautious side
+    // wins, because a delay is recoverable and strangers sent to an address are
+    // not.
     const p = resolveCountdown({
       source: 'voice',
       motion: 'violent',
       cancelRate: 0.8,
       historySize: 10,
+      voice: { confidence: 0.95, loudnessRatio: 4.0 },
     });
     expect(p.seconds).toBeGreaterThanOrEqual(BASE_SECONDS);
     expect(p.level).not.toBe('high');
@@ -125,7 +183,13 @@ describe('resolveCountdown', () => {
   it('never goes outside the floor and the ceiling', () => {
     const cases: Array<Parameters<typeof resolveCountdown>[0]> = [
       { source: 'voice', motion: 'still', cancelRate: 1, historySize: 10 },
-      { source: 'voice', motion: 'violent', cancelRate: 0, historySize: 10 },
+      {
+        source: 'voice',
+        motion: 'violent',
+        cancelRate: 0,
+        historySize: 10,
+        voice: { confidence: 0.99, loudnessRatio: 9 },
+      },
       { source: 'voice', motion: 'unknown', cancelRate: null, historySize: 0 },
     ];
     for (const c of cases) {
