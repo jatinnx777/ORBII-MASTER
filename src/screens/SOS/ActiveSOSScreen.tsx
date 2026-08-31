@@ -643,6 +643,18 @@ export function ActiveSOSScreen() {
   // India's universal emergency number. Wrapped because we surface it
   // from two places (the always-visible button + the auto-escalation
   // prompt) and we don't want the URI string sprinkled around.
+  // Read out loud to an operator, so it has to be big, high contrast, and
+  // never truncated. Coordinates are the fallback because they are ALWAYS
+  // correct: a place name can be wrong, and a wrong name sends people to the
+  // wrong building while she waits.
+  const spokenLocation = useMemo(() => {
+    const place = activeSOS?.location?.address?.trim();
+    const coords = userLocation
+      ? `${userLocation.latitude.toFixed(5)}, ${userLocation.longitude.toFixed(5)}`
+      : null;
+    return { place: place || null, coords };
+  }, [activeSOS?.location?.address, userLocation]);
+
   const dial112 = useCallback(() => {
     Linking.openURL('tel:112').catch(() => undefined);
     if (activeSOS) {
@@ -941,6 +953,28 @@ export function ActiveSOSScreen() {
                 : 'Tap to reveal. Keep them hidden until your helper is with you.'}
             </Text>
           </Pressable>
+        ) : null}
+
+        {/* Where she is, in type she can read out.
+            The only route to police that exists today is a voice call, and the
+            first thing an operator asks is "where are you". Under threat, at
+            night, somewhere unfamiliar, that is the question people cannot
+            answer. ORBII already knew it and was not showing it in a form she
+            could speak. */}
+        {!resolved && (spokenLocation.place || spokenLocation.coords) ? (
+          <View style={styles.readOut}>
+            <Text style={styles.readOutLabel}>READ THIS TO 112</Text>
+            {spokenLocation.place ? (
+              <Text style={styles.readOutPlace} selectable>
+                {spokenLocation.place}
+              </Text>
+            ) : null}
+            {spokenLocation.coords ? (
+              <Text style={styles.readOutCoords} selectable>
+                {spokenLocation.coords}
+              </Text>
+            ) : null}
+          </View>
         ) : null}
 
         {!resolved ? (
@@ -1656,6 +1690,36 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 12,
     color: colors.coralDeep,
+    fontVariant: ['tabular-nums'],
+  },
+  readOut: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.coralDeep,
+    gap: 4,
+  },
+  readOutLabel: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 11,
+    letterSpacing: 1.1,
+    color: colors.coralDeep,
+  },
+  // Deliberately large. This is read aloud under stress, sometimes in the dark,
+  // by someone whose hands are shaking.
+  readOutPlace: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 22,
+    lineHeight: 28,
+    color: colors.textPrimary,
+  },
+  readOutCoords: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 18,
+    color: colors.textSecondary,
     fontVariant: ['tabular-nums'],
   },
   call112: {

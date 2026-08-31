@@ -19,6 +19,13 @@ import { MLMapView, type MLMarker } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import type { AppStackParamList } from '@/navigation/types';
 import type { GeoPoint } from '@/types';
+import {
+  claimEscalation,
+  releaseEscalation,
+  getEscalationState,
+  describeClaim,
+  type EscalationClaim,
+} from '@/services/escalation';
 
 // Victim-facing "Help is on the way" screen, the calm, premium moment right
 // after a helper accepts the SOS. Soft-minimal (Blinkit / Uber / Google Maps),
@@ -63,6 +70,51 @@ export function HelperResponseScreen() {
       : null;
 
   const [etaMin, setEtaMin] = useState(startEta);
+
+  // Who has taken responsibility for what, on this SOS, right now.
+  //
+  // Everyone looking at this screen sees the same answer. That is the entire
+  // point: four people each thinking somebody else is calling 112 is the best
+  // documented failure in emergency response, and showing four people the same
+  // screen at the same instant is how software makes it worse.
+  const [claims, setClaims] = useState<EscalationClaim[]>([]);
+  const [claimBusy, setClaimBusy] = useState(false);
+  const sosIdForClaims = (params as { sosId?: string } | undefined)?.sosId ?? null;
+
+  useEffect(() => {
+    if (!sosIdForClaims) return;
+    let alive = true;
+    const pull = async () => {
+      const c = await getEscalationState(sosIdForClaims);
+      if (alive) setClaims(c);
+    };
+    void pull();
+    // Polled, not pushed. The push that tells you nobody is coming is exactly
+    // the one most likely to be swallowed by a locked phone in a pocket.
+    const id = setInterval(() => void pull(), 6000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, [sosIdForClaims]);
+
+  const mine = claims.find((c) => c.is_me && c.action === 'calling_112');
+
+  const toggleCalling = async () => {
+    if (!sosIdForClaims || claimBusy) return;
+    setClaimBusy(true);
+    try {
+      if (mine) {
+        await releaseEscalation(sosIdForClaims, 'calling_112');
+      } else {
+        await claimEscalation(sosIdForClaims, 'calling_112');
+        Linking.openURL('tel:112').catch(() => undefined);
+      }
+      setClaims(await getEscalationState(sosIdForClaims));
+    } finally {
+      setClaimBusy(false);
+    }
+  };
   const [sharing, setSharing] = useState(true);
   const [showHelper, setShowHelper] = useState(true);
   const [showAddress, setShowAddress] = useState(false);
@@ -298,6 +350,53 @@ export function HelperResponseScreen() {
         </View>
 
         {/* ── Quick actions ── */}
+        {/* Who has this in hand.
+            Sits ABOVE quick actions on purpose: before anyone picks an action,
+            they need to know what is already being done. Four people each
+            thinking somebody else called 112 is the failure this card exists to
+            prevent. */}
+        <View style={styles.card}>
+          <Text style={styles.cardLabel}>Who is doing what</Text>
+          {claims.length === 0 ? (
+            <Text style={styles.claimNone}>
+              Nobody has taken this on yet. If you are not going, say so to someone who can.
+            </Text>
+          ) : (
+            claims.map((c) => (
+              <View key={`${c.action}-${c.claimed_by}`} style={styles.claimRow}>
+                <Ionicons
+                  name={c.action === 'calling_112' ? 'call' : c.action === 'reached' ? 'checkmark-circle' : 'walk'}
+                  size={16}
+                  color={c.is_me ? colors.sageDeep : colors.textSecondary}
+                />
+                <Text style={[styles.claimText, c.is_me && { color: colors.sageDeep }]}>
+                  {describeClaim(c)}
+                </Text>
+              </View>
+            ))
+          )}
+
+          <Pressable
+            onPress={() => void toggleCalling()}
+            disabled={claimBusy}
+            style={({ pressed }) => [
+              styles.claimBtn,
+              mine && styles.claimBtnOn,
+              pressed && { opacity: 0.92 },
+            ]}
+            accessibilityRole="button"
+          >
+            <Text style={[styles.claimBtnText, mine && styles.claimBtnTextOn]}>
+              {mine ? 'I can no longer call' : 'I am calling 112'}
+            </Text>
+          </Pressable>
+          <Text style={styles.claimHint}>
+            {mine
+              ? 'Everyone else can see you are calling. If something stops you, tap again so somebody else takes it.'
+              : 'Tapping this dials 112 and tells everyone else you have it, so nobody assumes another person did.'}
+          </Text>
+        </View>
+
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Quick actions</Text>
           <View style={styles.qaGrid}>
@@ -518,6 +617,32 @@ const styles = StyleSheet.create({
   privacy: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   privacyText: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textMuted, flex: 1 },
 
+  claimNone: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+  },
+  claimRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs, paddingVertical: 3 },
+  claimText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
+  claimBtn: {
+    marginTop: spacing.sm,
+    height: 46,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.coralDeep,
+  },
+  claimBtnOn: { backgroundColor: colors.creamDeep },
+  claimBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textInverse },
+  claimBtnTextOn: { color: colors.textSecondary },
+  claimHint: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: colors.textMuted,
+    marginTop: spacing.xs,
+  },
   qaGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   qa: { width: '31.5%', alignItems: 'center', gap: 8, paddingVertical: spacing.md, borderRadius: 20, backgroundColor: colors.creamDeep },
   qaIco: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
