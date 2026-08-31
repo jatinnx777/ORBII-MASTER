@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -10,8 +10,14 @@ import { useEntitlement } from '@/services/entitlements';
 import {
   broadcastDisasterStatus,
   openDisasterComposer,
+  openRollCall,
+  getRollCall,
+  answerRollCall,
+  myOpenRollCalls,
   type DisasterStatus,
+  type RollCallEntry,
 } from '@/services/disaster';
+import { isSurvivalModeOn, setSurvivalMode } from '@/services/disaster-power';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
@@ -87,8 +93,62 @@ export function DisasterModeScreen() {
   const navigation = useNavigation();
   const profile = useAppSelector((s) => s.user.profile);
   const location = useAppSelector((s) => s.sos.currentLocation);
+  const circles = useAppSelector((s) => s.circles.circles);
   const [busy, setBusy] = useState<DisasterStatus | null>(null);
   const [openCard, setOpenCard] = useState<string | null>(null);
+  const [survival, setSurvival] = useState(isSurvivalModeOn());
+  const [rollId, setRollId] = useState<string | null>(null);
+  const [roll, setRoll] = useState<RollCallEntry[]>([]);
+  const [rollBusy, setRollBusy] = useState(false);
+
+  // An open roll call somebody else started is the thing she most needs to see
+  // when she opens this screen: her family is already asking.
+  useEffect(() => {
+    void myOpenRollCalls().then(async (list) => {
+      const first = list[0];
+      if (!first) return;
+      setRollId(first.id);
+      setRoll(await getRollCall(first.id));
+    });
+  }, []);
+
+  const refreshRoll = async (id: string) => {
+    setRoll(await getRollCall(id));
+  };
+
+  const startRollCall = async () => {
+    const circleId = circles[0]?.id;
+    if (!circleId) {
+      appAlert(
+        'You need a circle first',
+        'A roll call asks the people in your circle whether they are safe. Add someone from the Circle tab.',
+      );
+      return;
+    }
+    setRollBusy(true);
+    try {
+      const id = await openRollCall(circleId);
+      if (!id) {
+        appAlert('Could not start it', 'Check your connection and try again.');
+        return;
+      }
+      setRollId(id);
+      await refreshRoll(id);
+    } finally {
+      setRollBusy(false);
+    }
+  };
+
+  const reply = async (status: DisasterStatus) => {
+    if (!rollId) return;
+    setRollBusy(true);
+    try {
+      await answerRollCall(rollId, status, null, null);
+      await refreshRoll(rollId);
+    } finally {
+      setRollBusy(false);
+    }
+  };
   const canUseDisaster = useEntitlement('disaster_mode');
 
   if (!canUseDisaster) {
@@ -184,6 +244,112 @@ export function DisasterModeScreen() {
               <Text style={styles.miniSub}>Reassure your circle with one tap, over SMS</Text>
             </Pressable>
           </View>
+
+          {/* Roll call.
+              The list deliberately leads with whoever has NOT answered. In a
+              disaster the replies are reassuring and the silences are the
+              information, so the screen is built around the silences. */}
+          <Text style={styles.sectionLabel}>IS EVERYONE OK</Text>
+          {rollId ? (
+            <View style={styles.rollBox}>
+              {roll.map((r) => (
+                <View key={r.user_id} style={styles.rollRow}>
+                  <Ionicons
+                    name={
+                      r.status === 'safe'
+                        ? 'checkmark-circle'
+                        : r.status === 'help'
+                          ? 'alert-circle'
+                          : 'ellipse-outline'
+                    }
+                    size={18}
+                    color={
+                      r.status === 'safe'
+                        ? colors.sageDeep
+                        : r.status === 'help'
+                          ? colors.coralDeep
+                          : colors.textMuted
+                    }
+                  />
+                  <Text style={styles.rollName}>{r.name}</Text>
+                  <Text
+                    style={[
+                      styles.rollState,
+                      r.status === 'help' && { color: colors.coralDeep },
+                      !r.status && { color: colors.textMuted },
+                    ]}
+                  >
+                    {r.status === 'safe'
+                      ? 'Safe'
+                      : r.status === 'help'
+                        ? 'Needs help'
+                        : 'No answer yet'}
+                  </Text>
+                </View>
+              ))}
+              <View style={styles.rollActions}>
+                <Pressable
+                  style={[styles.rollBtn, styles.rollSafe]}
+                  disabled={rollBusy}
+                  onPress={() => void reply('safe')}
+                >
+                  <Text style={styles.rollBtnText}>I am safe</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.rollBtn, styles.rollHelp]}
+                  disabled={rollBusy}
+                  onPress={() => void reply('help')}
+                >
+                  <Text style={styles.rollBtnText}>I need help</Text>
+                </Pressable>
+              </View>
+              <Pressable onPress={() => void refreshRoll(rollId)} hitSlop={8}>
+                <Text style={styles.rollRefresh}>Check for new answers</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+              disabled={rollBusy}
+              onPress={() => void startRollCall()}
+            >
+              <Ionicons name="people" size={22} color={colors.brandDeep} style={styles.helpIcon} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.helpTitle}>Ask everyone if they are safe</Text>
+                <Text style={styles.helpSub}>
+                  One tap asks your circle. You will see who has not answered.
+                </Text>
+              </View>
+            </Pressable>
+          )}
+
+          {/* Survival battery mode. */}
+          <Text style={styles.sectionLabel}>MAKE THE PHONE LAST</Text>
+          <Pressable
+            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+            onPress={() => {
+              const next = !survival;
+              setSurvival(next);
+              void setSurvivalMode(next);
+            }}
+          >
+            <Ionicons
+              name={survival ? 'battery-charging' : 'battery-half'}
+              size={22}
+              color={survival ? colors.sageDeep : colors.brandDeep}
+              style={styles.helpIcon}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.helpTitle}>
+                {survival ? 'Survival mode is on' : 'Turn on survival mode'}
+              </Text>
+              <Text style={styles.helpSub}>
+                {survival
+                  ? 'ORBII has stopped everything except being found. Voice SOS and the offline mesh keep running.'
+                  : 'Stops location history and background work. Voice SOS and the offline mesh are never switched off.'}
+              </Text>
+            </View>
+          </Pressable>
 
           {/* Helplines */}
           <Text style={styles.sectionLabel}>EMERGENCY HELPLINES · TAP TO CALL</Text>
@@ -388,6 +554,30 @@ const styles = StyleSheet.create({
   },
   dCallText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textInverse },
 
+  rollBox: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    gap: spacing.sm,
+    ...shadows.card,
+  },
+  rollRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  rollName: { flex: 1, fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary },
+  rollState: { fontFamily: fontFamilies.interRegular, fontSize: 12, color: colors.sageDeep },
+  rollActions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
+  rollBtn: { flex: 1, height: 44, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  rollSafe: { backgroundColor: colors.sageDeep },
+  rollHelp: { backgroundColor: colors.coralDeep },
+  rollBtnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textInverse },
+  rollRefresh: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 12,
+    color: colors.brandDeep,
+    textAlign: 'center',
+    paddingTop: spacing.xs,
+  },
   footnote: {
     fontFamily: fontFamilies.poppinsMedium,
     fontSize: 11.5,
