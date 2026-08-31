@@ -20,6 +20,7 @@ import { toE164India } from '@/utils/validation';
 import { contactAdded } from '@/redux/slices/userSlice';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { armVoiceSos } from '@/services/voice-detection';
+import { runVoiceTest, cancelVoiceTest } from '@/services/voice-test';
 import { requestBatteryExemption } from '@/services/background-voice';
 
 /**
@@ -120,6 +121,8 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
   const [voiceArmed, setVoiceArmed] = useState(false);
+  const [voiceHeard, setVoiceHeard] = useState(false);
+  const [listeningForTest, setListeningForTest] = useState(false);
 
   const i = STEPS.indexOf(step);
   const go = (s: Step) => setStep(s);
@@ -581,11 +584,50 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
         sheetTitle={hi ? 'यही पूरा ORBII है' : 'THIS IS THE WHOLE THING'}
         video={src('voice')}
         nextLabel={
-          voiceArmed ? (hi ? 'आगे' : 'Next') : hi ? 'Voice SOS चालू करें' : 'Turn on Voice SOS'
+          !voiceArmed
+            ? hi
+              ? 'Voice SOS चालू करें'
+              : 'Turn on Voice SOS'
+            : listeningForTest
+              ? hi
+                ? 'सुन रहे हैं...'
+                : 'Listening...'
+              : voiceHeard
+                ? hi
+                  ? 'आगे'
+                  : 'Next'
+                : hi
+                  ? 'अब बोलकर देखिए'
+                  : 'Try saying it now'
         }
-        nextDisabled={busy}
+        nextDisabled={busy || listeningForTest}
         onNext={async () => {
-          if (voiceArmed) return go('battery');
+          if (voiceHeard) return go('battery');
+
+          // PRACTICE IS A TEST, NEVER A REAL SOS.
+          //
+          // The first version of this screen armed Voice SOS and told her to
+          // "try saying it now". That fires a REAL alarm: her circle is alerted,
+          // nearby users are alerted, evidence recording starts. Every single
+          // person put through onboarding created a false alarm, which is both
+          // frightening for the people she trusted and the fastest way to teach
+          // a circle to ignore ORBII.
+          //
+          // runVoiceTest arms the identical native engine and intercepts the
+          // detection instead of dispatching it. Nothing is sent and nobody is
+          // notified, and she still gets to hear it work, which is the whole
+          // point of the step.
+          if (voiceArmed) {
+            setListeningForTest(true);
+            try {
+              const r = await runVoiceTest();
+              if (r === 'heard') setVoiceHeard(true);
+            } finally {
+              setListeningForTest(false);
+            }
+            return;
+          }
+
           setBusy(true);
           try {
             // 12 hours, the same default the old setup screen armed with.
@@ -608,11 +650,17 @@ export function OnboardingFlow({ lang, onDone }: { lang: OnboardingLang; onDone:
             ? 'कहिए "help", "बचाओ" या "मदद"। Screen lock हो, फ़ोन बैग में हो, internet ना हो, फिर भी।'
             : 'Say "help", "bachao" or "madad". Screen locked, phone in your bag, no internet.'}
         </Text>
-        {voiceArmed ? (
+        {voiceHeard ? (
           <Text style={s.ok}>
             {hi
-              ? 'चालू है। अभी बोलकर देखिए, दस सेकंड में cancel कर सकती हैं।'
-              : 'It is on. Try saying it now, you have ten seconds to cancel.'}
+              ? 'सुन लिया। यह अब चालू है और असली में भी ऐसे ही काम करेगा।'
+              : 'Heard you. It is on, and that is exactly how it will work for real.'}
+          </Text>
+        ) : voiceArmed ? (
+          <Text style={s.ok}>
+            {hi
+              ? 'चालू है। अब ज़ोर से "help" बोलिए। यह सिर्फ़ test है, किसी को कुछ नहीं जाएगा।'
+              : 'It is on. Now say "help" out loud. This is only a test, nobody is alerted.'}
           </Text>
         ) : (
           <Text style={s.help}>

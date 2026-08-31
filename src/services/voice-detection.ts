@@ -226,6 +226,36 @@ export async function armVoiceSos(hours: number): Promise<{ ok: boolean; reason?
   return { ok: true };
 }
 
+/**
+ * Put the shared status back in step with the guard after a cold start.
+ *
+ * armVoiceSos persists {enabled, hours} and App.tsx restarts the background
+ * guard from it on launch, but nothing marked the in-memory state. isListening()
+ * therefore returned false while the guard was genuinely running: the tile read
+ * OFF, and tapping it opened the duration picker instead of offering to turn it
+ * off. Voice SOS could be armed with no way to reach disarm.
+ *
+ * Returns whether the guard is armed, so a caller can render immediately rather
+ * than waiting for a status event that only fires on a change.
+ */
+export async function restoreVoiceState(): Promise<boolean> {
+  try {
+    const bg = await loadBgVoiceState();
+    if (!bg.enabled) {
+      markGuardState(false);
+      return false;
+    }
+    await startBackgroundVoice([], bg.hours);
+    markGuardState(true);
+    return true;
+  } catch {
+    // A restore that fails must not leave the UI claiming protection it does
+    // not have. Off is the safe thing to show.
+    markGuardState(false);
+    return false;
+  }
+}
+
 /** The ONE way to turn Voice SOS off. Fully tears the guard down. */
 export async function disarmVoiceSos(): Promise<void> {
   await stopBackgroundVoice();

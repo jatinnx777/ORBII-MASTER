@@ -33,6 +33,7 @@ import { Caveat_600SemiBold } from '@expo-google-fonts/caveat';
 
 import { store, useAppSelector } from '@/redux/store';
 import { hydrateStore } from '@/redux/persist';
+import { restoreVoiceState } from '@/services/voice-detection';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
 import { supabase } from '@/services/supabase';
 import { reconcileExpiredVoiceSessions } from '@/services/voice-sessions';
@@ -173,9 +174,10 @@ function RootNavigator() {
   // Re-arm always-on background protection if the user left it on. The engine
   // listens for the built-in panic words ("help, help"), so no phrases to load.
   useEffect(() => {
-    loadBgVoiceState().then((bg) => {
-      if (bg.enabled) startBackgroundVoice([], bg.hours).catch(() => undefined);
-    });
+    // restoreVoiceState also marks the shared status, so the Home and Emergency
+    // tiles show ARMED after a cold start and their tap reaches disarm. Starting
+    // the guard without that left Voice SOS on with no way to switch it off.
+    void restoreVoiceState();
   }, []);
 
   // Helper Mode runtime: if the user opted in (and is signed in), start
