@@ -33,6 +33,13 @@ import {
 import { getSOSLocationFix, reverseGeocode } from '@/services/location';
 import { createSOS } from '@/services/sos';
 import { recordVoiceSOS } from '@/services/voice-limits';
+import {
+  loadCancelRate,
+  recordVoiceOutcome,
+  resolveCountdown,
+  sampleMotion,
+  type CountdownPlan,
+} from '@/services/sos-confidence';
 import { broadcastSOSViaWhatsApp } from '@/services/whatsapp-sos';
 import { trackEvent } from '@/services/analytics';
 import type { AppStackParamList } from '@/navigation/types';
@@ -69,9 +76,14 @@ export function CountdownScreen() {
   // call (which background-throttles JS timers) can't pause the SOS. When
   // the app comes back to foreground we recompute from the original deadline,
   // and if the deadline has already passed we fire immediately.
+  const startedAtRef = useRef<number>(Date.now());
   const deadlineRef = useRef<number>(
-    Date.now() + (isInstant ? 0 : COUNTDOWN_SECONDS * 1000),
+    startedAtRef.current + (isInstant ? 0 : COUNTDOWN_SECONDS * 1000),
   );
+  // How the window was decided. Null until the sensor answers, and null forever
+  // for anything that is not a voice trigger.
+  const planRef = useRef<CountdownPlan | null>(null);
+  const [planLevel, setPlanLevel] = useState<CountdownPlan['level'] | null>(null);
   const [seconds, setSeconds] = useState(isInstant ? 0 : COUNTDOWN_SECONDS);
   const [triggering, setTriggering] = useState(false);
   const cancelledRef = useRef(false);
@@ -108,6 +120,62 @@ export function CountdownScreen() {
         recActiveRef.current = false;
         void countdownRecorder.stop().catch(() => undefined);
       }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // How long she gets to say "I am fine", decided from the phone itself.
+  //
+  // A phone lying flat and untouched hearing "help" out of a television is the
+  // commonest false trigger there is, and it gets a LONGER window so somebody
+  // has time to reach it. A phone being fought over gets a shorter one. And
+  // nothing else happens here: this can only move the deadline, it can never
+  // fire an SOS, cancel one, or stop one going out.
+  //
+  // The sample runs alongside the countdown rather than before it, so it costs
+  // no delay at all. It answers in under a second, while seconds remain.
+  useEffect(() => {
+    if (isTest || isInstant || !isVoice) return;
+    let alive = true;
+    void (async () => {
+      const [motion, history] = await Promise.all([sampleMotion(), loadCancelRate()]);
+      if (!alive || cancelledRef.current || triggeredRef.current) return;
+
+      const plan = resolveCountdown({
+        source: 'voice',
+        motion,
+        cancelRate: history.rate,
+        historySize: history.size,
+      });
+      planRef.current = plan;
+      if (plan.seconds === COUNTDOWN_SECONDS) return;
+
+      // Anchored to when the countdown STARTED, never to now. Anchoring to now
+      // would hand out a fresh full window every time this resolved slowly,
+      // which on a shortened plan is the opposite of what was decided.
+      const deadline = startedAtRef.current + plan.seconds * 1000;
+      const remaining = deadline - Date.now();
+      // Already past it. Leave the original deadline alone rather than firing
+      // early off a sensor reading.
+      if (remaining <= 0) return;
+
+      deadlineRef.current = deadline;
+      lastBuzzedSecondRef.current = plan.seconds + 1;
+      setPlanLevel(plan.level);
+      setSeconds(Math.ceil(remaining / 1000));
+
+      // Re-time the ring so it still empties exactly when the SOS goes.
+      progress.stopAnimation(() => {
+        Animated.timing(progress, {
+          toValue: 0,
+          duration: remaining,
+          easing: Easing.linear,
+          useNativeDriver: false,
+        }).start();
+      });
+    })();
+    return () => {
+      alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -216,7 +284,14 @@ export function CountdownScreen() {
       trackEvent('voice_sos_cancelled', {
         phrase: route.params?.phrase ?? null,
         secondsLeft: Math.max(seconds, 0),
+        // Logged so the window rules can be judged rather than trusted. If
+        // cancels cluster on 'high' confidence, the classifier is wrong and
+        // the thresholds have to move.
+        window: planRef.current?.seconds ?? COUNTDOWN_SECONDS,
+        confidence: planRef.current?.level ?? 'normal',
+        reasons: planRef.current?.reasons ?? [],
       });
+      void recordVoiceOutcome(true);
     }
     navigation.goBack();
   }, [isVoice, navigation, route.params?.phrase, seconds]);
@@ -284,7 +359,13 @@ export function CountdownScreen() {
       // The other half of the false-positive rate: a voice trigger the user
       // let run to zero, i.e. a genuine detection.
       if (isVoice && !isTest) {
-        trackEvent('voice_sos_confirmed', { phrase: route.params?.phrase ?? null });
+        trackEvent('voice_sos_confirmed', {
+          phrase: route.params?.phrase ?? null,
+          window: planRef.current?.seconds ?? COUNTDOWN_SECONDS,
+          confidence: planRef.current?.level ?? 'normal',
+          reasons: planRef.current?.reasons ?? [],
+        });
+        void recordVoiceOutcome(false);
         // The 15s captured BEFORE she spoke, often the only recording of the
         // threat itself. We only learn the sosId here, so upload now.
         const preroll = route.params?.preroll;
@@ -462,7 +543,9 @@ export function CountdownScreen() {
               ? isTest
                 ? 'Test SOS recorded. No real alerts were sent.'
                 : 'Alerting your circle and nearby helpers now.'
-              : 'We’ll alert your circle and nearby helpers.'}
+              : planLevel === 'low'
+                ? 'Your phone has not moved. Extra time to cancel.'
+                : 'We’ll alert your circle and nearby helpers.'}
           </Text>
         </View>
 

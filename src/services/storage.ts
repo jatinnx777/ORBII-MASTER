@@ -33,6 +33,8 @@ const KEYS = {
   introDone: 'orbii:intro-done',
   onboardingLang: 'orbii:onboarding-lang',
   sosQueue: 'orbii:sos-queue',
+  // Ten booleans. Whether this user's voice triggers tend to be real.
+  voiceOutcomes: 'orbii:voice-outcomes',
 } as const;
 
 export const storageKeys = KEYS;
