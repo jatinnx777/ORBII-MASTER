@@ -45,6 +45,17 @@ type MeshPayload = {
   lat: number;
   lng: number;
   ts: number; // ms epoch when the SOS started
+  /**
+   * ABSENT MEANS 'sos'. Every phone in the field before this change seals SOS
+   * packets with no kind field, and they must keep working, so the default is
+   * the old behaviour rather than a rejection.
+   *
+   * 'status' is a disaster check-in. It must NEVER create an sos_events row:
+   * somebody telling their family they are safe would otherwise arrive as an
+   * emergency, which is both a false alarm and a cruel one.
+   */
+  kind?: 'sos' | 'status';
+  status?: 'safe' | 'help';
 };
 
 Deno.serve(async (req) => {
@@ -92,6 +103,48 @@ Deno.serve(async (req) => {
   if (dupErr) {
     // Unique violation => already bridged. Anything else, still ack so relays stop.
     return json({ ok: true, deduped: true });
+  }
+
+  // A disaster check-in is not an emergency and must not become one.
+  //
+  // Without this branch a "I am safe" packet would fall through to the SOS
+  // insert below and alert everyone in the circle to an emergency that is not
+  // happening. On a product where false alarms teach people to ignore the real
+  // ones, silently converting reassurance into panic is the worst outcome
+  // available.
+  if (payload.kind === 'status') {
+    const st = payload.status === 'help' ? 'help' : 'safe';
+
+    const { error: stErr } = await admin.from('disaster_checkins').insert({
+      user_id: payload.uid,
+      status: st,
+      lat: payload.lat,
+      lng: payload.lng,
+      source: 'mesh',
+      at: new Date(payload.ts || Date.now()).toISOString(),
+    });
+    if (stErr) return json({ error: 'could not record status', detail: stErr.message }, 500);
+
+    // 'help' during a disaster still deserves a push to the circle. It is not
+    // an SOS row, because it did not come from the SOS path and dispatching
+    // responders to a flood zone is a different decision, but the people who
+    // care must hear about it.
+    if (st === 'help') {
+      try {
+        await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/notify-sos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
+          },
+          body: JSON.stringify({ checkinUserId: payload.uid, kind: 'disaster_help' }),
+        });
+      } catch {
+        // The row exists regardless; the push is best effort.
+      }
+    }
+
+    return json({ ok: true, bridged: 'status', status: st });
   }
 
   // Create the SOS exactly like an online one, then fan out.

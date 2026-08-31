@@ -18,6 +18,47 @@
 -- Idempotent. Run after sql/106.
 -- ============================================================================
 
+-- ---------------------------------------------------------------------------
+-- DISASTER CHECK-INS
+-- ---------------------------------------------------------------------------
+-- Where a mesh-carried "I am safe" lands.
+--
+-- It has its own table rather than sharing sos_events, and that separation is
+-- the point: a check-in must never be able to become an emergency. If these
+-- shared a table, one wrong branch in the bridge would turn somebody reassuring
+-- their family into an alarm, which on this product is the cruellest possible
+-- bug.
+create table if not exists disaster_checkins (
+  id      bigserial primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  status  text not null check (status in ('safe', 'help')),
+  lat     double precision,
+  lng     double precision,
+  source  text not null default 'mesh',
+  at      timestamptz not null default now()
+);
+
+create index if not exists disaster_checkins_user_idx on disaster_checkins (user_id, at desc);
+
+alter table disaster_checkins enable row level security;
+
+-- Your own check-ins, and those of anyone whose circle you are in. Nobody else.
+drop policy if exists "checkins visible to circle" on disaster_checkins;
+create policy "checkins visible to circle" on disaster_checkins
+  for select to authenticated
+  using (
+    user_id = auth.uid()
+    or exists (
+      select 1
+      from circle_members mine
+      join circle_members theirs on theirs.circle_id = mine.circle_id
+      where mine.user_id = auth.uid()
+        and mine.deleted_at is null
+        and theirs.user_id = disaster_checkins.user_id
+        and theirs.deleted_at is null
+    )
+  );
+
 create table if not exists roll_calls (
   id         uuid primary key default gen_random_uuid(),
   circle_id  uuid not null references circles(id) on delete cascade,
@@ -251,4 +292,10 @@ select 'my open roll calls', (to_regprocedure('public.my_open_roll_calls()') is 
 union all
 -- A stranger must never be able to read who is hurt and where.
 select 'anon cannot read roll calls (must be false)',
-       has_table_privilege('anon', 'public.roll_calls', 'select')::text;
+       has_table_privilege('anon', 'public.roll_calls', 'select')::text
+union all
+select 'disaster_checkins table',
+       (to_regclass('public.disaster_checkins') is not null)::text
+union all
+select 'anon cannot read check-ins (must be false)',
+       has_table_privilege('anon', 'public.disaster_checkins', 'select')::text;
