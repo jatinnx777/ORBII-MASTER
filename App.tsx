@@ -78,7 +78,11 @@ import { resolvePremiumTier } from '@/services/razorpay';
 import { registerPushToken } from '@/services/push';
 import { initSOSQueue, flushSOSQueue } from '@/services/sos-queue';
 import { initVaultAutoFlush, vaultStatusLine } from '@/services/hotPotatoVault';
-import { initVolumetricMonitor, ENABLE_IMPACT_DETECTION } from '@/services/volumetricShock';
+import {
+  initVolumetricMonitor,
+  ENABLE_IMPACT_DETECTION,
+  SHADOW_MODE,
+} from '@/services/volumetricShock';
 import { flushPendingSosAudio } from '@/services/sos-audio';
 // Side-effect import: registers the background victim-location task with the OS
 // so a headless invocation (app killed mid-SOS) can still find it.
@@ -312,6 +316,7 @@ function RootNavigator() {
     void bindReferral().catch(() => undefined);
   }, [status]);
 
+
   // Keep circle invites fresh so an Instagram-style "X invited you" alert
   // arrives without opening the Circles tab: re-check when the app returns to
   // the foreground and on a gentle 60s poll while it's open. refreshCircles
@@ -473,9 +478,16 @@ function RootNavigator() {
   //
   // Gated on authentication, unlike the vault: an SOS needs a profile, and there
   // is nothing useful to do with a detected fall before sign-in.
+  //
+  // SHADOW MODE, which is what it is actually doing today. The detector runs
+  // against the real accelerometer and its route into the app is closed inside
+  // initVolumetricMonitor, so onTrigger below is unreachable. Every decision it
+  // reaches is logged instead. After a week there is a measured answer to "how
+  // often would this have fired, and on what", and the thresholds stop being
+  // borrowed from a paper.
   useEffect(() => {
     if (status !== 'authenticated') return;
-    if (!ENABLE_IMPACT_DETECTION) return;
+    if (!ENABLE_IMPACT_DETECTION && !SHADOW_MODE) return;
 
     const handle = initVolumetricMonitor(
       () => {
@@ -495,7 +507,20 @@ function RootNavigator() {
         // Every rejection is logged, because the thresholds in volumetricShock
         // were reasoned from published ranges and not measured on the phones
         // this ships to. Without the rejections there is nothing to tune from.
-        onEvent: (e) => console.log('[impact]', JSON.stringify(e)),
+        //
+        // This used to be a console.log, which in a release build is nobody
+        // reading anything. It goes to app_events now, where sql/112 can read
+        // it back, because a measurement no one can retrieve is not a
+        // measurement.
+        onEvent: (e) => {
+          trackEvent('impact_shadow', {
+            type: e.type,
+            reason: 'reason' in e ? e.reason : null,
+            magnitudeG:
+              'magnitudeG' in e ? Math.round(e.magnitudeG * 100) / 100 : null,
+            shadow: !ENABLE_IMPACT_DETECTION,
+          });
+        },
       },
     );
     return () => handle.stop();

@@ -48,6 +48,29 @@ import type { Subscription } from 'expo-sensors/build/DeviceSensor';
  */
 export const ENABLE_IMPACT_DETECTION = false;
 
+/**
+ * SHADOW MODE. The detector runs for real and can never fire anything.
+ *
+ * The blocker on switching impact detection on was never the code, it was that
+ * every threshold in this file came from published fall-detection ranges rather
+ * than from the phones ORBII actually ships to. Guessing and shipping is how a
+ * dropped bag sends strangers to somebody's address.
+ *
+ * You cannot fix that by reasoning harder. You fix it by measuring. So the
+ * detector now runs against the real accelerometer on real phones, and every
+ * decision it reaches, including the ones it rejects and why, is logged. It
+ * calls nothing. onTrigger is unreachable while this is true.
+ *
+ * After a week of logs there is an actual answer to "how often would this have
+ * fired, and on what", and IMPACT_G and the rest get set from data. Until then
+ * the honest state of this feature is unknown, not off.
+ *
+ * COST. The accelerometer at 20 Hz, foreground only, stopped the moment the app
+ * is backgrounded. It is one of the cheapest sensors on the device and it is
+ * never running while she is not looking at ORBII.
+ */
+export const SHADOW_MODE = true;
+
 /** 20 Hz. Fast enough to catch a 50 ms impact spike, cheap on battery. */
 export const SAMPLE_HZ = 20;
 export const SAMPLE_INTERVAL_MS = Math.round(1000 / SAMPLE_HZ);
@@ -276,7 +299,7 @@ export function initVolumetricMonitor(
   onTrigger: () => void,
   options: VolumetricMonitorOptions = {},
 ): VolumetricMonitorHandle {
-  if (!ENABLE_IMPACT_DETECTION) {
+  if (!ENABLE_IMPACT_DETECTION && !SHADOW_MODE) {
     // Reports inactive rather than pretending. A caller showing "impact
     // detection on" while nothing is listening is the failure this project
     // keeps hitting: a dead feature that looks alive.
@@ -329,7 +352,11 @@ export function initVolumetricMonitor(
         console.warn('[volumetricShock] onEvent threw', err);
       }
 
-      if (event.type === 'unresponsive') {
+      // THE ONLY PLACE THIS FEATURE CAN REACH THE REST OF THE APP, and in
+      // shadow mode it is closed. The observation still went to onEvent above,
+      // so a week of shadow logs answers what the thresholds should be without
+      // one person ever being sent anywhere.
+      if (event.type === 'unresponsive' && ENABLE_IMPACT_DETECTION) {
         try {
           onTrigger();
         } catch (err) {

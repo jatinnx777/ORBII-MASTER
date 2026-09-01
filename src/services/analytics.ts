@@ -50,6 +50,9 @@ type EventName =
   | 'sos_dialed_112'
   | 'setup_protection_activated'
   | 'setup_completed'
+  // Impact detection running in shadow: what it WOULD have done, never what it
+  // did. Reading these back is the only way its thresholds stop being guesses.
+  | 'impact_shadow'
   | 'mesh_capability_probe'
   | 'offline_helper_accept'
   | 'screen_viewed';
