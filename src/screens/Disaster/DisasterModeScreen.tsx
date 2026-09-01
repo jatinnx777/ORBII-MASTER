@@ -233,17 +233,19 @@ export function DisasterModeScreen() {
             <Ionicons name="chevron-forward" size={20} color={colors.textInverse} />
           </Pressable>
 
-          <View style={styles.pairRow}>
-            <Pressable
-              onPress={() => send('safe')}
-              disabled={!!busy}
-              style={({ pressed }) => [styles.miniCard, styles.safeCard, pressed && styles.pressed]}
-            >
-              <Ionicons name="checkmark-circle" size={24} color={colors.sageDeep} />
-              <Text style={styles.miniTitle}>I'm safe</Text>
-              <Text style={styles.miniSub}>Reassure your circle with one tap, over SMS</Text>
-            </Pressable>
-          </View>
+          <Pressable
+            onPress={() => send('safe')}
+            disabled={!!busy}
+            style={({ pressed }) => [styles.rowCard, pressed && styles.pressed]}
+          >
+            <View style={[styles.rowIcon, { backgroundColor: colors.sageSoft }]}>
+              <Ionicons name="checkmark-circle" size={22} color={colors.sageDeep} />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>I am safe</Text>
+              <Text style={styles.rowSub}>Reassure your circle with one tap, over SMS.</Text>
+            </View>
+          </Pressable>
 
           {/* Roll call.
               The list deliberately leads with whoever has NOT answered. In a
@@ -309,44 +311,65 @@ export function DisasterModeScreen() {
             </View>
           ) : (
             <Pressable
-              style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.rowCard, pressed && styles.pressed]}
               disabled={rollBusy}
               onPress={() => void startRollCall()}
             >
-              <Ionicons name="people" size={22} color={colors.brandDeep} style={styles.helpIcon} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.helpTitle}>Ask everyone if they are safe</Text>
-                <Text style={styles.helpSub}>
+              <View style={[styles.rowIcon, { backgroundColor: colors.lavenderSoft }]}>
+                <Ionicons name="people" size={22} color={colors.lavenderDeep} />
+              </View>
+              <View style={styles.rowText}>
+                <Text style={styles.rowTitle}>Ask everyone if they are safe</Text>
+                <Text style={styles.rowSub}>
                   One tap asks your circle. You will see who has not answered.
                 </Text>
               </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </Pressable>
           )}
 
           {/* Survival battery mode. */}
           <Text style={styles.sectionLabel}>MAKE THE PHONE LAST</Text>
           <Pressable
-            style={({ pressed }) => [styles.helpBtn, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.rowCard,
+              survival && styles.rowCardOn,
+              pressed && styles.pressed,
+            ]}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: survival }}
             onPress={() => {
               const next = !survival;
               setSurvival(next);
               void setSurvivalMode(next);
             }}
           >
-            <Ionicons
-              name={survival ? 'battery-charging' : 'battery-half'}
-              size={22}
-              color={survival ? colors.sageDeep : colors.brandDeep}
-              style={styles.helpIcon}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.helpTitle}>
+            <View
+              style={[
+                styles.rowIcon,
+                { backgroundColor: survival ? colors.sageSoft : colors.goldSoft },
+              ]}
+            >
+              <Ionicons
+                name={survival ? 'battery-charging' : 'battery-half'}
+                size={22}
+                color={survival ? colors.sageDeep : colors.goldDeep}
+              />
+            </View>
+            <View style={styles.rowText}>
+              <Text style={styles.rowTitle}>
                 {survival ? 'Survival mode is on' : 'Turn on survival mode'}
               </Text>
-              <Text style={styles.helpSub}>
+              <Text style={styles.rowSub}>
                 {survival
-                  ? 'ORBII has stopped everything except being found. Voice SOS and the offline mesh keep running.'
+                  ? 'Everything except being found is stopped. Voice SOS and the offline mesh keep running.'
                   : 'Stops location history and background work. Voice SOS and the offline mesh are never switched off.'}
+              </Text>
+            </View>
+            {/* State you can see from across a room, not just read. */}
+            <View style={[styles.pill, survival ? styles.pillOn : styles.pillOff]}>
+              <Text style={[styles.pillText, survival && styles.pillTextOn]}>
+                {survival ? 'ON' : 'OFF'}
               </Text>
             </View>
           </Pressable>
@@ -456,13 +479,15 @@ const styles = StyleSheet.create({
     maxWidth: 320,
   },
 
+  // Belongs to what is BELOW it. The old spacing was symmetrical, which is why
+  // the screen read as one undifferentiated column of cards.
   sectionLabel: {
     fontFamily: fontFamilies.poppinsBold,
     fontSize: 11,
     letterSpacing: 1.1,
     color: colors.textMuted,
-    marginTop: spacing.lg,
-    marginBottom: spacing.sm,
+    marginTop: spacing.xl,
+    marginBottom: spacing.xs,
   },
 
   helpBtn: {
@@ -489,29 +514,53 @@ const styles = StyleSheet.create({
   helpTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textInverse },
   helpSub: { fontFamily: fontFamilies.poppinsMedium, fontSize: 12.5, color: colors.textInverse, opacity: 0.9, marginTop: 2 },
 
-  pairRow: { flexDirection: 'row', gap: spacing.md, marginTop: spacing.md },
-  miniCard: {
-    flex: 1,
-    borderRadius: radius.xl,
+  // ONE loud thing per screen. helpBtn above is coral with a heavy glow and it
+  // belongs to "I need help" alone. Everything else that is a tappable row uses
+  // this: same height, same icon badge, same two lines of text, so the eye can
+  // scan the column instead of re-reading four competing buttons.
+  rowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     padding: spacing.md,
-    gap: 6,
-    borderWidth: 1.5,
+    marginTop: spacing.sm,
     ...shadows.icon,
   },
-  safeCard: { backgroundColor: colors.sageSoft, borderColor: colors.sage },
-  chatCard: { backgroundColor: colors.lavenderSoft, borderColor: colors.lavender },
-  miniTitle: { fontFamily: fontFamilies.poppinsBold, fontSize: 15, color: colors.textPrimary },
-  miniSub: { fontFamily: fontFamilies.poppinsMedium, fontSize: 11.5, color: colors.textSecondary },
-  betaBadge: {
-    position: 'absolute',
-    top: spacing.sm,
-    right: spacing.sm,
-    backgroundColor: colors.lavenderDeep,
-    borderRadius: radius.pill,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  rowCardOn: { borderColor: colors.sage, backgroundColor: colors.sageSoft },
+
+  // A View, never a style handed to <Ionicons>. A glyph is text: giving it
+  // width, height and flex centring leaves the icon parked in the corner of its
+  // own badge, which is exactly how these rows were misaligned.
+  rowIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  soonText: { fontFamily: fontFamilies.poppinsBold, fontSize: 9, letterSpacing: 0.5, color: colors.textInverse },
+  rowText: { flex: 1, gap: 2 },
+  rowTitle: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
+  rowSub: {
+    fontFamily: fontFamilies.poppinsMedium,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+
+  pill: { borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  pillOn: { backgroundColor: colors.sageDeep },
+  pillOff: { backgroundColor: colors.creamDeep },
+  pillText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    color: colors.textSecondary,
+  },
+  pillTextOn: { color: colors.textInverse },
 
   helpGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   lineCard: {
