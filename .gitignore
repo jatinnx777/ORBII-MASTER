@@ -65,3 +65,7 @@ supabase/.temp/
 # Dead copy of the Helper app from before the rescaffold. The live repo is
 # D:\ORBII-HELPER, which is a separate project and must not be a submodule.
 ORBII-HELPER/
+
+# Skill packs installed by tooling, not project source.
+.agents/
+.claude/skills/

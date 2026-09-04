@@ -1,9 +1,8 @@
 // MUST be first: polyfills global crypto.getRandomValues so tweetnacl (used by
 // the mesh sealed-box crypto) has a real RNG on React Native, on every instance.
 import 'react-native-get-random-values';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { IntroFlow } from '@/screens/Onboarding/IntroFlow';
-import { OnboardingFlow } from '@/screens/Onboarding/OnboardingFlow';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FirstRun } from '@/screens/Onboarding/FirstRun';
 import { Animated, AppState, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
@@ -32,6 +31,7 @@ import {
 import { Caveat_600SemiBold } from '@expo-google-fonts/caveat';
 
 import { store, useAppSelector } from '@/redux/store';
+import { onboardingCompleted } from '@/redux/slices/appSlice';
 import { hydrateStore } from '@/redux/persist';
 import { restoreVoiceState } from '@/services/voice-detection';
 import { installGlobalErrorHandler } from '@/services/error-reporting';
@@ -48,8 +48,6 @@ import { syncZoneMonitoring, authorizeGeofenceEvent, escalateGeofenceEvent, load
 import * as Location from 'expo-location';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
-import { OnboardingScreen } from '@/screens/Onboarding/OnboardingScreen';
-import { GuidedSetupScreen } from '@/screens/Setup/GuidedSetupScreen';
 import { SafetyPinSetupScreen } from '@/screens/Setup/SafetyPinSetupScreen';
 import { getItem, setItem, storageKeys } from '@/services/storage';
 import {
@@ -141,11 +139,24 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 function RootNavigator() {
   // Shown once, ever. Null while we read it, so a returning user never sees a
   // flash of the language picker on top of their own app.
-  const [introDone, setIntroDone] = useState<boolean | null>(null);
-  const [lang, setLang] = useState<'en' | 'hi'>('en');
+  // Read from the device, not asked for. A language screen before she knows
+  // what the app does is a screen that buys nothing, and the phone already
+  // knows the answer. Changeable in Settings.
+  //
+  // Intl ships with Hermes, so this costs no dependency. Wrapped because a
+  // stripped locale build returns something unexpected rather than throwing
+  // where you would expect it to.
+  const lang = useMemo<'en' | 'hi'>(() => {
+    try {
+      return Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase().startsWith('hi')
+        ? 'hi'
+        : 'en';
+    } catch {
+      return 'en';
+    }
+  }, []);
 
   useEffect(() => {
-    void getItem<boolean>(storageKeys.introDone).then((v) => setIntroDone(!!v));
   }, []);
 
   const status = useAppSelector((s) => s.user.status);
@@ -155,10 +166,8 @@ function RootNavigator() {
 
   // First-run guided setup (circle → secret phrase → protected). Shown once
   // after sign-in; null = still loading the flag from storage.
-  const [setupDone, setSetupDone] = useState<boolean | null>(null);
   const [pinReady, setPinReady] = useState<boolean | null>(null);
   useEffect(() => {
-    getItem<boolean>(storageKeys.guidedSetup).then((v) => setSetupDone(!!v));
     void isPinSet()
       .then(setPinReady)
       .catch(() => setPinReady(false));
@@ -665,24 +674,15 @@ function RootNavigator() {
   }, [status, safeJourney]);
 
   if (!hydrated) return null;
-  if (!onboarded) return <OnboardingScreen />;
   if (status === 'authenticated') {
     // The safety PIN is mandatory and write-once. Gate BEFORE guided setup so
     // it's part of registration — and so the existing users who never had one
     // are asked exactly once, on their next launch.
+    // EXISTING USERS ONLY. First run now sets the PIN as its last step, so a
+    // new account reaches here with pinReady already true. This branch is the
+    // one-time ask for accounts created before the PIN existed.
     if (pinReady === null) return null;
     if (!pinReady) return <SafetyPinSetupScreen onDone={() => setPinReady(true)} />;
-    if (setupDone === null) return null;
-    if (!setupDone) {
-      return (
-        <GuidedSetupScreen
-          onDone={() => {
-            void setItem(storageKeys.guidedSetup, true);
-            setSetupDone(true);
-          }}
-        />
-      );
-    }
     return (
       <>
         <AppNavigator />
@@ -691,34 +691,28 @@ function RootNavigator() {
       </>
     );
   }
-  // Language, then thirty seconds on what ORBII is, THEN the email box. Every
-  // other app in this category asks who you are before saying what it does, and
-  // then wonders why people stop at the email.
+  // ONE FLOW, six steps, and the last one is true.
   //
-  // introDone === null means we have not read storage yet. Rendering nothing for
-  // that instant is correct: showing the picker and yanking it away is worse.
-  if (introDone === false) {
+  // What used to live here: a six-slide carousel, a language screen, a video
+  // about what ORBII is, fourteen registration steps, a PIN, and a five-step
+  // guided setup. Twenty-nine screens. Slide six of the carousel was titled
+  // "Two things and you're set".
+  //
+  // Language is no longer a screen. It is read from the device and changeable
+  // in Settings, because asking someone to pick a language before she knows
+  // what the app does is a screen that buys nothing.
+  if (!onboarded) {
     return (
-      <IntroFlow
-        onDone={(lang) => {
-          setLang(lang);
-          void setItem(storageKeys.onboardingLang, lang);
-          void setItem(storageKeys.introDone, true);
-          setIntroDone(true);
+      <FirstRun
+        lang={lang}
+        onDone={() => {
+          store.dispatch(onboardingCompleted());
         }}
       />
     );
   }
-  // One flow from consent to a working account, replacing WelcomeScreen,
-  // PhoneVerifyScreen and ProfileSetupScreen. AuthNavigator is kept mounted
-  // for its other routes (Login, PhoneSignIn, LanguageSelector), which are
-  // still reachable from settings and from a returning user's deep link.
-  if (introDone === true) {
-    // onDone is a no-op on purpose. Signing in dispatches to redux, which
-    // re-renders this and sends her into the app through the authenticated
-    // branch above. There is nothing for the flow itself to navigate to.
-    return <OnboardingFlow lang={lang} onDone={() => undefined} />;
-  }
+  // Been here before, just signed out. She gets a login screen, not six steps
+  // of setting up things she already set up.
   return <AuthNavigator />;
 }
 
