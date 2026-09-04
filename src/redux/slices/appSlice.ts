@@ -60,6 +60,14 @@ const appSlice = createSlice({
     onboardingCompleted(state) {
       state.onboarded = true;
     },
+    /**
+     * Sends the user back through first run. Used by "Run setup again" in
+     * Settings, which is the only way to see the flow a second time without
+     * making a throwaway account.
+     */
+    onboardingReset(state) {
+      state.onboarded = false;
+    },
     connectionChanged(state, action: PayloadAction<boolean>) {
       state.isOnline = action.payload;
     },
@@ -101,6 +109,7 @@ const appSlice = createSlice({
 export const {
   appHydrated,
   onboardingCompleted,
+  onboardingReset,
   connectionChanged,
   alertVibrationToggled,
   pushEnabledSet,

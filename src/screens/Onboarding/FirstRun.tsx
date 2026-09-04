@@ -16,6 +16,12 @@ import { armVoiceSos } from '@/services/voice-detection';
 import { setPin } from '@/services/safety-pin';
 import { acceptInviteByToken } from '@/services/circles';
 import { toE164India } from '@/utils/validation';
+import {
+  SceneHandsFree,
+  SceneHelpers,
+  ScenePrivate,
+  SceneVoice,
+} from '@/screens/Onboarding/illustrations/scenes';
 import type { OnboardingLang } from '@/onboardingVideos';
 
 /**
@@ -107,6 +113,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('consent')}
         icon="lock-closed"
         tint={colors.lavenderDeep}
+        scene={<SceneHandsFree />}
         title={hi ? 'शुरू करने से पहले' : 'Welcome to ORBII'}
         blurb={
           hi
@@ -386,6 +393,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('voice')}
         icon="mic"
         tint={colors.coralDeep}
+        scene={<SceneVoice />}
         title={hi ? 'बस एक शब्द' : 'Just say the word'}
         blurb={
           hi
@@ -445,6 +453,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('circle')}
         icon="people"
         tint={colors.lavenderDeep}
+        scene={<SceneHelpers />}
         title={hi ? 'आपका circle' : 'Your circle'}
         blurb={
           hi
@@ -516,6 +525,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('pin')}
         icon="shield-checkmark"
         tint={colors.goldDeep}
+        scene={<ScenePrivate />}
         title={hi ? 'एक PIN चुनिए' : 'Choose a PIN'}
         blurb={
           hi

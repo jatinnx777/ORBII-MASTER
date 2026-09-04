@@ -50,6 +50,22 @@ export type StepProps = {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   /** The icon's colour. Each step gets its own so the flow has a palette. */
   tint: string;
+  /**
+   * A full-bleed illustration instead of the icon badge.
+   *
+   * Only on steps that EXPLAIN. A step that collects an email wants the field
+   * near the top of the screen, and a 200pt picture above it pushes the input
+   * under the keyboard on a small phone. Picture where there is something to
+   * say, badge where there is something to fill in.
+   */
+  scene?: React.ReactNode;
+  /**
+   * Hides the progress bar and the "2 of 8" counter.
+   *
+   * For signing back in, which is not a wizard. A returning user is doing one
+   * thing, and a progress bar over it invents a journey she is not on.
+   */
+  bare?: boolean;
   title: string;
   /** One sentence under the title. Optional: some steps are the sentence. */
   blurb?: string;
@@ -68,6 +84,8 @@ export function Step({
   total,
   icon,
   tint,
+  scene,
+  bare,
   title,
   blurb,
   children,
@@ -99,8 +117,10 @@ export function Step({
     }).start();
     // Announced rather than left to the reader to discover, because the screen
     // replaces itself in place and a screen reader has nothing to notice.
-    AccessibilityInfo.announceForAccessibility(`Step ${index} of ${total}. ${title}`);
-  }, [index, reduced, enter, title, total]);
+    AccessibilityInfo.announceForAccessibility(
+      bare ? title : `Step ${index} of ${total}. ${title}`,
+    );
+  }, [index, reduced, enter, title, total, bare]);
 
   // Absolutely positioned, no children, so animating width is the documented
   // exception rather than a layout pass: nothing else re-lays out.
@@ -127,19 +147,21 @@ export function Step({
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-      <View style={styles.track}>
-        <Animated.View
-          style={[
-            styles.fill,
-            {
-              width: progress.interpolate({
-                inputRange: [0, 1],
-                outputRange: ['0%', '100%'],
-              }),
-            },
-          ]}
-        />
-      </View>
+      {!bare ? (
+        <View style={styles.track}>
+          <Animated.View
+            style={[
+              styles.fill,
+              {
+                width: progress.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
+        </View>
+      ) : null}
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -180,14 +202,22 @@ export function Step({
               {/* Said out loud rather than left to a 3px bar. Knowing there are
                   six and this is the second is most of what makes a flow feel
                   short, and the old one never said. */}
-              <Text style={styles.counter}>
-                {index} of {total}
-              </Text>
+              {!bare ? (
+                <Text style={styles.counter}>
+                  {index} of {total}
+                </Text>
+              ) : (
+                <View />
+              )}
             </View>
 
-            <View style={[styles.badge, { backgroundColor: tint + '1A' }]}>
-              <Ionicons name={icon} size={26} color={tint} />
-            </View>
+            {scene ? (
+              <View style={styles.scene}>{scene}</View>
+            ) : (
+              <View style={[styles.badge, { backgroundColor: tint + '1A' }]}>
+                <Ionicons name={icon} size={26} color={tint} />
+              </View>
+            )}
 
             <Text style={styles.title}>{title}</Text>
             {blurb ? <Text style={styles.blurb}>{blurb}</Text> : null}
@@ -253,6 +283,15 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     letterSpacing: 0.4,
     color: colors.textMuted,
+  },
+  // 4:3, matching the scenes' 400x300 viewBox, so nothing is cropped and the
+  // horizon sits where it was drawn to sit.
+  scene: {
+    aspectRatio: 4 / 3,
+    width: '100%',
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    marginBottom: spacing.lg,
   },
   badge: {
     width: 56,

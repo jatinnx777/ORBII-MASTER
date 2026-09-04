@@ -1,6 +1,6 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { WelcomeScreen } from '@/screens/Auth/WelcomeScreen';
+import { SignInScreen } from '@/screens/Auth/SignInScreen';
 import { LoginScreen } from '@/screens/Auth/LoginScreen';
 import { PhoneSignInScreen } from '@/screens/Auth/PhoneSignInScreen';
 import { PhoneVerifyScreen } from '@/screens/Auth/PhoneVerifyScreen';
@@ -34,7 +34,11 @@ export function AuthNavigator() {
         contentStyle: { backgroundColor: '#FFFFFF' },
       }}
     >
-      <Stack.Screen name="Welcome" component={WelcomeScreen} />
+      {/* Signing back in uses the same shell as first run. The old
+          WelcomeScreen predates that rebuild and looked like a different
+          app, which meant the worst screen in ORBII was the one shown to
+          people who had already decided to use it. */}
+      <Stack.Screen name="Welcome" component={SignInScreen} />
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="PhoneSignIn" component={PhoneSignInScreen} />
       <Stack.Screen name="PhoneVerify" component={PhoneVerifyScreen} />

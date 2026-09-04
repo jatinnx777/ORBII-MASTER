@@ -23,8 +23,10 @@ import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
   alertVibrationToggled,
+  onboardingReset,
   pushEnabledSet,
 } from '@/redux/slices/appSlice';
+import { setItem, storageKeys } from '@/services/storage';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
 import { isVideoEvidenceReady, requestVideoEvidencePermissions } from '@/services/sos-video';
@@ -430,6 +432,30 @@ export function SettingsScreen() {
 
         <RowSection title="Account" />
         <RowGroup>
+          {/* Run the setup again.
+              Everything it touches is idempotent: signing in with the same
+              email returns the same account, and the contact, PIN and circle
+              steps overwrite rather than duplicate. So this is safe for anyone,
+              and it is the only way to see the flow again without creating a
+              throwaway account, which is a miserable way to check your own
+              onboarding. */}
+          <Row
+            icon="refresh"
+            label="Run setup again"
+            onPress={() => {
+              sheet.confirm({
+                title: 'Run setup again?',
+                body: 'You will be signed out and taken back through setup. Sign in with the same email and nothing is lost: your contacts, circle and history all come back.',
+                confirmLabel: 'Run it again',
+                onConfirm: async () => {
+                  await setItem(storageKeys.onboarded, false);
+                  dispatch(onboardingReset());
+                  dispatch(signedOut());
+                  void signOutFromGoogle();
+                },
+              });
+            }}
+          />
           <Row
             icon="log-out"
             label="Sign out"

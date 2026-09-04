@@ -42,7 +42,6 @@ import {
   type FeedPost,
   type FeedTab,
 } from '@/services/community-feed';
-import { useIsPremium } from '@/services/entitlements';
 import { useTabBarScroll } from '@/navigation/tabBarVisibility';
 
 // Community, an anonymous, moderated space to share safety experiences.
@@ -84,7 +83,6 @@ export function CommunityFeedScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const sheet = useBrandSheet();
-  const isPremium = useIsPremium();
   const onTabScroll = useTabBarScroll();
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -146,12 +144,25 @@ export function CommunityFeedScreen() {
   };
 
   const openCompose = () => {
-    if (!isPremium) {
-      navigation.navigate('PremiumUpgrade' as never);
-      return;
-    }
+    // THE PREMIUM GATE IS GONE, and leaving it here was my mistake. Community
+    // left ALWAYS_GATED so reading became free, but posting still checked
+    // isPremium directly, so the tab opened for everyone and the compose button
+    // bounced them to a paywall. Half-opening a feature is worse than leaving
+    // it shut: it looks broken rather than locked.
     if (!hasProfile) {
-      navigation.navigate('CommunityProfileSetup' as never);
+      // And this used to swap the screen with no explanation, which reads as
+      // the app malfunctioning. Say what is needed and why, then go.
+      appAlert(
+        'Pick a name first',
+        'Community posts show a display name instead of your real one. It takes a few seconds and you only do it once.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Set it up',
+            onPress: () => navigation.navigate('CommunityProfileSetup' as never),
+          },
+        ],
+      );
       return;
     }
     setComposeOpen(true);
@@ -292,11 +303,9 @@ export function CommunityFeedScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Community</Text>
           <Pressable
-            onPress={() =>
-              isPremium
-                ? navigation.navigate('CommunityProfileSetup' as never)
-                : navigation.navigate('PremiumUpgrade' as never)
-            }
+            // Same stale gate as openCompose had: the profile button sent
+            // free users to a paywall for a section that is now free.
+            onPress={() => navigation.navigate('CommunityProfileSetup' as never)}
             hitSlop={8}
             style={styles.headerBtn}
             accessibilityLabel="Your community profile"
