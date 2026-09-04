@@ -10,10 +10,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { appAlert, useBrandSheet } from '@/components/common';
+import { useBrandSheet } from '@/components/common';
+import { ProfileHeader } from '@/components/community/ProfileHeader';
+import { Tabs } from '@/components/community/Tabs';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import {
-  avatarEmoji,
   blockProfile,
   follow,
   getUserProfile,
@@ -29,13 +30,10 @@ const CATEGORY_COLOR: Record<string, string> = {
   general: colors.textMuted, safety: colors.sageDeep, legal: colors.brandDeep, emergency: colors.coralDeep,
 };
 const SORTS: { key: PostSort; label: string }[] = [
-  { key: 'newest', label: 'Newest' },
-  { key: 'oldest', label: 'Oldest' },
-  { key: 'popular', label: 'Most Popular' },
+  { key: 'newest', label: 'Latest' },
+  { key: 'popular', label: 'Top' },
+  { key: 'oldest', label: 'Earliest' },
 ];
-const GENDER_LABEL: Record<string, string> = {
-  female: 'Female', male: 'Male', nonbinary: 'Non-binary', undisclosed: '',
-};
 
 function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -119,44 +117,13 @@ export function CommunityUserProfileScreen() {
           <View style={styles.empty}><Text style={styles.emptyText}>Profile not found.</Text></View>
         ) : (
           <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-            {/* Header */}
-            <View style={styles.pHead}>
-              <View style={styles.avatar}><Text style={styles.avatarEmoji}>{avatarEmoji(profile.avatarKey)}</Text></View>
-              <Text style={styles.name}>{profile.displayName}</Text>
-              <Text style={styles.handle}>@{profile.handle}</Text>
-              {GENDER_LABEL[profile.gender] ? <Text style={styles.gender}>{GENDER_LABEL[profile.gender]}</Text> : null}
-              {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+            <ProfileHeader profile={profile} onToggleFollow={() => void toggleFollow()} />
 
-              <View style={styles.stats}>
-                <View style={styles.stat}><Text style={styles.statNum}>{profile.followers}</Text><Text style={styles.statLbl}>Followers</Text></View>
-                <View style={styles.statSep} />
-                <View style={styles.stat}><Text style={styles.statNum}>{profile.following}</Text><Text style={styles.statLbl}>Following</Text></View>
-                {profile.helped > 0 ? (
-                  <>
-                    <View style={styles.statSep} />
-                    <View style={styles.stat}>
-                      <Text style={[styles.statNum, { color: colors.sageDeep }]}>{profile.helped}</Text>
-                      <Text style={styles.statLbl}>Helped</Text>
-                    </View>
-                  </>
-                ) : null}
-              </View>
-
-              <Pressable onPress={toggleFollow} style={[styles.followBtn, profile.isFollowing && styles.followingBtn]}>
-                <Text style={[styles.followText, profile.isFollowing && styles.followingText]}>
-                  {profile.isFollowing ? 'Following' : 'Follow'}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Sort */}
-            <View style={styles.sortRow}>
-              {SORTS.map((s) => (
-                <Pressable key={s.key} onPress={() => changeSort(s.key)} style={[styles.sortChip, sort === s.key && styles.sortChipOn]}>
-                  <Text style={[styles.sortText, sort === s.key && styles.sortTextOn]}>{s.label}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <Tabs
+              tabs={SORTS.map((x) => ({ key: x.key, label: x.label }))}
+              active={sort}
+              onChange={(k) => void changeSort(k as PostSort)}
+            />
 
             {/* Posts */}
             {posts.length === 0 ? (
@@ -201,30 +168,9 @@ const styles = StyleSheet.create({
   topTitle: { ...typography.h2, fontSize: 17, color: colors.textPrimary },
   scroll: { padding: spacing.lg, paddingBottom: 120, gap: spacing.md },
 
-  pHead: { alignItems: 'center', gap: 4, paddingBottom: spacing.md },
-  avatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 6 },
-  avatarEmoji: { fontSize: 42 },
-  name: { fontFamily: fontFamilies.poppinsBold, fontSize: 20, color: colors.textPrimary },
-  handle: { fontFamily: fontFamilies.interRegular, fontSize: 13.5, color: colors.textMuted },
-  gender: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.brandDeep, marginTop: 4 },
-  bio: { fontFamily: fontFamilies.interRegular, fontSize: 14, color: colors.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8, maxWidth: 300 },
 
-  stats: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, marginTop: spacing.md },
-  stat: { alignItems: 'center' },
-  statNum: { fontFamily: fontFamilies.poppinsBold, fontSize: 18, color: colors.textPrimary },
-  statLbl: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textMuted },
-  statSep: { width: 1, height: 28, backgroundColor: colors.divider },
 
-  followBtn: { marginTop: spacing.md, backgroundColor: colors.brand, borderRadius: radius.pill, paddingHorizontal: 40, paddingVertical: 11 },
-  followingBtn: { backgroundColor: colors.brandSoft },
-  followText: { fontFamily: fontFamilies.poppinsBold, fontSize: 14, color: colors.textInverse },
-  followingText: { color: colors.brandDeep },
 
-  sortRow: { flexDirection: 'row', gap: spacing.sm },
-  sortChip: { paddingHorizontal: spacing.md, paddingVertical: 8, borderRadius: radius.pill, backgroundColor: colors.surface, ...shadows.icon },
-  sortChipOn: { backgroundColor: colors.brand },
-  sortText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12.5, color: colors.textSecondary },
-  sortTextOn: { color: colors.textInverse },
 
   card: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md, gap: spacing.sm, ...shadows.card },
   cardTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

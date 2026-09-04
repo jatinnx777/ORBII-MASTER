@@ -58,7 +58,17 @@ const ALWAYS_GATED: ReadonlySet<Feature> = new Set<Feature>([
   //
   // Charge for unlimited responder dispatch. Never charge somebody for saying
   // "I am safe".
-  'community',
+
+  // 'community' has now gone the same way, for a different reason.
+  //
+  // A community is worth what its density is worth, and a paywall in front of
+  // an empty room guarantees it stays empty: the people who would have posted
+  // first are exactly the ones who will not pay to find out whether anyone
+  // else is there. Charging for it was charging for a thing that does not
+  // exist yet, and the price was that it never would.
+  //
+  // Free until there are people in it. Whether it is ever worth charging for
+  // is a question that can only be answered once it is full.
   'circle_geofencing',
 ]);
 
