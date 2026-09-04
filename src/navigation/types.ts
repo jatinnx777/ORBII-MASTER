@@ -64,6 +64,7 @@ export type AppStackParamList = {
   DisasterMode: undefined;
   ZoneEditor: undefined;
   CircleMap: undefined;
+  TripReplay: { userId: string; name?: string };
   OfflineHelperAlert: { alertId: string };
   CommunityFeed: undefined;
   CommunityProfileSetup: undefined;

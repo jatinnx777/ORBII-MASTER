@@ -656,6 +656,23 @@ export function CircleMapScreen() {
                     >
                       <Ionicons name="footsteps-outline" size={17} color={colors.brandDeep} />
                     </Pressable>
+                    {/* The trail as a list of stops answers "where did she go".
+                        The replay answers "how did the day go", which is a
+                        different question and the one a parent is actually
+                        asking at 11pm. */}
+                    <Pressable
+                      onPress={() =>
+                        // @ts-expect-error TripReplay lives in the AppStack, same
+                        // as the other pushes from this screen.
+                        navigation.navigate('TripReplay', { userId: m.userId, name: m.name })
+                      }
+                      hitSlop={8}
+                      style={styles.historyBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Replay ${m.name || 'their'} day`}
+                    >
+                      <Ionicons name="play-circle-outline" size={18} color={colors.brandDeep} />
+                    </Pressable>
                   </Pressable>
                 );
               })}

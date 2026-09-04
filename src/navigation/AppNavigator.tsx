@@ -11,6 +11,7 @@ import { VoiceDonationScreen } from '@/screens/Profile/VoiceDonationScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { ZoneEditorScreen } from '@/screens/Geofence/ZoneEditorScreen';
 import { CircleMapScreen } from '@/screens/Circles/CircleMapScreen';
+import { TripReplayScreen } from '@/screens/Circles/TripReplayScreen';
 import { MissionsScreen } from '@/responder/MissionsScreen';
 import { useEntitlement } from '@/services/entitlements';
 import { PremiumLock } from '@/components/common';
@@ -181,6 +182,11 @@ export function AppNavigator() {
       <Stack.Screen
         name="CircleMap"
         component={GatedCircleMap}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
+      />
+      <Stack.Screen
+        name="TripReplay"
+        component={TripReplayScreen}
         options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
