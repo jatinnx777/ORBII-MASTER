@@ -5,52 +5,80 @@ import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
 import { Protected } from '@/components/onboarding/Protected';
 import { Listening } from '@/components/onboarding/Listening';
+import { PermissionCards } from '@/components/onboarding/PermissionCards';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { contactAdded, signInSucceeded } from '@/redux/slices/userSlice';
+import { contactAdded, profileUpdated, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
-import { sendEmailOtp, signInWithGoogle, verifyEmailOtp } from '@/services/auth';
+import { sendEmailOtp, signInWithGoogle, updateProfile, verifyEmailOtp } from '@/services/auth';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { armVoiceSos } from '@/services/voice-detection';
 import { setPin } from '@/services/safety-pin';
+import { acceptInviteByToken } from '@/services/circles';
 import { toE164India } from '@/utils/validation';
 import type { OnboardingLang } from '@/onboardingVideos';
 
 /**
- * First run, rebuilt.
+ * First run.
  *
- * IT REPLACES TWENTY-NINE SCREENS WITH SIX. What was here before was a
- * six-slide carousel, then a language screen, then a video about what ORBII
- * is, then fourteen registration steps, then a PIN, then a five-step guided
- * setup, then a permission modal. 2,323 lines across five files, none of which
- * knew about the others. Slide six of the carousel was titled "Two things and
- * you're set", and twenty-three screens came after it.
+ * IT REPLACED TWENTY-NINE SCREENS: a six-slide carousel, a language screen, a
+ * video, fourteen registration steps, a PIN, and a five-step guided setup, in
+ * 2,323 lines across five files that did not know about each other. Slide six
+ * of the carousel was titled "Two things and you're set", and twenty-three
+ * screens came after it.
  *
- * THE RULE EVERY SCREEN HERE HAD TO PASS: does skipping this leave her less
- * safe in the next five minutes? Name, photo, phone number, battery exemption,
- * safe zones, evidence settings and offline setup all failed it. They are not
- * deleted, they are asked later, in the place where they mean something.
+ * THE RULE EVERY SCREEN PASSES: does skipping it leave her less safe in the
+ * next five minutes? Photo, username, safe zones, evidence settings and offline
+ * setup all failed it and are asked later, where they mean something.
  *
- * WHY THAT IS A SAFETY DECISION AND NOT A TASTE ONE. She is not exploring a
- * product. Nobody downloads a women's safety app on a good day; she is doing it
- * because of a commute, a corridor, or a person. Every screen before she is
- * covered is a screen during which she is not. And the person who gave up at
- * step eleven of the old flow walked away believing she had a safety app.
- * A half-finished safety setup is more dangerous than no app at all, because
- * it is trusted.
+ * WHY THAT IS A SAFETY DECISION. Nobody downloads a women's safety app on a
+ * good day. Every screen before she is covered is a screen during which she is
+ * not, and whoever gave up at step eleven of the old flow walked away believing
+ * she had a safety app. A half-finished safety setup is more dangerous than
+ * none, because it is trusted.
  *
- * So: six screens, and the last one is true.
+ * TWO THINGS THE SPEC ASKED FOR THAT ARE NOT HERE, both deliberate:
+ *
+ *   PHONE AS THE LOGIN. sendPhoneOtp exists and cannot work: Supabase Phone
+ *   Auth needs an SMS provider and none is wired, which is exactly why auth.ts
+ *   retired that path. A phone-OTP screen would be a beautiful form that can
+ *   never send a message. The number is still collected, as her emergency
+ *   contact's, which is what it is actually for.
+ *
+ *   DROPPING THE PIN. The spec's five steps have no PIN. It stays, because it
+ *   is the only thing stopping somebody who grabs her phone from tapping
+ *   cancel on her own SOS.
  */
 
-type StepId = 'consent' | 'email' | 'code' | 'contact' | 'voice' | 'pin' | 'done';
+type StepId =
+  | 'consent'
+  | 'auth'
+  | 'code'
+  | 'profile'
+  | 'permissions'
+  | 'voice'
+  | 'circle'
+  | 'pin'
+  | 'done';
 
-const ORDER: StepId[] = ['consent', 'email', 'code', 'contact', 'voice', 'pin'];
+const ORDER: StepId[] = [
+  'consent',
+  'auth',
+  'code',
+  'profile',
+  'permissions',
+  'voice',
+  'circle',
+  'pin',
+];
 const TOTAL = ORDER.length;
+
+const ROLES = ['Parent', 'Friend', 'Partner', 'Sibling', 'Guardian'] as const;
 
 export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () => void }) {
   const hi = lang === 'hi';
   const dispatch = useAppDispatch();
-  const profile = useAppSelector((s) => s.user.profile);
+  const profile = useAppSelector((st) => st.user.profile);
 
   const [step, setStep] = useState<StepId>('consent');
   const [busy, setBusy] = useState(false);
@@ -58,31 +86,35 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   const [adult, setAdult] = useState(false);
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
+  const [name, setName] = useState('');
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
-  const [pin, setPinValue] = useState('');
+  const [role, setRole] = useState<string>('Parent');
+  const [perms, setPerms] = useState<string[]>([]);
   const [voiceArmed, setVoiceArmed] = useState(false);
+  const [invite, setInvite] = useState('');
+  const [joined, setJoined] = useState(false);
+  const [pin, setPinValue] = useState('');
 
   const index = (id: StepId) => ORDER.indexOf(id) + 1;
   const go = (next: StepId) => setStep(next);
+  const common = (id: StepId) => ({ index: index(id), total: TOTAL, busy });
 
   // ---- consent -------------------------------------------------------------
   if (step === 'consent') {
     return (
       <Step
-        index={index('consent')}
-        total={TOTAL}
+        {...common('consent')}
         icon="lock-closed"
         tint={colors.lavenderDeep}
-        title={hi ? 'शुरू करने से पहले' : 'Before we start'}
+        title={hi ? 'शुरू करने से पहले' : 'Welcome to ORBII'}
         blurb={
           hi
             ? 'ORBII आपकी आवाज़ आपके फ़ोन पर ही पहचानता है। कुछ भी अपलोड नहीं होता।'
-            : 'ORBII recognises your voice on your phone. Nothing is uploaded to hear it.'
+            : 'Silent, hands-free protection for the people you trust. Your voice is recognised on your phone and never uploaded.'
         }
         ctaLabel={hi ? 'आगे' : 'Continue'}
         ctaDisabled={!adult}
-        busy={busy}
         footnote={
           hi
             ? 'भारत के DPDP नियमों के तहत 18 से कम उम्र पर लगातार लोकेशन बंद रहती है।'
@@ -93,7 +125,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           try {
             await recordConsent(lang, adult);
             void logConsentEvent('core', true, { method: 'checkbox' });
-            go('email');
+            go('auth');
           } finally {
             setBusy(false);
           }
@@ -116,40 +148,33 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
     );
   }
 
-  // ---- email ---------------------------------------------------------------
-  if (step === 'email') {
+  // ---- auth ----------------------------------------------------------------
+  if (step === 'auth') {
     return (
       <Step
-        index={index('email')}
-        total={TOTAL}
+        {...common('auth')}
         icon="mail"
         tint={colors.brandDeep}
-        title={hi ? 'आपका ईमेल' : 'Your email'}
-        blurb={
-          hi
-            ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।'
-            : 'No password. We send you a code.'
-        }
+        title={hi ? 'आपका ईमेल' : 'Create your account'}
+        blurb={hi ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।' : 'No password. We send you a code.'}
         ctaLabel={hi ? 'कोड भेजिए' : 'Email me a code'}
         ctaDisabled={!/^\S+@\S+\.\S+$/.test(email.trim())}
-        busy={busy}
         onBack={() => go('consent')}
         onNext={async () => {
           setBusy(true);
           try {
             await sendEmailOtp(email);
           } catch {
-            // A genuinely bad address surfaces on the code screen instead of
-            // trapping her here with an error she cannot act on.
+            // A bad address surfaces on the code screen rather than trapping
+            // her here with an error she cannot act on.
           } finally {
             setBusy(false);
             go('code');
           }
         }}
       >
-        {/* Google first, and it is not decoration. It is one tap against three
-            screens: no code to wait for, no inbox to switch to, no chance of a
-            slow SMTP handoff losing her between here and the code screen. */}
+        {/* Google first. One tap against three screens: no code to wait for, no
+            inbox to switch to, no slow SMTP handoff losing her in between. */}
         <Pressable
           disabled={busy}
           onPress={async () => {
@@ -158,10 +183,10 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
               const r = await signInWithGoogle();
               dispatch(signInSucceeded({ profile: r.profile, needsProfile: r.needsProfile }));
               dispatch(historyHydrated(r.history));
-              go('contact');
+              setName(r.profile.name ?? '');
+              go('profile');
             } catch (err) {
               const m = err instanceof Error ? err.message : 'Google sign-in failed.';
-              // A cancelled sign-in is a decision, not an error to apologise for.
               if (!/cancel/i.test(m)) Alert.alert(hi ? 'साइन इन नहीं हुआ' : 'Could not sign in', m);
             } finally {
               setBusy(false);
@@ -171,9 +196,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           accessibilityRole="button"
         >
           <Ionicons name="logo-google" size={19} color={colors.textPrimary} />
-          <Text style={s.googleText}>
-            {hi ? 'Google से जारी रखें' : 'Continue with Google'}
-          </Text>
+          <Text style={s.googleText}>{hi ? 'Google से जारी रखें' : 'Continue with Google'}</Text>
         </Pressable>
 
         <View style={s.orRow}>
@@ -202,23 +225,22 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   if (step === 'code') {
     return (
       <Step
-        index={index('code')}
-        total={TOTAL}
+        {...common('code')}
         icon="keypad"
         tint={colors.brandDeep}
         title={hi ? 'ईमेल देखिए' : 'Check your email'}
         blurb={email.trim().toLowerCase()}
         ctaLabel={hi ? 'आगे' : 'Continue'}
         ctaDisabled={code.replace(/\D/g, '').length < 6}
-        busy={busy}
-        onBack={() => go('email')}
+        onBack={() => go('auth')}
         onNext={async () => {
           setBusy(true);
           try {
             const r = await verifyEmailOtp(email, code);
             dispatch(signInSucceeded({ profile: r.profile, needsProfile: r.needsProfile }));
             dispatch(historyHydrated(r.history));
-            go('contact');
+            setName(r.profile.name ?? '');
+            go('profile');
           } catch (err) {
             Alert.alert(
               hi ? 'कोड ग़लत है' : 'That code did not work',
@@ -229,11 +251,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        {/* NOT CAPPED AT SIX. Supabase issues an 8 digit code on this project,
-            and a maxLength of 6 silently truncated it, which made every new
-            signup impossible rather than merely annoying. Accepts up to 8 and
-            unlocks at 6, so the field is right whichever length the project is
-            configured for and never eats a valid digit. */}
+        {/* Not capped at six. Supabase issues an 8 digit code on this project,
+            and a maxLength of 6 silently ate the last two, which made signup
+            impossible rather than merely annoying. */}
         <TextInput
           value={code}
           onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 8))}
@@ -250,12 +270,11 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
     );
   }
 
-  // ---- one contact ---------------------------------------------------------
-  if (step === 'contact') {
+  // ---- profile and the one contact ----------------------------------------
+  if (step === 'profile') {
     return (
       <Step
-        index={index('contact')}
-        total={TOTAL}
+        {...common('profile')}
         icon="person-add"
         tint={colors.sageDeep}
         title={hi ? 'एक भरोसेमंद नंबर' : 'One person who picks up'}
@@ -265,29 +284,43 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             : 'One person who will actually pick up at 2am. Not five who might.'
         }
         ctaLabel={hi ? 'आगे' : 'Continue'}
-        ctaDisabled={cName.trim().length < 2 || cPhone.length !== 10}
-        busy={busy}
-        footnote={
-          hi ? 'बाद में और लोग जोड़ सकती हैं।' : 'You can add more people later.'
-        }
+        ctaDisabled={name.trim().length < 2 || cName.trim().length < 2 || cPhone.length !== 10}
+        onBack={() => go('code')}
         onNext={async () => {
           if (!profile) return;
           setBusy(true);
           try {
+            // Her name is not vanity. Without it the alert her mother receives
+            // says "Someone needs help".
+            if (name.trim() && name.trim() !== profile.name) {
+              const updated = await updateProfile(profile, {
+                name: name.trim(),
+                photoUri: profile.photoUri ?? null,
+              }).catch(() => null);
+              if (updated) dispatch(profileUpdated(updated));
+            }
             const contact = {
               id: `ec_${Date.now()}`,
               name: cName.trim(),
               phone: toE164India(cPhone),
-              relation: 'Emergency contact',
+              relation: role,
             };
             const saved = await upsertEmergencyContact(profile.uid, contact);
             dispatch(contactAdded(saved ?? contact));
           } finally {
             setBusy(false);
-            go('voice');
+            go('permissions');
           }
         }}
       >
+        <TextInput
+          value={name}
+          onChangeText={setName}
+          placeholder={hi ? 'आपका नाम' : 'Your name'}
+          placeholderTextColor={colors.textMuted}
+          style={s.input}
+          autoCapitalize="words"
+        />
         <TextInput
           value={cName}
           onChangeText={setCName}
@@ -305,6 +338,43 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           keyboardType="number-pad"
           textContentType="telephoneNumber"
         />
+        <View style={s.chips}>
+          {ROLES.map((r) => (
+            <Pressable
+              key={r}
+              onPress={() => setRole(r)}
+              accessibilityRole="radio"
+              accessibilityState={{ selected: role === r }}
+              style={[s.chip, role === r && s.chipOn]}
+            >
+              <Text style={[s.chipText, role === r && s.chipTextOn]}>{r}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </Step>
+    );
+  }
+
+  // ---- permissions ---------------------------------------------------------
+  if (step === 'permissions') {
+    return (
+      <Step
+        {...common('permissions')}
+        icon="shield-half"
+        tint={colors.goldDeep}
+        title={hi ? 'ORBII को चालू रखिए' : 'Turn ORBII on'}
+        blurb={
+          hi
+            ? 'हर एक के लिए वजह पहले, फिर फ़ोन पूछेगा। कोई भी छोड़ सकती हैं।'
+            : 'The reason first, then your phone asks. You can skip any of them.'
+        }
+        ctaLabel={
+          perms.length === 0 ? (hi ? 'अभी छोड़ें' : 'Skip for now') : hi ? 'आगे' : 'Continue'
+        }
+        onBack={() => go('profile')}
+        onNext={() => go('voice')}
+      >
+        <PermissionCards onChange={(g) => setPerms(g)} />
       </Step>
     );
   }
@@ -313,8 +383,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   if (step === 'voice') {
     return (
       <Step
-        index={index('voice')}
-        total={TOTAL}
+        {...common('voice')}
         icon="mic"
         tint={colors.coralDeep}
         title={hi ? 'बस एक शब्द' : 'Just say the word'}
@@ -332,7 +401,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
               ? 'Voice SOS चालू कीजिए'
               : 'Turn on Voice SOS'
         }
-        busy={busy}
+        onBack={() => go('permissions')}
         footnote={
           hi
             ? 'यह 12 घंटे के लिए चालू होता है। कभी भी बंद कर सकती हैं।'
@@ -340,24 +409,21 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         }
         onNext={async () => {
           if (voiceArmed) {
-            go('pin');
+            go('circle');
             return;
           }
           setBusy(true);
           try {
             // NEVER a live trigger during setup. The old flow said "try saying
-            // it now" right after arming the real engine, which did exactly
-            // what you would expect.
+            // it now" right after arming the real engine.
             const r = await armVoiceSos(12);
             setVoiceArmed(!!r);
             if (!r) {
               Alert.alert(
                 hi ? 'चालू नहीं हो पाया' : 'Could not turn it on',
-                hi
-                  ? 'माइक की अनुमति चाहिए। Settings में जाकर दे सकती हैं, या अभी छोड़ दीजिए।'
-                  : 'ORBII needs microphone permission. You can allow it in Settings, or skip for now.',
+                hi ? 'माइक की अनुमति चाहिए।' : 'ORBII needs microphone permission for this.',
                 [
-                  { text: hi ? 'अभी छोड़ें' : 'Skip for now', onPress: () => go('pin') },
+                  { text: hi ? 'अभी छोड़ें' : 'Skip for now', onPress: () => go('circle') },
                   { text: 'OK' },
                 ],
               );
@@ -372,12 +438,82 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
     );
   }
 
+  // ---- circle --------------------------------------------------------------
+  if (step === 'circle') {
+    return (
+      <Step
+        {...common('circle')}
+        icon="people"
+        tint={colors.lavenderDeep}
+        title={hi ? 'आपका circle' : 'Your circle'}
+        blurb={
+          hi
+            ? 'अगर किसी ने आपको invite किया है तो code डालिए। नहीं तो यह बाद में हो सकता है।'
+            : 'If someone sent you an invite, enter the code. If not, this can wait.'
+        }
+        ctaLabel={
+          joined
+            ? hi
+              ? 'आगे'
+              : 'Continue'
+            : invite.trim()
+              ? hi
+                ? 'जुड़िए'
+                : 'Join'
+              : hi
+                ? 'बाद में'
+                : 'Later'
+        }
+        onBack={() => go('voice')}
+        onNext={async () => {
+          if (joined || !invite.trim()) {
+            go('pin');
+            return;
+          }
+          setBusy(true);
+          try {
+            await acceptInviteByToken(invite.trim());
+            setJoined(true);
+          } catch (err) {
+            Alert.alert(
+              hi ? 'Code काम नहीं आया' : 'That code did not work',
+              err instanceof Error ? err.message : 'Check it and try again.',
+            );
+          } finally {
+            setBusy(false);
+          }
+        }}
+        footnote={
+          hi
+            ? 'Circle बनाना और लोगों को बुलाना बाद में Circles tab से कर सकती हैं।'
+            : 'You can create a circle and invite people from the Circles tab any time.'
+        }
+      >
+        {joined ? (
+          <View style={s.joined}>
+            <Ionicons name="checkmark-circle" size={20} color={colors.sageDeep} />
+            <Text style={s.joinedText}>{hi ? 'आप जुड़ गईं' : 'You are in'}</Text>
+          </View>
+        ) : (
+          <TextInput
+            value={invite}
+            onChangeText={(v) => setInvite(v.trim())}
+            placeholder="Invite code"
+            placeholderTextColor={colors.textMuted}
+            style={[s.input, s.invite]}
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+        )}
+      </Step>
+    );
+  }
+
   // ---- pin -----------------------------------------------------------------
   if (step === 'pin') {
     return (
       <Step
-        index={index('pin')}
-        total={TOTAL}
+        {...common('pin')}
         icon="shield-checkmark"
         tint={colors.goldDeep}
         title={hi ? 'एक PIN चुनिए' : 'Choose a PIN'}
@@ -388,7 +524,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         }
         ctaLabel={hi ? 'हो गया' : 'Done'}
         ctaDisabled={pin.length !== 4}
-        busy={busy}
+        onBack={() => go('circle')}
         footnote={
           hi
             ? 'इसे याद रखिए। यह सिर्फ़ आपके फ़ोन पर रहता है।'
@@ -425,9 +561,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   }
 
   // ---- done ----------------------------------------------------------------
-  // Every line is something that is actually live for her right now. Nothing
-  // aspirational, nothing she has not done, because this is the one screen the
-  // whole flow exists to make true.
+  // Every line is live for her right now. Nothing aspirational, nothing she did
+  // not do, because this is the screen the whole flow exists to make true.
   const lines = [
     hi ? `${cName.trim()} को तुरंत पता चलेगा` : `${cName.trim()} is alerted instantly`,
     voiceArmed
@@ -439,14 +574,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         : 'The SOS button is ready',
     hi ? 'आपका PIN सेट है' : 'Your PIN is set',
   ];
+  if (joined) lines.push(hi ? 'आप एक circle में हैं' : 'You are in a circle');
 
-  return (
-    <Protected
-      lines={lines}
-      ctaLabel={hi ? 'ORBII खोलिए' : 'Open ORBII'}
-      onDone={onDone}
-    />
-  );
+  return <Protected lines={lines} ctaLabel={hi ? 'ORBII खोलिए' : 'Enter ORBII'} onDone={onDone} />;
 }
 
 const s = StyleSheet.create({
@@ -467,6 +597,7 @@ const s = StyleSheet.create({
     textAlign: 'center',
     fontFamily: fontFamilies.poppinsSemiBold,
   },
+  invite: { letterSpacing: 3, textAlign: 'center', fontFamily: fontFamilies.poppinsSemiBold },
 
   google: {
     flexDirection: 'row',
@@ -512,5 +643,19 @@ const s = StyleSheet.create({
   checkText: { fontFamily: fontFamilies.interRegular, fontSize: 15, color: colors.textPrimary },
   pressed: { opacity: 0.9 },
 
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  chip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  chipOn: { backgroundColor: colors.textPrimary, borderColor: colors.textPrimary },
+  chipText: { fontFamily: fontFamilies.interRegular, fontSize: 14, color: colors.textSecondary },
+  chipTextOn: { color: colors.textInverse, fontFamily: fontFamilies.poppinsSemiBold },
 
+  joined: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  joinedText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.sageDeep },
 });

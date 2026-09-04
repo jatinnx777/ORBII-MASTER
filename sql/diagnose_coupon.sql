@@ -17,10 +17,12 @@
 -- production: without it a single promo code is an unlimited free tier. It just
 -- makes the code look broken to the one person who redeems it most.
 --
--- SET YOUR EMAIL HERE and run the whole file.
+-- SET YOUR EMAIL by find-and-replacing the address below, then run the file.
+--
+-- NOTE: no \set here. That is a psql meta-command and the Supabase SQL editor
+-- is not psql: it sends the text straight to the server, which sees a
+-- backslash and stops. Plain literals only.
 -- ============================================================================
-
-\set ME 'jaykumar2470f@gmail.com'
 
 -- ---------------------------------------------------------------------------
 -- 1. WHAT THE COUPON ACTUALLY LOOKS LIKE
@@ -52,7 +54,7 @@ order by code;
 select r.code, r.user_id, r.redeemed_at
 from coupon_redemptions r
 join auth.users u on u.id = r.user_id
-where u.email = :'ME'
+where u.email = 'jaykumar2470f@gmail.com'
 order by r.redeemed_at desc;
 
 -- ---------------------------------------------------------------------------
@@ -64,7 +66,7 @@ order by r.redeemed_at desc;
 select e.plan_type, e.status, e.premium_enabled, e.purchase_date
 from entitlements e
 join auth.users u on u.id = e.user_id
-where u.email = :'ME';
+where u.email = 'jaykumar2470f@gmail.com';
 
 -- ---------------------------------------------------------------------------
 -- 4. THE REPAIRS
@@ -89,11 +91,11 @@ where u.email = :'ME';
 -- guard is the only thing standing between one promo code and a permanent
 -- free tier.
 -- delete from coupon_redemptions
---  where user_id = (select id from auth.users where email = :'ME');
+--  where user_id = (select id from auth.users where email = 'jaykumar2470f@gmail.com');
 
 -- (d) You just want Plus on this account and do not care about the coupon.
 -- insert into entitlements (user_id, plan_type, status, premium_enabled, purchase_date, updated_at)
--- select id, 'plus', 'active', true, now(), now() from auth.users where email = :'ME'
+-- select id, 'plus', 'active', true, now(), now() from auth.users where email = 'jaykumar2470f@gmail.com'
 --     on conflict (user_id) do update
 --    set plan_type = 'plus', status = 'active', premium_enabled = true, updated_at = now();
 
