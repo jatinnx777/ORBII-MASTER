@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { appAlert } from '@/components/common';
+import { appAlert, SkeletonList } from '@/components/common';
 import {
-  ActivityIndicator,
   FlatList,
   Image,
   Pressable,
@@ -232,7 +231,7 @@ export function CircleDetailScreen({
           }
           ListEmptyComponent={
             <View style={{ paddingTop: spacing.xl }}>
-              <ActivityIndicator color={colors.brandDeep} />
+              <SkeletonList rows={3} />
             </View>
           }
           refreshControl={

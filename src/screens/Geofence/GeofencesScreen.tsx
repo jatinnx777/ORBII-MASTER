@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { appAlert, useBrandSheet } from '@/components/common';
+import { appAlert, useBrandSheet, SkeletonList } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getCurrentLocation } from '@/services/location';
@@ -235,7 +234,7 @@ export function GeofencesScreen() {
           {/* ── Zones I set ── */}
           <Text style={styles.sectionLabel}>ZONES YOU SET</Text>
           {loading ? (
-            <ActivityIndicator color={colors.brand} style={{ marginVertical: spacing.lg }} />
+            <SkeletonList rows={3} />
           ) : mine.length === 0 ? (
             <View style={styles.empty}>
               <Text style={styles.emptyText}>No zones yet.</Text>

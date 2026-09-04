@@ -325,6 +325,37 @@ function RootNavigator() {
     void bindReferral().catch(() => undefined);
   }, [status]);
 
+  // ENTITLEMENT, READ BACK ON EVERY SIGN-IN. Without this, Plus lasted exactly
+  // one session.
+  //
+  // bootstrapProfile builds the profile with isPremium hardcoded false, and
+  // resolvePremiumTier was called from precisely one place: the checkout screen,
+  // right after a coupon was redeemed. So redeeming worked, the entitlement was
+  // written to the server correctly, premium turned on, and then the next launch
+  // rebuilt the profile from scratch and it was gone.
+  //
+  // The coupon guard then made it permanent. One redemption per account forever
+  // means the second attempt is refused as "already redeemed", so somebody who
+  // redeemed correctly ends up locked out of the thing they hold, with the app
+  // telling them they already have it. That is what it looks like from the
+  // outside, and it is exactly what happened here.
+  //
+  // resolvePremiumTier returns null when the question could not be answered, and
+  // null is not dispatched. Downgrading somebody because a read failed looks
+  // identical to theft to the person who paid.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    let alive = true;
+    void resolvePremiumTier()
+      .then((tier) => {
+        if (alive && tier) store.dispatch(premiumTierResolved(tier));
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [status, uid]);
+
 
   // Keep circle invites fresh so an Instagram-style "X invited you" alert
   // arrives without opening the Circles tab: re-check when the app returns to

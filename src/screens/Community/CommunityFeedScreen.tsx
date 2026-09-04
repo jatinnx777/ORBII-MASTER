@@ -17,7 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { appAlert, useBrandSheet } from '@/components/common';
+import { appAlert, useBrandSheet, SkeletonList } from '@/components/common';
 import { QuietState } from '@/components/community/QuietState';
 import { Tabs } from '@/components/community/Tabs';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -365,7 +365,7 @@ export function CommunityFeedScreen() {
           }
           ListEmptyComponent={
             loading ? (
-              <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
+              <SkeletonList rows={4} />
             ) : tab === 'following' ? (
               // The one case where guides are the wrong answer: she asked for
               // people she follows, and the honest reply is that they have not

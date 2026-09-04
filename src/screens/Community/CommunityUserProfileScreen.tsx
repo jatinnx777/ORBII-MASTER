@@ -1,6 +1,5 @@
 import React, { useCallback, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,7 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { useBrandSheet } from '@/components/common';
+import { useBrandSheet, SkeletonList } from '@/components/common';
 import { ProfileHeader } from '@/components/community/ProfileHeader';
 import { Tabs } from '@/components/community/Tabs';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -112,7 +111,7 @@ export function CommunityUserProfileScreen() {
         </View>
 
         {loading ? (
-          <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
+          <SkeletonList rows={3} />
         ) : !profile ? (
           <View style={styles.empty}><Text style={styles.emptyText}>Profile not found.</Text></View>
         ) : (

@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { appAlert } from '@/components/common';
+import { appAlert, SkeletonList } from '@/components/common';
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   FlatList,
@@ -185,7 +184,7 @@ export function CommunityAlertsScreen() {
 
       {isLoading && alerts.length === 0 ? (
         <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} />
+          <SkeletonList rows={3} />
           <Text style={styles.loadingText}>Looking for alerts nearby…</Text>
         </View>
       ) : error && alerts.length === 0 ? (
