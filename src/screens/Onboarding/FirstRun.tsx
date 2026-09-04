@@ -7,7 +7,7 @@ import { Protected } from '@/components/onboarding/Protected';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
-import { sendEmailOtp, verifyEmailOtp } from '@/services/auth';
+import { sendEmailOtp, signInWithGoogle, verifyEmailOtp } from '@/services/auth';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { armVoiceSos } from '@/services/voice-detection';
@@ -142,6 +142,41 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
+        {/* Google first, and it is not decoration. It is one tap against three
+            screens: no code to wait for, no inbox to switch to, no chance of a
+            slow SMTP handoff losing her between here and the code screen. */}
+        <Pressable
+          disabled={busy}
+          onPress={async () => {
+            setBusy(true);
+            try {
+              const r = await signInWithGoogle();
+              dispatch(signInSucceeded({ profile: r.profile, needsProfile: r.needsProfile }));
+              dispatch(historyHydrated(r.history));
+              go('contact');
+            } catch (err) {
+              const m = err instanceof Error ? err.message : 'Google sign-in failed.';
+              // A cancelled sign-in is a decision, not an error to apologise for.
+              if (!/cancel/i.test(m)) Alert.alert(hi ? 'साइन इन नहीं हुआ' : 'Could not sign in', m);
+            } finally {
+              setBusy(false);
+            }
+          }}
+          style={({ pressed }) => [s.google, pressed && s.pressed]}
+          accessibilityRole="button"
+        >
+          <Ionicons name="logo-google" size={19} color={colors.textPrimary} />
+          <Text style={s.googleText}>
+            {hi ? 'Google से जारी रखें' : 'Continue with Google'}
+          </Text>
+        </Pressable>
+
+        <View style={s.orRow}>
+          <View style={s.orLine} />
+          <Text style={s.orText}>{hi ? 'या' : 'or'}</Text>
+          <View style={s.orLine} />
+        </View>
+
         <TextInput
           value={email}
           onChangeText={setEmail}
@@ -153,7 +188,6 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           keyboardType="email-address"
           textContentType="emailAddress"
           autoComplete="email"
-          autoFocus
         />
       </Step>
     );
@@ -188,16 +222,21 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
+        {/* NOT CAPPED AT SIX. Supabase issues an 8 digit code on this project,
+            and a maxLength of 6 silently truncated it, which made every new
+            signup impossible rather than merely annoying. Accepts up to 8 and
+            unlocks at 6, so the field is right whichever length the project is
+            configured for and never eats a valid digit. */}
         <TextInput
           value={code}
-          onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
-          placeholder="123456"
+          onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 8))}
+          placeholder="12345678"
           placeholderTextColor={colors.textMuted}
           style={[s.input, s.code]}
           keyboardType="number-pad"
           textContentType="oneTimeCode"
           autoComplete="one-time-code"
-          maxLength={6}
+          maxLength={8}
           autoFocus
         />
       </Step>
@@ -425,10 +464,30 @@ const s = StyleSheet.create({
   },
   code: {
     fontSize: 24,
-    letterSpacing: 8,
+    letterSpacing: 6,
     textAlign: 'center',
     fontFamily: fontFamilies.poppinsSemiBold,
   },
+
+  google: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    height: 54,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  googleText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.border },
+  orText: { fontFamily: fontFamilies.interRegular, fontSize: 13, color: colors.textMuted },
 
   check: {
     flexDirection: 'row',
