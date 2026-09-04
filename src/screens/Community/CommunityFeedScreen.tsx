@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { appAlert, useBrandSheet } from '@/components/common';
+import { QuietState } from '@/components/community/QuietState';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import {
   addComment,
@@ -363,14 +364,16 @@ export function CommunityFeedScreen() {
           ListEmptyComponent={
             loading ? (
               <ActivityIndicator color={colors.brand} style={{ marginTop: spacing.xl }} />
-            ) : (
+            ) : tab === 'following' ? (
+              // The one case where guides are the wrong answer: she asked for
+              // people she follows, and the honest reply is that they have not
+              // posted, not a reading list.
               <View style={styles.empty}>
-                <Ionicons name="chatbubbles-outline" size={34} color={colors.textMuted} />
-                <Text style={styles.emptyText}>
-                  {tab === 'mine' ? "You haven't posted yet." : tab === 'following' ? 'No posts from people you follow.' : 'Nothing here yet.'}
-                </Text>
-                <Text style={styles.emptyHint}>Be the first to share something.</Text>
+                <Ionicons name="people-outline" size={34} color={colors.textMuted} />
+                <Text style={styles.emptyText}>No posts from people you follow.</Text>
               </View>
+            ) : (
+              <QuietState mine={tab === 'mine'} />
             )
           }
           renderItem={({ item: p }) => (
