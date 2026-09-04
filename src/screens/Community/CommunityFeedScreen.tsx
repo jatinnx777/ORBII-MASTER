@@ -19,6 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { appAlert, useBrandSheet } from '@/components/common';
 import { QuietState } from '@/components/community/QuietState';
+import { Tabs } from '@/components/community/Tabs';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import {
   addComment,
@@ -304,14 +305,11 @@ export function CommunityFeedScreen() {
           </Pressable>
         </View>
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          {TABS.map((t) => (
-            <Pressable key={t.key} onPress={() => setTab(t.key)} style={[styles.tab, tab === t.key && styles.tabOn]}>
-              <Text style={[styles.tabText, tab === t.key && styles.tabTextOn]}>{t.label}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <Tabs
+          tabs={TABS.map((t) => ({ key: t.key, label: t.label }))}
+          active={tab}
+          onChange={(k) => setTab(k as typeof tab)}
+        />
 
         <FlatList
           data={loading ? [] : shown}
@@ -334,11 +332,6 @@ export function CommunityFeedScreen() {
             // so the list's contentContainer gap does NOT space these children;
             // this restores the vertical rhythm between banner, search and chips.
             <View style={styles.feedHeader}>
-              {/* Moderation banner */}
-              <View style={styles.banner}>
-                <Text style={styles.bannerText}>Be respectful. Stay safe. All posts are anonymous and moderated 💜</Text>
-              </View>
-
               {/* Search */}
               <View style={styles.search}>
                 <Ionicons name="search" size={17} color={colors.textMuted} />
@@ -443,6 +436,15 @@ export function CommunityFeedScreen() {
               multiline
               maxLength={2000}
             />
+            {/* The anonymity promise, moved here from a banner that sat at the
+                top of the feed on every single visit. It is a real and useful
+                fact, and this is the one moment it answers a question somebody
+                is actually asking: what happens when I press post. Telling a
+                reader to be respectful before she has done anything is not
+                moderation, it is nagging. */}
+            <Text style={styles.composeNote}>
+              Posted anonymously. Your name and number are never shown. Every post is moderated.
+            </Text>
           </View>
         </KeyboardAvoidingView>
       </Modal>
@@ -873,6 +875,13 @@ const styles = StyleSheet.create({
   sheetPost: { fontFamily: fontFamilies.poppinsBold, fontSize: 14, color: colors.brand },
   composeCats: { gap: spacing.sm, paddingVertical: 2, marginBottom: spacing.xs },
   titleInput: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.textPrimary, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: colors.divider },
+  composeNote: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
+  },
   bodyInput: { fontFamily: fontFamilies.interRegular, fontSize: 14.5, color: colors.textPrimary, minHeight: 110, maxHeight: 220, textAlignVertical: 'top', paddingTop: spacing.sm },
 
   actionRoot: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(20,20,30,0.35)' },

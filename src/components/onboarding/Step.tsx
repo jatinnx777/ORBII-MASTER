@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 
 /**
@@ -45,6 +46,10 @@ export type StepProps = {
   /** 1-based, for the progress bar and the screen reader. */
   index: number;
   total: number;
+  /** Gives the step a face. Without one, six screens of type look identical. */
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  /** The icon's colour. Each step gets its own so the flow has a palette. */
+  tint: string;
   title: string;
   /** One sentence under the title. Optional: some steps are the sentence. */
   blurb?: string;
@@ -61,6 +66,8 @@ export type StepProps = {
 export function Step({
   index,
   total,
+  icon,
+  tint,
   title,
   blurb,
   children,
@@ -161,11 +168,26 @@ export function Step({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {onBack ? (
-              <Pressable onPress={onBack} hitSlop={12} style={styles.backHit}>
-                <Text style={styles.back}>Back</Text>
-              </Pressable>
-            ) : null}
+            <View style={styles.topRow}>
+              {onBack ? (
+                <Pressable onPress={onBack} hitSlop={12} style={styles.backHit}>
+                  <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
+                  <Text style={styles.back}>Back</Text>
+                </Pressable>
+              ) : (
+                <View />
+              )}
+              {/* Said out loud rather than left to a 3px bar. Knowing there are
+                  six and this is the second is most of what makes a flow feel
+                  short, and the old one never said. */}
+              <Text style={styles.counter}>
+                {index} of {total}
+              </Text>
+            </View>
+
+            <View style={[styles.badge, { backgroundColor: tint + '1A' }]}>
+              <Ionicons name={icon} size={26} color={tint} />
+            </View>
 
             <Text style={styles.title}>{title}</Text>
             {blurb ? <Text style={styles.blurb}>{blurb}</Text> : null}
@@ -216,9 +238,30 @@ const styles = StyleSheet.create({
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.brandDeep },
 
   body: { flex: 1 },
-  scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.xl, paddingBottom: spacing.lg },
-  backHit: { alignSelf: 'flex-start', paddingVertical: spacing.xs, marginBottom: spacing.sm },
+  scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.lg,
+    minHeight: 28,
+  },
+  backHit: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs },
   back: { fontFamily: fontFamilies.interRegular, fontSize: 15, color: colors.textSecondary },
+  counter: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12.5,
+    letterSpacing: 0.4,
+    color: colors.textMuted,
+  },
+  badge: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.lg,
+  },
 
   title: {
     fontFamily: fontFamilies.poppinsBold,

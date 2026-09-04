@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
 import { Protected } from '@/components/onboarding/Protected';
+import { Listening } from '@/components/onboarding/Listening';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
@@ -71,6 +72,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('consent')}
         total={TOTAL}
+        icon="lock-closed"
+        tint={colors.lavenderDeep}
         title={hi ? 'शुरू करने से पहले' : 'Before we start'}
         blurb={
           hi
@@ -119,6 +122,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('email')}
         total={TOTAL}
+        icon="mail"
+        tint={colors.brandDeep}
         title={hi ? 'आपका ईमेल' : 'Your email'}
         blurb={
           hi
@@ -199,6 +204,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('code')}
         total={TOTAL}
+        icon="keypad"
+        tint={colors.brandDeep}
         title={hi ? 'ईमेल देखिए' : 'Check your email'}
         blurb={email.trim().toLowerCase()}
         ctaLabel={hi ? 'आगे' : 'Continue'}
@@ -249,6 +256,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('contact')}
         total={TOTAL}
+        icon="person-add"
+        tint={colors.sageDeep}
         title={hi ? 'एक भरोसेमंद नंबर' : 'One person who picks up'}
         blurb={
           hi
@@ -306,6 +315,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('voice')}
         total={TOTAL}
+        icon="mic"
+        tint={colors.coralDeep}
         title={hi ? 'बस एक शब्द' : 'Just say the word'}
         blurb={
           hi
@@ -356,21 +367,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        <View style={s.words}>
-          {['help', 'bachao', 'madad', 'save me'].map((w) => (
-            <View key={w} style={s.word}>
-              <Text style={s.wordText}>{w}</Text>
-            </View>
-          ))}
-        </View>
-        {voiceArmed ? (
-          <View style={s.armed}>
-            <Ionicons name="checkmark-circle" size={18} color={colors.sageDeep} />
-            <Text style={s.armedText}>
-              {hi ? 'Voice SOS चालू है' : 'Voice SOS is listening'}
-            </Text>
-          </View>
-        ) : null}
+        <Listening armed={voiceArmed} words={['help', 'bachao', 'madad', 'save me']} />
       </Step>
     );
   }
@@ -381,6 +378,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
       <Step
         index={index('pin')}
         total={TOTAL}
+        icon="shield-checkmark"
+        tint={colors.goldDeep}
         title={hi ? 'एक PIN चुनिए' : 'Choose a PIN'}
         blurb={
           hi
@@ -513,19 +512,5 @@ const s = StyleSheet.create({
   checkText: { fontFamily: fontFamilies.interRegular, fontSize: 15, color: colors.textPrimary },
   pressed: { opacity: 0.9 },
 
-  words: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  word: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    backgroundColor: colors.lavenderSoft,
-  },
-  wordText: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 15,
-    color: colors.lavenderDeep,
-  },
 
-  armed: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.sm },
-  armedText: { fontFamily: fontFamilies.interRegular, fontSize: 14, color: colors.sageDeep },
 });
