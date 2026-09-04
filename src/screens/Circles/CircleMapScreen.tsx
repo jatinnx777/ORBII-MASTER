@@ -18,6 +18,7 @@ import {
   type OSMPolyline,
   type OSMCircle,
 } from '@/components/common';
+import { useGlide } from '@/hooks/useGlide';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
@@ -396,9 +397,19 @@ export function CircleMapScreen() {
     await beginSharing(hours);
   };
 
+  // Members glide to a new fix instead of teleporting to it. Fixes land every
+  // 60 seconds, so without this somebody vanishes and reappears 400 metres
+  // away, which is most of what makes this map feel less alive than Life360's.
+  // The map itself was never the problem: it is already native MapLibre on GPU
+  // vector tiles. Nothing sat between the data and the marker.
+  const glided = useGlide(shown.map((m) => ({ id: m.userId, lat: m.lat, lng: m.lng })));
+
   const markers: OSMMarker[] = shown.map((m) => ({
     id: m.userId,
-    coordinate: { latitude: m.lat, longitude: m.lng },
+    coordinate: {
+      latitude: glided[m.userId]?.lat ?? m.lat,
+      longitude: glided[m.userId]?.lng ?? m.lng,
+    },
     // A member who turned sharing off shows greyed at their LAST known spot.
     html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale, m.photoUri),
   }));
@@ -407,7 +418,10 @@ export function CircleMapScreen() {
     .filter((m) => m.sharing && m.accuracyM != null)
     .map((m) => ({
       id: `acc-${m.userId}`,
-      center: { latitude: m.lat, longitude: m.lng },
+      center: {
+        latitude: glided[m.userId]?.lat ?? m.lat,
+        longitude: glided[m.userId]?.lng ?? m.lng,
+      },
       radiusM: Math.max(15, Math.min(300, m.accuracyM as number)),
       color: colorFor(m.userId),
       fillColor: colorFor(m.userId),

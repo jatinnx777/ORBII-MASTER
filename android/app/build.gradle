@@ -102,8 +102,8 @@ android {
         applicationId 'in.orbii.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 26715
-        versionName "32.31.0"
+        versionCode 26716
+        versionName "32.32.0"
         // Instrumented tests only. MediaCodec, MediaMuxer and android.util.Base64
         // have no desktop-JVM implementation, so the evidence encoder can only be
         // tested on a device or emulator:
