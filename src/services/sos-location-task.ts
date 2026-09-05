@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { publishVictimLocation, type VictimPublishHandle } from './live-location';
+import { pushCircleLocationDuringSos } from './circle-location';
 import { getItem, setItem } from './storage';
 import { haversineMeters } from '@/utils/geo';
 import { addBreadcrumb, reportError } from './error-reporting';
@@ -77,6 +78,24 @@ TaskManager.defineTask(SOS_LOCATION_TASK, async ({ data, error }) => {
       longitude: last.coords.longitude,
     };
     publisherFor(sosId).publish(point);
+    // And to the CIRCLE, which is a different audience on a different channel.
+    //
+    // publishVictimLocation feeds the helper's live map. Her family is not on
+    // that channel: they read circle_locations, and if her sharing window had
+    // lapsed before the SOS, that table stopped updating when the window did.
+    // Without this line her mother opens the circle map during the emergency
+    // and sees a grey pin from wherever she was hours ago.
+    //
+    // set_circle_location_sos, NOT set_circle_location: the ordinary write
+    // sets sharing = true permanently, so using it here would end the
+    // emergency having silently opted her into live sharing. The SOS variant
+    // writes position only, and the server refuses it outright when the caller
+    // has no active SOS (sql/118).
+    //
+    // Fire and forget. This is the secondary audience; a failure here must
+    // never delay or break the publish above, which is what helpers navigate
+    // by.
+    void pushCircleLocationDuringSos(point, last.coords.accuracy ?? null);
     await adaptCadence(point);
   } catch (err) {
     reportError(err, {

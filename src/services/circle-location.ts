@@ -34,9 +34,66 @@ export type MemberLocation = {
   /** false = they turned live location off; this is their last known position. */
   sharing: boolean;
   sharingOffAt: string | null;
+  /**
+   * This row is here because they have an ACTIVE SOS, not because sharing is
+   * on (sql/118). Never render it as ordinary sharing: an SOS releases the row
+   * for the duration of the emergency and nothing longer, and saying "sharing"
+   * would misstate what she agreed to.
+   */
+  emergency: boolean;
+  /**
+   * Age of the fix in seconds, computed server-side.
+   *
+   * Every screen used to work this out from updatedAt, which meant every
+   * screen could forget. One did: the history sheet a parent actually reads
+   * rendered a forty-minute-old pin exactly like a live one.
+   */
+  ageSeconds: number;
+  /**
+   * Sharing is ON and nothing has arrived for twenty minutes. A dead battery,
+   * a basement, or a phone that was taken. This is the state a circle should
+   * be told about rather than left to infer from a pin that has not moved.
+   */
+  unreachable: boolean;
 };
 
 export type TrailPoint = { lat: number; lng: number; at: string };
+
+/**
+ * Battery percentage, or null if the device will not say.
+ *
+ * The circle_locations table has had a battery column since sql/70 and both
+ * call sites below passed a literal null into it, so the column has been
+ * empty for every user since the day it was added. expo-battery was already
+ * a dependency. Nothing was missing except this function.
+ *
+ * It matters because a phone at 8% is a pipeline that is about to fail, and a
+ * circle that is told beforehand can do something about it. sql/118's presence
+ * sweep reads this column, so leaving it null would have shipped a cron job
+ * that could never fire.
+ *
+ * Never throws. A battery read that fails must not stop a location push, which
+ * is the part that actually matters.
+ */
+async function batteryPct(): Promise<number | null> {
+  try {
+    // Imported here rather than at the top of the file on purpose. A static
+    // import pulls expo-modules-core into the module graph, and this module
+    // also exports pure functions (sameMemberLocations, detectStops,
+    // dwellMinutes) that are unit-tested in a plain node environment where
+    // that native bridge does not exist. The static import broke those tests
+    // the moment it was added. Deferring it also keeps a native module off the
+    // startup path for something only read during a location push.
+    const Battery = await import('expo-battery');
+    const level = await Battery.getBatteryLevelAsync();
+    // -1 is expo-battery's "unsupported" sentinel, and rounding it gives -100,
+    // which would read as a catastrophically dead phone and alert the circle.
+    if (typeof level !== 'number' || level < 0) return null;
+    return Math.round(level * 100);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * True when two member-location lists are equivalent for display purposes.
@@ -86,7 +143,7 @@ TaskManager.defineTask(CIRCLE_LOCATION_TASK, async ({ data, error }) => {
       p_lat: loc.coords.latitude,
       p_lng: loc.coords.longitude,
       p_acc: loc.coords.accuracy ?? null,
-      p_battery: null,
+      p_battery: await batteryPct(),
     });
   } catch (err) {
     reportError(err, { category: 'circle.location', message: 'background push failed' });
@@ -147,7 +204,7 @@ export async function startCircleSharing(hours = 2): Promise<boolean> {
         p_lat: now.coords.latitude,
         p_lng: now.coords.longitude,
         p_acc: now.coords.accuracy ?? null,
-        p_battery: null,
+        p_battery: await batteryPct(),
       });
     } catch {
       // ignore; the background task will catch up
@@ -282,6 +339,42 @@ export async function isCircleSharing(): Promise<boolean> {
   }
 }
 
+/**
+ * Position push during an active SOS, whatever the sharing setting says.
+ *
+ * THE CASE THIS EXISTS FOR. She turns sharing on for the walk home, it lapses
+ * after two hours, and later that night she says the word. Her circle opens
+ * the map during the emergency and, without this, sees a grey pin from
+ * wherever she was when the window closed.
+ *
+ * WHAT IT DELIBERATELY DOES NOT DO. It does not turn sharing on. The ordinary
+ * set_circle_location sets `sharing = true` and clears `sharing_off_at` on
+ * every write, so using it here would leave her permanently sharing after an
+ * emergency she never chose that for. The SOS RPC writes position and nothing
+ * else, and the server refuses the call outright unless the caller genuinely
+ * has an active SOS, so this cannot become a way to write a position while
+ * appearing not to share.
+ *
+ * Silent by design. It runs inside a background location task during an
+ * emergency, where the only thing worth doing about a failure is not making it
+ * worse.
+ */
+export async function pushCircleLocationDuringSos(
+  point: { latitude: number; longitude: number },
+  accuracyM: number | null,
+): Promise<void> {
+  try {
+    await supabase.rpc('set_circle_location_sos', {
+      p_lat: point.latitude,
+      p_lng: point.longitude,
+      p_acc: accuracyM,
+      p_battery: await batteryPct(),
+    });
+  } catch {
+    // The helper channel is the primary one and has already been published to.
+  }
+}
+
 /** Latest positions of everyone in my circles who is currently sharing. */
 export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
   const { data, error } = await supabase.rpc('circle_members_locations');
@@ -295,6 +388,15 @@ export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
     updatedAt: r.updated_at as string,
     battery: (r.battery as number) ?? null,
     accuracyM: (r.accuracy_m as number) ?? null,
+    // All three default to the safe reading if the server is older than
+    // sql/118: no emergency, and not unreachable. Age falls back to computing
+    // it here rather than reporting zero, because zero would mean "just now".
+    emergency: r.emergency === true,
+    ageSeconds:
+      typeof r.age_seconds === 'number'
+        ? (r.age_seconds as number)
+        : Math.max(0, Math.round((Date.now() - Date.parse(r.updated_at as string)) / 1000)),
+    unreachable: r.unreachable === true,
     // Backward-compatible: before sql/70 the column doesn't exist, so a missing
     // value means the row is only present because they're sharing.
     sharing: r.sharing !== false,

@@ -136,6 +136,45 @@ function freshness(iso: string): { color: string; stale: boolean } {
   return { color: colors.textMuted, stale: true };
 }
 
+/**
+ * One sentence about a member's presence, and the colour to say it in.
+ *
+ * The row used to print `ago(updatedAt)` and leave the reader to work out what
+ * it meant, so "2m ago" and "3h ago" arrived in the same grey type at the same
+ * size. Three states now say themselves, in the order they matter:
+ *
+ *   EMERGENCY   She has an active SOS. Her position is on screen because of
+ *               that, not because sharing is on (sql/118), so it says so.
+ *   UNREACHABLE Sharing is on and nothing has arrived in 20 minutes. A dead
+ *               battery, a basement, or a phone that was taken. The point is
+ *               that this is not the same as a live pin, and a parent should
+ *               not have to do the subtraction to find out.
+ *   LOW BATTERY Sharing works right up until it does not.
+ *
+ * Everything else keeps the old quiet treatment, because most of the time
+ * nothing is wrong and a screen that shouts constantly is a screen people stop
+ * reading.
+ */
+function presenceOf(m: MemberLocation): { label: string; color: string; loud: boolean } {
+  if (m.emergency) {
+    return { label: `SOS active · ${ago(m.updatedAt)}`, color: colors.primaryDeep, loud: true };
+  }
+  if (m.unreachable) {
+    return {
+      label: `Not updating · last seen ${ago(m.updatedAt)}`,
+      color: colors.goldDeep,
+      loud: true,
+    };
+  }
+  if (!m.sharing) {
+    return { label: `Location off · last seen ${ago(m.updatedAt)}`, color: colors.textMuted, loud: false };
+  }
+  if (m.battery != null && m.battery <= 15) {
+    return { label: `${ago(m.updatedAt)} · battery ${m.battery}%`, color: colors.goldDeep, loud: true };
+  }
+  return { label: ago(m.updatedAt), color: freshness(m.updatedAt).color, loud: false };
+}
+
 export function CircleMapScreen() {
   const navigation = useNavigation();
   const circles = useAppSelector((s) => s.circles.circles);
@@ -423,7 +462,7 @@ export function CircleMapScreen() {
       longitude: glided[m.userId]?.lng ?? m.lng,
     },
     // A member who turned sharing off shows greyed at their LAST known spot.
-    html: avatarHtml(m.name, colorFor(m.userId), !m.sharing || freshness(m.updatedAt).stale, m.photoUri),
+    html: avatarHtml(m.name, colorFor(m.userId), !m.emergency && (!m.sharing || freshness(m.updatedAt).stale), m.photoUri),
   }));
   // Accuracy rings, "precise to ~Xm". Only for people actually sharing now.
   const rings: OSMCircle[] = shown
@@ -642,8 +681,12 @@ export function CircleMapScreen() {
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
               {shown.map((m, i) => {
                 const f = freshness(m.updatedAt);
+                const presence = presenceOf(m);
                 const sel = selectedId === m.userId;
-                const off = !m.sharing;
+                // An SOS row is never dimmed as "off", whatever the sharing
+                // flag says: during an emergency her row is the most important
+                // thing on this screen.
+                const off = !m.sharing && !m.emergency;
                 return (
                   <Pressable
                     key={m.userId}
@@ -658,12 +701,18 @@ export function CircleMapScreen() {
                           <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
                         </View>
                       )}
-                      {!off ? <View style={[styles.liveDot, { backgroundColor: f.color }]} /> : null}
+                      {!off ? <View style={[styles.liveDot, { backgroundColor: presence.loud ? presence.color : f.color }]} /> : null}
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.memberName} numberOfLines={1}>{m.name || 'Circle member'}</Text>
-                      <Text style={styles.memberMeta} numberOfLines={1}>
-                        {off ? `Location off · last seen ${ago(m.updatedAt)}` : ago(m.updatedAt)}
+                      <Text
+                        style={[
+                          styles.memberMeta,
+                          presence.loud && { color: presence.color, fontFamily: fontFamilies.poppinsSemiBold },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {presence.label}
                       </Text>
                     </View>
                     <View style={styles.rightCol}>
