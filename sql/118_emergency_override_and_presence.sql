@@ -87,7 +87,22 @@ grant execute on function public.orbii_has_active_sos(uuid) to authenticated, se
 --                  interval is deliberately not tight: a phone in a pocket on
 --                  a train misses fixes constantly, and an alert that fires on
 --                  ordinary signal loss is an alert people learn to ignore.
-create or replace function public.circle_members_locations()
+-- DROP first, not `create or replace`. Postgres refuses to replace a function
+-- whose OUT parameters change, and this one gains three columns, so the
+-- replace fails with 42P13 rather than doing anything.
+--
+-- Dropping is safe here but not free: for the moment between this statement
+-- and the create below, the app's RPC does not exist and any live circle map
+-- gets an error instead of a roster. The window is milliseconds and the map
+-- polls, so the next tick recovers. Worth knowing rather than discovering.
+--
+-- The drop also discards the function's grants, which is why the revoke and
+-- grant below are not optional: after sql/116 changed the schema default, a
+-- freshly created function is executable by NOBODY until it is granted, and a
+-- missing grant here would surface in the app as "function does not exist".
+drop function if exists public.circle_members_locations();
+
+create function public.circle_members_locations()
 returns table (
   user_id uuid, name text, photo_url text,
   lat double precision, lng double precision, updated_at timestamptz,
