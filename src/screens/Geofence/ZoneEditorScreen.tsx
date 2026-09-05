@@ -17,6 +17,7 @@ import {
   type Geofence,
 } from '@/services/geofence';
 import { searchPlaces, type Place } from '@/services/geocode';
+import { INDIA_CENTER } from '@/utils/geo';
 import type { GeoPoint } from '@/types';
 
 // Full-bleed map with the wizard as floating sheets over it. The map mounts the
@@ -152,7 +153,7 @@ export function ZoneEditorScreen() {
     let alive = true;
     getCurrentLocation()
       .then((p) => alive && setCenter(p))
-      .catch(() => alive && setCenter({ latitude: 22.9734, longitude: 78.6569 }));
+      .catch(() => alive && setCenter(INDIA_CENTER));
     listCircles()
       .then((c) => alive && setCircles(c))
       .catch(() => alive && setCircles([]))
@@ -306,22 +307,24 @@ export function ZoneEditorScreen() {
 
   return (
     <View style={styles.root}>
-      {/* Full-bleed map (mounts as soon as we have a location) */}
-      {center ? (
-        <OSMMapView
-          style={StyleSheet.absoluteFill}
-          center={center}
-          zoom={16}
-          defaultLayer="satellite"
-          onMapPress={step === 'map' ? onMapPress : undefined}
-          markers={markers}
-          polylines={polylines}
-        />
-      ) : (
-        <View style={styles.skeleton}>
-          <ActivityIndicator color={colors.brandDeep} />
-        </View>
-      )}
+      {/* Full-bleed map. Mounts immediately, before any location is known.
+          It used to wait for `center` behind a full-screen spinner, which
+          meant every visit paid for a GL context and a tile fetch AFTER the
+          wait rather than during it. */}
+      <OSMMapView
+        style={StyleSheet.absoluteFill}
+        center={center ?? INDIA_CENTER}
+        zoom={center ? 16 : 4}
+        defaultLayer="satellite"
+        // Taps are refused until the real position arrives, which is the one
+        // way this screen differs from the circle map. There the fallback
+        // centre is only a camera; here a tap PLACES a zone, and accepting one
+        // at the fallback would drop a safe zone in a field in Madhya Pradesh
+        // because the user was quicker than the GPS.
+        onMapPress={step === 'map' && center ? onMapPress : undefined}
+        markers={markers}
+        polylines={polylines}
+      />
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top']} pointerEvents="box-none">
         {/* Floating top bar */}

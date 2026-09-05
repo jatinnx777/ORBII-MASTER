@@ -19,6 +19,7 @@ export { MascotLoader } from './MascotLoader';
 export { EmptyState } from './EmptyState';
 export { HelplinesCard } from './HelplinesCard';
 export { Skeleton, SkeletonRow, SkeletonList } from './Skeleton';
+export { SyncBar } from './SyncBar';
 export { OSMMapView, type OSMMarker, type OSMPolyline, type OSMCircle } from './OSMMapView';
 export {
   MLMapView,

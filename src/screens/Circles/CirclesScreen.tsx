@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { EmptyState, MascotLoader, ScreenContainer } from '@/components/common';
+import { EmptyState, MascotLoader, ScreenContainer, SyncBar } from '@/components/common';
 import { CirclesHero } from './components/CirclesHero';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -83,7 +83,11 @@ export function CirclesScreen() {
     navigation.navigate('CircleCreate');
   };
   const insets = useSafeAreaInsets();
-  const { circles, incomingInvites, activeCircleId, status, error, setupNeeded } =
+  // `revalidating` is a background refresh over a list that is already
+  // rendered. This screen was already careful not to blank on one (see the
+  // `!hasContent` guards below); the sync line is the missing half, so the
+  // refresh is visible rather than completely silent.
+  const { circles, incomingInvites, activeCircleId, status, revalidating, error, setupNeeded } =
     useAppSelector((s) => s.circles);
   const profile = useAppSelector((s) => s.user.profile);
   const [refreshing, setRefreshing] = useState(false);
@@ -181,6 +185,7 @@ export function CirclesScreen() {
 
   return (
     <ScreenContainer padded={false} edges={['top', 'left', 'right']}>
+      <SyncBar active={revalidating} />
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable
           onPress={() => navigation.goBack()}

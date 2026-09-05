@@ -13,6 +13,7 @@ import {
   useBrandSheet,
   MemberHistorySheet,
   OSMMapView,
+  SyncBar,
   VoiceDurationSheet,
   type OSMMarker,
   type OSMPolyline,
@@ -40,7 +41,7 @@ import {
   type TrailPoint,
   type Stop,
 } from '@/services/circle-location';
-import { haversineMeters, formatDistance } from '@/utils/geo';
+import { haversineMeters, formatDistance, INDIA_CENTER } from '@/utils/geo';
 import type { GeoPoint } from '@/types';
 import { escapeHtml } from '@/utils/html';
 
@@ -119,6 +120,7 @@ function thinTrail(points: TrailPoint[]): TrailPoint[] {
  * outlive the promise even if it drifts.
  */
 const TRAIL_HOURS = 7 * 24;
+
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
   if (s < 60) return 'just now';
@@ -138,6 +140,9 @@ export function CircleMapScreen() {
   const navigation = useNavigation();
   const circles = useAppSelector((s) => s.circles.circles);
   const activeCircleId = useAppSelector((s) => s.circles.activeCircleId);
+  // Background refresh of the roster. Not a loading state: the map and the
+  // member list stay exactly where they are while this is true.
+  const revalidating = useAppSelector((s) => s.circles.revalidating);
 
   const sheet = useBrandSheet();
   const [members, setMembers] = useState<MemberLocation[]>([]);
@@ -297,7 +302,7 @@ export function CircleMapScreen() {
         setCenter(p);
         setMyLoc(p);
       })
-      .catch(() => alive && setCenter({ latitude: 22.9734, longitude: 78.6569 }));
+      .catch(() => alive && setCenter(INDIA_CENTER));
     isCircleSharing().then((s) => alive && setSharing(s));
     return () => {
       alive = false;
@@ -498,19 +503,35 @@ export function CircleMapScreen() {
 
   return (
     <View style={styles.root}>
-      {center ? (
-        <OSMMapView
-          style={StyleSheet.absoluteFill}
-          center={center}
-          zoom={13}
-          markers={markers}
-          circles={[...rings, ...stopRings, ...breadcrumbs]}
-          polylines={trailLines}
-          fitAll={markers.length > 0}
-        />
-      ) : (
-        <View style={styles.skeleton}><ActivityIndicator color={colors.brandDeep} /></View>
-      )}
+      <SyncBar active={revalidating} />
+      {/*
+        Mounted unconditionally, and deliberately without a `key`.
+
+        This used to be `{center ? <map/> : <full-screen spinner/>}`. Because
+        `center` starts null and is only filled once GPS or a member position
+        resolves, opening this screen showed a spinner over the whole surface
+        for as long as the first fix took, which outdoors is a second and
+        indoors can be much longer.
+
+        Worse, it made the native map view conditional. Every remount of a
+        MapLibre surface re-creates the GL context and re-requests tiles, so
+        the cost of that spinner was paid twice: once waiting, once redrawing.
+
+        Now the map mounts at frame one on a default centre and the camera
+        moves when the real position arrives. `fitAll` already re-frames on
+        markers, so nothing is lost. Keeping it out of any conditional is also
+        what makes switching circles flash-free: the surface is never torn
+        down, only its marker and polyline props change.
+      */}
+      <OSMMapView
+        style={StyleSheet.absoluteFill}
+        center={center ?? INDIA_CENTER}
+        zoom={center ? 13 : 4}
+        markers={markers}
+        circles={[...rings, ...stopRings, ...breadcrumbs]}
+        polylines={trailLines}
+        fitAll={markers.length > 0}
+      />
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top', 'bottom']} pointerEvents="box-none">
         {/* Top bar, floating glass controls. */}

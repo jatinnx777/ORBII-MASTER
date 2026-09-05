@@ -10,7 +10,9 @@ import {
   membersLoaded,
 } from '@/redux/slices/circlesSlice';
 import {
+  Circle,
   CircleInvite,
+  CircleMember,
   CirclesNotInstalledError,
   listCircles,
   listCircleMembers,
@@ -56,20 +58,57 @@ async function announceNewInvites(invites: CircleInvite[]): Promise<void> {
 
 // Circles bootstrap. Runs after auth so we never hit Supabase with no
 // session. Order of operations:
-//   1. Hydrate the cached active-circle id from AsyncStorage so the Home
-//      header doesn't flash to "All circles" before the server replies.
-//   2. Fetch circles + pending invites from Supabase.
-//   3. Fetch members for the active circle so the Home map can render its
-//      circle peers immediately.
+//   1. Hydrate circles, members and the active-circle id from AsyncStorage, so
+//      a returning user sees their real roster on the first frame rather than
+//      an empty list that fills in when the network replies.
+//   2. Fetch circles + pending invites from Supabase in the background.
+//   3. Fetch members for the active circle.
+//   4. Write the result back to the cache for next launch.
+//
+// Step 1 used to hydrate only the active-circle id and pass an empty circles
+// array, which meant the cache prevented a header flash and nothing else.
 
 export async function hydrateCirclesFromCache(): Promise<void> {
-  const cachedActive = await getItem<string | null>(storageKeys.activeCircleId);
+  // All three reads together. Serially awaiting them would put three
+  // AsyncStorage round-trips in front of the first frame for no reason.
+  const [cachedActive, cachedCircles, cachedMembers] = await Promise.all([
+    getItem<string | null>(storageKeys.activeCircleId),
+    getItem<Circle[]>(storageKeys.circlesList),
+    getItem<Record<string, CircleMember[]>>(storageKeys.circleMembers),
+  ]);
+
   store.dispatch(
-    circlesHydrated({ circles: [], activeCircleId: cachedActive ?? null }),
+    circlesHydrated({
+      circles: cachedCircles ?? [],
+      activeCircleId: cachedActive ?? null,
+      membersByCircle: cachedMembers ?? {},
+    }),
   );
 }
 
+// Members are cached for every circle, not just the active one, so switching
+// circles renders the new roster instantly instead of emptying the list while
+// a fetch runs. The cap exists because this is one AsyncStorage value: a user
+// in many large circles would otherwise be writing a growing blob on every
+// refresh, on the main thread, for a screen they may never open.
+const MAX_CACHED_MEMBERS_PER_CIRCLE = 50;
+
+async function cacheCircles(): Promise<void> {
+  const s = store.getState().circles;
+  const trimmed: Record<string, CircleMember[]> = {};
+  for (const [id, members] of Object.entries(s.membersByCircle)) {
+    trimmed[id] = members.slice(0, MAX_CACHED_MEMBERS_PER_CIRCLE);
+  }
+  await Promise.all([
+    setItem(storageKeys.circlesList, s.circles),
+    setItem(storageKeys.circleMembers, trimmed),
+  ]);
+}
+
 export async function refreshCircles(): Promise<void> {
+  // After the first run this no longer blanks the UI. circlesLoading() only
+  // means 'loading' when there is nothing cached to look at; otherwise it
+  // raises the sync line and leaves the screen alone.
   store.dispatch(circlesLoading());
   try {
     const [circles, invites] = await Promise.all([
@@ -84,6 +123,11 @@ export async function refreshCircles(): Promise<void> {
       const members = await listCircleMembers(active).catch(() => []);
       store.dispatch(membersLoaded({ circleId: active, members }));
     }
+    // Write the cache from state rather than from `circles`, so whatever
+    // circlesLoaded settled on (including its activeCircleId repair) is what
+    // gets persisted. Not awaited by the caller: a slow disk write must never
+    // hold up a screen that already has its data.
+    void cacheCircles();
   } catch (err) {
     if (err instanceof CirclesNotInstalledError) {
       store.dispatch(circlesSetupNeeded());
@@ -101,8 +145,10 @@ export async function setActiveCircle(circleId: string | null): Promise<void> {
     try {
       const members = await listCircleMembers(circleId);
       store.dispatch(membersLoaded({ circleId, members }));
+      void cacheCircles();
     } catch {
-      // Soft-fail; UI shows last cached members.
+      // Soft-fail; the UI keeps showing the cached roster, which is the whole
+      // reason it is cached.
     }
   }
 }
@@ -111,6 +157,7 @@ export async function refreshCircleMembers(circleId: string): Promise<void> {
   try {
     const members = await listCircleMembers(circleId);
     store.dispatch(membersLoaded({ circleId, members }));
+    void cacheCircles();
   } catch {
     // Soft-fail.
   }

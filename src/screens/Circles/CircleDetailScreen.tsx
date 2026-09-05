@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { appAlert, SkeletonList } from '@/components/common';
+import { appAlert, SkeletonList, SyncBar } from '@/components/common';
 import {
   FlatList,
   Image,
@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { EmptyState } from '@/components/common';
-import { useAppDispatch, useAppSelector } from '@/redux/store';
+import { store, useAppDispatch, useAppSelector } from '@/redux/store';
 import { refreshCircleMembers } from '@/services/circles-bootstrap';
 import {
   deleteCircle,
@@ -57,13 +57,26 @@ export function CircleDetailScreen({
   // BOTH, so a circle with no members span forever. I then swapped that spinner
   // for skeletons, which made a permanent state look like a permanent load and
   // read as the members having vanished.
-  const [loaded, setLoaded] = useState(false);
+  //
+  // The flag now STARTS true when the roster is already in the store, which
+  // after sql/115's cache work is the normal case for a returning user: the
+  // members came off the device before this screen mounted. Starting false and
+  // correcting a frame later would show the skeleton over data that was
+  // already there, which is the exact flicker the skeleton exists to avoid.
+  const [loaded, setLoaded] = useState(() => members.length > 0);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    setLoaded(false);
+    // Blank to a skeleton only when there is genuinely nothing cached for this
+    // circle. Otherwise the refresh happens under the existing list.
+    const haveCached = (store.getState().circles.membersByCircle[circleId] ?? []).length > 0;
+    if (haveCached) setSyncing(true);
+    else setLoaded(false);
     void Promise.resolve(refreshCircleMembers(circleId)).finally(() => {
-      if (alive) setLoaded(true);
+      if (!alive) return;
+      setLoaded(true);
+      setSyncing(false);
     });
     return () => {
       alive = false;
@@ -149,6 +162,7 @@ export function CircleDetailScreen({
 
   return (
     <View style={styles.root}>
+      <SyncBar active={syncing} />
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'left', 'right']}>
         <View style={styles.headerRow}>
           <Pressable

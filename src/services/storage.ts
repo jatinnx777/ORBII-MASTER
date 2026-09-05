@@ -15,6 +15,19 @@ const KEYS = {
   safetyModes: 'orbii:safety-modes',
   locale: 'orbii:locale',
   activeCircleId: 'orbii:circles:active',
+  // Stale-while-revalidate caches. These exist so a returning user sees their
+  // circles, their members and the feed at frame one instead of an empty list
+  // that fills in when the network replies. They are a rendering convenience
+  // and never a source of truth: the server overwrites them on every refresh,
+  // and anything read from them is already on screen by the time it is checked.
+  //
+  // Nothing here is sensitive beyond what the account already sees. Locations
+  // are deliberately NOT cached: a member's last known position is the one
+  // thing that must never be shown stale on a safety app, because a pin from
+  // forty minutes ago looks exactly like a pin from now.
+  circlesList: 'orbii:circles:list',
+  circleMembers: 'orbii:circles:members',
+  feedPosts: 'orbii:community:feed',
   inviteSeen: 'orbii:circles:invite-seen',
   voiceUsage: 'orbii:voice-usage',
   bgVoice: 'orbii:bg-voice',

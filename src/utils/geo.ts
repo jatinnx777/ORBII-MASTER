@@ -128,3 +128,18 @@ export function formatElapsed(seconds: number): string {
     .padStart(2, '0');
   return `${m}:${s}`;
 }
+
+/**
+ * Geographic centre of India.
+ *
+ * The camera a map starts on before any real position is known, so a map
+ * surface can mount on the first frame instead of hiding behind a spinner
+ * until GPS answers. Every screen that uses it pairs it with a wide zoom, and
+ * none of them draws it as a marker: it is where the camera points, never a
+ * claim about where anybody is.
+ *
+ * Defined once because two screens fell back to the same pair of literals
+ * independently, and a fallback position that drifts between screens is the
+ * kind of thing nobody notices until it is wrong in one of them.
+ */
+export const INDIA_CENTER = { latitude: 22.9734, longitude: 78.6569 };

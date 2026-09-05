@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Share,
@@ -17,7 +17,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { appAlert, useBrandSheet, SkeletonList } from '@/components/common';
+import { appAlert, useBrandSheet, SkeletonList, SyncBar } from '@/components/common';
+import { getItem, setItem, storageKeys } from '@/services/storage';
 import { QuietState } from '@/components/community/QuietState';
 import { Tabs } from '@/components/community/Tabs';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
@@ -79,6 +80,10 @@ const FILTERS: { key: CommunityCategory | 'all'; label: string }[] = [
 
 const COMPOSE_CATS: CommunityCategory[] = ['general', 'safety', 'legal', 'emergency'];
 
+/** How many posts survive into the cache. Two screens' worth is plenty to make
+ *  the next launch feel instant, and keeps the AsyncStorage write small. */
+const FEED_CACHE_SIZE = 30;
+
 export function CommunityFeedScreen() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
@@ -87,6 +92,9 @@ export function CommunityFeedScreen() {
 
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
+  // A refresh running over posts that are already on screen. Drives the sync
+  // line only, and never gates a render.
+  const [syncing, setSyncing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<FeedTab>('explore');
   const [cat, setCat] = useState<CommunityCategory | 'all'>('all');
@@ -112,11 +120,42 @@ export function CommunityFeedScreen() {
     setPosts(feed);
     setHasProfile(!!mine);
     setLoading(false);
+    setSyncing(false);
+    // Only the default view is cached. Caching every tab and category
+    // combination would mean writing a dozen blobs to satisfy the one screen
+    // people actually open first, and a stale "top posts in Safety" is worth
+    // far less than a stale Explore feed.
+    if (tab === 'explore' && cat === 'all') {
+      void setItem(storageKeys.feedPosts, feed.slice(0, FEED_CACHE_SIZE));
+    }
   }, [tab, cat]);
+
+  // Cache restore, once, before anything is fetched. A returning user sees
+  // their last feed on the first frame; a first-run user sees the skeleton,
+  // which is exactly who the skeleton was built for.
+  useEffect(() => {
+    let alive = true;
+    void getItem<FeedPost[]>(storageKeys.feedPosts).then((cached) => {
+      if (!alive || !cached || cached.length === 0) return;
+      // Guard against arriving after the network. The fetch that started at
+      // mount can win the race on a fast connection, and overwriting fresh
+      // posts with cached ones is the one way this pattern makes things worse.
+      setPosts((cur) => (cur.length > 0 ? cur : cached));
+      setLoading(false);
+    });
+    return () => { alive = false; };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      // `loading` blanks the list to a skeleton, so it is set only when there
+      // is genuinely nothing to look at. With posts already on screen this is
+      // a background revalidate and shows the 2px line instead.
+      setPosts((cur) => {
+        if (cur.length === 0) setLoading(true);
+        else setSyncing(true);
+        return cur;
+      });
       void refresh();
     }, [refresh]),
   );
@@ -299,6 +338,7 @@ export function CommunityFeedScreen() {
 
   return (
     <View style={styles.root}>
+      <SyncBar active={syncing} />
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Community</Text>
