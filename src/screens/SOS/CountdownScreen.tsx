@@ -71,6 +71,11 @@ export function CountdownScreen() {
   // Voice-triggered: count against the monthly voice quota only when the SOS
   // actually fires (a cancelled countdown costs nothing).
   const isVoice = route.params?.voice === true;
+  // The accelerometer raised this, not a person. The countdown is the entire
+  // false-positive defence for impact detection: a dropped bag costs her five
+  // seconds of tapping Cancel, and only a phone that took a hard knock AND then
+  // stopped moving AND was not answered ever reaches her circle.
+  const isImpact = route.params?.impact === true;
 
   // Deadline-based countdown. We compute remaining time off Date.now() each
   // tick rather than decrementing a counter, that way an incoming phone
@@ -344,6 +349,7 @@ export function CountdownScreen() {
         profile,
         location,
         isTest ? 'test' : 'real',
+        isImpact ? 'impact' : isVoice ? 'voice' : 'manual',
       );
       // Stop the countdown recording and keep it as this SOS's pre-roll. Done
       // BEFORE navigating so the mic is free when ActiveSOS starts the main clip.
@@ -415,7 +421,7 @@ export function CountdownScreen() {
                 lat: location.latitude,
                 lng: location.longitude,
                 batteryLevel: NaN, // unknown; encoder marks it rather than lying
-                triggerType: isVoice ? 'voice' : 'manual',
+                triggerType: isImpact ? 'impact' : isVoice ? 'voice' : 'manual',
               },
               profile.emergencyContacts.map((c) => c.phone),
               { senderName: profile.name ?? '', placeName: null },
@@ -493,14 +499,26 @@ export function CountdownScreen() {
           <View style={[styles.badge, isReal ? styles.badgeGlass : styles.badgeLight]}>
             <View style={[styles.badgeDot, { backgroundColor: onColor }]} />
             <Text style={[styles.badgeText, { color: onColor }]}>
-              {isTest ? 'PRACTICE · NO ALERTS SENT' : 'EMERGENCY SOS'}
+              {isTest
+                ? 'PRACTICE · NO ALERTS SENT'
+                : isImpact
+                  ? 'HARD IMPACT DETECTED'
+                  : 'EMERGENCY SOS'}
             </Text>
           </View>
         </View>
 
         <View style={styles.center}>
           <Text style={[styles.heading, { color: subColor }]}>
-            {isTest ? 'Practice SOS in' : 'Sending your SOS in'}
+            {/* An impact countdown has to answer the question the person is
+                actually asking, which is "why is my phone doing this". Naming
+                the cause is also the fastest route to Cancel: someone who
+                knows their bag hit the floor stops reading and taps. */}
+            {isTest
+              ? 'Practice SOS in'
+              : isImpact
+                ? 'Are you okay? Sending your SOS in'
+                : 'Sending your SOS in'}
           </Text>
 
           {/* A real countdown ring: the arc drains as the seconds do. */}

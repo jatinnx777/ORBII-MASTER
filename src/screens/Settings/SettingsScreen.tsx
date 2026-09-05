@@ -26,7 +26,7 @@ import {
   onboardingReset,
   pushEnabledSet,
 } from '@/redux/slices/appSlice';
-import { setItem, storageKeys } from '@/services/storage';
+import { getItem, setItem, storageKeys } from '@/services/storage';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
 import { isVideoEvidenceReady, requestVideoEvidencePermissions } from '@/services/sos-video';
@@ -86,6 +86,7 @@ export function SettingsScreen() {
   // one-tap switch that takes effect immediately rather than on next launch.
   const [meshRelay, setMeshRelay] = useState(true);
   const [videoEvidence, setVideoEvidence] = useState(false);
+  const [impactDetection, setImpactDetection] = useState(false);
   useEffect(() => {
     let alive = true;
     void isMeshRelayEnabled().then((v) => {
@@ -109,10 +110,32 @@ export function SettingsScreen() {
     void isVideoEvidenceReady().then((ok) => {
       if (!cancelled) setVideoEvidence(ok);
     });
+    // Impact detection needs no permission, so unlike the camera above the
+    // stored value IS the truth here.
+    void getItem<boolean>(storageKeys.impactDetection).then((v) => {
+      if (!cancelled) setImpactDetection(v === true);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const handleImpactDetection = async (next: boolean) => {
+    setImpactDetection(next);
+    await setItem(storageKeys.impactDetection, next);
+    if (next) {
+      // Told once, on the way in, rather than buried in a settings row nobody
+      // scrolls back to. The countdown IS the feature's safety margin: the
+      // thresholds have not been measured on Indian handsets yet, so the
+      // honest promise is not "it will not misfire", it is "when it does,
+      // cancelling costs you five seconds".
+      sheet.notify({
+        title: 'Watching for a hard impact',
+        body: 'If your phone takes a hard knock and then stops moving, you get a countdown. Cancel it and nobody is told. It only works while ORBII is open on screen.',
+        tone: 'neutral',
+      });
+    }
+  };
 
   const handleVideoEvidence = async (next: boolean) => {
     if (!next) {
@@ -337,6 +360,40 @@ export function SettingsScreen() {
             governs what ORBII does with SOMEONE ELSE'S data on this phone,
             rather than what it does with the user's own. Burying that in "App"
             would misrepresent what is being asked. */}
+        <RowSection title="Crash and fall detection" />
+        <RowGroup>
+          <Row
+            icon="pulse-outline"
+            label="Detect a hard impact"
+            value={
+              impactDetection
+                ? 'On. If your phone takes a hard knock and then stops moving, ORBII starts a countdown. Cancel it and nothing is sent. New feature, still being tuned, so tell us if it fires when it should not.'
+                : 'Off. Turn this on and ORBII watches for a hard impact followed by stillness, then gives you a countdown to cancel before alerting your circle.'
+            }
+            right={
+              <Switch
+                value={impactDetection}
+                onValueChange={(v) => void handleImpactDetection(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+          {impactDetection ? (
+            // Said plainly, because someone who reads "crash detection" and
+            // thinks of Life360 will assume it covers them while driving with
+            // the phone in a pocket, and it does not. ORBII watches the
+            // accelerometer only while the app is open on screen. Letting that
+            // misunderstanding stand on a safety app is worse than not having
+            // the feature.
+            <Row
+              icon="information-circle-outline"
+              label="What this cannot do yet"
+              value="It only watches while ORBII is open on your screen. It will not detect a crash with your phone in a pocket or bag, and it is not a substitute for calling 112."
+            />
+          ) : null}
+        </RowGroup>
+
         <RowSection title="Evidence" />
         <RowGroup>
           <Row

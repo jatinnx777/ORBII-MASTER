@@ -89,6 +89,11 @@ export type SOSRecord = {
   timestamp: number;
   status: SOSStatus;
   kind?: SOSKind;
+  /**
+   * What set it off: manual, voice, impact, geofence, disaster. Defaults to
+   * manual, which is true of every SOS raised before sql/120 existed.
+   */
+  trigger?: 'manual' | 'voice' | 'impact' | 'geofence' | 'disaster';
   responders: Responder[];
   responder: Responder | null;
   responseTime: number | null;

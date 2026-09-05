@@ -42,6 +42,13 @@ const KEYS = {
   guidedSetup: 'orbii:guided-setup-done',
   // Survival battery mode. Outlives an app session because a disaster does.
   survivalMode: 'orbii:survival-mode',
+  // Crash and fall detection, off until the person turns it on.
+  //
+  // A stored preference rather than a build constant, because the thresholds
+  // in volumetricShock.ts have never been measured on a phone ORBII ships to.
+  // Arming it had to be something one person can do on one handset to find
+  // out, not a release that arms it for everybody at once.
+  impactDetection: 'orbii:impact-detection',
   // The two screens before sign-in: language, then what ORBII is.
   introDone: 'orbii:intro-done',
   onboardingLang: 'orbii:onboarding-lang',

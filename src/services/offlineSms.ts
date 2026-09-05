@@ -45,6 +45,8 @@ export type SosTriggerType =
   | 'deadman'
   | 'geofence'
   | 'power_button'
+  /** The accelerometer, with no answer to the countdown (sql/120). */
+  | 'impact'
   | 'unknown';
 
 const TRIGGER_CODES: Record<SosTriggerType, number> = {
@@ -55,6 +57,12 @@ const TRIGGER_CODES: Record<SosTriggerType, number> = {
   deadman: 4,
   geofence: 5,
   power_button: 6,
+  // APPENDED, never inserted. These codes go out over SMS and are decoded by
+  // whatever version of ORBII the receiving phone happens to be running.
+  // Renumbering an existing one would make an old build read a new message as
+  // the wrong trigger; adding 7 at the end makes it read as 'unknown', which
+  // is honest.
+  impact: 7,
 };
 
 const CODE_TRIGGERS: SosTriggerType[] = [
@@ -65,6 +73,7 @@ const CODE_TRIGGERS: SosTriggerType[] = [
   'deadman',
   'geofence',
   'power_button',
+  'impact',
 ];
 
 export type SOSPayloadObject = {

@@ -273,12 +273,27 @@ export class ShockDetector {
 
 export type VolumetricMonitorOptions = {
   /**
-   * Called on every event, not only a trigger. Useful for logging why a
-   * candidate was rejected, which is the only way to tune the thresholds
-   * against real phones instead of guesses.
+   * Let the detector actually fire, overriding SHADOW_MODE for this caller.
+   *
+   * The gate used to be two module constants, which meant arming the feature
+   * needed a rebuild and a release, so nobody could ever test it on a phone
+   * without shipping it to everyone. This makes it a runtime decision the user
+   * owns: off by default, per person, revocable in Settings.
+   *
+   * When false the detector still runs and still logs, so shadow data keeps
+   * accruing for people who have not turned it on. That data is the only route
+   * to thresholds that are measured rather than reasoned.
+   */
+  armed?: boolean;
+  /**
+   * Called on every event, not only a trigger. Logging why a candidate was
+   * rejected is the only way to tune the thresholds against real phones
+   * instead of against a guess.
    */
   onEvent?: (event: ShockEvent) => void;
 };
+
+
 
 export type VolumetricMonitorHandle = {
   /** Idempotent. Safe to call from a React cleanup that may run twice. */
@@ -299,7 +314,8 @@ export function initVolumetricMonitor(
   onTrigger: () => void,
   options: VolumetricMonitorOptions = {},
 ): VolumetricMonitorHandle {
-  if (!ENABLE_IMPACT_DETECTION && !SHADOW_MODE) {
+  const armed = options.armed ?? ENABLE_IMPACT_DETECTION;
+  if (!armed && !SHADOW_MODE) {
     // Reports inactive rather than pretending. A caller showing "impact
     // detection on" while nothing is listening is the failure this project
     // keeps hitting: a dead feature that looks alive.
@@ -352,11 +368,13 @@ export function initVolumetricMonitor(
         console.warn('[volumetricShock] onEvent threw', err);
       }
 
-      // THE ONLY PLACE THIS FEATURE CAN REACH THE REST OF THE APP, and in
-      // shadow mode it is closed. The observation still went to onEvent above,
-      // so a week of shadow logs answers what the thresholds should be without
-      // one person ever being sent anywhere.
-      if (event.type === 'unresponsive' && ENABLE_IMPACT_DETECTION) {
+      // THE ONLY PLACE THIS FEATURE CAN REACH THE REST OF THE APP.
+      //
+      // Closed unless this caller armed it. The observation above still went to
+      // onEvent either way, so shadow logs keep accruing for everyone who has
+      // not turned it on, and a fortnight of them answers what the thresholds
+      // should be without one person being sent anywhere.
+      if (event.type === 'unresponsive' && armed) {
         try {
           onTrigger();
         } catch (err) {

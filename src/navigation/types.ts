@@ -32,6 +32,14 @@ export type AppStackParamList = {
         instant?: boolean;
         test?: boolean;
         voice?: boolean;
+        /**
+         * The accelerometer detected a hard impact followed by stillness and
+         * she did not move afterwards. Changes the countdown copy and is
+         * recorded on the SOS, so her circle is told a sensor raised this and
+         * not a person, which is the difference between "call her" and "she
+         * may be unable to answer".
+         */
+        impact?: boolean;
         /** Which phrase/sound fired the voice trigger, for false-positive tuning. */
         phrase?: string;
         /** Absolute path to the pre-roll WAV captured before the trigger. */

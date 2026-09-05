@@ -525,9 +525,25 @@ function RootNavigator() {
   // reaches is logged instead. After a week there is a measured answer to "how
   // often would this have fired, and on what", and the thresholds stop being
   // borrowed from a paper.
+  //
+  // ARMING IS NOW A RUNTIME DECISION, not a build constant. It used to take a
+  // release to switch this on, which meant nobody could try it on one handset
+  // without arming it for everybody at once. It reads a per-device setting that
+  // defaults OFF, so shadow logging continues for everyone else and the data
+  // that would fix the thresholds keeps accruing either way.
+  const [impactArmed, setImpactArmed] = useState(false);
   useEffect(() => {
     if (status !== 'authenticated') return;
-    if (!ENABLE_IMPACT_DETECTION && !SHADOW_MODE) return;
+    let alive = true;
+    void getItem<boolean>(storageKeys.impactDetection).then((v) => {
+      if (alive) setImpactArmed(v === true);
+    });
+    return () => { alive = false; };
+  }, [status]);
+
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    if (!ENABLE_IMPACT_DETECTION && !SHADOW_MODE && !impactArmed) return;
 
     const handle = initVolumetricMonitor(
       () => {
@@ -539,9 +555,15 @@ function RootNavigator() {
         // Already counting down. Re-navigating would restart a countdown she may
         // be halfway through cancelling, which is the opposite of a safeguard.
         if (navigationRef.getCurrentRoute()?.name === 'SOSCountdown') return;
+        // impact: true does two things. It words the countdown as a detected
+        // impact rather than a pressed button, and it records trigger =
+        // 'impact' on the SOS (sql/120) so her circle is told a SENSOR raised
+        // this. That distinction changes what a reader should do: a person who
+        // pressed a button can usually answer the phone, and someone whose
+        // phone took a hard knock and then stopped moving may not be able to.
         // @ts-expect-error SOSCountdown lives in the AppStack only, same as the
         // OfflineHelperAlert navigate above.
-        navigationRef.navigate('SOSCountdown', {});
+        navigationRef.navigate('SOSCountdown', { impact: true });
       },
       {
         // Every rejection is logged, because the thresholds in volumetricShock
@@ -552,13 +574,17 @@ function RootNavigator() {
         // reading anything. It goes to app_events now, where sql/112 can read
         // it back, because a measurement no one can retrieve is not a
         // measurement.
+        armed: impactArmed,
         onEvent: (e) => {
           trackEvent('impact_shadow', {
             type: e.type,
             reason: 'reason' in e ? e.reason : null,
             magnitudeG:
               'magnitudeG' in e ? Math.round(e.magnitudeG * 100) / 100 : null,
-            shadow: !ENABLE_IMPACT_DETECTION,
+            // Whether this observation came from a phone that would have acted
+            // on it. Without the distinction the log mixes "would have fired"
+            // with "did fire" and stops answering the question it exists for.
+            shadow: !impactArmed,
           });
         },
       },

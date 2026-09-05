@@ -206,7 +206,7 @@ Deno.serve(async (req) => {
     // 1. The SOS row.
     const { data: sos } = await admin
       .from('sos_events')
-      .select('id, user_id, user_name, lat, lng, circle_only')
+      .select('id, user_id, user_name, lat, lng, circle_only, trigger')
       .eq('id', sosId)
       .single();
     if (!sos) return json({ error: 'sos not found' }, 404);
@@ -283,12 +283,25 @@ Deno.serve(async (req) => {
         admin,
         tokens.map((to: string) => ({
           to,
-          title: `🆘 ${name} needs help`,
-          body: 'Tap to see their live location and respond.',
+          // A sensor-raised alert is worded differently on purpose. "Needs
+          // help" reads as a person who chose to ask, and the sensible first
+          // response to that is to call them. An impact alert means the phone
+          // took a hard knock, stopped moving, and nobody answered a countdown,
+          // so she may be unable to pick up and the useful response is to GO.
+          // Saying which one this is changes what the reader does in the first
+          // thirty seconds, which is the only part that matters.
+          title:
+            sos.trigger === 'impact'
+              ? `🆘 ${name} may have had a fall or crash`
+              : `🆘 ${name} needs help`,
+          body:
+            sos.trigger === 'impact'
+              ? 'Their phone detected a hard impact and they did not respond. Tap for their location.'
+              : 'Tap to see their live location and respond.',
           sound: 'default',
           priority: 'high',
           channelId: 'sos',
-          data: { kind: 'sos_push', sosId, lat: sos.lat, lng: sos.lng },
+          data: { kind: 'sos_push', sosId, lat: sos.lat, lng: sos.lng, trigger: sos.trigger ?? 'manual' },
         })),
         0, // highest drain priority: this is an emergency
       );

@@ -40,10 +40,18 @@ export class SOSRateLimitedError extends Error {
 // failure, short enough that nobody is standing in the dark waiting.
 const DELIVERY_GRACE_MS = 4000;
 
+/**
+ * What set this SOS off. Stored on the row (sql/120) and used to word the
+ * push, because a circle should act differently on a sensor reading than on a
+ * person pressing a button.
+ */
+export type SOSTrigger = 'manual' | 'voice' | 'impact' | 'geofence' | 'disaster';
+
 export async function createSOS(
   user: UserProfile,
   location: SOSLocation,
   kind: SOSKind = 'real',
+  trigger: SOSTrigger = 'manual',
 ): Promise<SOSRecord> {
   if (kind === 'real') {
     const gate = checkRateLimit('sos.fire');
@@ -76,6 +84,7 @@ export async function createSOS(
     timestamp: Date.now(),
     status: 'active',
     kind,
+    trigger,
     responders: [],
     responder: null,
     responseTime: null,
@@ -238,6 +247,7 @@ async function persistSOS(
         address: record.location.address,
         status: 'active',
         kind: record.kind ?? 'real',
+        trigger: record.trigger ?? 'manual',
         user_name: user.name,
         user_photo: user.photoUri,
         // Every active SOS is visible to nearby users while it's live (the RPC
