@@ -425,15 +425,27 @@ select 'a signed-in user cannot enumerate a stranger''s circle (must be false)',
        public.orbii_can_exec('authenticated', 'public.orbii_circle_peers(uuid)')
 union all
 -- Proves the correction above actually took, rather than trusting that it did,
--- which is exactly the assumption that produced the bug. Any default ACL still
--- naming anon or authenticated means the next function created here is open
--- again.
-select 'no default still grants anon or authenticated (must be 0)',
+-- which is exactly the assumption that produced the bug.
+--
+-- ONLY THE CURRENT ROLE'S DEFAULT MATTERS HERE, and that is not a loophole,
+-- it is how the feature works. ALTER DEFAULT PRIVILEGES is per grantor: an
+-- entry owned by role X applies only to objects X creates. Supabase installs
+-- entries under its own admin roles, and those govern functions Supabase's
+-- tooling creates, not the ones written in this repo and run through the SQL
+-- editor.
+--
+-- The first version of this check counted every row in pg_default_acl, so it
+-- reported a supabase_admin entry that has no bearing on anything in sql/ and
+-- read as a failure. Counting rows that cannot affect you is not a stricter
+-- test, it is a noisier one, and a check that cries wolf is a check people
+-- stop reading. The listing below shows the others so nothing is hidden.
+select 'no default of MINE grants anon or authenticated (must be 0)',
        (select count(*)::text
         from pg_default_acl d
         join pg_namespace n on n.oid = d.defaclnamespace
         where n.nspname = 'public'
           and d.defaclobjtype = 'f'
+          and d.defaclrole = current_role::regrole::oid
           and array_to_string(d.defaclacl, ',') ~ '(anon|authenticated)=')
 union all
 select 'the app can still read circle locations (must be true)',
@@ -446,3 +458,26 @@ union all
 -- background task that nobody is watching.
 select 'the emergency write refuses a caller with no SOS (must be false)',
        public.set_circle_location_sos(0, 0)::text;
+
+
+-- ---------------------------------------------------------------------------
+-- EVERY DEFAULT PRIVILEGE ON FUNCTIONS IN public, AND WHO OWNS IT
+-- ---------------------------------------------------------------------------
+-- Shown rather than counted, because the count above deliberately ignores
+-- roles other than the one running this file and that decision should be
+-- visible rather than buried.
+--
+-- Read it like this: a row whose grantor is the role that creates ORBII's
+-- functions (the SQL editor's role, normally postgres) governs everything in
+-- sql/. A row owned by supabase_admin or another Supabase-internal role
+-- governs objects that role creates and nothing here. If a row ever appears
+-- naming anon or authenticated under the SQL editor's own role, the guarantee
+-- above is broken and the next function written is open.
+select d.defaclrole::regrole::text as grantor,
+       (d.defaclrole = current_role::regrole::oid) as is_the_role_running_this,
+       array_to_string(d.defaclacl, ', ') as default_privileges
+from pg_default_acl d
+join pg_namespace n on n.oid = d.defaclnamespace
+where n.nspname = 'public'
+  and d.defaclobjtype = 'f'
+order by 2 desc, 1;
