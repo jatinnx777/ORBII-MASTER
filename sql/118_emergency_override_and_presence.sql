@@ -375,11 +375,21 @@ select cron.schedule('orbii-presence-sweep', '*/5 * * * *',
 -- and anon and a grant to service_role only, and the verify still found
 -- authenticated able to execute it.
 --
--- WHY. Supabase ships its own default privileges on the public schema,
--- granting functions to anon, authenticated and service_role. Revoking the
--- PUBLIC default leaves those three intact, so every function created since
--- sql/116 has been silently re-granted to anon and authenticated by a rule
--- that was there the whole time and that sql/116 never looked for.
+-- WHY, confirmed by reading pg_default_acl rather than guessing. Supabase
+-- installs default privileges on this schema under TWO grantors, postgres and
+-- supabase_admin, each granting functions to anon, authenticated and
+-- service_role. The SQL editor runs as postgres, so the postgres entry is the
+-- one that governs everything in sql/.
+--
+-- sql/116 revoked the PUBLIC default, and PUBLIC was never where the grant
+-- came from. The postgres entry was untouched, so it kept handing anon and
+-- authenticated EXECUTE on every function created after it, which is exactly
+-- how orbii_circle_peers ended up reachable by any signed-in account.
+--
+-- After the revoke below, the postgres entry reads
+-- `postgres=X/postgres, service_role=X/postgres` and nothing else. The
+-- listing at the end of this file prints it, so this is checkable rather than
+-- asserted.
 --
 -- This is the same mistake sql/116 was written to fix, made one level up: a
 -- privilege assumed rather than checked. The lesson holds and I did not apply
@@ -390,11 +400,23 @@ select cron.schedule('orbii-presence-sweep', '*/5 * * * *',
 alter default privileges in schema public
   revoke execute on functions from public, anon, authenticated;
 
--- FROM HERE ON, for real this time: a new function in public is executable by
--- nobody until granted. Every sql file must end with an explicit grant, and a
--- missing one shows up in the app as a 404 from PostgREST rather than a
--- permission error, so it reads like a typo in the RPC name. The unreachable
--- function audit at the end of sql/116 is what catches it.
+-- FROM HERE ON a new function created through the SQL editor is executable by
+-- postgres and service_role only. THIS IS A FOOTGUN AND IT IS NOW ARMED:
+-- every sql file must end with an explicit `grant execute ... to
+-- authenticated` for anything the app calls, and a missing one shows up as a
+-- 404 from PostgREST rather than a permission error, so it reads like a typo
+-- in the RPC name rather than a missing grant.
+--
+-- Run AUDIT 2 at the end of sql/116 after every new sql file. It lists
+-- non-trigger functions no role can reach, which is precisely this mistake.
+--
+-- sql/119 and sql/120 were written before this took effect and every function
+-- in them carries its own explicit revoke and grant, so neither is affected.
+--
+-- And the rule that has actually held all along, which none of this replaces:
+-- write the revoke and the grant on every function, never rely on a default.
+-- Three separate bugs in this codebase came from trusting a default that was
+-- never read.
 
 
 -- ---------------------------------------------------------------------------
