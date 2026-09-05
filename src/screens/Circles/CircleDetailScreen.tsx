@@ -49,9 +49,25 @@ export function CircleDetailScreen({
   );
   const myUid = useAppSelector((s) => s.user.profile?.uid ?? null);
   const [refreshing, setRefreshing] = useState(false);
+  // Whether the first fetch has come back yet.
+  //
+  // Members come from redux, so an empty array means two completely different
+  // things: "still fetching" and "this circle has nobody in it". Without this
+  // flag the screen cannot tell them apart, and it used to render a spinner for
+  // BOTH, so a circle with no members span forever. I then swapped that spinner
+  // for skeletons, which made a permanent state look like a permanent load and
+  // read as the members having vanished.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    refreshCircleMembers(circleId);
+    let alive = true;
+    setLoaded(false);
+    void Promise.resolve(refreshCircleMembers(circleId)).finally(() => {
+      if (alive) setLoaded(true);
+    });
+    return () => {
+      alive = false;
+    };
   }, [circleId]);
 
   const myRole = useMemo(() => {
@@ -232,7 +248,18 @@ export function CircleDetailScreen({
           }
           ListEmptyComponent={
             <View style={{ paddingTop: spacing.xl }}>
-              <SkeletonList rows={3} />
+              {!loaded ? (
+                <SkeletonList rows={3} />
+              ) : (
+                <View style={styles.emptyMembers}>
+                  <Ionicons name="people-outline" size={30} color={colors.textMuted} />
+                  <Text style={styles.emptyMembersTitle}>Nobody here yet</Text>
+                  <Text style={styles.emptyMembersText}>
+                    A circle is only useful once somebody else is in it. Invite the person who
+                    would actually come.
+                  </Text>
+                </View>
+              )}
             </View>
           }
           refreshControl={
@@ -403,6 +430,20 @@ const styles = StyleSheet.create({
     letterSpacing: 0.1,
   },
   replayBtn: { padding: 4, marginLeft: spacing.xs },
+  emptyMembers: { alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg },
+  emptyMembersTitle: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    color: colors.textPrimary,
+  },
+  emptyMembersText: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 13.5,
+    lineHeight: 20,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
