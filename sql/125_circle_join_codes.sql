@@ -46,15 +46,29 @@ declare
   alpha text := public.orbii_join_alphabet();
   n int := length(alpha);
   code text;
+  raw text;
   tries int := 0;
 begin
   loop
+    -- gen_random_uuid, not random() and not gen_random_bytes.
+    --
+    -- random() is seeded per session and is not a cryptographic source, so two
+    -- phones creating a circle in the same second could collide predictably.
+    -- gen_random_bytes was the obvious replacement and is wrong here: it comes
+    -- from pgcrypto, which Supabase installs into the `extensions` schema, and
+    -- this function pins `search_path = public`, so it resolves to nothing.
+    -- Widening the search_path to reach it would mean every other call in this
+    -- function could also resolve somewhere unexpected, which is exactly what
+    -- pinning the path is for.
+    --
+    -- gen_random_uuid is core Postgres and already the default on every table
+    -- in this schema. Two of them give 64 hex characters, far more than the 12
+    -- needed, and ('x' || <2 hex>)::bit(8)::int is the standard way to read a
+    -- byte back out.
+    raw := replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', '');
     code := '';
     for i in 1..6 loop
-      -- gen_random_bytes, not random(). random() is seeded per session and is
-      -- not a cryptographic source; two devices creating a circle in the same
-      -- second should not be able to collide predictably.
-      code := code || substr(alpha, 1 + (get_byte(gen_random_bytes(1), 0) % n), 1);
+      code := code || substr(alpha, 1 + ((('x' || substr(raw, i * 2 - 1, 2))::bit(8)::int) % n), 1);
     end loop;
     exit when not exists (select 1 from circles where join_code = code);
     tries := tries + 1;

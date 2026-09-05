@@ -76,9 +76,20 @@ grant execute on function public.circle_trails(uuid[], int) to authenticated;
 -- read filters on (user_id, at desc) and takes the newest rows. Without a
 -- matching index that is a sequential scan plus a sort, per member, per open.
 --
--- Concurrently, because this table has live writes from every sharing phone
--- and a plain CREATE INDEX would hold a write lock on it for the duration.
-create index concurrently if not exists circle_location_history_user_at_idx
+-- NOT CONCURRENTLY, though it should be. CREATE INDEX CONCURRENTLY cannot run
+-- inside a transaction block and the Supabase SQL editor wraps the whole file
+-- in one, so it fails with 25001 before anything else in the file runs.
+--
+-- A plain CREATE INDEX takes a write lock for the build. On this table today
+-- that is milliseconds: it holds a few thousand rows on a young app. It will
+-- not stay that way. Once circle_location_history is into the millions, run
+-- the concurrent version by itself, outside any transaction:
+--
+--   create index concurrently if not exists circle_location_history_user_at_idx
+--     on circle_location_history (user_id, at desc);
+--
+-- and drop this statement.
+create index if not exists circle_location_history_user_at_idx
   on circle_location_history (user_id, at desc);
 
 
