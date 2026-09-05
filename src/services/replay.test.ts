@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
   HIGH_SPEED_KMH,
   MIN_LEG_M,
+  bearingDeg,
   buildTrip,
   haversineM,
+  headingAt,
   positionAt,
+  splitAt,
   type RawFix,
 } from './replay';
 
@@ -144,5 +147,80 @@ describe('positionAt', () => {
     expect(mid.lng).toBeGreaterThan(Math.min(a.lng, b.lng));
     expect(mid.lng).toBeLessThan(Math.max(a.lng, b.lng));
     expect(mid.lng).toBeCloseTo((a.lng + b.lng) / 2, 6);
+  });
+});
+
+describe('bearingDeg', () => {
+  it('points north, east, south and west', () => {
+    const o = { lat: 28.6, lng: 77.2 };
+    // ~1km each way, comfortably past MIN_LEG_M.
+    expect(Math.round(bearingDeg(o, { lat: 28.609, lng: 77.2 })!)).toBe(0);
+    expect(Math.round(bearingDeg(o, { lat: 28.6, lng: 77.21 })!)).toBe(90);
+    expect(Math.round(bearingDeg(o, { lat: 28.591, lng: 77.2 })!)).toBe(180);
+    expect(Math.round(bearingDeg(o, { lat: 28.6, lng: 77.19 })!)).toBe(270);
+  });
+
+  it('refuses a bearing between two points of GPS wander', () => {
+    // The reason this returns null instead of a number. A parked phone still
+    // reports fixes metres apart, and turning that into a heading makes the
+    // marker spin on the spot as though she were circling.
+    const a = { lat: 28.6, lng: 77.2 };
+    const b = { lat: 28.60005, lng: 77.20005 };
+    expect(haversineM(a, b)).toBeLessThan(MIN_LEG_M);
+    expect(bearingDeg(a, b)).toBeNull();
+  });
+
+  it('always reports a compass bearing, never a negative one', () => {
+    const d = bearingDeg({ lat: 28.6, lng: 77.2 }, { lat: 28.609, lng: 77.19 })!;
+    expect(d).toBeGreaterThanOrEqual(0);
+    expect(d).toBeLessThan(360);
+  });
+});
+
+describe('headingAt', () => {
+  const moving = buildTrip([
+    { lat: 28.6, lng: 77.2, at: T0 },
+    { lat: 28.609, lng: 77.2, at: T0 + 60_000 },
+    // Stopped: two fixes a couple of metres apart.
+    { lat: 28.60902, lng: 77.20001, at: T0 + 120_000 },
+  ])!;
+
+  it('keeps the last real heading while stationary', () => {
+    // The whole point. At the traffic light the marker must still point the
+    // way she was going, not snap back to north because the last two fixes
+    // were wander.
+    expect(Math.round(headingAt(moving, 2, 123))).toBe(0);
+  });
+
+  it('falls back to what is already on screen when nothing has moved yet', () => {
+    const still = buildTrip([
+      { lat: 28.6, lng: 77.2, at: T0 },
+      { lat: 28.60001, lng: 77.2, at: T0 + 60_000 },
+    ])!;
+    expect(headingAt(still, 1, 42)).toBe(42);
+  });
+});
+
+describe('splitAt', () => {
+  const trip = buildTrip([
+    { lat: 28.6, lng: 77.2, at: T0 },
+    { lat: 28.61, lng: 77.2, at: T0 + 60_000 },
+    { lat: 28.62, lng: 77.2, at: T0 + 120_000 },
+  ])!;
+
+  it('meets exactly at the marker, with no gap and no overlap', () => {
+    const { travelled, remaining } = splitAt(trip, T0 + 90_000);
+    expect(travelled[travelled.length - 1]).toEqual(remaining[0]);
+  });
+
+  it('covers the whole route between them', () => {
+    const { travelled, remaining } = splitAt(trip, T0 + 90_000);
+    // The shared join point is counted twice, hence the + 1.
+    expect(travelled.length + remaining.length).toBe(trip.points.length + 2);
+  });
+
+  it('has nothing behind it at the start and nothing ahead at the end', () => {
+    expect(splitAt(trip, T0).travelled).toHaveLength(2);
+    expect(splitAt(trip, trip.endedAt).remaining).toHaveLength(1);
   });
 });

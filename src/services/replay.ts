@@ -246,6 +246,71 @@ export function positionAt(
   };
 }
 
+/**
+ * Compass bearing from a to b, in degrees clockwise from north.
+ *
+ * Used to point the playback marker the way she was travelling. Rotation is
+ * the cheapest way to answer "which way was she going" without the reader
+ * having to compare two frames.
+ *
+ * RETURNS NULL RATHER THAN A NUMBER when the two fixes are closer together
+ * than MIN_LEG_M. A stationary phone's GPS wanders, and the bearing between
+ * two points of wander is a direction she was never facing. A marker that
+ * spins on the spot while parked looks like data and is noise, so the caller
+ * is told to keep the previous heading instead.
+ */
+export function bearingDeg(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number | null {
+  if (haversineM(a, b) < MIN_LEG_M) return null;
+  const p = Math.PI / 180;
+  const y = Math.sin((b.lng - a.lng) * p) * Math.cos(b.lat * p);
+  const x =
+    Math.cos(a.lat * p) * Math.sin(b.lat * p) -
+    Math.sin(a.lat * p) * Math.cos(b.lat * p) * Math.cos((b.lng - a.lng) * p);
+  return (Math.atan2(y, x) / p + 360) % 360;
+}
+
+/**
+ * Heading at a scrubber position, given the heading already on screen.
+ *
+ * Walks BACKWARDS from the current leg until it finds one long enough to have
+ * a real direction, so a marker sitting at a traffic light keeps pointing the
+ * way it was going rather than resetting to north. Falls back to `prev` and,
+ * on the very first frame of a trip that starts stationary, to zero.
+ */
+export function headingAt(trip: DriveTrip, index: number, prev: number): number {
+  for (let i = Math.min(index, trip.points.length - 1); i > 0; i--) {
+    const b = bearingDeg(trip.points[i - 1], trip.points[i]);
+    if (b !== null) return b;
+  }
+  return prev;
+}
+
+/**
+ * The route split at the scrubber: where she has been, and where she has yet
+ * to go on this replay.
+ *
+ * The travelled half ends exactly at the interpolated marker rather than at
+ * the last whole fix, so the line does not visibly lag behind the puck between
+ * points. That gap is small in metres and very obvious on screen.
+ */
+export function splitAt(
+  trip: DriveTrip,
+  t: number,
+): { travelled: { lat: number; lng: number }[]; remaining: { lat: number; lng: number }[] } {
+  const here = positionAt(trip, t);
+  const pts = trip.points;
+  const travelled = pts.slice(0, here.index + 1).map((p) => ({ lat: p.lat, lng: p.lng }));
+  travelled.push({ lat: here.lat, lng: here.lng });
+  const remaining = [
+    { lat: here.lat, lng: here.lng },
+    ...pts.slice(here.index + 1).map((p) => ({ lat: p.lat, lng: p.lng })),
+  ];
+  return { travelled, remaining };
+}
+
 export function formatDistance(m: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }

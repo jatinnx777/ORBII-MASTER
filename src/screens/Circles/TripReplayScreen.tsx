@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -7,26 +7,16 @@ import {
   Text,
   View,
 } from 'react-native';
-import {
-  Camera,
-  GeoJSONSource,
-  Layer,
-  Marker,
-  Map as MLMap,
-  type CameraRef,
-} from '@maplibre/maplibre-react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { DriveReplay, type DriveReplayHandle } from '@/components/replay/DriveReplay';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Haptics from 'expo-haptics';
-import { ORBII_MAP_STYLE } from '@/components/common/mapStyle';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import {
-  HIGH_SPEED_KMH,
   formatDistance,
   formatDuration,
   loadTrip,
-  positionAt,
   type DriveEvent,
   type DriveTrip,
 } from '@/services/replay';
@@ -47,11 +37,8 @@ import {
  * replay can.
  */
 
-const SPEEDS = [1, 2, 4] as const;
-type Speed = (typeof SPEEDS)[number];
 
 /** Real time per replay tick. 16ms would burn battery to move a dot 3 metres. */
-const TICK_MS = 100;
 
 export function TripReplayScreen() {
   const navigation = useNavigation();
@@ -62,92 +49,19 @@ export function TripReplayScreen() {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
 
+  // Mirrors DriveReplay's playhead, fed by its onSeek, so the clock under the
+  // controls stays in step. The component owns the value; this is a copy for
+  // display, which is why nothing here writes to it except that callback.
   const [t, setT] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [rate, setRate] = useState<Speed>(1);
+  const replayRef = useRef<DriveReplayHandle>(null);
 
-  const cameraRef = useRef<CameraRef>(null);
-  // Measured on layout rather than assumed, so seeking stays correct on a
-  // narrow screen and at large system font sizes.
-  const trackW = useRef(0);
 
-  useEffect(() => {
-    let alive = true;
-    void loadTrip(userId)
-      .then((tr) => {
-        if (!alive) return;
-        setTrip(tr);
-        setFailed(!tr);
-        if (tr) setT(tr.startedAt);
-        setLoading(false);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setFailed(true);
-        setLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [userId]);
 
-  // Playback. A wall-clock delta rather than a fixed increment per tick, so a
-  // dropped frame loses time rather than desyncing the marker from the clock.
-  const lastRef = useRef(0);
-  useEffect(() => {
-    if (!playing || !trip) return;
-    lastRef.current = Date.now();
-    const id = setInterval(() => {
-      const now = Date.now();
-      const delta = (now - lastRef.current) * rate;
-      lastRef.current = now;
-      setT((prev) => {
-        const next = prev + delta;
-        if (next >= trip.endedAt) {
-          setPlaying(false);
-          return trip.endedAt;
-        }
-        return next;
-      });
-    }, TICK_MS);
-    return () => clearInterval(id);
-  }, [playing, rate, trip]);
-
-  const here = useMemo(() => (trip ? positionAt(trip, t) : null), [trip, t]);
-
-  // Two lines, not one gradient. MapLibre can interpolate a line's colour along
-  // a gradient, but only on a source with lineMetrics, and the honest reading
-  // of this data is binary anyway: a leg either averaged above the threshold or
-  // it did not. A smooth gradient would imply a precision the 60 second sample
-  // does not have.
-  const lines = useMemo(() => {
-    if (!trip) return { normal: emptyFC(), fast: emptyFC() };
-    const normal: number[][][] = [];
-    const fast: number[][][] = [];
-    let run: number[][] = [];
-    let runFast = false;
-
-    for (let i = 1; i < trip.points.length; i++) {
-      const a = trip.points[i - 1];
-      const b = trip.points[i];
-      const isFast = (b.speedKmh ?? 0) >= HIGH_SPEED_KMH;
-      if (run.length === 0 || isFast !== runFast) {
-        if (run.length > 1) (runFast ? fast : normal).push(run);
-        run = [[a.lng, a.lat]];
-        runFast = isFast;
-      }
-      run.push([b.lng, b.lat]);
-    }
-    if (run.length > 1) (runFast ? fast : normal).push(run);
-
-    return { normal: linesFC(normal), fast: linesFC(fast) };
-  }, [trip]);
-
+  // Pausing and flying the camera are both inside seekTo now, because both are
+  // properties of moving the playhead rather than of tapping a chip.
   const jumpTo = useCallback((e: DriveEvent) => {
     Haptics.selectionAsync().catch(() => undefined);
-    setPlaying(false);
-    setT(e.at);
-    cameraRef.current?.flyTo({ center: [e.lng, e.lat], zoom: 16, duration: 600 });
+    replayRef.current?.seekTo(e.at);
   }, []);
 
   if (loading) {
@@ -158,7 +72,7 @@ export function TripReplayScreen() {
     );
   }
 
-  if (failed || !trip || !here) {
+  if (failed || !trip) {
     return (
       <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
         <Header name={name} onBack={() => navigation.goBack()} />
@@ -174,153 +88,24 @@ export function TripReplayScreen() {
     );
   }
 
-  const progress = (t - trip.startedAt) / Math.max(1, trip.endedAt - trip.startedAt);
 
   return (
     <SafeAreaView style={s.safe} edges={['top', 'left', 'right']}>
       <Header name={name} onBack={() => navigation.goBack()} />
 
-      <View style={s.mapWrap}>
-        <MLMap
-          style={s.fill}
-          mapStyle={ORBII_MAP_STYLE as never}
-          logo={false}
-          attribution={false}
-          compass={false}
-          touchRotate={false}
-          touchPitch={false}
-        >
-          <Camera
-            ref={cameraRef}
-            initialViewState={{
-              center: [trip.points[0].lng, trip.points[0].lat],
-              zoom: 14,
-            }}
-          />
+      {/*
+        The map, the moving marker and the transport controls all live in
+        DriveReplay now. This screen keeps what is actually its own job:
+        loading the trip, the header, the totals, and the event chips.
 
-          <GeoJSONSource id="trip-normal" data={lines.normal}>
-            <Layer
-              id="trip-normal-casing"
-              type="line"
-              paint={{ 'line-color': '#1A1A1A', 'line-width': 8, 'line-opacity': 0.14 }}
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            />
-            <Layer
-              id="trip-normal-line"
-              type="line"
-              paint={{ 'line-color': colors.brandDeep, 'line-width': 4.5 }}
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            />
-          </GeoJSONSource>
-
-          <GeoJSONSource id="trip-fast" data={lines.fast}>
-            <Layer
-              id="trip-fast-line"
-              type="line"
-              paint={{ 'line-color': colors.coralDeep, 'line-width': 5.5 }}
-              layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-            />
-          </GeoJSONSource>
-
-          <Marker lngLat={[trip.points[0].lng, trip.points[0].lat]} anchor="center">
-            <View style={[s.pin, { backgroundColor: colors.sageDeep }]} />
-          </Marker>
-          <Marker
-            lngLat={[
-              trip.points[trip.points.length - 1].lng,
-              trip.points[trip.points.length - 1].lat,
-            ]}
-            anchor="center"
-          >
-            <View style={[s.pin, { backgroundColor: colors.textPrimary }]} />
-          </Marker>
-
-          <Marker lngLat={[here.lng, here.lat]} anchor="center">
-            <View style={s.puckRing}>
-              <View style={s.puck} />
-            </View>
-          </Marker>
-        </MLMap>
-
-        <View style={s.speedBadge}>
-          <Text style={s.speedNum}>
-            {here.speedKmh === null ? '--' : Math.round(here.speedKmh)}
-          </Text>
-          <Text style={s.speedUnit}>km/h</Text>
-        </View>
-      </View>
+        The playhead is NOT lifted into this screen. It changes on every
+        animation frame, and owning it here would re-render the totals and
+        the chip list sixty times a second to move one marker. A chip tap
+        reaches in through the ref instead.
+      */}
+      <DriveReplay ref={replayRef} trip={trip} onSeek={setT} style={s.replay} />
 
       <View style={s.sheet}>
-        <View style={s.scrubRow}>
-          <Pressable
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
-              if (t >= trip.endedAt) setT(trip.startedAt);
-              setPlaying((p) => !p);
-            }}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel={playing ? 'Pause' : 'Play'}
-            style={s.play}
-          >
-            <Ionicons
-              name={playing ? 'pause' : 'play'}
-              size={20}
-              color={colors.textInverse}
-              style={playing ? undefined : { marginLeft: 2 }}
-            />
-          </Pressable>
-
-          <View
-            style={s.track}
-            onLayout={(e) => {
-              trackW.current = e.nativeEvent.layout.width;
-            }}
-            onStartShouldSetResponder={() => true}
-            onMoveShouldSetResponder={() => true}
-            onResponderGrant={(e) => {
-              setPlaying(false);
-              seek(e.nativeEvent.locationX);
-            }}
-            onResponderMove={(e) => seek(e.nativeEvent.locationX)}
-          >
-            <View style={s.trackBg} />
-            <View style={[s.trackFill, { width: `${Math.max(0, Math.min(1, progress)) * 100}%` }]} />
-            {/* Events sit ON the scrubber, so the shape of the journey is
-                visible without playing it. */}
-            {trip.events.map((e) => (
-              <View
-                key={e.id}
-                pointerEvents="none"
-                style={[
-                  s.tick,
-                  {
-                    left: `${
-                      ((e.at - trip.startedAt) / Math.max(1, trip.endedAt - trip.startedAt)) * 100
-                    }%`,
-                    backgroundColor:
-                      e.kind === 'high_speed' ? colors.coralDeep : colors.goldDeep,
-                  },
-                ]}
-              />
-            ))}
-            <View
-              pointerEvents="none"
-              style={[s.knob, { left: `${Math.max(0, Math.min(1, progress)) * 100}%` }]}
-            />
-          </View>
-
-          <Pressable
-            onPress={() => {
-              Haptics.selectionAsync().catch(() => undefined);
-              setRate(SPEEDS[(SPEEDS.indexOf(rate) + 1) % SPEEDS.length]);
-            }}
-            hitSlop={10}
-            style={s.rate}
-          >
-            <Text style={s.rateText}>{rate}x</Text>
-          </Pressable>
-        </View>
 
         <Text style={s.clock}>
           {clock(t)} <Text style={s.clockDim}>of {clock(trip.endedAt)}</Text>
@@ -373,13 +158,6 @@ export function TripReplayScreen() {
     </SafeAreaView>
   );
 
-  function seek(x: number) {
-    // Measured lazily off the laid-out track rather than assumed, so it stays
-    // correct on a small screen and at large system font sizes.
-    const w = trackW.current || 1;
-    const f = Math.max(0, Math.min(1, x / w));
-    setT(trip!.startedAt + f * (trip!.endedAt - trip!.startedAt));
-  }
 }
 
 function Header({ name, onBack }: { name?: string; onBack: () => void }) {
@@ -414,25 +192,11 @@ function clock(ms: number): string {
   });
 }
 
-function emptyFC() {
-  return { type: 'FeatureCollection' as const, features: [] };
-}
 
-function linesFC(runs: number[][][]) {
-  return {
-    type: 'FeatureCollection' as const,
-    features: runs.map((coords, i) => ({
-      type: 'Feature' as const,
-      id: i,
-      properties: {},
-      geometry: { type: 'LineString' as const, coordinates: coords },
-    })),
-  };
-}
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.cream },
-  fill: { flex: 1 },
+  replay: { flex: 1 },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -477,51 +241,7 @@ const s = StyleSheet.create({
     textAlign: 'center',
   },
 
-  mapWrap: { flex: 1, overflow: 'hidden' },
-  pin: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2.5,
-    borderColor: colors.surface,
-  },
-  puckRing: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  puck: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.brandDeep,
-    borderWidth: 2.5,
-    borderColor: colors.surface,
-  },
 
-  speedBadge: {
-    position: 'absolute',
-    top: spacing.md,
-    right: spacing.md,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    minWidth: 74,
-  },
-  speedNum: {
-    fontFamily: fontFamilies.poppinsBold,
-    fontSize: 24,
-    color: colors.textPrimary,
-    fontVariant: ['tabular-nums'],
-  },
-  speedUnit: { fontFamily: fontFamilies.interRegular, fontSize: 11, color: colors.textMuted },
 
   sheet: {
     backgroundColor: colors.surface,
@@ -533,24 +253,7 @@ const s = StyleSheet.create({
     gap: spacing.md,
   },
 
-  scrubRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
-  play: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.brandDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  track: { flex: 1, height: 32, justifyContent: 'center' },
   trackBg: { height: 4, borderRadius: 2, backgroundColor: colors.creamDeep },
-  trackFill: {
-    position: 'absolute',
-    left: 0,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.brandDeep,
-  },
   tick: { position: 'absolute', width: 3, height: 12, borderRadius: 2, marginLeft: -1.5 },
   knob: {
     position: 'absolute',
@@ -562,15 +265,6 @@ const s = StyleSheet.create({
     borderWidth: 3,
     borderColor: colors.brandDeep,
   },
-  rate: {
-    minWidth: 40,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.creamDeep,
-    alignItems: 'center',
-  },
-  rateText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13, color: colors.textPrimary },
 
   clock: {
     fontFamily: fontFamilies.poppinsSemiBold,
