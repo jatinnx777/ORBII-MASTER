@@ -79,11 +79,61 @@ export type Circle = {
   updatedAt: number;
 };
 
+/**
+ * Relationship options, in the order they are offered.
+ *
+ * Parents first because a parent watching a daughter is the commonest circle
+ * ORBII has, then the reverse, then siblings, then everything else. 'Other'
+ * exists so nobody has to pick a wrong answer, and there is deliberately no
+ * free-text option: a label everyone else in the circle reads should not be a
+ * place to write a sentence.
+ */
+export type CircleRelation =
+  | 'mother' | 'father' | 'daughter' | 'son'
+  | 'sister' | 'brother' | 'partner' | 'grandparent'
+  | 'friend' | 'roommate' | 'colleague' | 'other';
+
+export const RELATION_LABELS: Record<CircleRelation, string> = {
+  mother: 'Mum',
+  father: 'Dad',
+  daughter: 'Daughter',
+  son: 'Son',
+  sister: 'Sister',
+  brother: 'Brother',
+  partner: 'Partner',
+  grandparent: 'Grandparent',
+  friend: 'Friend',
+  roommate: 'Roommate',
+  colleague: 'Colleague',
+  other: 'Other',
+};
+
+/** Set your own relationship in a circle. Nobody can set anyone else's. */
+export async function setMyRelation(
+  circleId: string,
+  relation: CircleRelation | null,
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('set_my_circle_relation', {
+    p_circle: circleId,
+    p_relation: relation,
+  });
+  return !error && data === true;
+}
+
 export type CircleMember = {
   id: string;
   circleId: string;
   userId: string;
   role: CircleRole;
+  /**
+   * Who they are to the circle, as opposed to what they may do (that is
+   * `role`). Optional: a woman adding a colleague to a walk-home circle has no
+   * answer to "what are they to you", and the app should not insist.
+   *
+   * Set by the person it describes and nobody else, so a flatmate cannot find
+   * herself listed as somebody's daughter.
+   */
+  relation?: CircleRelation | null;
   joinedAt: number;
   // Hydrated from users_public when available.
   username?: string | null;
@@ -132,6 +182,7 @@ type MemberRow = {
   circle_id: string;
   user_id: string;
   role: CircleRole;
+  relation?: CircleRelation | null;
   joined_at: string;
 };
 
@@ -179,6 +230,7 @@ function rowToMember(row: MemberRow): CircleMember {
     circleId: row.circle_id,
     userId: row.user_id,
     role: row.role,
+    relation: row.relation ?? null,
     joinedAt: Date.parse(row.joined_at),
   };
 }

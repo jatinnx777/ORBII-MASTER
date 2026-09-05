@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
+import { CodeBoxes, PillInput } from '@/components/onboarding/Pill';
 import { Protected } from '@/components/onboarding/Protected';
 import { Listening } from '@/components/onboarding/Listening';
 import { PermissionCards } from '@/components/onboarding/PermissionCards';
@@ -114,13 +115,13 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="lock-closed"
         tint={colors.lavenderDeep}
         scene={<SceneHandsFree />}
-        title={hi ? 'शुरू करने से पहले' : 'Welcome to ORBII'}
+        title={hi ? 'शुरू करने से पहले' : 'before we start'}
         blurb={
           hi
             ? 'ORBII आपकी आवाज़ आपके फ़ोन पर ही पहचानता है। कुछ भी अपलोड नहीं होता।'
             : 'Silent, hands-free protection for the people you trust. Your voice is recognised on your phone and never uploaded.'
         }
-        ctaLabel={hi ? 'आगे' : 'Continue'}
+        ctaLabel={hi ? 'आगे' : 'continue'}
         ctaDisabled={!adult}
         footnote={
           hi
@@ -162,9 +163,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('auth')}
         icon="mail"
         tint={colors.brandDeep}
-        title={hi ? 'आपका ईमेल' : 'Create your account'}
-        blurb={hi ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।' : 'No password. We send you a code.'}
-        ctaLabel={hi ? 'कोड भेजिए' : 'Email me a code'}
+        title={hi ? 'आपका ईमेल' : 'give us your email'}
+        blurb={hi ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।' : 'no password. we send you a code.'}
+        ctaLabel={hi ? 'कोड भेजिए' : 'send me a code'}
         ctaDisabled={!/^\S+@\S+\.\S+$/.test(email.trim())}
         onBack={() => go('consent')}
         onNext={async () => {
@@ -212,18 +213,15 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           <View style={s.orLine} />
         </View>
 
-        <TextInput
-          value={email}
+        <PillInput          value={email}
           onChangeText={setEmail}
           placeholder="you@example.com"
-          placeholderTextColor={colors.textMuted}
-          style={s.input}
           autoCapitalize="none"
           autoCorrect={false}
           keyboardType="email-address"
           textContentType="emailAddress"
           autoComplete="email"
-        />
+/>
       </Step>
     );
   }
@@ -235,9 +233,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('code')}
         icon="keypad"
         tint={colors.brandDeep}
-        title={hi ? 'ईमेल देखिए' : 'Check your email'}
+        title={hi ? 'ईमेल देखिए' : 'verify'}
         blurb={email.trim().toLowerCase()}
-        ctaLabel={hi ? 'आगे' : 'Continue'}
+        ctaLabel={hi ? 'आगे' : 'continue'}
         ctaDisabled={code.replace(/\D/g, '').length < 6}
         onBack={() => go('auth')}
         onNext={async () => {
@@ -258,21 +256,11 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        {/* Not capped at six. Supabase issues an 8 digit code on this project,
-            and a maxLength of 6 silently ate the last two, which made signup
-            impossible rather than merely annoying. */}
-        <TextInput
-          value={code}
-          onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 8))}
-          placeholder="12345678"
-          placeholderTextColor={colors.textMuted}
-          style={[s.input, s.code]}
-          keyboardType="number-pad"
-          textContentType="oneTimeCode"
-          autoComplete="one-time-code"
-          maxLength={8}
-          autoFocus
-        />
+        {/* EIGHT boxes, not six. Supabase issues an 8 digit code on this
+            project, and a maxLength of 6 silently ate the last two, which made
+            signup impossible rather than merely annoying. The reference design
+            this is modelled on shows six; six is its layout, not our spec. */}
+        <CodeBoxes value={code} onChange={setCode} length={8} autoFocus />
       </Step>
     );
   }
@@ -284,13 +272,13 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('profile')}
         icon="person-add"
         tint={colors.sageDeep}
-        title={hi ? 'एक भरोसेमंद नंबर' : 'One person who picks up'}
+        title={hi ? 'एक भरोसेमंद नंबर' : 'one person who picks up'}
         blurb={
           hi
             ? 'एक ऐसा इंसान जो रात दो बजे सच में फ़ोन उठाए। पाँच लोग नहीं जो शायद उठाएँ।'
             : 'One person who will actually pick up at 2am. Not five who might.'
         }
-        ctaLabel={hi ? 'आगे' : 'Continue'}
+        ctaLabel={hi ? 'आगे' : 'continue'}
         ctaDisabled={name.trim().length < 2 || cName.trim().length < 2 || cPhone.length !== 10}
         onBack={() => go('code')}
         onNext={async () => {
@@ -320,31 +308,22 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        <TextInput
-          value={name}
+        <PillInput          value={name}
           onChangeText={setName}
           placeholder={hi ? 'आपका नाम' : 'Your name'}
-          placeholderTextColor={colors.textMuted}
-          style={s.input}
           autoCapitalize="words"
-        />
-        <TextInput
-          value={cName}
+/>
+        <PillInput          value={cName}
           onChangeText={setCName}
           placeholder={hi ? 'उनका नाम' : 'Their name'}
-          placeholderTextColor={colors.textMuted}
-          style={s.input}
           autoCapitalize="words"
-        />
-        <TextInput
-          value={cPhone}
+/>
+        <PillInput          value={cPhone}
           onChangeText={(v) => setCPhone(v.replace(/\D/g, '').slice(0, 10))}
           placeholder={hi ? '10 अंकों का नंबर' : '10 digit mobile number'}
-          placeholderTextColor={colors.textMuted}
-          style={s.input}
           keyboardType="number-pad"
           textContentType="telephoneNumber"
-        />
+/>
         <View style={s.chips}>
           {ROLES.map((r) => (
             <Pressable
@@ -369,7 +348,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('permissions')}
         icon="shield-half"
         tint={colors.goldDeep}
-        title={hi ? 'ORBII को चालू रखिए' : 'Turn ORBII on'}
+        title={hi ? 'ORBII को चालू रखिए' : 'a few permissions'}
         blurb={
           hi
             ? 'हर एक के लिए वजह पहले, फिर फ़ोन पूछेगा। कोई भी छोड़ सकती हैं।'
@@ -394,7 +373,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="mic"
         tint={colors.coralDeep}
         scene={<SceneVoice />}
-        title={hi ? 'बस एक शब्द' : 'Just say the word'}
+        title={hi ? 'बस एक शब्द' : 'just say the word'}
         blurb={
           hi
             ? 'फ़ोन जेब में हो, स्क्रीन बंद हो, इंटरनेट न हो। "help" या "bachao" कहिए और ORBII चल पड़ता है।'
@@ -454,7 +433,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="people"
         tint={colors.lavenderDeep}
         scene={<SceneHelpers />}
-        title={hi ? 'आपका circle' : 'Your circle'}
+        title={hi ? 'आपका circle' : 'your circle'}
         blurb={
           hi
             ? 'अगर किसी ने आपको invite किया है तो code डालिए। नहीं तो यह बाद में हो सकता है।'
@@ -504,12 +483,15 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             <Text style={s.joinedText}>{hi ? 'आप जुड़ गईं' : 'You are in'}</Text>
           </View>
         ) : (
-          <TextInput
+          // Kept as one field rather than the boxed treatment used for the
+          // email code. An invite token here is a variable-length string, and
+          // a fixed row of boxes would either truncate a longer one or leave
+          // empty boxes sitting there implying a length that is not required.
+          <PillInput
             value={invite}
             onChangeText={(v) => setInvite(v.trim())}
             placeholder="Invite code"
-            placeholderTextColor={colors.textMuted}
-            style={[s.input, s.invite]}
+            style={s.invite}
             autoCapitalize="characters"
             autoCorrect={false}
           />
@@ -526,13 +508,13 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="shield-checkmark"
         tint={colors.goldDeep}
         scene={<ScenePrivate />}
-        title={hi ? 'एक PIN चुनिए' : 'Choose a PIN'}
+        title={hi ? 'एक PIN चुनिए' : 'choose a pin'}
         blurb={
           hi
             ? 'अगर कोई आपका फ़ोन छीन ले, तो बिना इस PIN के आपका SOS रोका नहीं जा सकता।'
             : 'If someone takes your phone, your SOS cannot be cancelled without this PIN.'
         }
-        ctaLabel={hi ? 'हो गया' : 'Done'}
+        ctaLabel={hi ? 'हो गया' : 'done'}
         ctaDisabled={pin.length !== 4}
         onBack={() => go('circle')}
         footnote={
@@ -555,17 +537,15 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        <TextInput
-          value={pin}
+        <PillInput          value={pin}
           onChangeText={(v) => setPinValue(v.replace(/\D/g, '').slice(0, 4))}
           placeholder="••••"
-          placeholderTextColor={colors.textMuted}
           style={[s.input, s.code]}
           keyboardType="number-pad"
           secureTextEntry
           maxLength={4}
           autoFocus
-        />
+/>
       </Step>
     );
   }
@@ -586,27 +566,10 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   ];
   if (joined) lines.push(hi ? 'आप एक circle में हैं' : 'You are in a circle');
 
-  return <Protected lines={lines} ctaLabel={hi ? 'ORBII खोलिए' : 'Enter ORBII'} onDone={onDone} />;
+  return <Protected lines={lines} ctaLabel={hi ? 'ORBII खोलिए' : 'open orbii'} onDone={onDone} />;
 }
 
 const s = StyleSheet.create({
-  input: {
-    height: 54,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.inputBorder,
-    backgroundColor: colors.surface,
-    paddingHorizontal: spacing.md,
-    fontFamily: fontFamilies.interRegular,
-    fontSize: 16,
-    color: colors.textPrimary,
-  },
-  code: {
-    fontSize: 24,
-    letterSpacing: 6,
-    textAlign: 'center',
-    fontFamily: fontFamilies.poppinsSemiBold,
-  },
   invite: { letterSpacing: 3, textAlign: 'center', fontFamily: fontFamilies.poppinsSemiBold },
 
   google: {

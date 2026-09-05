@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
+import { SoftGround } from './SoftGround';
 
 /**
  * One screen of first run, and the only place motion is defined for it.
@@ -146,6 +147,7 @@ export function Step({
   const disabled = !!ctaDisabled || !!busy;
 
   return (
+    <SoftGround reduced={reduced}>
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
       {!bare ? (
         <View style={styles.track}>
@@ -250,7 +252,7 @@ export function Step({
                 style={[styles.cta, disabled && styles.ctaOff]}
               >
                 <Text style={[styles.ctaText, disabled && styles.ctaTextOff]}>
-                  {busy ? 'One moment' : ctaLabel}
+                  {busy ? 'one moment' : ctaLabel}
                 </Text>
               </Pressable>
             </Animated.View>
@@ -259,12 +261,15 @@ export function Step({
         </Animated.View>
       </KeyboardAvoidingView>
     </SafeAreaView>
+    </SoftGround>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.cream },
-  track: { height: 3, backgroundColor: colors.creamDeep, width: '100%' },
+  // Transparent: SoftGround paints behind this now. A cream fill here would
+  // cover the drifting field entirely.
+  safe: { flex: 1, backgroundColor: 'transparent' },
+  track: { height: 3, backgroundColor: 'rgba(23,22,28,0.07)', width: '100%' },
   fill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.brandDeep },
 
   body: { flex: 1 },
@@ -302,11 +307,13 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
 
+  // Bigger and tighter than the app's usual heading. Onboarding asks one
+  // question per screen and the question should own the screen.
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 30,
-    lineHeight: 37,
-    letterSpacing: -0.7,
+    fontSize: 34,
+    lineHeight: 40,
+    letterSpacing: -1,
     color: colors.textPrimary,
   },
   blurb: {
@@ -319,14 +326,19 @@ const styles = StyleSheet.create({
   slot: { marginTop: spacing.xl, gap: spacing.md },
 
   footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
+  // Near-black, not the brand colour. There is exactly one action per screen
+  // and it has to be unmissable against a pale drifting ground; lavender on
+  // cream is pleasant and low contrast, which is right for a button competing
+  // with other content and wrong for the only one on the page. The brand shows
+  // up in the field behind it instead.
   cta: {
     height: 56,
     borderRadius: radius.pill,
-    backgroundColor: colors.brandDeep,
+    backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaOff: { backgroundColor: colors.creamDeep },
+  ctaOff: { backgroundColor: 'rgba(23,22,28,0.20)' },
   ctaText: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 17,
