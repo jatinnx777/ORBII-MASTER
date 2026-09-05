@@ -38,6 +38,14 @@ export type MemberCardProps = {
   relation?: CircleRelation | null;
   selected?: boolean;
   onPress?: () => void;
+  /**
+   * Actions on the right edge: history, replay, whatever the screen offers.
+   *
+   * A slot rather than props, because the card should not know what a circle
+   * map happens to be able to do with a person. It owns who they are and how
+   * they are; what you can do about it belongs to the screen.
+   */
+  trailing?: React.ReactNode;
 };
 
 function ago(iso: string): string {
@@ -91,6 +99,7 @@ export function MemberCard({
   relation,
   selected,
   onPress,
+  trailing,
 }: MemberCardProps) {
   const status = statusOf(m);
   // Never dim an emergency, whatever the sharing flag says. During an SOS this
@@ -175,6 +184,8 @@ export function MemberCard({
           ) : null}
         </View>
       </View>
+
+      {trailing ? <View style={s.trailing}>{trailing}</View> : null}
     </Pressable>
   );
 }
@@ -235,6 +246,7 @@ const s = StyleSheet.create({
   },
 
   right: { alignItems: 'flex-end', gap: 4 },
+  trailing: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   distance: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 13.5,

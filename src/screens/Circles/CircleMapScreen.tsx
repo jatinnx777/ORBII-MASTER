@@ -19,6 +19,7 @@ import {
   type OSMPolyline,
   type OSMCircle,
 } from '@/components/common';
+import { MemberCard } from '@/components/circles/MemberCard';
 import { useGlide } from '@/hooks/useGlide';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
@@ -136,55 +137,6 @@ function freshness(iso: string): { color: string; stale: boolean } {
   return { color: colors.textMuted, stale: true };
 }
 
-/**
- * One sentence about a member's presence, and the colour to say it in.
- *
- * The row used to print `ago(updatedAt)` and leave the reader to work out what
- * it meant, so "2m ago" and "3h ago" arrived in the same grey type at the same
- * size. Three states now say themselves, in the order they matter:
- *
- *   EMERGENCY   She has an active SOS. Her position is on screen because of
- *               that, not because sharing is on (sql/118), so it says so.
- *   UNREACHABLE Sharing is on and nothing has arrived in 20 minutes. A dead
- *               battery, a basement, or a phone that was taken. The point is
- *               that this is not the same as a live pin, and a parent should
- *               not have to do the subtraction to find out.
- *   LOW BATTERY Sharing works right up until it does not.
- *
- * Everything else keeps the old quiet treatment, because most of the time
- * nothing is wrong and a screen that shouts constantly is a screen people stop
- * reading.
- */
-function presenceOf(m: MemberLocation): { label: string; color: string; loud: boolean } {
-  if (m.emergency) {
-    return { label: `SOS active · ${ago(m.updatedAt)}`, color: colors.primaryDeep, loud: true };
-  }
-  if (m.unreachable) {
-    return {
-      label: `Not updating · last seen ${ago(m.updatedAt)}`,
-      color: colors.goldDeep,
-      loud: true,
-    };
-  }
-  if (!m.sharing) {
-    return { label: `Location off · last seen ${ago(m.updatedAt)}`, color: colors.textMuted, loud: false };
-  }
-  if (m.precisionM != null) {
-    // Named plainly. A pin is a pin, and without this line a bubbled position
-    // looks exactly like an exact one to anyone who does not notice the circle
-    // around it is larger than usual.
-    const km = m.precisionM >= 1000 ? `${(m.precisionM / 1000).toFixed(1)} km` : `${m.precisionM} m`;
-    return {
-      label: `Approximate, within ${km} · ${ago(m.updatedAt)}`,
-      color: colors.textSecondary,
-      loud: false,
-    };
-  }
-  if (m.battery != null && m.battery <= 15) {
-    return { label: `${ago(m.updatedAt)} · battery ${m.battery}%`, color: colors.goldDeep, loud: true };
-  }
-  return { label: ago(m.updatedAt), color: freshness(m.updatedAt).color, loud: false };
-}
 
 export function CircleMapScreen() {
   const navigation = useNavigation();
@@ -710,94 +662,50 @@ export function CircleMapScreen() {
             </Text>
           ) : (
             <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-              {shown.map((m, i) => {
-                const f = freshness(m.updatedAt);
-                const presence = presenceOf(m);
-                const sel = selectedId === m.userId;
-                // An SOS row is never dimmed as "off", whatever the sharing
-                // flag says: during an emergency her row is the most important
-                // thing on this screen.
-                const off = !m.sharing && !m.emergency;
-                return (
-                  <Pressable
-                    key={m.userId}
-                    onPress={() => void selectMember(m)}
-                    style={[styles.memberRow, i > 0 && styles.memberDivider, sel && styles.memberRowOn]}
-                  >
-                    <View style={[styles.avatarRing, { borderColor: off ? '#9a958c' : colorFor(m.userId) }]}>
-                      {m.photoUri ? (
-                        <Image source={{ uri: m.photoUri }} style={styles.avatarImg} />
-                      ) : (
-                        <View style={[styles.memberDot, { backgroundColor: off ? '#9a958c' : colorFor(m.userId) }]}>
-                          <Text style={styles.memberInitial}>{(m.name || '?').slice(0, 1).toUpperCase()}</Text>
-                        </View>
-                      )}
-                      {!off ? <View style={[styles.liveDot, { backgroundColor: presence.loud ? presence.color : f.color }]} /> : null}
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.memberName} numberOfLines={1}>{m.name || 'Circle member'}</Text>
-                      <Text
-                        style={[
-                          styles.memberMeta,
-                          presence.loud && { color: presence.color, fontFamily: fontFamilies.poppinsSemiBold },
-                        ]}
-                        numberOfLines={1}
+              {shown.map((m) => (
+                <MemberCard
+                  key={m.userId}
+                  member={m}
+                  color={colorFor(m.userId)}
+                  distanceM={distanceOf(m)}
+                  selected={selectedId === m.userId}
+                  onPress={() => void selectMember(m)}
+                  trailing={
+                    <>
+                      <Pressable
+                        onPress={() => {
+                          setSelectedId(m.userId);
+                          setCenter({ latitude: m.lat, longitude: m.lng });
+                          setHistoryOpen(true);
+                        }}
+                        hitSlop={8}
+                        style={styles.historyBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`See ${m.name || 'their'} location history`}
                       >
-                        {presence.label}
-                      </Text>
-                    </View>
-                    <View style={styles.rightCol}>
-                      {distanceOf(m) != null ? (
-                        <Text style={[styles.distance, off && styles.distanceOff]}>
-                          {formatDistance(distanceOf(m) as number)}
-                        </Text>
-                      ) : off ? (
-                        <View style={styles.offPill}><Text style={styles.offPillText}>OFF</Text></View>
-                      ) : null}
-                      {m.battery != null ? (
-                        <View style={styles.batteryRow}>
-                          <Ionicons
-                            name={m.battery <= 20 ? 'battery-dead' : m.battery <= 50 ? 'battery-half' : 'battery-full'}
-                            size={13}
-                            color={m.battery <= 20 ? colors.coralDeep : colors.textMuted}
-                          />
-                          <Text style={[styles.battery, m.battery <= 20 && styles.batteryLow]}>{m.battery}%</Text>
-                        </View>
-                      ) : null}
-                    </View>
-                    <Pressable
-                      onPress={() => {
-                        setSelectedId(m.userId);
-                        setCenter({ latitude: m.lat, longitude: m.lng });
-                        setHistoryOpen(true);
-                      }}
-                      hitSlop={8}
-                      style={styles.historyBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel={`See ${m.name || 'their'} location history`}
-                    >
-                      <Ionicons name="footsteps-outline" size={17} color={colors.brandDeep} />
-                    </Pressable>
-                    {/* The trail as a list of stops answers "where did she go".
-                        The replay answers "how did the day go", which is a
-                        different question and the one a parent is actually
-                        asking at 11pm. */}
-                    <Pressable
-                      onPress={() =>
-                        // @ts-expect-error TripReplay lives in the AppStack, same
-                        // as the other pushes from this screen.
-                        navigation.navigate('TripReplay', { userId: m.userId, name: m.name })
-                      }
-                      hitSlop={8}
-                      style={styles.historyBtn}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Replay ${m.name || 'their'} day`}
-                    >
-                      <Ionicons name="play-circle-outline" size={18} color={colors.brandDeep} />
-                    </Pressable>
-                  </Pressable>
-                );
-              })}
+                        <Ionicons name="footsteps-outline" size={17} color={colors.brandDeep} />
+                      </Pressable>
+                      {/* The trail as a list of stops answers "where did she
+                          go". The replay answers "how did the day go", which is
+                          a different question and the one a parent is actually
+                          asking at 11pm. */}
+                      <Pressable
+                        onPress={() =>
+                          // @ts-expect-error TripReplay lives in the AppStack, same
+                          // as the other pushes from this screen.
+                          navigation.navigate('TripReplay', { userId: m.userId, name: m.name })
+                        }
+                        hitSlop={8}
+                        style={styles.historyBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Replay ${m.name || 'their'} day`}
+                      >
+                        <Ionicons name="play-circle-outline" size={18} color={colors.brandDeep} />
+                      </Pressable>
+                    </>
+                  }
+                />
+              ))}
             </ScrollView>
           )}
         </BlurView>
@@ -926,36 +834,8 @@ const styles = StyleSheet.create({
   },
   empty: { fontFamily: fontFamilies.interMedium, fontSize: 13, color: colors.textMuted, lineHeight: 19, paddingVertical: spacing.sm },
   list: { maxHeight: 244 },
-  memberRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, paddingVertical: 11, paddingHorizontal: spacing.xs, borderRadius: radius.md },
-  memberDivider: { borderTopWidth: 1, borderTopColor: 'rgba(20,18,40,0.05)' },
-  memberRowOn: { backgroundColor: 'rgba(134,114,206,0.10)' },
-  avatarRing: {
-    width: 46, height: 46, borderRadius: 23, borderWidth: 2.5,
-    overflow: 'visible', alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.surface,
-  },
-  avatarImg: { width: 39, height: 39, borderRadius: 20 },
-  liveDot: {
-    position: 'absolute', right: -1, bottom: -1,
-    width: 12, height: 12, borderRadius: 6,
-    borderWidth: 2, borderColor: colors.surface,
-  },
-  rightCol: { alignItems: 'flex-end', gap: 3 },
-  distance: {
-    fontFamily: fontFamilies.poppinsSemiBold, fontSize: 14, color: colors.textPrimary,
-  },
-  distanceOff: { color: colors.textMuted },
-  batteryRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  batteryLow: { color: colors.coralDeep },
-  memberDot: { width: 42, height: 42, borderRadius: 21, alignItems: 'center', justifyContent: 'center' },
-  memberInitial: { fontFamily: fontFamilies.poppinsBold, fontSize: 16, color: '#fff' },
-  memberName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15, color: colors.textPrimary },
   freshRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   freshDot: { width: 7, height: 7, borderRadius: 4 },
-  memberMeta: { fontFamily: fontFamilies.interMedium, fontSize: 12, color: colors.textSecondary },
-  battery: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted },
-  offPill: { backgroundColor: 'rgba(20,18,40,0.06)', borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
-  offPillText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 10, color: colors.textMuted, letterSpacing: 0.6 },
 
   historyBtn: {
     width: 32, height: 32, borderRadius: 16, marginLeft: 2,
