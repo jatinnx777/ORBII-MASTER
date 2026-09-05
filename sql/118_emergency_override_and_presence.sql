@@ -166,7 +166,23 @@ create or replace function public.set_circle_location_sos(
 returns boolean
 language plpgsql security definer set search_path = public as $$
 begin
-  if auth.uid() is null then raise exception 'auth required'; end if;
+  -- RETURNS FALSE, NEVER RAISES. set_circle_location raises 'auth required'
+  -- here and that is right for it: it is called from a screen, where an
+  -- exception surfaces as an error someone can act on.
+  --
+  -- This one is called from a background OS location task during an active
+  -- emergency. There is no screen, nobody reads the exception, and an
+  -- unhandled throw inside a background task is how Android decides to stop
+  -- delivering to it. A session that expired mid-SOS should cost this one
+  -- position update, not the task.
+  --
+  -- It also makes the guard testable. The first version of this raised, so the
+  -- verify line below could not call it from the SQL editor at all: the editor
+  -- runs as postgres with no auth.uid(), and the check meant to prove the
+  -- guard works instead proved only that a raise raises.
+  if auth.uid() is null then
+    return false;
+  end if;
 
   -- Refuses unless the caller is genuinely in an emergency. Without this the
   -- function would be a way for any signed-in account to write its position
@@ -369,8 +385,10 @@ union all
 select 'the app can still read circle locations (must be true)',
        public.orbii_can_exec('authenticated', 'public.circle_members_locations()')
 union all
--- Calling it without an SOS must be a no-op, not a write. If this ever returns
--- true, the emergency write has become an ordinary one and the sharing flag it
--- was built to protect is protecting nothing.
+-- Called here with no session at all, which is the strictest case: if the
+-- guard ever lets this through, the emergency write has become an ordinary one
+-- and the sharing flag it exists to protect is protecting nothing. It must
+-- come back false rather than throwing, because the real caller is a
+-- background task that nobody is watching.
 select 'the emergency write refuses a caller with no SOS (must be false)',
        public.set_circle_location_sos(0, 0)::text;
