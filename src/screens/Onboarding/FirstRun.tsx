@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
@@ -436,7 +436,16 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('circle')}
         icon="people"
         tint={colors.lavenderDeep}
-        scene={<SceneHelpers />}
+        // The rendered map disc, not the SVG scene. Four pins in the four
+        // member colours the map itself uses, so the illustration and the
+        // screen she lands on afterwards are visibly the same product.
+        scene={
+          <Image
+            source={require('../../../assets/onboarding/circle-map.png')}
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="contain"
+          />
+        }
         title={hi ? 'आपका circle' : 'your circle'}
         blurb={
           hi
