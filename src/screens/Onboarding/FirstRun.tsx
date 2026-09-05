@@ -213,7 +213,8 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           <View style={s.orLine} />
         </View>
 
-        <PillInput          value={email}
+        <PillInput
+          value={email}
           onChangeText={setEmail}
           placeholder="you@example.com"
           autoCapitalize="none"
@@ -308,17 +309,20 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        <PillInput          value={name}
+        <PillInput
+          value={name}
           onChangeText={setName}
           placeholder={hi ? 'आपका नाम' : 'Your name'}
           autoCapitalize="words"
-/>
-        <PillInput          value={cName}
+        />
+        <PillInput
+          value={cName}
           onChangeText={setCName}
           placeholder={hi ? 'उनका नाम' : 'Their name'}
           autoCapitalize="words"
-/>
-        <PillInput          value={cPhone}
+        />
+        <PillInput
+          value={cPhone}
           onChangeText={(v) => setCPhone(v.replace(/\D/g, '').slice(0, 10))}
           placeholder={hi ? '10 अंकों का नंबर' : '10 digit mobile number'}
           keyboardType="number-pad"
@@ -494,7 +498,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             style={s.invite}
             autoCapitalize="characters"
             autoCorrect={false}
-          />
+        />
         )}
       </Step>
     );
@@ -537,15 +541,13 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           }
         }}
       >
-        <PillInput          value={pin}
-          onChangeText={(v) => setPinValue(v.replace(/\D/g, '').slice(0, 4))}
-          placeholder="••••"
-          style={[s.input, s.code]}
-          keyboardType="number-pad"
-          secureTextEntry
-          maxLength={4}
+        <CodeBoxes
+          value={pin}
+          onChange={(v) => setPinValue(v.replace(/\D/g, '').slice(0, 4))}
+          length={4}
+          secure
           autoFocus
-/>
+        />
       </Step>
     );
   }

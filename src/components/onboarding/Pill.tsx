@@ -135,11 +135,18 @@ export function CodeBoxes({
   onChange,
   length = 6,
   autoFocus,
+  secure,
 }: {
   value: string;
   onChange: (next: string) => void;
   length?: number;
   autoFocus?: boolean;
+  /**
+   * Render a filled dot instead of the character. For a PIN, which is the one
+   * code here that is a secret rather than a one-time token: an emailed code
+   * is worthless to anyone reading over her shoulder, and a PIN is not.
+   */
+  secure?: boolean;
 }) {
   const ref = useRef<TextInput>(null);
   const chars = value.split('');
@@ -164,7 +171,11 @@ export function CodeBoxes({
             key={i}
             style={[s.box, { width: box, borderRadius: box / 2 }, filled && s.boxFilled, next && s.boxNext]}
           >
-            <Text style={[s.boxText, length > 6 && { fontSize: 18 }]}>{chars[i] ?? ''}</Text>
+            {secure && filled ? (
+              <View style={s.dot} />
+            ) : (
+              <Text style={[s.boxText, length > 6 && { fontSize: 18 }]}>{chars[i] ?? ''}</Text>
+            )}
           </View>
         );
       })}
@@ -175,8 +186,9 @@ export function CodeBoxes({
         maxLength={length}
         autoFocus={autoFocus}
         keyboardType="number-pad"
-        textContentType="oneTimeCode"
-        autoComplete="one-time-code"
+        secureTextEntry={secure}
+        textContentType={secure ? 'password' : 'oneTimeCode'}
+        autoComplete={secure ? 'off' : 'one-time-code'}
         accessibilityLabel={`Verification code, ${chars.length} of ${length} entered`}
         // Transparent and stretched over the boxes rather than hidden off
         // screen: an input at left:-1000 stops receiving autofill on Android.
@@ -253,6 +265,12 @@ const s = StyleSheet.create({
     fontSize: 21,
     color: colors.textPrimary,
     fontVariant: ['tabular-nums'],
+  },
+  dot: {
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: colors.textPrimary,
   },
   hidden: {
     ...StyleSheet.absoluteFillObject,
