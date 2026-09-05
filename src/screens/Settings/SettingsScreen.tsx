@@ -390,7 +390,7 @@ export function SettingsScreen() {
           <Row
             icon="location-outline"
             label="Location permissions"
-            value="Opt-in, you pick how long, deleted at midnight"
+            value="Opt-in, you pick how long, deleted after 7 days"
             onPress={() => Linking.openSettings().catch(() => undefined)}
           />
           <Row

@@ -108,7 +108,7 @@ export function ActivityDetailScreen({ route, navigation }: AppScreenProps<'Acti
         <View style={styles.privacy}>
           <Ionicons name="shield-checkmark" size={14} color={colors.sageDeep} />
           <Text style={styles.privacyText}>
-            Location history is deleted every night at midnight IST. Only your circle can see
+            Location history older than 7 days is deleted. Only your circle can see
             this, and we never sell it.
           </Text>
         </View>

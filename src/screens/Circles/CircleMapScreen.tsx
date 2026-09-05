@@ -106,12 +106,19 @@ function thinTrail(points: TrailPoint[]): TrailPoint[] {
   return out;
 }
 
-/** Hours elapsed since local midnight, so history always means "today". */
-function hoursSinceMidnight(): number {
-  const now = new Date();
-  const mid = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return Math.max(0.25, (now.getTime() - mid.getTime()) / 3_600_000);
-}
+/**
+ * How far back to ask for a trail.
+ *
+ * This used to compute hours since local midnight, because the server wiped
+ * everything at midnight and asking for more was pointless. Retention is now 7
+ * days (sql/115), so the clamp had to go with it: leaving it would have meant
+ * the map quietly asking for a day while the server was willing to give a week,
+ * and the feature would have looked unchanged.
+ *
+ * The server caps this at the retention window anyway, so this number can never
+ * outlive the promise even if it drifts.
+ */
+const TRAIL_HOURS = 7 * 24;
 function ago(iso: string): string {
   const s = Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 1000));
   if (s < 60) return 'just now';
@@ -256,12 +263,12 @@ export function CircleMapScreen() {
     [myLoc],
   );
 
-  // Pull today's breadcrumbs for everyone visible, refreshed with the map.
+  // Pull the last week of breadcrumbs for everyone visible, refreshed with
+  // the map. The server caps this at the retention window regardless.
   useEffect(() => {
     if (shown.length === 0) { setTrails({}); return; }
     let alive = true;
-    const hrs = hoursSinceMidnight();
-    Promise.all(shown.map(async (m) => [m.userId, thinTrail(await loadMemberTrail(m.userId, hrs))] as const))
+    Promise.all(shown.map(async (m) => [m.userId, thinTrail(await loadMemberTrail(m.userId, TRAIL_HOURS))] as const))
       .then((pairs) => { if (alive) setTrails(Object.fromEntries(pairs)); })
       .catch(() => undefined);
     return () => { alive = false; };
@@ -571,7 +578,7 @@ export function CircleMapScreen() {
                   ? shareEnds
                     ? `Your circle can see you until ${shareEnds}.`
                     : 'Your circle can see you until you turn this off.'
-                  : 'Only your circle sees it. Today’s route clears at midnight.'}
+                  : 'Only your circle sees it. Your route clears after 7 days.'}
               </Text>
             </View>
             <Pressable

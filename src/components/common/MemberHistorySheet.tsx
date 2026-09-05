@@ -145,7 +145,7 @@ export function MemberHistorySheet({
               <Text style={styles.emptyTitle}>Nothing recorded yet today</Text>
               <Text style={styles.emptyBody}>
                 A place appears here once they have stayed somewhere for five minutes or more while
-                sharing their location. Everything is erased at midnight.
+                sharing their location. Everything older than 7 days is erased.
               </Text>
             </View>
           ) : (
@@ -174,7 +174,7 @@ export function MemberHistorySheet({
                 ),
               )}
               <Text style={styles.footNote}>
-                This whole day is deleted at midnight. ORBII keeps no long-term record of where
+                Anything older than 7 days is deleted. ORBII keeps no long-term record of where
                 anyone has been.
               </Text>
             </ScrollView>

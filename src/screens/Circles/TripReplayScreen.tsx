@@ -167,7 +167,7 @@ export function TripReplayScreen() {
           <Text style={s.emptyTitle}>Nothing to replay</Text>
           <Text style={s.emptyText}>
             {name ?? 'They'} has not shared location today, or there are too few points to draw
-            a route. Today&apos;s trail is deleted every midnight.
+            a route. Trails older than 7 days are deleted.
           </Text>
         </View>
       </SafeAreaView>
@@ -390,7 +390,7 @@ function Header({ name, onBack }: { name?: string; onBack: () => void }) {
       </Pressable>
       <View>
         <Text style={s.headerTitle}>{name ? `${name}'s day` : 'Replay'}</Text>
-        <Text style={s.headerSub}>Today, deleted at midnight</Text>
+        <Text style={s.headerSub}>Last 7 days</Text>
       </View>
       <View style={{ width: 40 }} />
     </View>

@@ -320,7 +320,7 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
             {step === 'hero' ? (
               <Text style={styles.promise}>
                 Only your circle sees you. Never sold, never given to a college, and today's route is
-                deleted at midnight.
+                deleted after 7 days.
               </Text>
             ) : null}
             <Pressable

@@ -6,7 +6,7 @@ import { supabase } from './supabase';
  * WHAT THE DATA ACTUALLY IS, because it decides most of what this file can
  * honestly claim. circle_location_history is written every 60 seconds OR every
  * 40 metres, whichever comes first (circle-location.ts), capped at 500 points,
- * and wiped at local midnight (sql/73).
+ * and kept for 7 days (sql/115).
  *
  * That sampling rate is the whole story:
  *
