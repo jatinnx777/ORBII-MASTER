@@ -22,8 +22,17 @@ Deno.serve(async (req) => {
   try {
     const { geofenceId, kind, eventId } = await req.json().catch(() => ({}));
     if (!geofenceId) return json({ error: 'missing geofenceId' }, 400);
-    // We only alert the circle when someone LEAVES.
-    if (kind && kind !== 'exit') return json({ sent: 0, reason: 'not an exit' });
+    // Both directions now. This used to reject anything that was not an exit,
+    // which is why arrivals were recorded in geofence_events and never told
+    // anybody: the app had been sending them and this line dropped them.
+    //
+    // Whether a crossing DESERVES a push is decided in sql/119 before the app
+    // gets here, because that decision needs the previous crossing and this
+    // function does not have it. An unrecognised kind is still refused.
+    const direction: 'exit' | 'enter' = kind === 'enter' ? 'enter' : 'exit';
+    if (kind && kind !== 'exit' && kind !== 'enter') {
+      return json({ sent: 0, reason: 'unknown kind' });
+    }
 
     const admin = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -100,12 +109,27 @@ Deno.serve(async (req) => {
 
     const messages = tokens.map((to: string) => ({
       to,
-      title: `${name} left ${zone.label}`,
-      body: `Left at ${timeStr}. Tap to see where.`,
+      // Arrival and departure are not the same message and must not read like
+      // it. A departure is the one that can escalate, so it says when and
+      // offers the map. An arrival is reassurance and should be over in one
+      // glance: "Aditi got to College" is the whole content, and adding "tap
+      // to see where" to it invites a look at a map nobody needed to open.
+      title:
+        direction === 'enter'
+          ? `${name} got to ${zone.label}`
+          : `${name} left ${zone.label}`,
+      body:
+        direction === 'enter'
+          ? `Arrived at ${timeStr}.`
+          : `Left at ${timeStr}. Tap to see where.`,
       sound: 'default',
-      priority: 'high',
-      channelId: 'safe-zone',
-      data: { kind: 'geofence', geofenceId, event: 'exit', at, lat, lng, name, label: zone.label },
+      // An arrival is good news and must never buzz like an emergency. Android
+      // sorts by priority, so a normal-priority arrival cannot arrive above a
+      // departure, and 'safe-zone-arrival' gives it its own channel so anyone
+      // who finds arrivals noisy can silence them without losing departures.
+      priority: direction === 'enter' ? 'normal' : 'high',
+      channelId: direction === 'enter' ? 'safe-zone-arrival' : 'safe-zone',
+      data: { kind: 'geofence', geofenceId, event: direction, at, lat, lng, name, label: zone.label },
     }));
 
     let sent = 0;

@@ -65,6 +65,25 @@ function configure() {
       lightColor: '#8672CE',
       sound: 'default',
     }).catch(() => undefined);
+    // Someone GOT somewhere. Its own channel, and deliberately quieter than the
+    // one above.
+    //
+    // A departure can escalate and has to interrupt. An arrival is reassurance,
+    // and reassurance that heads-up over what you were doing stops being
+    // reassuring by the fourth time in a day. DEFAULT importance puts it in the
+    // tray without taking the screen, and a separate channel means anyone who
+    // finds arrivals noisy can silence exactly those in Android settings
+    // without losing the alert that matters.
+    Notifications.setNotificationChannelAsync('safe-zone-arrival', {
+      name: 'Arrival alerts',
+      description: 'When someone in your circle reaches a place you watch.',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      vibrationPattern: [0, 200],
+      enableVibrate: true,
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE,
+      lightColor: '#8672CE',
+      sound: 'default',
+    }).catch(() => undefined);
     // YOU left a zone someone set for you. Aimed at the fenced person, not the
     // watcher: a deliberately DIFFERENT, unmistakable buzz (long-short-long) so
     // it doesn't feel like a normal safe-zone ping, because she needs to answer

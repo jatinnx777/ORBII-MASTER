@@ -117,6 +117,11 @@ export function ZoneEditorScreen() {
   // The hours the fenced person should be inside the zone (scrollable picker).
   const [fromTime, setFromTime] = useState('09:00');
   const [toTime, setToTime] = useState('17:00');
+  // Both default on. Arriving is the message people read every day and the
+  // alert is deliberately quiet; leaving is the one that can escalate, and it
+  // is what every zone made before this existed was set up to do.
+  const [notifyArrival, setNotifyArrival] = useState(true);
+  const [notifyDeparture, setNotifyDeparture] = useState(true);
 
   // Place search (hospital / college / etc.)
   const [query, setQuery] = useState('');
@@ -289,6 +294,8 @@ export function ZoneEditorScreen() {
         corners,
         activeFrom: fromTime,
         activeTo: toTime,
+        notifyArrival,
+        notifyDeparture,
       });
       if (!res.ok) {
         appAlert("Couldn't save the area", res.error);
@@ -558,6 +565,46 @@ export function ZoneEditorScreen() {
                 </View>
               ) : null}
 
+              <View style={styles.timeCard}>
+                <Text style={styles.timeCardLabel}>
+                  <Ionicons name="notifications-outline" size={13} color={colors.textSecondary} />{' '}
+                  Tell the circle when
+                </Text>
+                {([
+                  {
+                    on: notifyArrival,
+                    set: setNotifyArrival,
+                    title: 'They get here',
+                    // Says what it costs, because the honest answer to "should I
+                    // leave this on" is that it is quiet.
+                    sub: 'A quiet notification. No sound over what you are doing.',
+                  },
+                  {
+                    on: notifyDeparture,
+                    set: setNotifyDeparture,
+                    title: 'They leave during those hours',
+                    sub: 'The loud one. This is the alert that can escalate.',
+                  },
+                ] as const).map((opt) => (
+                  <Pressable
+                    key={opt.title}
+                    onPress={() => opt.set(!opt.on)}
+                    style={styles.alertRow}
+                    accessibilityRole="switch"
+                    accessibilityState={{ checked: opt.on }}
+                    accessibilityLabel={opt.title}
+                  >
+                    <View style={[styles.check, opt.on && styles.checkOn]}>
+                      {opt.on ? <Ionicons name="checkmark" size={13} color={colors.textInverse} /> : null}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.alertTitle}>{opt.title}</Text>
+                      <Text style={styles.alertSub}>{opt.sub}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+
               <Pressable
                 onPress={save}
                 disabled={busy || corners.length < 3}
@@ -706,6 +753,25 @@ const styles = StyleSheet.create({
   reuseChipTime: { fontFamily: fontFamilies.interMedium, fontSize: 11, color: colors.brandDeep },
   reuseHint: { fontFamily: fontFamilies.interMedium, fontSize: 11.5, color: colors.textMuted },
 
+  alertRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
+  },
+  check: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkOn: { backgroundColor: colors.brandDeep, borderColor: colors.brandDeep },
+  alertTitle: { fontFamily: fontFamilies.poppinsMedium, fontSize: 13.5, color: colors.textPrimary },
+  alertSub: { fontFamily: fontFamilies.interRegular, fontSize: 11.5, color: colors.textSecondary, marginTop: 1 },
   timeCard: { backgroundColor: colors.surfaceMuted, borderRadius: radius.lg, padding: spacing.md, marginTop: spacing.sm, gap: spacing.sm },
   timeCardLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textSecondary },
   timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

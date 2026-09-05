@@ -188,6 +188,19 @@ export async function createPolygonZone(input: {
   corners: Corner[];
   activeFrom?: string | null;
   activeTo?: string | null;
+  /**
+   * Tell the circle when they GET here. Default on: arriving somewhere is the
+   * message people actually read every day, and the alerts are deliberately
+   * quiet (their own Android channel, default importance) so leaving it on
+   * costs nothing.
+   */
+  notifyArrival?: boolean;
+  /**
+   * Tell the circle when they LEAVE, during the zone's active hours. Default
+   * on, because that is what every zone created before sql/119 was set up to
+   * do and silently changing it would disarm alarms people are relying on.
+   */
+  notifyDeparture?: boolean;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   if (input.corners.length < 3) {
     return { ok: false, error: 'Place at least 3 corners to draw an area.' };
@@ -206,6 +219,8 @@ export async function createPolygonZone(input: {
     owner_id: input.ownerId,
     member_id: input.memberId,
     label: input.label,
+    notify_arrival: input.notifyArrival ?? true,
+    notify_departure: input.notifyDeparture ?? true,
     lat: circle.lat,
     lng: circle.lng,
     radius_m: circle.radiusM,
@@ -329,30 +344,59 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }) => {
       .select('id')
       .single();
 
-    // On EXIT: alert the WHOLE circle, but ONLY during the zone's active hours.
-    // Leaving college at 6pm when they're only expected inside 9-5 is normal and
-    // must not fire an alarm. Outside the window the crossing is still recorded
-    // for history; it just doesn't alert anyone. ENTER is history-only.
-    if (kind === 'exit' && inserted?.id) {
-      const { data: g } = await supabase
-        .from('geofences')
-        .select('label, active_from, active_to')
-        .eq('id', zoneId)
-        .maybeSingle();
-      const gg = g as { label?: string; active_from?: string | null; active_to?: string | null } | null;
-      const label = gg?.label ?? 'an area';
-      const withinHours = isWithinActiveWindow(gg?.active_from ?? null, gg?.active_to ?? null, nowMinutesIST());
-      if (withinHours) {
-        // Fire-and-forget: alert everyone in the circle right away.
-        supabase.functions
-          .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
-          .catch(() => {
-            // Best-effort, a failed push must never throw here or Android may
-            // stop delivering geofence events to us.
-          });
-        await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
-      }
+    if (!inserted?.id) return;
+
+    // ASK THE SERVER WHETHER THIS CROSSING MEANS ANYTHING.
+    //
+    // This used to be `if (kind === 'exit')` and nothing else, so arrivals were
+    // written to history and never told anyone. The naive fix, alerting on
+    // every enter, fires three ways when nothing happened: Android delivers an
+    // initial ENTER for any region the phone is already inside when monitoring
+    // starts (so every app launch at home would push "she arrived home"), a
+    // GPS fix wandering across a boundary produces enter/exit pairs from a
+    // phone on a table, and a four minute trip to the shop next door is not an
+    // arrival.
+    //
+    // The rule that handles all three lives in sql/119 and needs to know what
+    // happened LAST time, which is exactly what a background OS task with no
+    // memory between invocations cannot answer. It returns the kind to alert
+    // on, or null for silence.
+    const { data: alertKind } = await supabase.rpc('geofence_event_should_alert', {
+      p_event: inserted.id,
+    });
+    if (!alertKind) return;
+
+    const { data: g } = await supabase
+      .from('geofences')
+      .select('label, active_from, active_to')
+      .eq('id', zoneId)
+      .maybeSingle();
+    const gg = g as { label?: string; active_from?: string | null; active_to?: string | null } | null;
+    const label = gg?.label ?? 'an area';
+
+    if (alertKind === 'exit') {
+      // The active-hours gate stays here rather than moving into sql/119, because
+      // it is wall-clock IST arithmetic and having two implementations of it is
+      // how the two answers start to disagree. Leaving college at 6pm when she
+      // is only expected inside 9 to 5 is normal and must not fire an alarm;
+      // the crossing is still in history either way.
+      if (!isWithinActiveWindow(gg?.active_from ?? null, gg?.active_to ?? null, nowMinutesIST())) return;
+      // Fire-and-forget: a failed push must never throw here, or Android may
+      // stop delivering geofence events to us at all.
+      supabase.functions
+        .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'exit', eventId: inserted.id } })
+        .catch(() => undefined);
+      await presentGeofenceLeavePrompt(inserted.id, label, zoneId);
+      return;
     }
+
+    // Arrival. No active-hours gate and no local prompt on her own phone: the
+    // departure prompt exists so she can say "yes, I meant to leave" before it
+    // escalates, and arriving needs no such defence. It is her circle that is
+    // told, and only them.
+    supabase.functions
+      .invoke('notify-geofence', { body: { geofenceId: zoneId, kind: 'enter', eventId: inserted.id } })
+      .catch(() => undefined);
   } catch (err) {
     reportError(err, { category: 'geofence', message: 'geofence event failed' });
   }
