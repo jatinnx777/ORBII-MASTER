@@ -322,8 +322,15 @@ export function formatDuration(ms: number): string {
   return `${h}h ${mins % 60}m`;
 }
 
-/** Fetch one member's trail for the day and build the trip from it. */
-export async function loadTrip(userId: string, hours = 24): Promise<DriveTrip | null> {
+/**
+ * Fetch one member's trail and build the trip from it.
+ *
+ * The default is the full 7 day retention window, not 24 hours. It was 24 from
+ * when the trail was wiped at midnight, and left at 24 the replay silently
+ * showed a day of a week that exists, which looks exactly like a member who
+ * did not travel.
+ */
+export async function loadTrip(userId: string, hours = 168): Promise<DriveTrip | null> {
   const { data, error } = await supabase.rpc('circle_member_trail', {
     p_uid: userId,
     p_hours: hours,

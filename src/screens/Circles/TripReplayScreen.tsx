@@ -55,7 +55,33 @@ export function TripReplayScreen() {
   const [t, setT] = useState(0);
   const replayRef = useRef<DriveReplayHandle>(null);
 
-
+  // THE LOAD. This effect was deleted by a dead-code sweep when the playback
+  // state moved into DriveReplay: it sat inside the block being removed, and
+  // nothing else sets `loading` to false, so the screen span forever on an
+  // empty spinner. A `loading` flag with exactly one writer is easy to orphan
+  // and impossible to notice from a type check.
+  //
+  // The default hours in loadTrip is the full retention window, so this asks
+  // for the week rather than the day.
+  useEffect(() => {
+    let alive = true;
+    void loadTrip(userId)
+      .then((tr) => {
+        if (!alive) return;
+        setTrip(tr);
+        setFailed(!tr);
+        if (tr) setT(tr.startedAt);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setFailed(true);
+        setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [userId]);
 
   // Pausing and flying the camera are both inside seekTo now, because both are
   // properties of moving the playhead rather than of tapping a chip.

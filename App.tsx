@@ -30,7 +30,6 @@ import {
 } from '@expo-google-fonts/inter';
 import { Caveat_600SemiBold } from '@expo-google-fonts/caveat';
 
-import { BalloonSplash } from '@/screens/Onboarding/BalloonSplash';
 import { store, useAppSelector } from '@/redux/store';
 import { onboardingCompleted } from '@/redux/slices/appSlice';
 import { hydrateStore } from '@/redux/persist';
@@ -138,9 +137,6 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 });
 
 function RootNavigator() {
-  // In memory, not persisted. It should replay if she force quits during
-  // setup and comes back, because at that point she has not seen the app yet.
-  const [introSeen, setIntroSeen] = useState(false);
   // Shown once, ever. Null while we read it, so a returning user never sees a
   // flash of the language picker on top of their own app.
   // Read from the device, not asked for. A language screen before she knows
@@ -763,15 +759,6 @@ function RootNavigator() {
   // in Settings, because asking someone to pick a language before she knows
   // what the app does is a screen that buys nothing.
   if (!onboarded) {
-    // The intro plays ONCE, and only ahead of a first run. Someone who has
-    // already set ORBII up is opening it because something is happening, and a
-    // two second animation between her and the app is the last thing she needs.
-    //
-    // The native splash is the animation's first frame, so the handover from
-    // the OS splash to this screen has nothing to see.
-    if (!introSeen) {
-      return <BalloonSplash onFinish={() => setIntroSeen(true)} />;
-    }
     return (
       <FirstRun
         lang={lang}
