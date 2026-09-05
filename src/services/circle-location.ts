@@ -2,7 +2,7 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import { supabase } from './supabase';
-import { getItem, setItem, removeItem } from './storage';
+import { getItem, setItem, removeItem, storageKeys } from './storage';
 import { getAgeStatus } from './consent';
 import { reportError } from './error-reporting';
 
@@ -425,8 +425,50 @@ export async function pushCircleLocationDuringSos(
 }
 
 /** Latest positions of everyone in my circles who is currently sharing. */
+/**
+ * Last known roster, straight off the device.
+ *
+ * Returns in a millisecond or two, so the map can draw pins on its first frame
+ * rather than after a round trip. Every row carries ageSeconds and unreachable
+ * with it, so a restored position says how old it is instead of pretending to
+ * be current, which is the line between a cache and a lie.
+ */
+export async function cachedMemberLocations(): Promise<MemberLocation[]> {
+  return (await getItem<MemberLocation[]>(storageKeys.memberLocations)) ?? [];
+}
+
+/**
+ * Every visible member's trail in ONE request, thinned server-side.
+ *
+ * This replaced a Promise.all of one query per member. Four members meant four
+ * round trips returning up to 2000 rows, which the app then thinned to ~480 on
+ * the main thread, having paid to transfer all 2000. sql/126 samples in SQL, so
+ * roughly a quarter of the data crosses the wire and the thinning happens on a
+ * machine that is not also drawing the map.
+ */
+export async function loadCircleTrails(
+  userIds: string[],
+  hours = 168,
+): Promise<Record<string, TrailPoint[]>> {
+  if (userIds.length === 0) return {};
+  const { data, error } = await supabase.rpc('circle_trails', {
+    p_uids: userIds,
+    p_hours: hours,
+  });
+  if (error || !Array.isArray(data)) return {};
+  const out: Record<string, TrailPoint[]> = {};
+  for (const r of data as Record<string, unknown>[]) {
+    const uid = r.user_id as string;
+    (out[uid] ??= []).push({ lat: r.lat as number, lng: r.lng as number, at: r.at as string });
+  }
+  return out;
+}
+
 export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
   const { data, error } = await supabase.rpc('circle_members_locations');
+  // On failure the caller keeps whatever it already had rather than blanking
+  // the map, which on a train is the difference between a stale roster and an
+  // empty one.
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map((r) => ({
     userId: r.user_id as string,
@@ -454,6 +496,18 @@ export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
     sharing: r.sharing !== false,
     sharingOffAt: (r.sharing_off_at as string) ?? null,
   }));
+}
+
+/**
+ * Fetch and write through to the cache, so the next cold open paints instantly.
+ *
+ * Not awaited by the caller for the write. A slow disk must never sit between
+ * a fresh position and the screen.
+ */
+export async function refreshMemberLocations(): Promise<MemberLocation[]> {
+  const next = await loadCircleMembersLocations();
+  if (next.length > 0) void setItem(storageKeys.memberLocations, next);
+  return next;
 }
 
 // ── Stop detection ─────────────────────────────────────────────────────────

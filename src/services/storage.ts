@@ -28,6 +28,12 @@ const KEYS = {
   circlesList: 'orbii:circles:list',
   circleMembers: 'orbii:circles:members',
   feedPosts: 'orbii:community:feed',
+  // Last known positions, so the map paints pins on the first frame instead of
+  // after a round trip. Cached deliberately despite the rule against stale
+  // locations elsewhere: the pins carry age_seconds and unreachable with them
+  // (sql/118), so a restored position announces how old it is rather than
+  // pretending to be live. That is the difference between a cache and a lie.
+  memberLocations: 'orbii:circles:locations',
   inviteSeen: 'orbii:circles:invite-seen',
   voiceUsage: 'orbii:voice-usage',
   bgVoice: 'orbii:bg-voice',

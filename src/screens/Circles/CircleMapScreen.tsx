@@ -31,8 +31,9 @@ import {
   isCircleSharing,
   startCircleSharing,
   stopCircleSharing,
-  loadCircleMembersLocations,
-  loadMemberTrail,
+  cachedMemberLocations,
+  loadCircleTrails,
+  refreshMemberLocations,
   detectStops,
   dwellMinutes,
   formatDuration,
@@ -92,20 +93,6 @@ function buildAvatarHtml(
     <div style="position:absolute;inset:3px;border-radius:50%;overflow:hidden;background:#fff;border:2px solid #fff">${inner}</div>
     <div style="position:absolute;inset:0;border-radius:50%;background:linear-gradient(160deg,rgba(255,255,255,0.45),rgba(255,255,255,0) 55%);pointer-events:none"></div>
   </div>`;
-}
-// A day's breadcrumbs can run to 500 points per person. Four of those, serialised
-// into the map WebView on every refresh, is what made the screen crawl. Thinning
-// to ~120 points keeps the shape of the route identical at any zoom a phone can
-// show, at a quarter of the cost. Endpoints are always kept.
-const MAX_TRAIL_POINTS = 120;
-function thinTrail(points: TrailPoint[]): TrailPoint[] {
-  if (points.length <= MAX_TRAIL_POINTS) return points;
-  const step = points.length / MAX_TRAIL_POINTS;
-  const out: TrailPoint[] = [];
-  for (let i = 0; i < MAX_TRAIL_POINTS; i++) out.push(points[Math.floor(i * step)]);
-  const last = points[points.length - 1];
-  if (out[out.length - 1] !== last) out.push(last);
-  return out;
 }
 
 /**
@@ -275,8 +262,16 @@ export function CircleMapScreen() {
   useEffect(() => {
     if (shown.length === 0) { setTrails({}); return; }
     let alive = true;
-    Promise.all(shown.map(async (m) => [m.userId, thinTrail(await loadMemberTrail(m.userId, TRAIL_HOURS))] as const))
-      .then((pairs) => { if (alive) setTrails(Object.fromEntries(pairs)); })
+    // ONE request for everybody, thinned server-side (sql/126). This was a
+    // Promise.all of one query per member: four members meant four round trips
+    // returning up to 2000 rows, which were then thinned to ~480 here on the
+    // main thread after paying to transfer all 2000.
+    //
+    // It is also deliberately not awaited by anything that draws. Trails are
+    // decoration; the pins are the content, and the pins must never wait on
+    // them.
+    void loadCircleTrails(shown.map((m) => m.userId), TRAIL_HOURS)
+      .then((byUser) => { if (alive) setTrails(byUser); })
       .catch(() => undefined);
     return () => { alive = false; };
     // Re-run when the roster changes, not on every position tick.
@@ -292,8 +287,22 @@ export function CircleMapScreen() {
   };
 
   const refresh = useCallback(async () => {
-    const next = await loadCircleMembersLocations();
+    const next = await refreshMemberLocations();
     setMembers((prev) => (sameMemberLocations(prev, next) ? prev : next));
+  }, []);
+
+  // Frame one, off the device, before any network call. Every row carries its
+  // own age and an `unreachable` flag, so a restored pin says how old it is
+  // rather than posing as live. Skipped if the network already won the race,
+  // which on a good connection it sometimes does.
+  useEffect(() => {
+    let alive = true;
+    void cachedMemberLocations().then((cached) => {
+      if (!alive || cached.length === 0) return;
+      setMembers((prev) => (prev.length > 0 ? prev : cached));
+      setLoading(false);
+    });
+    return () => { alive = false; };
   }, []);
 
   useEffect(() => {
