@@ -1,3 +1,21 @@
+// PEOPLE SEARCH WAS REMOVED HERE, deliberately and not by refactor.
+//
+// This file used to export findUserByPhone and searchUsers, the two calls that
+// let one account look another one up by number or by name. Both were careful:
+// exact match only, the phone number never returned, a SECURITY DEFINER
+// wrapper so users_public itself stayed unreadable, rate limits on top.
+//
+// Every one of those was a mitigation of a hole that did not need to exist,
+// and the thing being mitigated was a searchable index of women who installed
+// a personal safety app.
+//
+// Circles are joined with a six letter code now (sql/125). Nothing is looked
+// up, nothing is enumerable, and the person joining has to have been told the
+// code by somebody who has it. The RPCs behind these functions are revoked
+// from `authenticated` rather than dropped, so an older installed build that
+// still calls them gets a permission error it already handles as "no results"
+// instead of a crash.
+
 import { supabase } from './supabase';
 import type { UserProfile } from '@/types';
 
@@ -66,55 +84,8 @@ export async function syncUsersPublic(profile: UserProfile): Promise<void> {
 // Look up a registered ORBII user by their E.164 phone. Used by the
 // circle-invite flow to make sure the invitee already has an account
 // before sending a friend request.
-export async function findUserByPhone(
-  phoneE164: string,
-  excludeUid: string,
-): Promise<PublicUser | null> {
-  if (!phoneE164.startsWith('+')) return null;
-  // Phone is no longer a readable column on users_public (see sql/18). We
-  // resolve it through a SECURITY DEFINER RPC that does an exact match and
-  // never returns the number, so the directory can't be scraped.
-  const { data, error } = await supabase.rpc('find_user_by_phone', {
-    p_phone: phoneE164,
-    p_exclude: excludeUid,
-  });
-  if (error) {
-    console.warn('[users-public] phone search error', error.message);
-    return null;
-  }
-  const row = Array.isArray(data) ? data[0] : data;
-  return row ? rowToUser({ ...row, phone: null }) : null;
-}
-
 // User search by username OR name. Substring match (matches middle, not
 // just prefix). Excludes the caller. Capped at 10 results.
-export async function searchUsers(args: {
-  query: string;
-  excludeUid: string;
-}): Promise<PublicUser[]> {
-  const q = args.query.trim().toLowerCase();
-  if (q.length < 2) return [];
-  // Postgres `ilike` treats % and _ as wildcards. Escape any in the user
-  // input so a literal underscore in a username doesn't match every char.
-  const escaped = q.replace(/[%_]/g, '\\$&');
-  const { data, error } = await supabase
-    .from('users_public')
-    .select('id, username, name, photo_url')
-    .or(`username.ilike.%${escaped}%,name.ilike.%${escaped}%`)
-    .neq('id', args.excludeUid)
-    .order('username', { ascending: true })
-    .limit(10);
-  if (error) {
-    console.warn('[users-public] search error:', error.message);
-    return [];
-  }
-  console.log(
-    `[users-public] search "${q}" → ${data?.length ?? 0} result(s)`,
-  );
-  if (!data) return [];
-  return (data as PublicUserRow[]).map(rowToUser);
-}
-
 // Bulk-fetch public records by usernames. Used when hydrating the friends
 // list on sign-in.
 export async function getPublicUsersByUsernames(

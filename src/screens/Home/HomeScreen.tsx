@@ -237,11 +237,6 @@ export function HomeScreen() {
   const activeAlerts = alerts?.length ?? 0;
   const setupDone = pct >= READINESS_CAP;
 
-  const openPlaces = (query: string) => {
-    const near = me ? `${query} near ${me.latitude},${me.longitude}` : query;
-    Linking.openURL(`https://www.google.com/maps/search/${encodeURIComponent(near)}`).catch(() => undefined);
-  };
-
   // ── Draggable bottom sheet (built-in PanResponder, no extra libs) ──
   // The sheet is anchored near the top; a translateY moves it DOWN to the
   // collapsed resting position. Dragging the handle slides it, and it snaps to
@@ -326,14 +321,27 @@ export function HomeScreen() {
           />
         </View>
 
-        <View>
+        {/* Circles was reachable only by tapping a status row halfway down the
+            sheet, which is to say it was not reachable. It is not a tab either,
+            because the bar is four icons split around the centre SOS and a
+            fifth breaks that. So it lives here, next to notifications, always
+            on screen whatever the sheet is doing. */}
+        <View style={styles.topBtns}>
           <GlassButton
-            icon="chatbubble-ellipses-outline"
+            icon="people-outline"
             size={42}
-            onPress={() => navigation.navigate('Notifications')}
-            accessibilityLabel="Notifications"
+            onPress={() => navigation.navigate('Circles')}
+            accessibilityLabel="Your circles"
           />
-          {activeAlerts > 0 ? <View style={styles.ctlDot} pointerEvents="none" /> : null}
+          <View>
+            <GlassButton
+              icon="chatbubble-ellipses-outline"
+              size={42}
+              onPress={() => navigation.navigate('Notifications')}
+              accessibilityLabel="Notifications"
+            />
+            {activeAlerts > 0 ? <View style={styles.ctlDot} pointerEvents="none" /> : null}
+          </View>
         </View>
       </View>
 
@@ -616,17 +624,6 @@ export function HomeScreen() {
             </Pressable>
           </View>
 
-          {/* D. Nearby places */}
-          <Text style={styles.miniLabel}>NEARBY SAFE PLACES</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.placesRow}>
-            {PLACES.map((p) => (
-              <Pressable key={p.key} onPress={() => openPlaces(p.query)} style={({ pressed }) => [styles.placeTile, pressed && styles.pressed]}>
-                <Ionicons name={p.icon} size={20} color={colors.brandDeep} />
-                <Text style={styles.placeLabel}>{p.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-
           {/* Alerts */}
           <Pressable onPress={() => navigation.navigate('CommunityAlerts')} style={({ pressed }) => [styles.alertCard, pressed && styles.pressed]}>
             <View style={[styles.alertIcon, activeAlerts > 0 && { backgroundColor: colors.coralSoft }]}>
@@ -761,6 +758,7 @@ const styles = StyleSheet.create({
   // Was flex: 1, which made the circle switcher eat every pixel the two icon
   // buttons did not. It now sizes to its label and simply stops growing past
   // the point where it would crowd the notification button.
+  topBtns: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   switcherSlot: { flexShrink: 1, alignItems: 'center' },
   activityHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   activityCount: { fontFamily: fontFamilies.interMedium, fontSize: 12.5, color: colors.textMuted },
@@ -939,12 +937,6 @@ const styles = StyleSheet.create({
   tabOnText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textInverse },
 
   miniLabel: { ...typography.label, fontSize: 11, color: colors.textMuted, letterSpacing: 1, marginBottom: -spacing.xs },
-  placesRow: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.lg, paddingVertical: 2 },
-  placeTile: {
-    width: 84, backgroundColor: colors.surface, borderRadius: radius.lg, paddingVertical: spacing.md,
-    alignItems: 'center', gap: 7, ...shadows.card,
-  },
-  placeLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textPrimary },
 
   alertCard: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.md, ...shadows.card },
   alertIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.sageSoft, alignItems: 'center', justifyContent: 'center' },

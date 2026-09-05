@@ -39,13 +39,18 @@ export type MemberCardProps = {
   selected?: boolean;
   onPress?: () => void;
   /**
-   * Actions on the right edge: history, replay, whatever the screen offers.
+   * Actions, revealed UNDER the card when it is selected.
    *
-   * A slot rather than props, because the card should not know what a circle
-   * map happens to be able to do with a person. It owns who they are and how
-   * they are; what you can do about it belongs to the screen.
+   * They used to be two 17px unlabelled icons crammed against the right edge,
+   * next to the distance, and nobody found them. Replay in particular is the
+   * best thing on this screen and it was a footprint glyph the width of a
+   * fingernail.
+   *
+   * Select a person, then act on them. The actions get a full row, real labels
+   * and a proper tap target, and only one person's are on screen at a time so
+   * the list stays a list.
    */
-  trailing?: React.ReactNode;
+  actions?: React.ReactNode;
 };
 
 function ago(iso: string): string {
@@ -99,7 +104,7 @@ export function MemberCard({
   relation,
   selected,
   onPress,
-  trailing,
+  actions,
 }: MemberCardProps) {
   const status = statusOf(m);
   // Never dim an emergency, whatever the sharing flag says. During an SOS this
@@ -110,16 +115,13 @@ export function MemberCard({
   const lowBattery = m.battery != null && m.battery <= 15 && m.charging !== true;
 
   return (
+    <View style={[s.wrap, selected && s.wrapOn, m.emergency && s.wrapSOS]}>
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
+      accessibilityState={{ expanded: !!selected }}
       accessibilityLabel={`${m.name || 'Circle member'}. ${status.text}`}
-      style={({ pressed }) => [
-        s.card,
-        selected && s.cardOn,
-        m.emergency && s.cardSOS,
-        pressed && { transform: [{ scale: 0.985 }] },
-      ]}
+      style={({ pressed }) => [s.card, pressed && { transform: [{ scale: 0.985 }] }]}
     >
       <View style={[s.ring, { borderColor: dim ? '#9a958c' : color }]}>
         {m.photoUri ? (
@@ -185,22 +187,35 @@ export function MemberCard({
         </View>
       </View>
 
-      {trailing ? <View style={s.trailing}>{trailing}</View> : null}
+      <Ionicons
+        name={selected ? 'chevron-up' : 'chevron-down'}
+        size={15}
+        color={colors.textMuted}
+      />
     </Pressable>
+
+    {selected && actions ? <View style={s.actions}>{actions}</View> : null}
+    </View>
   );
 }
 
 const s = StyleSheet.create({
+  wrap: { borderRadius: radius.md, overflow: 'hidden' },
+  wrapOn: { backgroundColor: 'rgba(134,114,206,0.10)' },
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
     paddingVertical: 11,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
   },
-  cardOn: { backgroundColor: 'rgba(134,114,206,0.10)' },
-  cardSOS: {
+  actions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  wrapSOS: {
     backgroundColor: 'rgba(239,96,94,0.08)',
     // A left stripe rather than a border or a fill. It marks the row without
     // changing its shape, so an SOS card does not shove the others around when
@@ -246,7 +261,6 @@ const s = StyleSheet.create({
   },
 
   right: { alignItems: 'flex-end', gap: 4 },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: 2 },
   distance: {
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 13.5,

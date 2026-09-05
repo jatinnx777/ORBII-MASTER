@@ -16,6 +16,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { EmptyState, MascotLoader, ScreenContainer, SyncBar } from '@/components/common';
+import { JoinByCodeSheet } from '@/components/circles/JoinByCodeSheet';
 import { CirclesHero } from './components/CirclesHero';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -91,6 +92,7 @@ export function CirclesScreen() {
     useAppSelector((s) => s.circles);
   const profile = useAppSelector((s) => s.user.profile);
   const [refreshing, setRefreshing] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -202,19 +204,45 @@ export function CirclesScreen() {
             Trusted people who get your SOS and share live location with you, 24/7.
           </Text>
         </View>
-        <Pressable
-          onPress={handleCreatePress}
-          style={({ pressed }) => [
-            styles.addBtn,
-            pressed && styles.pressedScale,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Create circle"
-          hitSlop={8}
-        >
-          <Ionicons name="add" size={22} color={colors.textPrimary} />
-        </Pressable>
+        <View style={styles.headerActions}>
+          {/* Join is deliberately not gated. Creating a circle is the paid
+              thing; joining one somebody else made has always been free, and
+              putting a paywall between a woman and her family's circle would
+              be the worst possible place to put one. */}
+          <Pressable
+            onPress={() => setJoinOpen(true)}
+            style={({ pressed }) => [styles.joinBtn, pressed && styles.pressedScale]}
+            accessibilityRole="button"
+            accessibilityLabel="Join a circle with a code"
+            hitSlop={8}
+          >
+            <Ionicons name="enter-outline" size={17} color={colors.brandDeep} />
+            <Text style={styles.joinBtnText}>Join</Text>
+          </Pressable>
+          <Pressable
+            onPress={handleCreatePress}
+            style={({ pressed }) => [
+              styles.addBtn,
+              pressed && styles.pressedScale,
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel="Create circle"
+            hitSlop={8}
+          >
+            <Ionicons name="add" size={22} color={colors.textPrimary} />
+          </Pressable>
+        </View>
       </View>
+
+      <JoinByCodeSheet
+        visible={joinOpen}
+        onClose={() => setJoinOpen(false)}
+        onJoined={(id) => {
+          setJoinOpen(false);
+          void refreshCircles().then(() => setActiveCircle(id));
+          navigation.navigate('CircleDetail', { circleId: id });
+        }}
+      />
 
       {!profile ? (
         <View style={styles.center}>
@@ -574,6 +602,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     ...shadows.icon,
+  },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  joinBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+  },
+  joinBtnText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 13.5,
+    color: colors.brandDeep,
   },
   addBtn: {
     width: 40,

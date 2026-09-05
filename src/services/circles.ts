@@ -75,6 +75,17 @@ export type Circle = {
   color: string;
   emoji: string | null;
   isDefault: boolean;
+  /**
+   * The six letter code somebody types to join (sql/125). Read it out, they
+   * type it, they are in.
+   *
+   * It replaced a searchable directory. Adding people by looking them up meant
+   * the directory had to be searchable, and a searchable index of women who
+   * installed a personal safety app is the worst thing this product could own.
+   * A code inverts that: nothing is enumerable, and the person joining has to
+   * have been told it.
+   */
+  joinCode: string | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -118,6 +129,29 @@ export async function setMyRelation(
     p_relation: relation,
   });
   return !error && data === true;
+}
+
+/**
+ * Join a circle with its six letter code.
+ *
+ * Returns the circle id, or null when the code matches nothing. Null rather
+ * than an exception, so a typo is a message and not a crash. Anything the
+ * server refuses outright (a full circle, a revoked member, too many attempts)
+ * throws with a sentence worth showing.
+ */
+export async function joinCircleByCode(code: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('join_circle_by_code', {
+    p_code: code.trim().toUpperCase(),
+  });
+  if (error) throw new Error(error.message);
+  return typeof data === 'string' ? data : null;
+}
+
+/** Roll the code. Owner and admins only; the server enforces that, not this. */
+export async function rotateJoinCode(circleId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('rotate_circle_code', { p_circle: circleId });
+  if (error) throw new Error(error.message);
+  return typeof data === 'string' ? data : null;
 }
 
 export type CircleMember = {
@@ -173,6 +207,7 @@ type CircleRow = {
   color: string;
   emoji: string | null;
   is_default: boolean;
+  join_code?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -219,6 +254,7 @@ function rowToCircle(row: CircleRow): Circle {
     color: row.color,
     emoji: row.emoji,
     isDefault: row.is_default,
+    joinCode: row.join_code ?? null,
     createdAt: Date.parse(row.created_at),
     updatedAt: Date.parse(row.updated_at),
   };

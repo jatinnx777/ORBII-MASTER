@@ -679,7 +679,7 @@ export function CircleMapScreen() {
                   distanceM={distanceOf(m)}
                   selected={selectedId === m.userId}
                   onPress={() => void selectMember(m)}
-                  trailing={
+                  actions={
                     <>
                       <Pressable
                         onPress={() => {
@@ -687,29 +687,29 @@ export function CircleMapScreen() {
                           setCenter({ latitude: m.lat, longitude: m.lng });
                           setHistoryOpen(true);
                         }}
-                        hitSlop={8}
-                        style={styles.historyBtn}
+                        style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.7 }]}
                         accessibilityRole="button"
-                        accessibilityLabel={`See ${m.name || 'their'} location history`}
                       >
-                        <Ionicons name="footsteps-outline" size={17} color={colors.brandDeep} />
+                        <Ionicons name="footsteps-outline" size={16} color={colors.brandDeep} />
+                        <Text style={styles.actionText}>Where they went</Text>
                       </Pressable>
-                      {/* The trail as a list of stops answers "where did she
-                          go". The replay answers "how did the day go", which is
-                          a different question and the one a parent is actually
-                          asking at 11pm. */}
+                      {/* The one people actually want, and previously a
+                          fingernail-sized glyph nobody found. "Replay the day"
+                          says what it does; a play triangle next to a distance
+                          reads as a media control for something else. */}
                       <Pressable
                         onPress={() =>
                           // @ts-expect-error TripReplay lives in the AppStack, same
                           // as the other pushes from this screen.
                           navigation.navigate('TripReplay', { userId: m.userId, name: m.name })
                         }
-                        hitSlop={8}
-                        style={styles.historyBtn}
+                        style={({ pressed }) => [styles.actionBtn, styles.actionPrimary, pressed && { opacity: 0.7 }]}
                         accessibilityRole="button"
-                        accessibilityLabel={`Replay ${m.name || 'their'} day`}
                       >
-                        <Ionicons name="play-circle-outline" size={18} color={colors.brandDeep} />
+                        <Ionicons name="play-circle" size={16} color={colors.textInverse} />
+                        <Text style={[styles.actionText, { color: colors.textInverse }]}>
+                          Replay the day
+                        </Text>
                       </Pressable>
                     </>
                   }
@@ -846,6 +846,22 @@ const styles = StyleSheet.create({
   freshRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   freshDot: { width: 7, height: 7, borderRadius: 4 },
 
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
+  },
+  actionPrimary: { backgroundColor: colors.brandDeep },
+  actionText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12.5,
+    color: colors.brandDeep,
+  },
   historyBtn: {
     width: 32, height: 32, borderRadius: 16, marginLeft: 2,
     backgroundColor: colors.brandSoft, alignItems: 'center', justifyContent: 'center',
