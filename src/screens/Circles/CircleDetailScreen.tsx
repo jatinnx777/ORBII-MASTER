@@ -1,3 +1,4 @@
+import { useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { appAlert, SkeletonList } from '@/components/common';
 import {
@@ -248,6 +249,7 @@ export function CircleDetailScreen({
 }
 
 function MemberRow({ member, isMe }: { member: CircleMember; isMe: boolean }) {
+  const navigation = useNavigation();
   const displayName =
     member.name?.trim() ||
     (member.username ? `@${member.username}` : 'Member');
@@ -271,6 +273,29 @@ function MemberRow({ member, isMe }: { member: CircleMember; isMe: boolean }) {
           {member.role === 'owner' ? 'Owner' : member.role === 'admin' ? 'Admin' : 'Member'}
         </Text>
       </View>
+      {/* Replay lives here as well as on the circle map, and it had to.
+          The map is gated on circle_geofencing, the one entitlement still in
+          ALWAYS_GATED, so putting the ONLY way in there quietly locked a free
+          feature behind the last paywall standing. Nobody decided that; it was
+          a side effect of where the button went. This screen is not gated. */}
+      {!isMe ? (
+        <Pressable
+          onPress={() =>
+            // Typed against the AppStack, which this screen is not generically
+            // bound to. The route and its params are declared in
+            // navigation/types.ts, so the shape is checked there.
+            (navigation as unknown as {
+              navigate: (r: string, p: { userId: string; name?: string }) => void;
+            }).navigate('TripReplay', { userId: member.userId, name: member.name ?? undefined })
+          }
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={`Replay ${member.name || 'their'} day`}
+          style={({ pressed }) => [styles.replayBtn, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="play-circle-outline" size={22} color={colors.brandDeep} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -377,6 +402,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     letterSpacing: 0.1,
   },
+  replayBtn: { padding: 4, marginLeft: spacing.xs },
   memberRow: {
     flexDirection: 'row',
     alignItems: 'center',
