@@ -55,6 +55,23 @@ export type MemberLocation = {
    * be told about rather than left to infer from a pin that has not moved.
    */
   unreachable: boolean;
+  /** On a charger. Null when the device will not say. */
+  charging: boolean | null;
+  /**
+   * Live speed in km/h, or null.
+   *
+   * Null is not zero. Both platforms report an unknown speed as a negative
+   * number, and a card that renders that as 0 km/h says "stationary" about a
+   * phone that never told us anything.
+   */
+  speedKmh: number | null;
+  /**
+   * Their chosen sharing radius in metres, or null for exact (sql/123).
+   *
+   * When set, lat/lng are the centre of a cell rather than a position, and
+   * accuracyM is the radius. The map must draw the circle, not a pin.
+   */
+  precisionM: number | null;
 };
 
 export type TrailPoint = { lat: number; lng: number; at: string };
@@ -75,7 +92,7 @@ export type TrailPoint = { lat: number; lng: number; at: string };
  * Never throws. A battery read that fails must not stop a location push, which
  * is the part that actually matters.
  */
-async function batteryPct(): Promise<number | null> {
+async function batteryState(): Promise<{ pct: number | null; charging: boolean | null }> {
   try {
     // Imported here rather than at the top of the file on purpose. A static
     // import pulls expo-modules-core into the module graph, and this module
@@ -85,14 +102,40 @@ async function batteryPct(): Promise<number | null> {
     // the moment it was added. Deferring it also keeps a native module off the
     // startup path for something only read during a location push.
     const Battery = await import('expo-battery');
-    const level = await Battery.getBatteryLevelAsync();
+    const [level, state] = await Promise.all([
+      Battery.getBatteryLevelAsync(),
+      Battery.getBatteryStateAsync().catch(() => null),
+    ]);
     // -1 is expo-battery's "unsupported" sentinel, and rounding it gives -100,
     // which would read as a catastrophically dead phone and alert the circle.
-    if (typeof level !== 'number' || level < 0) return null;
-    return Math.round(level * 100);
+    const pct = typeof level === 'number' && level >= 0 ? Math.round(level * 100) : null;
+    // CHARGING IS NOT COSMETIC. sql/121 skips the low-battery alert entirely
+    // for a phone on a charger, because 11 percent next to a cable is not a
+    // circle's problem and an alert that fires for it teaches people to swipe
+    // the real one away too. UNKNOWN maps to null, never to false: guessing
+    // "not charging" would put the alert back.
+    const charging =
+      state === null || state === Battery.BatteryState.UNKNOWN
+        ? null
+        : state === Battery.BatteryState.CHARGING || state === Battery.BatteryState.FULL;
+    return { pct, charging };
   } catch {
-    return null;
+    return { pct: null, charging: null };
   }
+}
+
+/**
+ * Speed in km/h from an OS location fix, or null.
+ *
+ * Both platforms report an unknown speed as a negative number. Passing that
+ * through as 0 would tell a circle she is stationary when the truth is that
+ * nobody knows, which on this product is the difference between "she is
+ * waiting somewhere" and "we have no idea".
+ */
+function speedKmhOf(coords: { speed?: number | null }): number | null {
+  const s = coords.speed;
+  if (typeof s !== 'number' || s < 0) return null;
+  return Math.round(s * 3.6 * 10) / 10;
 }
 
 /**
@@ -139,11 +182,14 @@ TaskManager.defineTask(CIRCLE_LOCATION_TASK, async ({ data, error }) => {
     if (!loc) return;
     const uid = (await supabase.auth.getSession()).data.session?.user?.id;
     if (!uid) return;
+    const bat = await batteryState();
     await supabase.rpc('set_circle_location', {
       p_lat: loc.coords.latitude,
       p_lng: loc.coords.longitude,
       p_acc: loc.coords.accuracy ?? null,
-      p_battery: await batteryPct(),
+      p_battery: bat.pct,
+      p_charging: bat.charging,
+      p_speed_kmh: speedKmhOf(loc.coords),
     });
   } catch (err) {
     reportError(err, { category: 'circle.location', message: 'background push failed' });
@@ -200,11 +246,14 @@ export async function startCircleSharing(hours = 2): Promise<boolean> {
     // Push one immediate fix so members see you right away.
     try {
       const now = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const bat = await batteryState();
       await supabase.rpc('set_circle_location', {
         p_lat: now.coords.latitude,
         p_lng: now.coords.longitude,
         p_acc: now.coords.accuracy ?? null,
-        p_battery: await batteryPct(),
+        p_battery: bat.pct,
+        p_charging: bat.charging,
+        p_speed_kmh: speedKmhOf(now.coords),
       });
     } catch {
       // ignore; the background task will catch up
@@ -368,7 +417,7 @@ export async function pushCircleLocationDuringSos(
       p_lat: point.latitude,
       p_lng: point.longitude,
       p_acc: accuracyM,
-      p_battery: await batteryPct(),
+      p_battery: (await batteryState()).pct,
     });
   } catch {
     // The helper channel is the primary one and has already been published to.
@@ -397,6 +446,9 @@ export async function loadCircleMembersLocations(): Promise<MemberLocation[]> {
         ? (r.age_seconds as number)
         : Math.max(0, Math.round((Date.now() - Date.parse(r.updated_at as string)) / 1000)),
     unreachable: r.unreachable === true,
+    charging: typeof r.charging === 'boolean' ? r.charging : null,
+    speedKmh: typeof r.speed_kmh === 'number' && r.speed_kmh >= 0 ? (r.speed_kmh as number) : null,
+    precisionM: typeof r.precision_m === 'number' ? (r.precision_m as number) : null,
     // Backward-compatible: before sql/70 the column doesn't exist, so a missing
     // value means the row is only present because they're sharing.
     sharing: r.sharing !== false,

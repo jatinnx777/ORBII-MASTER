@@ -169,6 +169,17 @@ function presenceOf(m: MemberLocation): { label: string; color: string; loud: bo
   if (!m.sharing) {
     return { label: `Location off · last seen ${ago(m.updatedAt)}`, color: colors.textMuted, loud: false };
   }
+  if (m.precisionM != null) {
+    // Named plainly. A pin is a pin, and without this line a bubbled position
+    // looks exactly like an exact one to anyone who does not notice the circle
+    // around it is larger than usual.
+    const km = m.precisionM >= 1000 ? `${(m.precisionM / 1000).toFixed(1)} km` : `${m.precisionM} m`;
+    return {
+      label: `Approximate, within ${km} · ${ago(m.updatedAt)}`,
+      color: colors.textSecondary,
+      loud: false,
+    };
+  }
   if (m.battery != null && m.battery <= 15) {
     return { label: `${ago(m.updatedAt)} · battery ${m.battery}%`, color: colors.goldDeep, loud: true };
   }
@@ -464,20 +475,40 @@ export function CircleMapScreen() {
     // A member who turned sharing off shows greyed at their LAST known spot.
     html: avatarHtml(m.name, colorFor(m.userId), !m.emergency && (!m.sharing || freshness(m.updatedAt).stale), m.photoUri),
   }));
-  // Accuracy rings, "precise to ~Xm". Only for people actually sharing now.
+  // Accuracy rings, and bubbles, which are the same shape meaning two very
+  // different things.
+  //
+  // An accuracy ring says "the GPS is confident to about this much" and is
+  // clamped to 300m, because a 900m accuracy reading is a bad fix and drawing
+  // it at full size would swamp the map with a circle nobody can act on.
+  //
+  // A BUBBLE MUST NOT BE CLAMPED. When precisionM is set, the position is the
+  // centre of a cell of that size and the circle IS the information: she chose
+  // to be locatable to a neighbourhood and nothing narrower. Clamping a 2000m
+  // bubble to 300m would draw a small tight circle around a point she is
+  // probably not standing at, which claims precision the data does not have
+  // and is exactly the lie the feature exists to prevent.
   const rings: OSMCircle[] = shown
-    .filter((m) => m.sharing && m.accuracyM != null)
-    .map((m) => ({
-      id: `acc-${m.userId}`,
-      center: {
-        latitude: glided[m.userId]?.lat ?? m.lat,
-        longitude: glided[m.userId]?.lng ?? m.lng,
-      },
-      radiusM: Math.max(15, Math.min(300, m.accuracyM as number)),
-      color: colorFor(m.userId),
-      fillColor: colorFor(m.userId),
-      fillOpacity: 0.1,
-    }));
+    .filter((m) => m.sharing && (m.precisionM != null || m.accuracyM != null))
+    .map((m) => {
+      const bubbled = m.precisionM != null;
+      return {
+        id: `acc-${m.userId}`,
+        center: {
+          latitude: glided[m.userId]?.lat ?? m.lat,
+          longitude: glided[m.userId]?.lng ?? m.lng,
+        },
+        radiusM: bubbled
+          ? (m.precisionM as number)
+          : Math.max(15, Math.min(300, m.accuracyM as number)),
+        color: colorFor(m.userId),
+        fillColor: colorFor(m.userId),
+        // A bubble is filled more heavily than an accuracy ring. It is a
+        // deliberate choice somebody made, not a measurement artefact, and it
+        // should read as a region rather than as a margin of error.
+        fillOpacity: bubbled ? 0.16 : 0.1,
+      };
+    });
   // Today's paths, one per member, each in that member's colour. When someone is
   // selected the others dim back so a single day reads clearly.
   const trailLines: OSMPolyline[] = shown
