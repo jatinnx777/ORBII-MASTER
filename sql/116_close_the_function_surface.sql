@@ -168,8 +168,18 @@ end $$;
 -- Without this, the next sql file re-opens the hole for whatever it creates,
 -- and this whole exercise repeats in three months.
 --
--- READ THIS BEFORE WRITING sql/117. From here on a new function is executable
--- by NOBODY until it is granted. A missing grant surfaces in the app as
+-- WRONG, AND CORRECTED IN sql/118. This line revokes the PUBLIC default and
+-- nothing else. Supabase ships its own default privileges on this schema
+-- granting functions to anon, authenticated and service_role, so those three
+-- survived it and every function created after this file was silently
+-- re-granted to anon and authenticated. sql/118 revokes from all three and
+-- adds a check against pg_default_acl to prove it took.
+--
+-- It is the same mistake this whole file was written to fix, made one level
+-- up: a privilege assumed rather than looked for.
+--
+-- READ THIS BEFORE WRITING sql/117. From here on (once sql/118 has run) a new
+-- function is executable by NOBODY until it is granted. A missing grant surfaces in the app as
 -- "function does not exist" or a silent 404 from PostgREST, not as a
 -- permission error, so it looks like a typo in the RPC name. Every future sql
 -- file must end with an explicit `grant execute ... to authenticated` or

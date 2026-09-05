@@ -257,7 +257,14 @@ language sql stable security definer set search_path = public as $$
     );
 $$;
 
-revoke all on function public.orbii_circle_peers(uuid) from public, anon;
+-- authenticated is revoked EXPLICITLY, and the reason matters beyond this
+-- function. See the default-privileges section at the end of this file: the
+-- revoke in sql/116 was not enough, and anything relying on it is wrong.
+--
+-- This one enumerates who is in a person's circles. A signed-in stranger able
+-- to call it could hand it any uuid and get back that person's circle, which
+-- is a social graph nobody agreed to publish. Only the sweep needs it.
+revoke all on function public.orbii_circle_peers(uuid) from public, anon, authenticated;
 grant execute on function public.orbii_circle_peers(uuid) to service_role;
 
 -- One alert per person per state, cleared when the state clears, so a phone
@@ -356,6 +363,41 @@ select cron.schedule('orbii-presence-sweep', '*/5 * * * *',
 
 
 -- ---------------------------------------------------------------------------
+-- CORRECTING sql/116: THE DEFAULT PRIVILEGES REVOKE WAS NOT ENOUGH
+-- ---------------------------------------------------------------------------
+-- sql/116 ends with:
+--
+--   alter default privileges in schema public revoke execute on functions from public;
+--
+-- and a comment promising that from then on a new function is executable by
+-- NOBODY until it is granted. That promise is false, and this file is how it
+-- was caught: orbii_circle_peers above was created with a revoke from public
+-- and anon and a grant to service_role only, and the verify still found
+-- authenticated able to execute it.
+--
+-- WHY. Supabase ships its own default privileges on the public schema,
+-- granting functions to anon, authenticated and service_role. Revoking the
+-- PUBLIC default leaves those three intact, so every function created since
+-- sql/116 has been silently re-granted to anon and authenticated by a rule
+-- that was there the whole time and that sql/116 never looked for.
+--
+-- This is the same mistake sql/116 was written to fix, made one level up: a
+-- privilege assumed rather than checked. The lesson holds and I did not apply
+-- it far enough.
+--
+-- The functions created in this file are unaffected, because each one carries
+-- an explicit revoke. The exposure was anything created without one.
+alter default privileges in schema public
+  revoke execute on functions from public, anon, authenticated;
+
+-- FROM HERE ON, for real this time: a new function in public is executable by
+-- nobody until granted. Every sql file must end with an explicit grant, and a
+-- missing one shows up in the app as a 404 from PostgREST rather than a
+-- permission error, so it reads like a typo in the RPC name. The unreachable
+-- function audit at the end of sql/116 is what catches it.
+
+
+-- ---------------------------------------------------------------------------
 -- VERIFY
 -- ---------------------------------------------------------------------------
 select 'the read exposes emergency, age_seconds and unreachable' as check,
@@ -381,6 +423,18 @@ select 'a signed-in user cannot run the sweep (must be false)',
 union all
 select 'a signed-in user cannot enumerate a stranger''s circle (must be false)',
        public.orbii_can_exec('authenticated', 'public.orbii_circle_peers(uuid)')
+union all
+-- Proves the correction above actually took, rather than trusting that it did,
+-- which is exactly the assumption that produced the bug. Any default ACL still
+-- naming anon or authenticated means the next function created here is open
+-- again.
+select 'no default still grants anon or authenticated (must be 0)',
+       (select count(*)::text
+        from pg_default_acl d
+        join pg_namespace n on n.oid = d.defaclnamespace
+        where n.nspname = 'public'
+          and d.defaclobjtype = 'f'
+          and array_to_string(d.defaclacl, ',') ~ '(anon|authenticated)=')
 union all
 select 'the app can still read circle locations (must be true)',
        public.orbii_can_exec('authenticated', 'public.circle_members_locations()')
