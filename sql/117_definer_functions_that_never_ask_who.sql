@@ -86,6 +86,42 @@ order by (case
 
 
 -- ---------------------------------------------------------------------------
+-- THE THREE POSTGIS ROWS SQL/115 STILL REPORTS
+-- ---------------------------------------------------------------------------
+-- 116 took the anon-executable count from 130 to 3, and the three left are
+-- st_estimatedextent, which it skipped on purpose: extension-owned functions
+-- are left as the extension shipped them, and a PostGIS upgrade would restore
+-- anything changed here anyway.
+--
+-- They are SECURITY DEFINER, so an anon caller could in principle ask for the
+-- bounding box of a geometry column without holding any permission on the
+-- table behind it. On a helper-location table that would be a box drawn around
+-- every responder in the country, which with few responders is a box drawn
+-- around a neighbourhood.
+--
+-- It reports nothing here, because ORBII has no geometry columns: nearest_
+-- helpers does its own arithmetic. So the exception stands and nothing is
+-- revoked.
+--
+-- BUT the repo is not proof of the live schema. The admin_ functions were
+-- created in the dashboard and appear in no sql file, and a geometry column
+-- could have been added the same way. This asks the database instead of the
+-- repo. Any row here means the paragraph above is wrong and the grant needs
+-- revisiting.
+select c.relname as table_with_geometry,
+       a.attname as column_name,
+       format_type(a.atttypid, a.atttypmod) as type
+from pg_attribute a
+join pg_class c on c.oid = a.attrelid
+join pg_namespace n on n.oid = c.relnamespace
+where n.nspname = 'public'
+  and a.attnum > 0
+  and not a.attisdropped
+  and format_type(a.atttypid, a.atttypmod) ~* '^(geometry|geography)'
+order by 1, 2;
+
+
+-- ---------------------------------------------------------------------------
 -- RE-VERIFY, because 116's own output was never read back
 -- ---------------------------------------------------------------------------
 select 'anon can execute nothing (must be 0)' as check,
@@ -98,8 +134,14 @@ union all
 select 'the auth.users oracle is closed (must be false)',
        public.orbii_can_exec('authenticated', 'public.amb_identity_verified(uuid)')
 union all
+-- Spelled with its argument. The website calls this as rpc('ambassador_summary')
+-- with no parameters, which reads like a zero-argument function, but the
+-- parameter has a DEFAULT. to_regprocedure matches on declared arguments, not
+-- on how few you can get away with passing, so 'ambassador_summary()' resolves
+-- to nothing and the check reported FUNCTION NOT FOUND for a function that was
+-- there the whole time.
 select 'ambassador page still works (must be true)',
-       public.orbii_can_exec('authenticated', 'public.ambassador_summary()')
+       public.orbii_can_exec('authenticated', 'public.ambassador_summary(uuid)')
 union all
 select 'admin panel still works (must be true)',
        public.orbii_can_exec('authenticated', 'public.admin_approve_helper(uuid)')

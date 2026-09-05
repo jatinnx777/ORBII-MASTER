@@ -5,11 +5,17 @@
 -- WHY THE SWEEP IN sql/115 FOUND 130 FUNCTIONS. Postgres grants EXECUTE on a
 -- new function to PUBLIC by default. PUBLIC is not a role you can see in a
 -- role list, it is "everyone, including roles that do not exist yet", and both
--- anon and authenticated inherit from it. So every function ORBII has ever
--- created has been callable by an unauthenticated caller since the day it was
--- written, and the `grant execute ... to authenticated` lines scattered through
--- sql/1 through sql/115 were decorative: they granted a privilege the caller
--- already had.
+-- anon and authenticated inherit from it. A `grant execute ... to
+-- authenticated` on a function that still carries the PUBLIC default grants
+-- nothing: the caller already had it.
+--
+-- CORRECTION, because the first version of this comment said the repo had
+-- never got this right and that is not true. 88 lines across 41 sql files do
+-- revoke from public before granting, correctly, going back to sql/18. The
+-- problem was never that the pattern was unknown. It was applied to some
+-- functions and not others, with no check that would notice the difference,
+-- which is worse than not knowing: it looks handled. The 130 that stayed open
+-- are the ones nobody happened to write the line for.
 --
 -- WHY `REVOKE ... FROM anon` DID NOT WORK. Revoking from anon removes a grant
 -- held BY anon. The grant here is held by PUBLIC. Revoking from anon when the
