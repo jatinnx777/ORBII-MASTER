@@ -16,6 +16,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { EmptyState, MascotLoader, ScreenContainer, SyncBar } from '@/components/common';
+import { FREE_CIRCLE_LIMIT } from '@/services/entitlements';
 import { JoinByCodeSheet } from '@/components/circles/JoinByCodeSheet';
 import { CirclesHero } from './components/CirclesHero';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -70,19 +71,6 @@ export function CirclesScreen() {
 
   // Family Circle creation is an ORBII Plus feature, the circle owner must be
   // a subscriber. Joining a circle (via invite) stays free.
-  const handleCreatePress = () => {
-    if (!isPremium) {
-      promptUpgrade({
-        feature: 'Family Circles',
-        body:
-          'Creating a Family Circle is part of ORBII Plus (₹149/month). The ' +
-          'circle owner needs Plus. Members you invite join for free.',
-        onUpgrade: () => navigation.navigate('PremiumUpgrade'),
-      });
-      return;
-    }
-    navigation.navigate('CircleCreate');
-  };
   const insets = useSafeAreaInsets();
   // `revalidating` is a background refresh over a list that is already
   // rendered. This screen was already careful not to blank on one (see the
@@ -93,6 +81,28 @@ export function CirclesScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const [refreshing, setRefreshing] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+
+  // The FIRST circle is free. A safety app whose first screen is a
+  // subscription page is an app nobody finishes setting up, and a circle with
+  // nobody in it protects nobody.
+  //
+  // Counted on circles you OWN, not circles you are in. Being on your mother's
+  // list has never cost anything and is not about to.
+  const owned = circles.filter((c) => c.ownerId === profile?.uid).length;
+  const handleCreatePress = () => {
+    if (!isPremium && owned >= FREE_CIRCLE_LIMIT) {
+      promptUpgrade({
+        feature: 'More circles',
+        body:
+          'Your first circle is free. A second one is part of ORBII Plus ' +
+          '(₹149/month). Everyone you invite joins for free, however many ' +
+          'circles you have.',
+        onUpgrade: () => navigation.navigate('PremiumUpgrade'),
+      });
+      return;
+    }
+    navigation.navigate('CircleCreate');
+  };
 
   useFocusEffect(
     useCallback(() => {

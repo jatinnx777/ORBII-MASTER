@@ -9,8 +9,10 @@ import { useAppSelector } from '@/redux/store';
 
 export type Feature =
   // Family & Circles
-  | 'circle_create' // creating / owning a family circle
+  | 'circle_create' // owning MORE than FREE_CIRCLE_LIMIT circles
   | 'circle_geofencing' // circle EXTRA: safe zones ("did you mean to leave?")
+  | 'live_location' // seeing your circle on the map day to day
+  | 'video_evidence' // recording video during an SOS
   // Advanced voice protection
   | 'unlimited_voice_phrases' // more than one trigger phrase
   | 'background_voice' // background voice monitoring
@@ -30,6 +32,8 @@ export type Feature =
 const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
   'circle_create',
   'circle_geofencing',
+  'live_location',
+  'video_evidence',
   'unlimited_voice_phrases',
   'background_voice',
   'advanced_protection',
@@ -70,10 +74,39 @@ const ALWAYS_GATED: ReadonlySet<Feature> = new Set<Feature>([
   // Free until there are people in it. Whether it is ever worth charging for
   // is a question that can only be answered once it is full.
   'circle_geofencing',
+  // THE LINE IS EMERGENCY VERSUS EVERYDAY.
+  //
+  // Free covers the thing ORBII exists for: build a circle, and when you fire
+  // an SOS they are alerted with your live location, hands-free if you use
+  // Voice SOS. None of that is behind a price, and it never should be.
+  //
+  // Paid covers seeing each other on an ordinary Tuesday. Continuous live
+  // location, safe-zone alerts, and video evidence are conveniences layered on
+  // top of a pipeline that already works without them.
+  //
+  // Note this does NOT touch the emergency override in sql/118. An active SOS
+  // releases a live location to the circle whatever the sharing setting says
+  // and whatever the tier, because a paywall between a woman in trouble and
+  // the people trying to reach her is not a business model.
+  'live_location',
+  'video_evidence',
 ]);
 
 // Free tier: up to 3 emergency contacts.
 export const FREE_CONTACT_LIMIT = 3;
+
+/**
+ * Circles a free account may OWN.
+ *
+ * One, not zero. A safety app whose first screen is a subscription page is an
+ * app nobody sets up, and a circle with nobody in it protects nobody. The
+ * first one is free so the pipeline can exist; a second circle is a
+ * convenience for somebody already getting value from the first.
+ *
+ * Being IN somebody else's circle has never counted against this and never
+ * will. You cannot be charged for being on your mother's list.
+ */
+export const FREE_CIRCLE_LIMIT = 1;
 
 // During early access, everything EXCEPT the always-gated set is unlocked and
 // free (no in-app billing yet, which also keeps us clear of Google Play's

@@ -152,9 +152,16 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
         isDefault: true,
       });
       dispatch(circleAdded(circle));
-      await setActiveCircle(circle.id);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // NAVIGATE FIRST. setActiveCircle writes to disk and then fetches the
+      // roster, and it used to be awaited before the screen moved. For a
+      // circle created one line ago the roster is exactly one person, the
+      // owner, whose profile is already in the store, so the wait bought
+      // nothing and cost two more round trips on top of the create.
+      //
+      // The next screen needs the circle id and that is all it is given.
       navigation.replace('CircleInvite', { circleId: circle.id });
+      void setActiveCircle(circle.id);
     } catch (err) {
       if (err instanceof CirclesNotInstalledError) {
         appAlert(

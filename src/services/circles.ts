@@ -369,16 +369,14 @@ export async function createCircle(input: {
   // nothing" bug. This self-insert is idempotent: it's a no-op (duplicate
   // key) when the trigger already added the row, and passes RLS because the
   // user is adding themselves.
-  const { error: memberErr } = await supabase
-    .from('circle_members')
-    .insert({ circle_id: data.id, user_id: user.id, role: 'owner' });
-  if (
-    memberErr &&
-    !/(duplicate|already exists|unique)/i.test(memberErr.message ?? '')
-  ) {
-    console.warn('[circles] owner membership insert:', memberErr.message);
-  }
-
+  // NO SECOND INSERT. The circles_add_owner trigger (sql/44) fires after every
+  // circle insert and adds the owner as a member in the same transaction.
+  //
+  // This used to insert the owner again from the app and then swallow the
+  // duplicate error, which is the tell: it was a second network round trip
+  // doing what the database had already done before the first one returned.
+  // On Indian mobile that was ~300ms added to every circle creation, and the
+  // person waiting on it had already pressed the button.
   return rowToCircle(data as CircleRow);
 }
 

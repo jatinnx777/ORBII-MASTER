@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -14,7 +14,7 @@ import { appAlert, useBrandSheet, SkeletonList } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { getCurrentLocation } from '@/services/location';
-import { listCircleMembers, listCircles, type CircleMember } from '@/services/circles';
+import { type CircleMember } from '@/services/circles';
 import {
   createZone,
   deleteZone,
@@ -57,7 +57,7 @@ export function GeofencesScreen() {
   // Who the zone is for. null = yourself. Anyone else must share a circle with
   // you (the server enforces that too, this picker is only the friendly half).
   const [target, setTarget] = useState<CircleMember | null>(null);
-  const [people, setPeople] = useState<CircleMember[]>([]);
+  const membersByCircle = useAppSelector((st) => st.circles.membersByCircle);
 
   const refresh = useCallback(async () => {
     if (!profile?.uid) return;
@@ -73,19 +73,26 @@ export function GeofencesScreen() {
     setPending(p);
     setLoading(false);
 
-    // Everyone I share a circle with, the only people I'm allowed to fence.
-    try {
-      const circles = await listCircles();
-      const lists = await Promise.all(circles.map((c) => listCircleMembers(c.id)));
-      const seen = new Map<string, CircleMember>();
-      for (const m of lists.flat()) {
-        if (m.userId !== profile.uid && !seen.has(m.userId)) seen.set(m.userId, m);
-      }
-      setPeople(Array.from(seen.values()));
-    } catch {
-      setPeople([]);
-    }
   }, [profile?.uid]);
+
+  // Everyone I share a circle with, the only people I am allowed to fence.
+  //
+  // THIS USED TO REFETCH ALL OF IT. listCircles, then listCircleMembers per
+  // circle, and listCircleMembers is itself two queries. Three circles meant
+  // seven round trips for a roster that was already in the store, hydrated
+  // from disk before this screen mounted.
+  //
+  // Derived from Redux now, so it costs nothing and is on screen at frame one.
+  // circles-bootstrap keeps it current.
+  const people = useMemo(() => {
+    const seen = new Map<string, CircleMember>();
+    for (const list of Object.values(membersByCircle)) {
+      for (const m of list) {
+        if (m.userId !== profile?.uid && !seen.has(m.userId)) seen.set(m.userId, m);
+      }
+    }
+    return Array.from(seen.values());
+  }, [membersByCircle, profile?.uid]);
 
   useFocusEffect(
     useCallback(() => {
