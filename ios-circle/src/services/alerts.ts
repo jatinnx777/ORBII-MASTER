@@ -24,12 +24,62 @@ export type CircleAlert = {
   responders: number;
   /** How many have taken ownership of an action (calling 112, going there). */
   claimed: number;
+  /**
+   * What set the alarm off (sql/120). Added after this app was written.
+   *
+   * It changes what the reader should do, which is why it is worth a column.
+   * Somebody who pressed a button can usually answer their phone. Somebody
+   * whose phone detected a hard impact and then did not respond to a countdown
+   * may not be able to, and calling is the wrong first move.
+   */
+  trigger: SOSTrigger;
 };
+
+export type SOSTrigger = 'manual' | 'voice' | 'impact' | 'geofence' | 'disaster';
 
 export async function getCircleAlerts(): Promise<CircleAlert[]> {
   const { data, error } = await supabase.rpc('my_circle_active_sos');
   if (error || !Array.isArray(data)) return [];
-  return data as CircleAlert[];
+  // `trigger` defaults to manual rather than being trusted from the row. A
+  // server older than sql/120 does not return the column at all, and the
+  // reading that is safe to get wrong is "a person pressed something".
+  return (data as Record<string, unknown>[]).map((r) => ({
+    ...(r as unknown as CircleAlert),
+    trigger: (r.trigger as SOSTrigger) ?? 'manual',
+  }));
+}
+
+/**
+ * The headline. What kind of alarm this is, before anything else.
+ *
+ * A sensor-raised alert and a pressed button are different events and the
+ * difference decides the first thirty seconds, which is the only part of this
+ * screen that matters.
+ */
+export function titleFor(a: CircleAlert): string {
+  switch (a.trigger) {
+    case 'impact':
+      return `${a.name} may have had a fall or crash`;
+    case 'voice':
+      return `${a.name} said the word`;
+    case 'geofence':
+      return `${a.name} left a safe zone`;
+    case 'disaster':
+      return `${a.name} raised an alert`;
+    default:
+      return `${a.name} needs help`;
+  }
+}
+
+/** The line under the title, when the trigger warrants one. */
+export function triggerNote(a: CircleAlert): string | null {
+  if (a.trigger === 'impact') {
+    return 'Their phone detected a hard impact and they did not respond to the countdown. They may not be able to answer a call.';
+  }
+  if (a.trigger === 'voice') {
+    return 'Raised hands-free, without touching the phone.';
+  }
+  return null;
 }
 
 /** Minutes since the alert was raised, floored, never negative. */

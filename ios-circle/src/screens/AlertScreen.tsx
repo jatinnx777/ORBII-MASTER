@@ -2,7 +2,14 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Linking, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing, weight } from '../theme';
-import { describeAlert, minutesSince, type CircleAlert } from '../services/alerts';
+import {
+  describeAlert,
+  minutesSince,
+  titleFor,
+  triggerNote,
+  type CircleAlert,
+} from '../services/alerts';
+import { AlertMap } from '../components/AlertMap';
 import {
   claimEscalation,
   describeClaim,
@@ -91,8 +98,26 @@ export function AlertScreen({
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.who}>{alert.name}</Text>
+        {/* The title now depends on WHAT set the alarm off (sql/120). "Needs
+            help" reads as somebody who chose to ask, and the sensible first
+            move is to call them. A detected impact means she may be unable to
+            pick up, and the useful response is to go. */}
+        <Text style={styles.who}>{titleFor(alert)}</Text>
         <Text style={styles.when}>{describeAlert(alert)}</Text>
+        {triggerNote(alert) ? (
+          <Text style={styles.triggerNote}>{triggerNote(alert)}</Text>
+        ) : null}
+
+        {/* The map this app shipped without. lat and lng were carried from the
+            first commit and nothing ever drew them, so an app for answering an
+            alarm could say one had arrived but not where to go. */}
+        <View style={styles.mapSlot}>
+          <AlertMap
+            userId={alert.user_id}
+            fallback={{ lat: alert.lat, lng: alert.lng }}
+            name={alert.name}
+          />
+        </View>
 
         {/* Where she is, in type that can be read out to an operator.
             The only route to police that exists today is a voice call, and the
@@ -183,6 +208,13 @@ const styles = StyleSheet.create({
   who: { fontSize: 30, fontWeight: weight.bold, letterSpacing: -0.6, color: colors.textPrimary },
   when: { fontSize: 15, color: colors.textSecondary, marginTop: 4 },
 
+  triggerNote: {
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    marginTop: spacing.xs,
+  },
+  mapSlot: { marginTop: spacing.md },
   readOut: {
     marginTop: spacing.lg,
     padding: spacing.md,

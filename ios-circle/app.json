@@ -25,7 +25,9 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["POST_NOTIFICATIONS"],
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -38,7 +40,8 @@
         {
           "color": "#EF605E"
         }
-      ]
+      ],
+      "@maplibre/maplibre-react-native"
     ]
   }
 }

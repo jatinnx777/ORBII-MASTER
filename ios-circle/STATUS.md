@@ -1,12 +1,12 @@
 # ORBII Circle (iOS) — what is actually built
 
-Last touched **4 September 2026**. Assessed **8 September 2026**.
+Last worked on **8 September 2026**.
 
 ## The one-line answer
 
-**Roughly 10 percent, and the 10 percent is the skeleton rather than the
-feature.** 1,050 lines against the Android app's 62,000. Three screens, six
-services, no map, no tests, and it has never been compiled for iOS.
+**Roughly 35 percent, and it now does the thing it exists for.** It has a live
+map, it knows what kind of alarm it is answering, it typechecks clean, and the
+iOS bundle builds. What it has never had is a device to run on.
 
 ## What this app is
 
@@ -36,25 +36,58 @@ receive an alert, show where she is, and let somebody say "I am coming".
 Expo SDK 57, React Native 0.86.3. It talks to the same Supabase project as the
 Android app, so every backend change since 4 September applies to it too.
 
+## Added on 8 September
+
+**The map.** `src/components/AlertMap.tsx`. MapLibre on OpenFreeMap tiles, the
+same stack and the same tiles as Android, so both apps render one world with no
+key and no billing account.
+
+It reads `circle_members_locations` rather than the SOS row, and this matters:
+during an active SOS that view keeps updating from her phone (sql/118), while
+the SOS row holds only where she was when she raised it. A pin drawn once from
+the SOS row is a pin that goes stale while somebody drives to it. The camera
+follows, and there is a Directions button that hands off to Apple Maps.
+
+**It knows what kind of alarm it is.** The title comes from the SOS trigger
+(sql/120) instead of always saying "needs help". A detected impact reads as a
+possible fall or crash, with a line saying she may not be able to answer a
+call, because "needs help" implies somebody chose to ask and the sensible
+response to that is to phone them.
+
+**It understands a bubbled position.** If she is sharing a neighbourhood rather
+than a point (sql/123), the marker is drawn wider and paler and the screen says
+so in words. Without that, somebody navigates to the centre of a square
+kilometre believing it is exact.
+
+**Everything else from sql/118 to 126** is in `src/services/locations.ts`:
+`emergency`, `age_seconds`, `unreachable`, battery, charging, speed. Each one
+defaults to the safe reading if the server predates it, and age is computed
+locally rather than reported as zero, because zero means "just now" and that is
+the one wrong answer that costs something.
+
+## What is verified, and what that is worth
+
+**It typechecks clean** under `strict`. First time it has been checked at all.
+
+**The iOS bundle builds.** `npx expo export --platform ios` produces 795
+modules and 2.4MB of Hermes bytecode with MapLibre in it. That proves every
+import resolves and the JavaScript is valid, which typecheck alone does not.
+
+**It has still never run.** A bundle is not a build and a build is not a
+device. Nothing here has been seen on a screen. Treat every layout number as a
+guess until somebody opens it.
+
 ## What does not exist
-
-**No map.** `@maplibre/maplibre-react-native` is not a dependency. The alert
-screen can tell you an alarm arrived; it cannot show you where she is. On an
-app whose entire job is answering an alarm, that is the missing half rather
-than a missing feature.
-
-**Never compiled.** Not once, for any target. It has no Xcode project, no
-iOS build, no simulator run. Every line in it is unverified: the count above
-is lines written, not lines that work.
 
 **No tests.** The Android app has 177.
 
-**Four days stale on a fast-moving backend.** Since 4 September the schema has
-moved through sql/118 to sql/126: the emergency override, presence alerts,
-arrival alerts, the SOS trigger column, bubbles, join codes and batched trails.
-This app was written against sql/117 and knows about none of it. In
-particular it will not read `emergency`, `unreachable` or `precision_m`, which
-are exactly the fields an alert-answering app should be leading with.
+**Push only routes SOS notifications.** A tapped low-battery, unreachable,
+arrival or check-in notification does nothing, because there is no screen in
+this app to route them to yet.
+
+**No everyday view.** It answers alarms. It cannot show you where everyone is
+on an ordinary Tuesday, which is what most of the Android circle work has been
+about.
 
 ## Why it stopped
 
@@ -68,25 +101,25 @@ Nothing in the code is blocked. The toolchain is.
 
 ## What I would do next, in order
 
-1. **Give it a git remote.** It had two commits and no remote and lived on one
-   laptop. Copying it here fixes that: it is now inside a repo that pushes.
-   The original at `D:\ORBII-CIRCLE` is untouched and can be deleted once you
-   are happy this copy is complete.
+1. **Run it on a Mac.** This is now the only thing standing between the app and
+   being real, and everything below is guesswork until it happens. The order
+   has changed because the app is no longer missing its main screen.
 
-2. **Bring it up to the current schema.** A day's work. The alert screen should
-   show `emergency`, `unreachable` and the SOS `trigger` from sql/120, so a
-   crash alert reads differently from a pressed button.
+2. **Fix whatever the first run breaks.** Expect layout problems. Nothing here
+   has been seen at any size on any device.
 
-3. **Add the map.** MapLibre, same as Android, same OpenFreeMap tiles. Without
-   it the app cannot do its job.
+3. **Route the other notification kinds**, once there is somewhere to send
+   them.
 
-4. **Then, and only then, find a Mac.** Compiling an app that is missing its
-   main screen tells you nothing except that it compiles.
+4. **Decide whether it gets an everyday view** or stays purely an alarm
+   answering app. Staying small is a defensible answer.
 
 ## What not to claim
 
-It is not "in development" in any sense a user would recognise. Nobody has run
-it. Until it builds and someone answers a real alert on a real iPhone, the
-honest description is a prototype, and the blog post from 5 September that
-announced development started is the strongest thing that should be said about
-it publicly.
+Nobody has run it. A clean typecheck and a successful bundle mean the code is
+valid, not that the app works, and the difference is every layout, every
+permission prompt, every push token and every map frame.
+
+Until somebody answers a real alert on a real iPhone, the honest description is
+a prototype, and the 5 September blog post announcing that development started
+remains the strongest thing that should be said about it publicly.
