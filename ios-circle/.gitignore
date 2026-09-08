@@ -1,0 +1,7 @@
+node_modules/
+.expo/
+dist/
+npm-debug.*
+*.orig.*
+web-build/
+.DS_Store
