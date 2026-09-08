@@ -76,34 +76,11 @@ export async function getMemberLocation(userId: string): Promise<MemberLocation 
   return all.find((m) => m.userId === userId) ?? null;
 }
 
-export function ago(seconds: number): string {
-  if (seconds < 60) return 'just now';
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
-  return `${Math.round(seconds / 86400)}d ago`;
-}
-
-/**
- * One sentence about a position, and how loudly to say it.
- *
- * Highest-priority true statement and only one, in the order that decides what
- * the reader does next.
- */
-export function describeLocation(m: MemberLocation): { text: string; loud: boolean } {
-  if (m.emergency) {
-    return { text: `Live, during the emergency · ${ago(m.ageSeconds)}`, loud: true };
-  }
-  if (m.unreachable) {
-    return { text: `Not updating · last seen ${ago(m.ageSeconds)}`, loud: true };
-  }
-  if (!m.sharing) {
-    return { text: `Location off · last seen ${ago(m.ageSeconds)}`, loud: false };
-  }
-  if (m.precisionM != null) {
-    const r = m.precisionM >= 1000 ? `${(m.precisionM / 1000).toFixed(1)} km` : `${m.precisionM} m`;
-    // Said out loud, because a blurred pin is drawn the same as an exact one
-    // and somebody would otherwise navigate to the centre of a cell.
-    return { text: `Approximate, within ${r} · ${ago(m.ageSeconds)}`, loud: false };
-  }
-  return { text: ago(m.ageSeconds), loud: false };
-}
+// Re-exported so callers keep one import path. The implementations live in
+// ../lib/format because they are pure and this module is not.
+export {
+  ago,
+  describeLocation,
+  formatDistance,
+  haversineM,
+} from '../lib/format';

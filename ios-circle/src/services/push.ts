@@ -58,20 +58,23 @@ export async function registerForPush(): Promise<string | null> {
     const uid = data.user?.id;
     if (!uid) return token;
 
-    // KNOWN LIMITATION, and it is not this app's to fix alone.
+    // FIXED IN sql/127, and this comment used to describe the bug.
     //
-    // push_tokens has user_id as its PRIMARY KEY (sql/20), so it holds exactly
-    // ONE token per person. If somebody installs both ORBII and ORBII Circle,
-    // or ORBII on two phones, the newer registration overwrites the older and
-    // the first device silently stops receiving alerts.
+    // push_tokens had user_id as its primary key, so it held exactly ONE token
+    // per person and every registration replaced the previous device. A parent
+    // with both ORBII and ORBII Circle installed would have had one of them go
+    // quiet, and it would have been whichever they opened first: the app whose
+    // entire job is receiving an emergency notification.
     //
-    // That is already true of the main app today; this app only makes it easy
-    // to hit. The fix is a composite key on (user_id, token) plus notify-sos
-    // sending to every token a user has, and it has to be done as one change
-    // across the table and the edge function, not quietly from here.
-    await supabase
-      .from('push_tokens')
-      .upsert({ user_id: uid, token, platform: Platform.OS }, { onConflict: 'user_id' });
+    // The key is (user_id, token) now, so a person can hold as many devices as
+    // they carry. Nothing downstream needed changing: every reader already did
+    // `.select('token').in('user_id', ids)` and fans out over whatever rows
+    // exist. updated_at is sent because the weekly prune uses it to decide
+    // which tokens belong to apps nobody has opened in three months.
+    await supabase.from('push_tokens').upsert(
+      { user_id: uid, token, platform: Platform.OS, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,token' },
+    );
 
     return token;
   } catch {

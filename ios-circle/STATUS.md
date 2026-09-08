@@ -4,9 +4,10 @@ Last worked on **8 September 2026**.
 
 ## The one-line answer
 
-**Roughly 35 percent, and it now does the thing it exists for.** It has a live
-map, it knows what kind of alarm it is answering, it typechecks clean, and the
-iOS bundle builds. What it has never had is a device to run on.
+**Roughly 45 percent, and it now does the thing it exists for.** Live map with
+your own position and the distance to her, it knows what kind of alarm it is
+answering, 23 tests, clean typecheck, and the iOS bundle builds. What it has
+never had is a device to run on.
 
 ## What this app is
 
@@ -65,7 +66,48 @@ defaults to the safe reading if the server predates it, and age is computed
 locally rather than reported as zero, because zero means "just now" and that is
 the one wrong answer that costs something.
 
+## Also on 8 September
+
+**How far away am I.** The map shows the reader's own position and the distance
+to her, which is the first question anybody answering an alarm asks and the one
+that decides whether they set off or call somebody closer. Asked once rather
+than watched: a moving blue dot is a navigation feature, and continuous
+positioning would drain the reader's battery during the exact hour they need
+it. Not shown for a bubbled position, because a precise-looking distance from
+the centre of a cell she deliberately blurred is a number computed from a point
+she is not standing on.
+
+**The push token bug is fixed, for both apps.** push_tokens had `user_id` as
+its primary key, so it held one token per PERSON and every registration
+replaced the previous device. A parent with both ORBII and ORBII Circle
+installed would have had one of them go quiet, and it would have been whichever
+they opened first: the app whose entire job is receiving an emergency
+notification. sql/127 makes the key `(user_id, token)`. Nothing downstream
+needed changing, because every reader already did
+`.select('token').in('user_id', ids)`.
+
+**Four dead dependencies removed:** React Navigation, native-stack,
+react-native-screens and expo-linking were installed and never imported.
+Navigation is hand-rolled state in `App.tsx`, which is right for three screens.
+`expo-location` was also unused and is kept, because it is what the distance
+above is built on.
+
+**`newArchEnabled` is pinned to true** rather than inherited from the SDK
+default, so an SDK bump cannot silently change the runtime underneath it.
+
+**The pure logic moved to `src/lib`.** Formatting and geometry now live in
+modules that import nothing, which is where they belonged and is also the only
+way they could be tested: they previously sat beside the Supabase client, which
+pulls in react-native, which is Flow-typed and cannot be parsed by the test
+runner.
+
 ## What is verified, and what that is worth
+
+**23 tests pass**, up from none. They cover the parts a compiler cannot check:
+that an emergency outranks every other status on a card even when the row is
+also stale and not sharing, that a blurred position is never described as a
+point, that "taken this on" and "arrived" never read the same, and that a phone
+clock running fast cannot print "-1 minutes ago" on an emergency screen.
 
 **It typechecks clean** under `strict`. First time it has been checked at all.
 

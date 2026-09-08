@@ -42,7 +42,12 @@ export async function registerPushToken(userId: string): Promise<void> {
         platform: 'android',
         updated_at: new Date().toISOString(),
       },
-      { onConflict: 'user_id' },
+      // (user_id, token), not user_id. The old conflict target meant every
+      // registration REPLACED the person's previous device, so signing in on a
+      // second phone silently stopped alerts on the first, and installing
+      // ORBII Circle alongside this app knocked one of the two offline.
+      // sql/127 makes the key composite; this is the other half.
+      { onConflict: 'user_id,token' },
     );
     if (!error) lastRegisteredFor = userId;
   } catch (err) {

@@ -7,9 +7,12 @@ import {
   type CameraRef,
 } from '@maplibre/maplibre-react-native';
 import { colors, radius, shadows, spacing, weight } from '../theme';
+import * as Location from 'expo-location';
 import {
   describeLocation,
+  formatDistance,
   getMemberLocation,
+  haversineM,
   type MemberLocation,
 } from '../services/locations';
 
@@ -48,7 +51,37 @@ export function AlertMap({
 }) {
   const [live, setLive] = useState<MemberLocation | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
   const cameraRef = useRef<CameraRef>(null);
+
+  // HOW FAR AWAY AM I. The first question anybody answering an alarm asks, and
+  // the one that decides whether they set off or call somebody closer.
+  //
+  // Asked once, not watched. A moving blue dot is a navigation feature and
+  // this is not a navigation app; the number only has to be right enough to
+  // choose with, and continuous positioning would run the reader's battery
+  // down during the exact hour they need it.
+  //
+  // Permission is requested here rather than at launch, because this is the
+  // first moment the reason for it is obvious on screen.
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted' || !alive) return;
+        const pos = await Location.getLastKnownPositionAsync();
+        const use = pos ?? (await Location.getCurrentPositionAsync({}));
+        if (alive && use) {
+          setMe({ lat: use.coords.latitude, lng: use.coords.longitude });
+        }
+      } catch {
+        // Declined, or no fix. The map still works; only the distance is
+        // missing, and a missing number is better than a wrong one.
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -93,6 +126,11 @@ export function AlertMap({
   // send somebody to the middle of a square kilometre believing it was exact.
   const bubble = live?.precisionM ?? null;
 
+  // Not shown for a bubbled position. "2.4 km away" from the centre of a cell
+  // she deliberately blurred is a precise-looking number computed from a point
+  // she is not standing on.
+  const away = me && bubble == null ? formatDistance(haversineM(me, point)) : null;
+
   return (
     <View style={s.wrap}>
       <MLMap
@@ -125,6 +163,18 @@ export function AlertMap({
         <View style={[s.badge, status.loud && s.badgeLoud]} pointerEvents="none">
           <Text style={[s.badgeText, status.loud && s.badgeTextLoud]}>{status.text}</Text>
         </View>
+      ) : null}
+
+      {away ? (
+        <View style={s.away} pointerEvents="none">
+          <Text style={s.awayText}>{away}</Text>
+        </View>
+      ) : null}
+
+      {me ? (
+        <Marker lngLat={[me.lng, me.lat]} anchor="center">
+          <View style={s.meDot} />
+        </Marker>
       ) : null}
 
       {bubble != null ? (
@@ -183,6 +233,25 @@ const s = StyleSheet.create({
     ...shadows.card,
   },
   badgeLoud: { backgroundColor: colors.coral },
+  away: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+    ...shadows.card,
+  },
+  awayText: { fontSize: 12, fontWeight: weight.semibold, color: colors.textPrimary },
+  meDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: colors.brandDeep,
+    borderWidth: 2.5,
+    borderColor: '#FFFFFF',
+  },
   badgeText: { fontSize: 12, fontWeight: weight.semibold, color: colors.textPrimary },
   badgeTextLoud: { color: '#FFFFFF' },
 
