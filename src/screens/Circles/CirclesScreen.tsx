@@ -18,6 +18,15 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { EmptyState, MascotLoader, ScreenContainer, SyncBar } from '@/components/common';
 import { FREE_CIRCLE_LIMIT } from '@/services/entitlements';
 import { JoinByCodeSheet } from '@/components/circles/JoinByCodeSheet';
+import { CheckInSheet } from '@/components/circles/CheckInSheet';
+import { PrecisionSheet } from '@/components/circles/PrecisionSheet';
+import * as Clipboard from 'expo-clipboard';
+import {
+  loadFeed,
+  myLocationPrecision,
+  PRECISION_OPTIONS,
+  type FeedEntry,
+} from '@/services/circle-feed';
 import { CirclesHero } from './components/CirclesHero';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import {
@@ -81,6 +90,11 @@ export function CirclesScreen() {
   const profile = useAppSelector((s) => s.user.profile);
   const [refreshing, setRefreshing] = useState(false);
   const [joinOpen, setJoinOpen] = useState(false);
+  const [checkInOpen, setCheckInOpen] = useState(false);
+  const [precisionOpen, setPrecisionOpen] = useState(false);
+  const [precision, setPrecision] = useState<number | null>(null);
+  const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const [codeCopied, setCodeCopied] = useState(false);
 
   // The FIRST circle is free. A safety app whose first screen is a
   // subscription page is an app nobody finishes setting up, and a circle with
@@ -104,11 +118,50 @@ export function CirclesScreen() {
     navigation.navigate('CircleCreate');
   };
 
+  // The circle every quick action on this screen applies to. Falls back to the
+  // first one, because a screen whose buttons do nothing until you have made a
+  // selection you were never asked to make is worse than a sensible default.
+  const activeCircle = useMemo(
+    () => circles.find((c) => c.id === activeCircleId) ?? circles[0] ?? null,
+    [circles, activeCircleId],
+  );
+
+  const refreshFeed = useCallback(async (circleId: string | null) => {
+    if (!circleId) {
+      setFeed([]);
+      return;
+    }
+    setFeed(await loadFeed(circleId, 6));
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       refreshCircles();
     }, []),
   );
+
+  // Feed and precision are read on focus rather than on mount, because both
+  // change from other screens: a check-in can come from a notification, and the
+  // radius is also reachable from Settings.
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void refreshFeed(activeCircle?.id ?? null);
+      void myLocationPrecision().then((m) => {
+        if (alive) setPrecision(m);
+      });
+      return () => {
+        alive = false;
+      };
+    }, [activeCircle?.id, refreshFeed]),
+  );
+
+  const copyCode = useCallback(async () => {
+    if (!activeCircle?.joinCode) return;
+    await Clipboard.setStringAsync(activeCircle.joinCode);
+    setCodeCopied(true);
+    setTimeout(() => setCodeCopied(false), 1800);
+  }, [activeCircle?.joinCode]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -237,6 +290,23 @@ export function CirclesScreen() {
         </View>
       </View>
 
+      <CheckInSheet
+        visible={checkInOpen}
+        circleId={activeCircle?.id ?? null}
+        onClose={() => setCheckInOpen(false)}
+        onDone={() => {
+          setCheckInOpen(false);
+          void refreshFeed(activeCircle?.id ?? null);
+        }}
+      />
+
+      <PrecisionSheet
+        visible={precisionOpen}
+        current={precision}
+        onClose={() => setPrecisionOpen(false)}
+        onChanged={setPrecision}
+      />
+
       <JoinByCodeSheet
         visible={joinOpen}
         onClose={() => setJoinOpen(false)}
@@ -340,7 +410,99 @@ export function CirclesScreen() {
           }}
           ListHeaderComponent={
             <View style={styles.invitesWrap}>
-              <Text style={styles.sectionLabel}>Circle tools</Text>
+              {/* The circle every quick action below applies to, its code ready
+                  to read out, and the three things somebody actually opens this
+                  tab to do. */}
+              {activeCircle ? (
+                <View style={[styles.activeCard, { borderColor: tint(activeCircle.color, 0.35) }]}>
+                  <View style={styles.activeTop}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.activeName} numberOfLines={1}>
+                        {activeCircle.name}
+                      </Text>
+                      <Text style={styles.activeSub}>
+                        {precision === null
+                          ? 'Sharing your exact position'
+                          : `Sharing ${PRECISION_OPTIONS.find((o) => o.metres === precision)?.label.toLowerCase() ?? 'an area'}`}
+                      </Text>
+                    </View>
+                    {activeCircle.joinCode ? (
+                      <Pressable
+                        onPress={copyCode}
+                        style={({ pressed }) => [styles.codeChip, pressed && styles.pressedScale]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Join code ${activeCircle.joinCode}, tap to copy`}
+                      >
+                        <Text style={styles.codeText}>{activeCircle.joinCode}</Text>
+                        <Ionicons
+                          name={codeCopied ? 'checkmark' : 'copy-outline'}
+                          size={14}
+                          color={colors.brandDeep}
+                        />
+                      </Pressable>
+                    ) : null}
+                  </View>
+
+                  <View style={styles.quickRow}>
+                    <QuickAction
+                      icon="hand-left-outline"
+                      label="Check in"
+                      onPress={() => setCheckInOpen(true)}
+                    />
+                    <QuickAction
+                      icon="map-outline"
+                      label="Map"
+                      onPress={() => navigation.navigate('CircleMap')}
+                    />
+                    <QuickAction
+                      icon="person-add-outline"
+                      label="Invite"
+                      onPress={() =>
+                        navigation.navigate('CircleInvite', { circleId: activeCircle.id })
+                      }
+                    />
+                  </View>
+                </View>
+              ) : null}
+
+              {feed.length > 0 ? (
+                <>
+                  <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Recent</Text>
+                  <View style={styles.feedCard}>
+                    {feed.map((e, i) => (
+                      <View key={`${e.kind}_${e.ref ?? e.at}_${i}`}>
+                        {i > 0 ? <View style={styles.feedDivider} /> : null}
+                        <Pressable
+                          onPress={() =>
+                            navigation.navigate('TripReplay', {
+                              userId: e.userId,
+                              name: e.name ?? undefined,
+                            })
+                          }
+                          style={({ pressed }) => [styles.feedRow, pressed && styles.pressedScale]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${e.name ?? 'Someone'}: ${e.body}`}
+                        >
+                          <View style={[styles.feedIcon, feedTone(e.kind)]}>
+                            <Ionicons name={feedIcon(e.kind)} size={15} color={feedColor(e.kind)} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.feedName} numberOfLines={1}>
+                              {e.name ?? 'Someone'}
+                            </Text>
+                            <Text style={styles.feedBody} numberOfLines={2}>
+                              {e.body}
+                            </Text>
+                          </View>
+                          <Text style={styles.feedAgo}>{ago(e.at)}</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                </>
+              ) : null}
+
+              <Text style={[styles.sectionLabel, { marginTop: spacing.md }]}>Circle tools</Text>
               <Pressable
                 onPress={() => navigation.navigate('Geofences')}
                 style={({ pressed }) => [styles.zonesRow, pressed && styles.pressedScale]}
@@ -369,6 +531,26 @@ export function CirclesScreen() {
                   <Text style={styles.zonesTitle}>Live location map</Text>
                   <Text style={styles.zonesSub}>See everyone in your circle on one live map.</Text>
                 </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+              </Pressable>
+              <Pressable
+                onPress={() => setPrecisionOpen(true)}
+                style={({ pressed }) => [styles.zonesRow, pressed && styles.pressedScale]}
+                accessibilityRole="button"
+                accessibilityLabel="Location precision"
+              >
+                <View style={[styles.zonesIcon, { backgroundColor: colors.lavenderSoft }]}>
+                  <Ionicons name="contract" size={18} color={colors.lavenderDeep} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.zonesTitle}>Location precision</Text>
+                  <Text style={styles.zonesSub}>
+                    Share a neighbourhood instead of a doorway. An SOS always sends exact.
+                  </Text>
+                </View>
+                <Text style={styles.zonesValue}>
+                  {PRECISION_OPTIONS.find((o) => o.metres === precision)?.label ?? 'Exact'}
+                </Text>
                 <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
               </Pressable>
               {incomingInvites.length > 0 ? (
@@ -402,6 +584,60 @@ export function CirclesScreen() {
       )}
     </ScreenContainer>
   );
+}
+
+// One of the three things somebody opens this tab to do. Deliberately labelled:
+// an icon alone makes a person guess, and guessing on a safety app is how a
+// check-in becomes an SOS.
+function QuickAction({
+  icon,
+  label,
+  onPress,
+}: {
+  icon: React.ComponentProps<typeof Ionicons>['name'];
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.quickAction, pressed && styles.pressedScale]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={19} color={colors.brandDeep} />
+      <Text style={styles.quickLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function feedIcon(kind: FeedEntry['kind']): React.ComponentProps<typeof Ionicons>['name'] {
+  if (kind === 'sos') return 'alert-circle';
+  if (kind === 'arrival') return 'location';
+  return 'hand-left';
+}
+
+function feedColor(kind: FeedEntry['kind']): string {
+  if (kind === 'sos') return colors.coralDeep;
+  if (kind === 'arrival') return colors.sageDeep;
+  return colors.lavenderDeep;
+}
+
+function feedTone(kind: FeedEntry['kind']): { backgroundColor: string } {
+  if (kind === 'sos') return { backgroundColor: colors.coralSoft };
+  if (kind === 'arrival') return { backgroundColor: colors.sageSoft };
+  return { backgroundColor: colors.lavenderSoft };
+}
+
+// Short enough to sit at the end of a row without wrapping it. An exact
+// timestamp is not what anybody wants from a list they are skimming.
+function ago(at: number): string {
+  const mins = Math.max(0, Math.round((Date.now() - at) / 60000));
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.round(hours / 24)}d`;
 }
 
 // Explains what a circle actually does, in the user's own framing:
@@ -597,6 +833,66 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 19,
   },
+  activeCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    padding: spacing.md,
+    gap: 12,
+    marginBottom: spacing.sm,
+  },
+  activeTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  activeName: { fontFamily: fontFamilies.poppinsBold, fontSize: 17, color: colors.textPrimary },
+  activeSub: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginTop: 1,
+  },
+  codeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+  },
+  codeText: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 14,
+    letterSpacing: 1.6,
+    color: colors.brandDeep,
+  },
+  quickRow: { flexDirection: 'row', gap: 8 },
+  quickAction: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 11,
+    borderRadius: radius.md,
+    backgroundColor: colors.cream,
+  },
+  quickLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 12, color: colors.textPrimary },
+
+  feedCard: { backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' },
+  feedDivider: { height: 1, backgroundColor: colors.border, marginLeft: 52 },
+  feedRow: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12 },
+  feedIcon: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  feedName: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
+  feedBody: {
+    fontFamily: fontFamilies.poppinsRegular,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: colors.textSecondary,
+  },
+  feedAgo: { fontFamily: fontFamilies.poppinsMedium, fontSize: 11.5, color: colors.textMuted },
+  zonesValue: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12.5,
+    color: colors.textSecondary,
+  },
+
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   joinBtn: {
     flexDirection: 'row',

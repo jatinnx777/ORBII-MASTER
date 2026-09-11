@@ -105,9 +105,35 @@ export async function loadFeed(circleId: string, limit = 40): Promise<FeedEntry[
  * An active SOS ignores this entirely and reports your true position. A
  * neighbourhood is not useful to somebody trying to reach you.
  */
-export async function setLocationPrecision(metres: number | null): Promise<boolean> {
-  const { error } = await supabase.rpc('set_location_precision', { p_metres: metres });
-  return !error;
+export type PrecisionResult =
+  /** Saved, and in force on the position her circle can see right now. */
+  | 'live'
+  /** Saved, but she is not sharing yet, so it applies from her first position. */
+  | 'pending'
+  | 'failed';
+
+export async function setLocationPrecision(metres: number | null): Promise<PrecisionResult> {
+  const { data, error } = await supabase.rpc('set_location_precision', { p_metres: metres });
+  if (error) return 'failed';
+  // sql/128 returns true when a circle_locations row existed to apply it to.
+  // Before that migration the function returned void, which arrives as null;
+  // treating that as 'live' keeps an un-migrated database working rather than
+  // telling everybody their setting did not save.
+  return data === false ? 'pending' : 'live';
+}
+
+/**
+ * The radius currently stored for this account, or null for exact.
+ *
+ * Read from the server rather than remembered on the device. A privacy setting
+ * whose displayed state comes from local storage is one reinstall away from
+ * telling her she is sharing a neighbourhood while the server shares a
+ * doorway.
+ */
+export async function myLocationPrecision(): Promise<number | null> {
+  const { data, error } = await supabase.rpc('my_location_precision');
+  if (error) return null;
+  return typeof data === 'number' ? data : null;
 }
 
 /**
