@@ -3,7 +3,16 @@
 import 'react-native-get-random-values';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FirstRun } from '@/screens/Onboarding/FirstRun';
-import { Animated, AppState, Linking, Platform, StyleSheet, Vibration, View } from 'react-native';
+import {
+  Animated,
+  AppState,
+  DeviceEventEmitter,
+  Linking,
+  Platform,
+  StyleSheet,
+  Vibration,
+  View,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -49,7 +58,7 @@ import * as Location from 'expo-location';
 import { AuthNavigator } from '@/navigation/AuthNavigator';
 import { AppNavigator } from '@/navigation/AppNavigator';
 import { SafetyPinSetupScreen } from '@/screens/Setup/SafetyPinSetupScreen';
-import { getItem, setItem, storageKeys } from '@/services/storage';
+import { getItem, SETTING_CHANGED, setItem, storageKeys } from '@/services/storage';
 import {
   AppDialogHost,
   appAlert,
@@ -535,10 +544,19 @@ function RootNavigator() {
   useEffect(() => {
     if (status !== 'authenticated') return;
     let alive = true;
-    void getItem<boolean>(storageKeys.impactDetection).then((v) => {
-      if (alive) setImpactArmed(v === true);
-    });
-    return () => { alive = false; };
+    const read = () => {
+      void getItem<boolean>(storageKeys.impactDetection).then((v) => {
+        if (alive) setImpactArmed(v === true);
+      });
+    };
+    read();
+    // Re-read when the Settings switch writes. Reading once meant the value was
+    // whatever it had been at sign-in, for the whole session.
+    const sub = DeviceEventEmitter.addListener(SETTING_CHANGED, read);
+    return () => {
+      alive = false;
+      sub.remove();
+    };
   }, [status]);
 
   useEffect(() => {
@@ -590,7 +608,14 @@ function RootNavigator() {
       },
     );
     return () => handle.stop();
-  }, [status]);
+    // impactArmed BELONGS HERE. Without it the monitor was created once, with
+    // the value of impactArmed at that instant, which is always false: the
+    // stored setting is read asynchronously and resolves AFTER this effect has
+    // already run. The monitor was never rebuilt, so `armed` stayed false for
+    // every user who turned the feature on, and the only thing the switch did
+    // was change the label under it. Shadow mode was not a policy, it was the
+    // only state this feature could reach.
+  }, [status, impactArmed]);
 
   // Store and forward for OTHER people's SOS packets this phone relayed but
   // could not upload. Without this the mesh drops them, and a relay that walks

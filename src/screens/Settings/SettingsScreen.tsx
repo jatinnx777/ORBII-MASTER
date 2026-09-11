@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  DeviceEventEmitter,
   Image,
   Linking,
   Pressable,
@@ -26,7 +27,7 @@ import {
   onboardingReset,
   pushEnabledSet,
 } from '@/redux/slices/appSlice';
-import { getItem, setItem, storageKeys } from '@/services/storage';
+import { getItem, SETTING_CHANGED, setItem, storageKeys } from '@/services/storage';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle } from '@/services/auth';
 import { isVideoEvidenceReady, requestVideoEvidencePermissions } from '@/services/sos-video';
@@ -123,6 +124,10 @@ export function SettingsScreen() {
   const handleImpactDetection = async (next: boolean) => {
     setImpactDetection(next);
     await setItem(storageKeys.impactDetection, next);
+    // The monitor lives in App.tsx and was started with whatever this value was
+    // at sign-in. Writing the key is not enough: without this the switch armed
+    // nothing until the next cold start, and the row above still read "On".
+    DeviceEventEmitter.emit(SETTING_CHANGED);
     if (next) {
       // Told once, on the way in, rather than buried in a settings row nobody
       // scrolls back to. The countdown IS the feature's safety margin: the

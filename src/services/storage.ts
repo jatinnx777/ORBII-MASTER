@@ -65,6 +65,19 @@ const KEYS = {
 
 export const storageKeys = KEYS;
 
+/**
+ * Emitted when a setting that something OUTSIDE the settings screen acts on
+ * changes, so the listener does not have to poll AsyncStorage or wait for a
+ * cold start.
+ *
+ * Only impact detection needs this today, and it needed it badly. App.tsx
+ * starts the accelerometer monitor once per sign-in and passes `armed` at that
+ * moment, so the Settings switch wrote a value that nothing read again for the
+ * rest of the session. A switch on a safety feature that reports itself as on
+ * while nothing is armed is worse than no switch at all.
+ */
+export const SETTING_CHANGED = 'orbii:setting-changed';
+
 export async function getItem<T>(key: string): Promise<T | null> {
   try {
     const raw = await AsyncStorage.getItem(key);
