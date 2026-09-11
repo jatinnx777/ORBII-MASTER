@@ -199,15 +199,8 @@ export function CirclesScreen() {
     <ScreenContainer padded={false} edges={['top', 'left', 'right']}>
       <SyncBar active={revalidating} />
       <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          hitSlop={10}
-          style={({ pressed }) => [styles.backBtn, pressed && styles.pressedScale]}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.textPrimary} />
-        </Pressable>
+        {/* No back button. This is a tab root now, and goBack() from here
+            either does nothing or pops the tab navigator out from under her. */}
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Circles</Text>
           <Text style={styles.subtitle}>
@@ -268,11 +261,11 @@ export function CirclesScreen() {
             <View style={styles.setupIcon}>
               <Ionicons name="server-outline" size={20} color={colors.brandDeep} />
             </View>
-            <Text style={styles.setupTitle}>Backend setup needed</Text>
+            <Text style={styles.setupTitle}>Circles are not available</Text>
             <Text style={styles.setupBody}>
-              The circles tables aren't installed on this Supabase project
-              yet. Open Supabase → SQL Editor → paste the contents of{' '}
-              <Text style={styles.setupCode}>sql/09_circles.sql</Text> → Run.
+              Something on our side is not set up correctly, so circles cannot
+              load right now. This is not a problem with your phone or your
+              connection. Your SOS still works.
             </Text>
             <Pressable
               onPress={() => refreshCircles()}
@@ -283,7 +276,7 @@ export function CirclesScreen() {
               accessibilityRole="button"
             >
               <Ionicons name="refresh" size={14} color={colors.brandDeep} />
-              <Text style={styles.setupRetryText}>I've run it, retry</Text>
+              <Text style={styles.setupRetryText}>Try again</Text>
             </Pressable>
           </View>
         </View>
@@ -306,7 +299,7 @@ export function CirclesScreen() {
           style={{ flex: 1 }}
           contentContainerStyle={[
             styles.emptyWrap,
-            { paddingBottom: insets.bottom + 32 },
+            { paddingBottom: insets.bottom + 96 },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -604,15 +597,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     lineHeight: 19,
   },
-  backBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...shadows.icon,
-  },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   joinBtn: {
     flexDirection: 'row',
@@ -755,10 +739,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     lineHeight: 19,
-  },
-  setupCode: {
-    fontFamily: fontFamilies.poppinsBold,
-    color: colors.brandDeep,
   },
   setupRetry: {
     flexDirection: 'row',

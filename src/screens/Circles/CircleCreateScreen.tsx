@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
+import Svg, { Circle as SvgCircle, G, Path, Rect as SvgRect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { appAlert } from '@/components/common';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
@@ -357,6 +358,11 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
  * exact colours the circle map uses. Drawn rather than shipped as an image, so
  * it always matches the product and costs nothing in the bundle.
  */
+// The disc is drawn at its own size and the SVG viewBox matches it one to one,
+// so a path coordinate is a pixel and the geometry above can be reasoned about.
+const DISC_W = 200;
+const DISC_H = 190;
+
 function CirclePreview({ photoUri }: { photoUri: string | null }) {
   const float = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -383,12 +389,103 @@ function CirclePreview({ photoUri }: { photoUri: string | null }) {
   return (
     <View style={styles.preview}>
       <View style={styles.previewDisc}>
-        {/* Suggested streets. Deliberately abstract, not a fake city. */}
-        <View style={[styles.road, { top: 62, left: 0, right: 0, height: 9 }]} />
-        <View style={[styles.road, { top: 128, left: 0, right: 0, height: 6 }]} />
-        <View style={[styles.road, { left: 74, top: 0, bottom: 0, width: 9 }]} />
-        <View style={[styles.road, { left: 168, top: 0, bottom: 0, width: 6 }]} />
-        <View style={styles.park} />
+        {/*
+          Drawn, not photographed, and drawn with curves.
+
+          This was four grey rectangles crossing a white circle, which reads as
+          a wireframe rather than a place. Roads in a real town bend, have a
+          casing a shade darker than their fill, and do not all meet at right
+          angles. Everything here is deliberately abstract: no labels, no real
+          geometry, nothing that pretends to be somewhere.
+        */}
+        <Svg width={DISC_W} height={DISC_H} viewBox="0 0 200 190">
+          <SvgRect x={0} y={0} width={200} height={190} fill="#FCF9F1" />
+
+          {/* Park. An organic edge, because nothing green is a rounded rect. */}
+          <Path
+            d="M148 14 C172 6 196 20 197 42 C198 64 176 76 155 69 C136 63 130 28 148 14 Z"
+            fill="#E4F0E5"
+          />
+
+          {/* Water, running under the roads it crosses. */}
+          <Path
+            d="M-12 170 C22 150 46 178 80 163 C104 152 120 170 146 161 C170 153 188 166 212 158"
+            stroke="#DCEAF3"
+            strokeWidth={13}
+            strokeLinecap="round"
+            fill="none"
+          />
+
+          {/* Blocks, well under the roads in contrast so they read as texture. */}
+          <G opacity={0.55}>
+            <SvgRect x={18} y={22} width={26} height={20} rx={4} fill="#F0E8D6" />
+            <SvgRect x={50} y={16} width={16} height={16} rx={3} fill="#F0E8D6" />
+            <SvgRect x={22} y={104} width={20} height={24} rx={4} fill="#F0E8D6" />
+            <SvgRect x={112} y={112} width={30} height={22} rx={4} fill="#F0E8D6" />
+            <SvgRect x={150} y={104} width={18} height={18} rx={3} fill="#F0E8D6" />
+            <SvgRect x={104} y={26} width={18} height={22} rx={4} fill="#F0E8D6" />
+          </G>
+
+          {/* Roads: a wide casing, then a narrower fill on the same path, which
+              is how a road reads as a road instead of a line. */}
+          <G fill="none" strokeLinecap="round">
+            <Path
+              d="M-12 88 C30 74 58 106 96 97 C134 88 166 110 214 99"
+              stroke="#EAE0C9"
+              strokeWidth={16}
+            />
+            <Path
+              d="M-12 88 C30 74 58 106 96 97 C134 88 166 110 214 99"
+              stroke="#FBF6E9"
+              strokeWidth={10}
+            />
+
+            <Path
+              d="M80 -12 C72 30 94 58 87 97 C80 136 100 162 94 202"
+              stroke="#EAE0C9"
+              strokeWidth={13}
+            />
+            <Path
+              d="M80 -12 C72 30 94 58 87 97 C80 136 100 162 94 202"
+              stroke="#FBF6E9"
+              strokeWidth={7.5}
+            />
+
+            <Path
+              d="M132 -10 C142 38 164 66 210 58"
+              stroke="#EDE5D1"
+              strokeWidth={9}
+            />
+            <Path
+              d="M20 134 C50 129 70 145 98 139"
+              stroke="#EDE5D1"
+              strokeWidth={7}
+            />
+          </G>
+
+          {/* A trail, because that is a feature of this product and not decor:
+              seven days of where somebody went, fading as it gets older. */}
+          <Path
+            d="M46 44 C62 62 60 84 82 96 C104 108 108 128 88 148"
+            stroke={MEMBER_COLORS[3]}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeDasharray="1 7"
+            opacity={0.55}
+            fill="none"
+          />
+
+          {/* The inner edge of the disc, so it sits on the page rather than
+              being cut out of it. */}
+          <SvgCircle
+            cx={100}
+            cy={95}
+            r={94}
+            stroke="#EFE7D6"
+            strokeWidth={2}
+            fill="none"
+          />
+        </Svg>
       </View>
       {pins.map((p, i) => (
         <Animated.View
@@ -516,32 +613,30 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 8,
     top: 6,
-    width: 200,
-    height: 190,
+    width: DISC_W,
+    height: DISC_H,
     borderRadius: 100,
     backgroundColor: colors.surface,
     overflow: 'hidden',
   },
-  road: { position: 'absolute', backgroundColor: '#E9E2CF' },
-  park: {
-    position: 'absolute',
-    right: 8,
-    top: 10,
-    width: 58,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: '#E6F1EC',
-  },
+  // A map chip, which is what every map people already use looks like: a
+  // circular avatar in a white collar, lifted off the ground by a shadow. The
+  // ring colour is the member colour, so the map is readable without labels.
   pin: {
     position: 'absolute',
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     borderWidth: 3,
     backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
+    shadowColor: '#3B2F1C',
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
   pinImg: { width: '100%', height: '100%' },
   pinFill: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
