@@ -117,8 +117,13 @@ android {
         // the prebuilt AARs (MapLibre, Vosk, TensorFlow Lite) each ship their
         // own 32-bit .so. This filters the final APK so none of them are
         // packaged, removing ~30 MB of duplicated native code.
+        // Default stays arm64-v8a, so nothing about the release APK changes.
+        // Overridable for emulator builds, which need x86_64: the AVD images on
+        // this machine are x86_64 and an arm64-only APK simply will not install
+        // on them, which made every feature untestable without a handset.
+        //   gradlew assembleRelease -PreactNativeArchitectures=x86_64
         ndk {
-            abiFilters "arm64-v8a"
+            abiFilters(*((findProperty('reactNativeArchitectures') ?: 'arm64-v8a').split(',')))
         }
 
         buildConfigField "String", "REACT_NATIVE_RELEASE_LEVEL", "\"${findProperty('reactNativeReleaseLevel') ?: 'stable'}\""

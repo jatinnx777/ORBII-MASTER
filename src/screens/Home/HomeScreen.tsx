@@ -659,7 +659,7 @@ export function HomeScreen() {
             <GridTile icon="map-outline" title="Circle map" sub="See your people live" onPress={() => navigation.navigate('CircleMap')} />
             <GridTile icon="locate-outline" title="Geofencing" sub="Alert if they leave an area" onPress={() => navigation.navigate('ZoneEditor')} />
             <GridTile icon="warning-outline" title="Disaster mode" sub="Reach people offline" onPress={() => navigation.navigate('DisasterMode')} />
-            <GridTile icon="chatbubbles-outline" title="Community" sub="Share & support" onPress={() => navigation.navigate('CommunityFeed')} />
+            <GridTile icon="people-outline" title="Circles" sub="Your people" onPress={() => navigation.navigate('Tabs', { screen: 'Circles' })} />
             <GridTile icon="navigate-outline" title="Location sharing" sub="Send your spot" onPress={onShare} />
             <GridTile icon="recording-outline" title="Record evidence" sub="Your recordings" onPress={() => navigation.navigate('Recordings')} />
           </View>

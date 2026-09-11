@@ -111,16 +111,9 @@ export function SupportScreen() {
             it just gets you to them fast.
           </Text>
 
-          {/* ── Community ── */}
-          <Text style={styles.sectionLabel}>COMMUNITY</Text>
+          {/* ── Helping ── */}
+          <Text style={styles.sectionLabel}>HELPING</Text>
           <View style={styles.card}>
-            <Row
-              icon="chatbubbles"
-              title="Community feed"
-              body="Share your experiences, ask, and support others."
-              onPress={() => navigation.navigate('CommunityFeed')}
-            />
-            <View style={styles.divider} />
             <Row
               icon="people"
               title="People helping nearby"

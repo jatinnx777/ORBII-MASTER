@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { HomeScreen } from '@/screens/Home/HomeScreen';
 import { EmergencyScreen } from '@/screens/Emergency/EmergencyScreen';
-import { CommunityFeedScreen } from '@/screens/Community/CommunityFeedScreen';
+import { CirclesScreen } from '@/screens/Circles/CirclesScreen';
 import { ProfileScreen } from '@/screens/Profile/ProfileScreen';
 import { useEntitlement } from '@/services/entitlements';
 import { appAlert, PremiumLock } from '@/components/common';
@@ -40,25 +40,17 @@ const ICONS: Partial<Record<
   { active: IoniconsName; inactive: IoniconsName; label: string }
 >> = {
   Home: { active: 'home', inactive: 'home-outline', label: 'Home' },
-  Community: { active: 'chatbubbles', inactive: 'chatbubbles-outline', label: 'Community' },
+  Circles: { active: 'people', inactive: 'people-outline', label: 'Circles' },
   Emergency: { active: 'shield', inactive: 'shield-outline', label: 'Safety' },
   Profile: { active: 'person', inactive: 'person-outline', label: 'Profile' },
 };
 
-// ORBII Community is a Plus feature: a free user sees the unlock screen on the tab.
-function GatedCommunity() {
-  const ok = useEntitlement('community');
-  if (!ok) {
-    return (
-      <PremiumLock
-        feature="ORBII Community"
-        icon="chatbubbles"
-        blurb="A moderated, anonymous space to share safety experiences, ask for advice, and look out for each other. Unlock it with ORBII Plus."
-      />
-    );
-  }
-  return <CommunityFeedScreen />;
-}
+// Circles takes the tab the social feed used to hold.
+//
+// It was reachable only from Home, Profile, Settings and the Safety screen,
+// which is how a core feature ends up feeling like a sub-page. It is not gated:
+// the first circle is free, and the paid parts (everyday live location,
+// geofencing, video) gate themselves further in.
 
 export function TabNavigator() {
   // Responder Missions moved to Profile, so the bar is a clean 4 tabs (Home,
@@ -75,7 +67,7 @@ export function TabNavigator() {
         }}
       >
         <Tab.Screen name="Home" component={HomeScreen} />
-        <Tab.Screen name="Community" component={GatedCommunity} />
+        <Tab.Screen name="Circles" component={CirclesScreen} />
         <Tab.Screen name="Emergency" component={EmergencyScreen} />
         <Tab.Screen name="Profile" component={ProfileScreen} />
       </Tab.Navigator>

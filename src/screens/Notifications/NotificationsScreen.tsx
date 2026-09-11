@@ -17,12 +17,6 @@ import {
   markAllRead,
   type NotificationEntry,
 } from '@/services/notification-inbox';
-import {
-  loadCommunityNotifications,
-  markCommunityNotificationsRead,
-  describeCommunityNotification,
-  type CommunityNotification,
-} from '@/services/community-notifications';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { acceptInvite, declineInvite, type CircleInvite } from '@/services/circles';
 import { inviteResolved } from '@/redux/slices/circlesSlice';
@@ -34,11 +28,10 @@ import {
   type ZoneRequest,
 } from '@/services/geofence';
 
-// Two clearly divided inboxes, like Instagram: "You" (things that concern your
-// safety, requests + activity) and "Community" (social likes/replies, kept out
-// of the way so a like never sits next to an SOS). Each section says what it is.
-
-type Tab = 'you' | 'community';
+// One inbox. It was split in two so a social like never sat next to an SOS,
+// and with the community feature gone the second half has nothing to hold, so
+// the segmented control goes with it rather than sitting there showing an empty
+// state forever.
 
 type Icon = { name: keyof typeof Ionicons.glyphMap; color: string; bg: string };
 type ActivityItem = { id: string; title: string; body: string; createdAt: number; icon: Icon };
@@ -49,21 +42,17 @@ export function NotificationsScreen() {
   const invites = useAppSelector((s) => s.circles.incomingInvites);
   const uid = useAppSelector((s) => s.user.profile?.uid);
 
-  const [tab, setTab] = useState<Tab>('you');
   const [local, setLocal] = useState<NotificationEntry[]>([]);
-  const [community, setCommunity] = useState<CommunityNotification[]>([]);
   const [zoneReqs, setZoneReqs] = useState<ZoneRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [l, c, z] = await Promise.all([
+    const [l, z] = await Promise.all([
       listNotifications(),
-      loadCommunityNotifications(),
       uid ? loadZoneRequests(uid) : Promise.resolve([]),
     ]);
     setLocal(l);
-    setCommunity(c);
     setZoneReqs(z);
     setLoading(false);
   }, [uid]);
@@ -71,7 +60,6 @@ export function NotificationsScreen() {
   useEffect(() => {
     load();
     markAllRead().catch(() => undefined);
-    markCommunityNotificationsRead().catch(() => undefined);
   }, [load]);
 
   const handleClear = async () => {
@@ -114,22 +102,11 @@ export function NotificationsScreen() {
     <ScreenContainer padded={false} scroll={false}>
       <View style={styles.header}>
         <Text style={styles.title}>Notifications</Text>
-        {tab === 'you' && local.length > 0 ? (
+        {local.length > 0 ? (
           <Pressable onPress={handleClear} hitSlop={8}>
             <Text style={styles.clear}>Clear</Text>
           </Pressable>
         ) : null}
-      </View>
-
-      {/* Segmented control divides the two inboxes */}
-      <View style={styles.segment}>
-        <Seg label="You" active={tab === 'you'} dot={requestCount > 0} onPress={() => setTab('you')} />
-        <Seg
-          label="Community"
-          active={tab === 'community'}
-          dot={community.length > 0}
-          onPress={() => setTab('community')}
-        />
       </View>
 
       <ScrollView
@@ -137,7 +114,7 @@ export function NotificationsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}
       >
-        {tab === 'you' ? (
+        {(
           youEmpty && !loading ? (
             <EmptyState
               icon="notifications-off-outline"
@@ -202,44 +179,9 @@ export function NotificationsScreen() {
               ) : null}
             </>
           )
-        ) : community.length === 0 && !loading ? (
-          <EmptyState
-            icon="chatbubble-ellipses-outline"
-            title="No community activity yet"
-            body="Likes and replies on your ORBII Community posts will appear here."
-          />
-        ) : (
-          <Section
-            title="From the Community"
-            hint="Likes and replies on your posts. Tap to open the thread."
-          >
-            <View style={styles.groupCard}>
-              {community.map((n, idx) => {
-                const { title, body } = describeCommunityNotification(n);
-                return (
-                  <View key={`cn_${n.id}`}>
-                    {idx > 0 ? <View style={styles.rowDivider} /> : null}
-                    <ActivityRow
-                      item={{ id: `cn_${n.id}`, title, body, createdAt: n.createdAt, icon: communityIcon(n.type) }}
-                      onPress={() => navigation.navigate('CommunityFeed')}
-                    />
-                  </View>
-                );
-              })}
-            </View>
-          </Section>
         )}
       </ScrollView>
     </ScreenContainer>
-  );
-}
-
-function Seg({ label, active, dot, onPress }: { label: string; active: boolean; dot: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[styles.segBtn, active && styles.segBtnActive]}>
-      <Text style={[styles.segText, active && styles.segTextActive]}>{label}</Text>
-      {dot ? <View style={styles.segDot} /> : null}
-    </Pressable>
   );
 }
 
@@ -323,17 +265,6 @@ function iconForKind(kind: NotificationEntry['kind']): Icon {
   }
 }
 
-function communityIcon(type: CommunityNotification['type']): Icon {
-  switch (type) {
-    case 'like':
-      return { name: 'heart', color: colors.coral, bg: colors.coralSoft };
-    case 'reply':
-      return { name: 'arrow-undo', color: colors.lavenderDeep, bg: colors.lavenderSoft };
-    default:
-      return { name: 'chatbubble-ellipses', color: colors.lavenderDeep, bg: colors.lavenderSoft };
-  }
-}
-
 function localToActivity(e: NotificationEntry): ActivityItem {
   return { id: e.id, title: e.title, body: e.body, createdAt: e.createdAt, icon: iconForKind(e.kind) };
 }
@@ -383,29 +314,6 @@ const styles = StyleSheet.create({
   },
   title: { fontFamily: fontFamilies.poppinsBold, fontSize: 28, color: colors.textPrimary },
   clear: { ...typography.bodyMedium, color: colors.coral },
-
-  segment: {
-    flexDirection: 'row',
-    gap: 6,
-    marginHorizontal: spacing.lg,
-    marginBottom: spacing.sm,
-    backgroundColor: colors.cream,
-    borderRadius: radius.pill,
-    padding: 4,
-  },
-  segBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: radius.pill,
-  },
-  segBtnActive: { backgroundColor: colors.surface, ...shadows.icon },
-  segText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textMuted },
-  segTextActive: { color: colors.textPrimary },
-  segDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.coral },
 
   scroll: { paddingHorizontal: spacing.lg, paddingBottom: spacing.xxl, flexGrow: 1 },
   section: { marginTop: spacing.md },

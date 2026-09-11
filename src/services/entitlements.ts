@@ -26,8 +26,7 @@ export type Feature =
   | 'safe_route'
   | 'priority_helpers'
   // Plus-only sections (gated NOW, even during early access)
-  | 'disaster_mode'
-  | 'community';
+  | 'disaster_mode';
 
 const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
   'circle_create',
@@ -45,7 +44,6 @@ const PREMIUM_FEATURES: ReadonlySet<Feature> = new Set<Feature>([
   'safe_route',
   'priority_helpers',
   'disaster_mode',
-  'community',
 ]);
 
 // Features that are Plus-only RIGHT NOW, even while EARLY_ACCESS_UNLOCK is on.
