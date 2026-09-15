@@ -755,6 +755,62 @@ function RootNavigator() {
     return () => clearInterval(id);
   }, [status, safeJourney]);
 
+  // Safe Journey escalation. When the arrival time passes and she has not
+  // marked herself safe, the SOS countdown opens on its own, wherever she is
+  // in the app and without waiting for a tap.
+  //
+  // This used to live on SafeJourneyActiveScreen as an alert with a Continue
+  // button, so the SOS only started if she tapped it, and only if that screen
+  // happened to be open. An overdue journey is exactly the case where she may
+  // be unable to tap anything.
+  //
+  // The countdown keeps its cancel window, so somebody who is only running late
+  // loses one tap, not a false alarm.
+  useEffect(() => {
+    if (status !== 'authenticated' || !safeJourney) return;
+
+    const check = () => {
+      const st = store.getState();
+      const journey = st.app.safeJourney;
+      if (!journey || Date.now() < journey.etaMs) return;
+
+      // An SOS is already live, or a countdown is already running. Either one
+      // covers this, and navigating again would restart a countdown she may be
+      // halfway through cancelling. The journey is done either way.
+      const onCountdown =
+        navigationRef.isReady() &&
+        navigationRef.getCurrentRoute()?.name === 'SOSCountdown';
+      if (st.sos.activeSOS || onCountdown) {
+        store.dispatch(safeJourneyEnded());
+        return;
+      }
+
+      // Navigation not mounted yet, which happens on a cold start with an
+      // overdue journey restored from storage. Keep the journey and try again on
+      // the next tick. Ending it here would drop the escalation on the floor.
+      if (!navigationRef.isReady()) return;
+
+      // End the journey BEFORE navigating, so this can only ever fire once.
+      store.dispatch(safeJourneyEnded());
+      Vibration.vibrate([0, 400, 200, 400]);
+      // @ts-expect-error SOSCountdown lives in the AppStack only.
+      navigationRef.navigate('SOSCountdown', { journey: true });
+    };
+
+    check();
+    // One second, not one minute. Timers are throttled in the background, and
+    // the AppState listener below catches the moment she comes back, but while
+    // the app is open the countdown should start on the second it is due.
+    const id = setInterval(check, 1000);
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next === 'active') check();
+    });
+    return () => {
+      clearInterval(id);
+      sub.remove();
+    };
+  }, [status, safeJourney]);
+
   if (!hydrated) return null;
   if (status === 'authenticated') {
     // The safety PIN is mandatory and write-once. Gate BEFORE guided setup so

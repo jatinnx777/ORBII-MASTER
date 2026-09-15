@@ -4,7 +4,7 @@ import type { GeoPoint } from '@/types';
 // SafeMode is a live-journey guard. User tells the app "I'll reach X by Y
 // time". The app shares a live-location link with a trusted contact and
 // auto-fires SOS if the user doesn't confirm safe arrival by the ETA.
-type SafeJourney = {
+export type SafeJourney = {
   // Shown to the user and sent to the trusted contact.
   label: string;
   // Expected safe-arrival timestamp (ms epoch).

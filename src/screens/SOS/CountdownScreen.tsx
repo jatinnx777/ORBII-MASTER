@@ -503,7 +503,9 @@ export function CountdownScreen() {
                 ? 'PRACTICE · NO ALERTS SENT'
                 : isImpact
                   ? 'HARD IMPACT DETECTED'
-                  : 'EMERGENCY SOS'}
+                  : route.params?.journey === true
+                    ? 'SAFE JOURNEY OVERDUE'
+                    : 'EMERGENCY SOS'}
             </Text>
           </View>
         </View>
@@ -513,12 +515,15 @@ export function CountdownScreen() {
             {/* An impact countdown has to answer the question the person is
                 actually asking, which is "why is my phone doing this". Naming
                 the cause is also the fastest route to Cancel: someone who
-                knows their bag hit the floor stops reading and taps. */}
+                knows their bag hit the floor stops reading and taps. The same
+                goes for a journey that ran past its arrival time. */}
             {isTest
               ? 'Practice SOS in'
               : isImpact
                 ? 'Are you okay? Sending your SOS in'
-                : 'Sending your SOS in'}
+                : route.params?.journey === true
+                  ? "You haven't marked yourself safe. Sending your SOS in"
+                  : 'Sending your SOS in'}
           </Text>
 
           {/* A real countdown ring: the arc drains as the seconds do. */}

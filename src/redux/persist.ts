@@ -2,6 +2,7 @@ import { store } from './store';
 import { getItem, setItem, storageKeys, removeItem } from '@/services/storage';
 import { historyHydrated } from './slices/historySlice';
 import { appHydrated } from './slices/appSlice';
+import type { SafeJourney } from './slices/appSlice';
 import { profileHydrated } from './slices/userSlice';
 import { safetyModesHydrated } from './slices/safetyModesSlice';
 import { syncProfile } from '@/services/profile-sync';
@@ -21,6 +22,14 @@ type PersistedApp = {
   pushEnabled?: boolean;
   helperMode?: boolean;
   policyAcceptedAt?: number | null;
+  // An active Safe Journey survives the app being killed.
+  //
+  // It was never persisted, so if Android reclaimed the app mid-journey, which
+  // it does routinely to low-memory phones, the journey vanished on relaunch:
+  // no escalation, and the lock-screen widget quietly removed. Restored here,
+  // an overdue one reaches the escalation in App.tsx the moment the app is back
+  // up, and she gets the cancellable countdown instead of nothing.
+  safeJourney?: SafeJourney | null;
 };
 
 export async function hydrateStore() {
@@ -77,7 +86,8 @@ function subscribePersist() {
       next.app.alertVibration !== prev.app.alertVibration ||
       next.app.pushEnabled !== prev.app.pushEnabled ||
       next.app.helperMode !== prev.app.helperMode ||
-      next.app.policyAcceptedAt !== prev.app.policyAcceptedAt
+      next.app.policyAcceptedAt !== prev.app.policyAcceptedAt ||
+      next.app.safeJourney !== prev.app.safeJourney
     ) {
       setItem<PersistedApp>(storageKeys.settings, {
         onboarded: next.app.onboarded,
@@ -85,6 +95,7 @@ function subscribePersist() {
         pushEnabled: next.app.pushEnabled,
         helperMode: next.app.helperMode,
         policyAcceptedAt: next.app.policyAcceptedAt,
+        safeJourney: next.app.safeJourney,
       });
     }
     if (next.user.profile !== prev.user.profile) {

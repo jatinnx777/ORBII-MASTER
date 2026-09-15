@@ -40,6 +40,12 @@ export type AppStackParamList = {
          * may be unable to answer".
          */
         impact?: boolean;
+        /**
+         * A Safe Journey passed its arrival time without her marking herself
+         * safe. Only changes the countdown copy, so she knows why a countdown
+         * appeared; the SOS itself is recorded as a normal manual one.
+         */
+        journey?: boolean;
         /** Which phrase/sound fired the voice trigger, for false-positive tuning. */
         phrase?: string;
         /** Absolute path to the pre-roll WAV captured before the trigger. */

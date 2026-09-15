@@ -73,29 +73,22 @@ export function SafeJourneyActiveScreen() {
     return () => loop.stop();
   }, [pulse]);
 
-  useEffect(() => {
-    if (!journey) return;
-    if (now < journey.etaMs) return;
-    // ETA has passed and user did not mark safe: auto-fire SOS. We navigate
-    // to Countdown for the standard 5s cancel window in case the user is
-    // just a little late. (Countdown will fall back to the normal SOS flow.)
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(
-      () => undefined,
-    );
-    appAlert(
-      'Journey overdue',
-      "You haven't marked yourself safe. Starting SOS.",
-      [
-        {
-          text: 'Continue',
-          onPress: () => {
-            dispatch(safeJourneyEnded());
-            navigation.replace('SOSCountdown');
-          },
-        },
-      ],
-    );
-  }, [journey, now, dispatch, navigation]);
+  // Escalation when the arrival time passes does NOT live here any more. It is
+  // in App.tsx, next to the lock-screen widget.
+  //
+  // It used to be an effect on this screen that showed a "Journey overdue"
+  // alert and only started the SOS countdown when she tapped Continue. Three
+  // things were wrong with that, and each one alone meant no SOS went out:
+  //
+  //   1. It needed a tap. The whole point of an overdue journey is that she
+  //      may not be able to give one.
+  //   2. It only ran while this screen was open. Go back to Home during a
+  //      journey and the ETA could pass with nothing watching it.
+  //   3. It depended on the 1-second clock, so once overdue it fired a fresh
+  //      alert and haptic every second instead of once.
+  //
+  // The countdown it now opens still has its cancel window, so a user who is
+  // simply late loses nothing but a tap.
 
   if (!journey) {
     return (
