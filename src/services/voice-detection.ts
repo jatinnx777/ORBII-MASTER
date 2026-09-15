@@ -30,6 +30,8 @@ const { VoiceGuard } = NativeModules as {
   VoiceGuard?: {
     startGuard(phrases: string[], durationMs: number): Promise<boolean>;
     setWhisperMode(enabled: boolean): Promise<boolean>;
+    setScreamTrigger?(enabled: boolean): Promise<boolean>;
+    setShakeTrigger?(enabled: boolean): Promise<boolean>;
     stopGuard(): Promise<boolean>;
     cancelSosAlert?(): Promise<boolean>;
   };
@@ -82,6 +84,35 @@ export async function setWhisperMode(enabled: boolean): Promise<void> {
     if (listening) await VoiceGuard!.startGuard(NO_EXTRA_PHRASES, 0);
   } catch {
     // takes effect on the next start
+  }
+}
+
+/**
+ * Scream starts an SOS. Off by default: the on-device sound model hears
+ * screams in television and playgrounds, so without this a scream only
+ * corroborates a spoken word. The service reads the switch live when a scream
+ * is heard, so there is no restart.
+ */
+export async function setScreamTrigger(enabled: boolean): Promise<void> {
+  if (!available || !VoiceGuard!.setScreamTrigger) return;
+  try {
+    await VoiceGuard!.setScreamTrigger(enabled);
+  } catch {
+    // stays at its previous value; the Settings copy is re-read on next open
+  }
+}
+
+/**
+ * The deliberate shake for a silent SOS. The service watches this switch and
+ * starts or stops its fast accelerometer to match, so the sensor only runs
+ * while it is on, and only while Voice SOS itself is running.
+ */
+export async function setShakeTrigger(enabled: boolean): Promise<void> {
+  if (!available || !VoiceGuard!.setShakeTrigger) return;
+  try {
+    await VoiceGuard!.setShakeTrigger(enabled);
+  } catch {
+    // stays at its previous value
   }
 }
 

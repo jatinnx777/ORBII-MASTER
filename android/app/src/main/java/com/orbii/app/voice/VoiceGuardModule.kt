@@ -111,6 +111,39 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Scream starts an SOS. Read live by the service at the moment a scream is
+   * heard, so no restart is needed. Off by default: the sound model hears
+   * screams in television and playgrounds, so without this a scream only
+   * corroborates a spoken word.
+   */
+  @ReactMethod
+  fun setScreamTrigger(enabled: Boolean, promise: Promise) {
+    try {
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("scream_trigger", enabled).apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("scream_failed", e)
+    }
+  }
+
+  /**
+   * The deliberate shake for a silent SOS. The service watches this key and
+   * starts or stops the fast accelerometer to match, so the fast sensor only
+   * runs while the switch is on.
+   */
+  @ReactMethod
+  fun setShakeTrigger(enabled: Boolean, promise: Promise) {
+    try {
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("shake_trigger", enabled).apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("shake_failed", e)
+    }
+  }
+
   @ReactMethod
   fun stopGuard(promise: Promise) {
     try {

@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import { ResolvedModal } from './components/ResolvedModal';
@@ -115,6 +115,13 @@ export function ActiveSOSScreen() {
   const delivery = useAppSelector((s) => s.sos.delivery);
   const profile = useAppSelector((s) => s.user.profile);
   const alertVibration = useAppSelector((s) => s.app.alertVibration);
+  // A silent SOS (the shake trigger) opens this screen behind a black cover
+  // with the pulse off: no light and no buzz, nothing that gives away that an
+  // SOS is running. Press and hold anywhere to show the real screen.
+  // navRoute, not route: this screen already has a `route`, the helper's map path.
+  const navRoute = useRoute<RouteProp<AppStackParamList, 'ActiveSOS'>>();
+  const silent = navRoute.params?.silent === true;
+  const [revealed, setRevealed] = useState(false);
   const contactCount = profile?.emergencyContacts?.length ?? 0;
 
   // Accessibility: a screen-reader user must HEAR that the SOS went out, not
@@ -281,10 +288,10 @@ export function ActiveSOSScreen() {
   // resolve, and on cancel, so there is no path off this screen that leaves the
   // phone buzzing.
   useEffect(() => {
-    if (!activeSOS?.id || resolved || !alertVibration) return undefined;
+    if (!activeSOS?.id || resolved || !alertVibration || silent) return undefined;
     startSosHaptics();
     return () => stopSosHaptics();
-  }, [activeSOS?.id, resolved, alertVibration]);
+  }, [activeSOS?.id, resolved, alertVibration, silent]);
 
   const lastPromptRef = useRef(0);
 
@@ -767,7 +774,30 @@ export function ActiveSOSScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar style="dark" />
+      <StatusBar style={silent && !revealed ? 'light' : 'dark'} hidden={silent && !revealed} />
+      {silent && !revealed ? (
+        <Pressable
+          onLongPress={() => setRevealed(true)}
+          delayLongPress={1200}
+          accessibilityRole="button"
+          accessibilityLabel="Silent SOS is active. Press and hold to show the SOS screen."
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: '#000000',
+            zIndex: 1000,
+            elevation: 1000,
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            paddingBottom: 48,
+          }}
+        >
+          <Text style={{ color: 'rgba(255,255,255,0.18)', fontSize: 12 }}>Hold to show</Text>
+        </Pressable>
+      ) : null}
 
       {/* The camera has to be mounted for the recorder to hold a ref, but this
           screen is a map and a list of responders, not a viewfinder. So it is

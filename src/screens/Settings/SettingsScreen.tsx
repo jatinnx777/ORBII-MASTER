@@ -42,6 +42,7 @@ import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
+import { setScreamTrigger, setShakeTrigger } from '@/services/voice-detection';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -88,6 +89,8 @@ export function SettingsScreen() {
   const [meshRelay, setMeshRelay] = useState(true);
   const [videoEvidence, setVideoEvidence] = useState(false);
   const [impactDetection, setImpactDetection] = useState(false);
+  const [screamTrigger, setScreamTriggerOn] = useState(false);
+  const [shakeTrigger, setShakeTriggerOn] = useState(false);
   useEffect(() => {
     let alive = true;
     void isMeshRelayEnabled().then((v) => {
@@ -116,10 +119,44 @@ export function SettingsScreen() {
     void getItem<boolean>(storageKeys.impactDetection).then((v) => {
       if (!cancelled) setImpactDetection(v === true);
     });
+    void getItem<boolean>(storageKeys.screamTrigger).then((v) => {
+      if (!cancelled) setScreamTriggerOn(v === true);
+    });
+    void getItem<boolean>(storageKeys.shakeTrigger).then((v) => {
+      if (!cancelled) setShakeTriggerOn(v === true);
+    });
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Both switches write the native copy too, which is what the Voice SOS
+  // service actually reads, live, so neither needs a restart.
+  const handleScreamTrigger = async (next: boolean) => {
+    setScreamTriggerOn(next);
+    await setItem(storageKeys.screamTrigger, next);
+    await setScreamTrigger(next);
+    if (next) {
+      sheet.notify({
+        title: 'A scream can start an SOS',
+        body: 'While Voice SOS is on, a clear scream on its own opens the countdown. Cancel it and nobody is told. A TV or children playing can set it off, which is why the countdown is always there.',
+        tone: 'neutral',
+      });
+    }
+  };
+
+  const handleShakeTrigger = async (next: boolean) => {
+    setShakeTriggerOn(next);
+    await setItem(storageKeys.shakeTrigger, next);
+    await setShakeTrigger(next);
+    if (next) {
+      sheet.notify({
+        title: 'Shake for a silent SOS',
+        body: 'While Voice SOS is on, shake your phone hard about ten times in two seconds. You feel one short buzz, the screen goes dark, and a silent countdown starts. Cancel it and nobody is told.',
+        tone: 'neutral',
+      });
+    }
+  };
 
   const handleImpactDetection = async (next: boolean) => {
     setImpactDetection(next);
@@ -395,6 +432,51 @@ export function SettingsScreen() {
               icon="information-circle-outline"
               label="What this cannot do yet"
               value="It only watches while ORBII is open on your screen. It will not detect a crash with your phone in a pocket or bag, and it is not a substitute for calling 112."
+            />
+          ) : null}
+        </RowGroup>
+
+        <RowSection title="More ways to raise an SOS" />
+        <RowGroup>
+          <Row
+            icon="megaphone-outline"
+            label="Scream starts an SOS"
+            value={
+              screamTrigger
+                ? 'On. While Voice SOS is on, a clear scream on its own opens the countdown. Cancel it and nothing is sent.'
+                : 'Off. A scream only counts when you also say a trigger word. Turn this on and a scream alone opens the countdown.'
+            }
+            right={
+              <Switch
+                value={screamTrigger}
+                onValueChange={(v) => void handleScreamTrigger(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+          <Row
+            icon="phone-portrait-outline"
+            label="Shake for a silent SOS"
+            value={
+              shakeTrigger
+                ? 'On. Shake your phone hard about ten times in two seconds. One short buzz, a dark screen, and a silent countdown. Cancel it and nothing is sent.'
+                : 'Off. Turn this on and a hard, deliberate shake starts a silent SOS, with no sound and a dark screen.'
+            }
+            right={
+              <Switch
+                value={shakeTrigger}
+                onValueChange={(v) => void handleShakeTrigger(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+          {screamTrigger || shakeTrigger ? (
+            <Row
+              icon="information-circle-outline"
+              label="What this cannot do yet"
+              value="Both only work while Voice SOS is switched on, because they run inside the same protection service. They are new and have not been tuned on many phones yet, and neither replaces calling 112."
             />
           ) : null}
         </RowGroup>

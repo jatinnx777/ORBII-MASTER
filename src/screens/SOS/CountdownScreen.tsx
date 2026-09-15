@@ -62,6 +62,30 @@ export function CountdownScreen() {
   const route = useRoute<RouteProp<AppStackParamList, 'SOSCountdown'>>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
+  const membersByCircle = useAppSelector((s) => s.circles.membersByCircle);
+  // Who this SOS sets out to reach, frozen at the moment it is sent, for the
+  // incident report. Emergency contacts first, then everyone in her circles,
+  // each person once.
+  const alertedSnapshot = (): { name: string; via: 'contact' | 'circle' }[] => {
+    const out: { name: string; via: 'contact' | 'circle' }[] = [];
+    const seen = new Set<string>();
+    for (const c of profile?.emergencyContacts ?? []) {
+      const name = (c.name ?? '').trim();
+      if (!name || seen.has(`contact:${name}`)) continue;
+      seen.add(`contact:${name}`);
+      out.push({ name, via: 'contact' });
+    }
+    for (const members of Object.values(membersByCircle)) {
+      for (const m of members) {
+        if (m.userId === profile?.uid || seen.has(`circle:${m.userId}`)) continue;
+        const name = (m.name ?? m.username ?? '').trim();
+        if (!name) continue;
+        seen.add(`circle:${m.userId}`);
+        out.push({ name, via: 'circle' });
+      }
+    }
+    return out;
+  };
   // Long-press path bypasses the countdown, used when the user is in
   // immediate danger and can't wait the 5 seconds.
   const isInstant = route.params?.instant === true;
@@ -76,6 +100,16 @@ export function CountdownScreen() {
   // seconds of tapping Cancel, and only a phone that took a hard knock AND then
   // stopped moving AND was not answered ever reaches her circle.
   const isImpact = route.params?.impact === true;
+  // The two opt-in triggers that are not words, both raised by the Voice SOS
+  // service. A shake is always SILENT: no haptics here, a black screen, and a
+  // covered live screen after it. Neither uses the adaptive window, which is
+  // built from a voice, so both get the plain countdown.
+  const isScream = route.params?.scream === true;
+  const isShake = route.params?.shake === true;
+  const isSilent = route.params?.silent === true;
+  // Raised by the service that owns the microphone. The countdown must not open
+  // a second recorder against it; the service's own pre-roll is uploaded instead.
+  const fromGuard = isVoice || isScream || isShake;
 
   // Deadline-based countdown. We compute remaining time off Date.now() each
   // tick rather than decrementing a counter, that way an incoming phone
@@ -104,7 +138,7 @@ export function CountdownScreen() {
   const countdownRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recActiveRef = useRef(false);
   useEffect(() => {
-    if (isTest || isVoice || isInstant) return;
+    if (isTest || fromGuard || isInstant) return;
     let cancelled = false;
     (async () => {
       try {
@@ -224,9 +258,11 @@ export function CountdownScreen() {
   const lastBuzzedSecondRef = useRef<number>(COUNTDOWN_SECONDS);
 
   useEffect(() => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
-      () => undefined,
-    );
+    if (!isSilent) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(
+        () => undefined,
+      );
+    }
     // Accessibility: a screen-reader user must HEAR what's happening on the most
     // critical screen in the app, not just see the countdown.
     AccessibilityInfo.announceForAccessibility(
@@ -250,9 +286,11 @@ export function CountdownScreen() {
       setSeconds(remaining);
       if (remaining > 0 && remaining < lastBuzzedSecondRef.current) {
         lastBuzzedSecondRef.current = remaining;
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
-          () => undefined,
-        );
+        if (!isSilent) {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(
+            () => undefined,
+          );
+        }
       }
       if (remaining <= 0) {
         triggeredRef.current = true;
@@ -287,7 +325,7 @@ export function CountdownScreen() {
   // Actually stop the SOS. Only reached once any duress guard has passed.
   const doCancel = useCallback(() => {
     cancelledRef.current = true;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    if (!isSilent) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
     // A cancelled VOICE trigger is a false positive. Cancelled ÷ (cancelled +
     // confirmed) is the voice engine's real error rate, the number we've never
     // measured and can now tune thresholds against.
@@ -349,7 +387,15 @@ export function CountdownScreen() {
         profile,
         location,
         isTest ? 'test' : 'real',
-        isImpact ? 'impact' : isVoice ? 'voice' : 'manual',
+        isImpact
+          ? 'impact'
+          : isScream
+            ? 'scream'
+            : isShake
+              ? 'shake'
+              : isVoice
+                ? 'voice'
+                : 'manual',
       );
       // Stop the countdown recording and keep it as this SOS's pre-roll. Done
       // BEFORE navigating so the mic is free when ActiveSOS starts the main clip.
@@ -385,12 +431,22 @@ export function CountdownScreen() {
           void uploadPreRoll(profile.uid, record.id, preroll);
         }
       }
+      // Scream and shake come from the guard service too, which kept the
+      // seconds before the trigger. Upload that pre-roll the same way.
+      if ((isScream || isShake) && !isTest && route.params?.preroll) {
+        void uploadPreRoll(profile.uid, record.id, route.params.preroll);
+      }
+      // Frozen now: a list rebuilt later from today's circle would name people
+      // who were not in it when this went out.
+      record.alerted = alertedSnapshot();
       dispatch(sosDispatchSucceeded(record));
       if (isVoice && !isTest) void recordVoiceSOS();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
-        () => undefined,
-      );
-      navigation.replace('ActiveSOS');
+      if (!isSilent) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
+          () => undefined,
+        );
+      }
+      navigation.replace('ActiveSOS', isSilent ? { silent: true } : undefined);
 
       // OFFLINE: put the pre-filled SMS in front of her instead of making her
       // find it.
@@ -421,7 +477,9 @@ export function CountdownScreen() {
                 lat: location.latitude,
                 lng: location.longitude,
                 batteryLevel: NaN, // unknown; encoder marks it rather than lying
-                triggerType: isImpact ? 'impact' : isVoice ? 'voice' : 'manual',
+                // The SMS format has no code for the two new triggers, and
+                // changing a binary format mid-emergency is not worth a label.
+                triggerType: isImpact ? 'impact' : isVoice || isScream ? 'voice' : 'manual',
               },
               profile.emergencyContacts.map((c) => c.phone),
               { senderName: profile.name ?? '', placeName: null },
@@ -479,12 +537,24 @@ export function CountdownScreen() {
   // in practice mode) carries a white countdown ring and number for maximum
   // urgency and legibility, no "card floating on a page" look.
   const isReal = !isTest;
+  // A silent SOS looks like a phone with its screen off: black, with the
+  // countdown just readable to the person holding it and nobody else.
   const grad = (isTest
     ? ['#FAF9EC', '#F3F0DF']
-    : ['#FF6B70', '#E23F45']) as [string, string];
-  const onColor = isTest ? colors.textPrimary : '#FFFFFF';
-  const trackColor = isTest ? colors.creamDeep : 'rgba(255,255,255,0.26)';
-  const subColor = isTest ? colors.textSecondary : 'rgba(255,255,255,0.92)';
+    : isSilent
+      ? ['#000000', '#050505']
+      : ['#FF6B70', '#E23F45']) as [string, string];
+  const onColor = isTest ? colors.textPrimary : isSilent ? 'rgba(255,255,255,0.55)' : '#FFFFFF';
+  const trackColor = isTest
+    ? colors.creamDeep
+    : isSilent
+      ? 'rgba(255,255,255,0.08)'
+      : 'rgba(255,255,255,0.26)';
+  const subColor = isTest
+    ? colors.textSecondary
+    : isSilent
+      ? 'rgba(255,255,255,0.38)'
+      : 'rgba(255,255,255,0.92)';
 
   return (
     <LinearGradient
@@ -493,7 +563,7 @@ export function CountdownScreen() {
       end={{ x: 1, y: 1 }}
       style={styles.container}
     >
-      <StatusBar style={isReal ? 'light' : 'dark'} />
+      <StatusBar style={isReal ? 'light' : 'dark'} hidden={isSilent} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.top}>
           <View style={[styles.badge, isReal ? styles.badgeGlass : styles.badgeLight]}>
@@ -501,11 +571,15 @@ export function CountdownScreen() {
             <Text style={[styles.badgeText, { color: onColor }]}>
               {isTest
                 ? 'PRACTICE · NO ALERTS SENT'
-                : isImpact
-                  ? 'HARD IMPACT DETECTED'
-                  : route.params?.journey === true
-                    ? 'SAFE JOURNEY OVERDUE'
-                    : 'EMERGENCY SOS'}
+                : isSilent
+                  ? 'SILENT SOS'
+                  : isImpact
+                    ? 'HARD IMPACT DETECTED'
+                    : isScream
+                      ? 'SCREAM DETECTED'
+                      : route.params?.journey === true
+                        ? 'SAFE JOURNEY OVERDUE'
+                        : 'EMERGENCY SOS'}
             </Text>
           </View>
         </View>
@@ -519,16 +593,20 @@ export function CountdownScreen() {
                 goes for a journey that ran past its arrival time. */}
             {isTest
               ? 'Practice SOS in'
-              : isImpact
-                ? 'Are you okay? Sending your SOS in'
-                : route.params?.journey === true
-                  ? "You haven't marked yourself safe. Sending your SOS in"
-                  : 'Sending your SOS in'}
+              : isSilent
+                ? 'Sending silently in'
+                : isImpact
+                  ? 'Are you okay? Sending your SOS in'
+                  : isScream
+                    ? 'Did you scream? Sending your SOS in'
+                    : route.params?.journey === true
+                      ? "You haven't marked yourself safe. Sending your SOS in"
+                      : 'Sending your SOS in'}
           </Text>
 
           {/* A real countdown ring: the arc drains as the seconds do. */}
           <View style={styles.ringWrap}>
-            {isReal ? <View style={styles.glow} pointerEvents="none" /> : null}
+            {isReal && !isSilent ? <View style={styles.glow} pointerEvents="none" /> : null}
             <Svg width={RING} height={RING}>
               <Circle
                 cx={RING / 2}
@@ -572,6 +650,8 @@ export function CountdownScreen() {
               ? isTest
                 ? 'Test SOS recorded. No real alerts were sent.'
                 : 'Alerting your circle and nearby helpers now.'
+              : isSilent
+                ? 'No sound. Your circle will be told this is a silent SOS.'
               : planLevel === 'low'
                 ? 'Your phone has not moved. Extra time to cancel.'
                 : 'We’ll alert your circle and nearby helpers.'}
@@ -586,11 +666,17 @@ export function CountdownScreen() {
           style={({ pressed }) => [
             styles.cancel,
             isReal ? styles.cancelReal : styles.cancelTest,
+            isSilent && { backgroundColor: 'rgba(255,255,255,0.06)' },
             pressed && styles.cancelPressed,
             triggering && styles.cancelDisabled,
           ]}
         >
-          <Text style={[styles.cancelText, { color: isReal ? colors.coralDeep : colors.textPrimary }]}>
+          <Text
+            style={[
+              styles.cancelText,
+              { color: isSilent ? 'rgba(255,255,255,0.55)' : isReal ? colors.coralDeep : colors.textPrimary },
+            ]}
+          >
             {isVoice && pinGuarded ? 'I’m safe, cancel (PIN)' : 'I’m safe, cancel'}
           </Text>
         </Pressable>

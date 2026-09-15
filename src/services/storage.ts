@@ -55,6 +55,11 @@ const KEYS = {
   // Arming it had to be something one person can do on one handset to find
   // out, not a release that arms it for everybody at once.
   impactDetection: 'orbii:impact-detection',
+  // Two opt-in triggers that run inside the Voice SOS service. Kept here for the
+  // Settings switches; the native side reads its own copy in the voiceguard
+  // SharedPreferences, which is what actually decides.
+  screamTrigger: 'orbii:scream-trigger',
+  shakeTrigger: 'orbii:shake-trigger',
   // The two screens before sign-in: language, then what ORBII is.
   introDone: 'orbii:intro-done',
   onboardingLang: 'orbii:onboarding-lang',

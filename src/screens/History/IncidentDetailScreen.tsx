@@ -12,6 +12,7 @@ import { useRoute, RouteProp } from '@react-navigation/native';
 import { useAudioPlayer } from 'expo-audio';
 import * as Sharing from 'expo-sharing';
 import {
+  appAlert,
   Button,
   Card,
   OSMMapView,
@@ -21,6 +22,7 @@ import {
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { hasSosRecording, sosRecordingUri } from '@/services/sos-recording';
+import { exportIncidentReport } from '@/services/incident-report';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Route = RouteProp<AppStackParamList, 'IncidentDetail'>;
@@ -30,6 +32,8 @@ export function IncidentDetailScreen() {
   const record = useAppSelector((s) =>
     s.history.records.find((r) => r.id === route.params.recordId),
   );
+  const profileName = useAppSelector((s) => s.user.profile?.name ?? null);
+  const [exporting, setExporting] = useState(false);
 
   if (!record) {
     return (
@@ -50,6 +54,27 @@ export function IncidentDetailScreen() {
     resolved: colors.success,
     cancelled: colors.textMuted,
   }[record.status];
+
+  // One tap from an SOS to a document she can take to a police station. The
+  // screen only starts it; everything the report says is built and tested in
+  // incident-report-html.ts.
+  const exportReport = async () => {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      const result = await exportIncidentReport(record, profileName);
+      if (result === 'failed') {
+        appAlert(
+          'Could not create the report',
+          'Something went wrong making the PDF. Try again, and if it keeps happening, tell us from Help.',
+        );
+      } else if (result === 'saved') {
+        appAlert('Report created', 'Sharing is not available on this phone, so the PDF could not be opened.');
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <ScrollView contentContainerStyle={styles.scroll}>
@@ -88,6 +113,29 @@ export function IncidentDetailScreen() {
           ]}
         />
       </View>
+
+      <SectionHeader title="Incident report" />
+      <Card style={styles.card}>
+        <Text style={styles.muted}>
+          A timestamped PDF of this SOS for a police complaint or an FIR: where it started,
+          the location trail, recordings, who was alerted and who responded.
+        </Text>
+        <Pressable
+          onPress={() => void exportReport()}
+          disabled={exporting}
+          style={({ pressed }) => [
+            styles.reportBtn,
+            (pressed || exporting) && { opacity: 0.85 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Export incident report as PDF"
+        >
+          <Ionicons name="document-text-outline" size={20} color={colors.textInverse} />
+          <Text style={styles.reportText}>
+            {exporting ? 'Creating PDF…' : 'Export incident report'}
+          </Text>
+        </Pressable>
+      </Card>
 
       <SectionHeader title="Location" />
       <Card style={styles.card}>
@@ -278,6 +326,21 @@ const styles = StyleSheet.create({
   muted: {
     ...typography.caption,
     color: colors.textMuted,
+  },
+  reportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.brandDeep,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    marginTop: spacing.sm,
+  },
+  reportText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 15,
+    color: colors.textInverse,
   },
   recRow: {
     flexDirection: 'row',

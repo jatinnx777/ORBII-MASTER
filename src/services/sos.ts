@@ -45,7 +45,14 @@ const DELIVERY_GRACE_MS = 4000;
  * push, because a circle should act differently on a sensor reading than on a
  * person pressing a button.
  */
-export type SOSTrigger = 'manual' | 'voice' | 'impact' | 'geofence' | 'disaster';
+export type SOSTrigger =
+  | 'manual'
+  | 'voice'
+  | 'impact'
+  | 'geofence'
+  | 'disaster'
+  | 'scream'
+  | 'shake';
 
 export async function createSOS(
   user: UserProfile,
@@ -238,8 +245,7 @@ async function persistSOS(
   user: UserProfile,
 ): Promise<void> {
   try {
-    const { error } = await supabase.from('sos_events').upsert(
-      {
+    const row = {
         id: record.id,
         user_id: user.uid,
         lat: record.location.latitude,
@@ -255,9 +261,20 @@ async function persistSOS(
         // so a free user can be reached by whoever is close. The paid perk , 
         // verified-helper dispatch, is gated separately, server-side.
         circle_only: false,
-      },
-      { onConflict: 'id' },
-    );
+    };
+    let { error } = await supabase.from('sos_events').upsert(row, { onConflict: 'id' });
+    // sql/129 adds 'scream' and 'shake' to the trigger check. A build that
+    // reaches phones before that migration is run would have every such SOS
+    // rejected with a check violation, and because this write is
+    // fire-and-forget nobody would see it: no row, so no nearby query and no
+    // helper dispatch. That is the exact failure the UUID comment above
+    // describes. So a rejected new trigger retries once as the nearest old
+    // one, and the emergency row exists either way.
+    if (error && error.code === '23514' && (row.trigger === 'scream' || row.trigger === 'shake')) {
+      ({ error } = await supabase
+        .from('sos_events')
+        .upsert({ ...row, trigger: row.trigger === 'scream' ? 'voice' : 'manual' }, { onConflict: 'id' }));
+    }
     if (error) {
       reportError(error, {
         category: 'sos.persist',

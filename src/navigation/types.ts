@@ -46,13 +46,19 @@ export type AppStackParamList = {
          * appeared; the SOS itself is recorded as a normal manual one.
          */
         journey?: boolean;
+        /** The opt-in scream trigger: a confident scream, no word needed. */
+        scream?: boolean;
+        /** The opt-in deliberate shake. Always arrives with silent: true. */
+        shake?: boolean;
+        /** No sound, no haptics, and a dark screen, through the live SOS. */
+        silent?: boolean;
         /** Which phrase/sound fired the voice trigger, for false-positive tuning. */
         phrase?: string;
         /** Absolute path to the pre-roll WAV captured before the trigger. */
         preroll?: string;
       }
     | undefined;
-  ActiveSOS: undefined;
+  ActiveSOS: { silent?: boolean } | undefined;
   // Victim-facing "help is coming" screen shown once a helper accepts. All
   // params optional so it degrades gracefully if some data isn't in yet.
   HelperResponse:

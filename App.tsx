@@ -674,9 +674,33 @@ function RootNavigator() {
         // resolve the test instead of dispatching a real alert. Nothing sent.
         if (consumeVoiceTestFire()) return;
         if (!navigationRef.isReady()) return;
+        // Trigger metadata from VoiceGuardService: which phrase fired, the
+        // pre-roll captured BEFORE she spoke, and for the two opt-in triggers
+        // that are not words, what the source was. All optional: an older
+        // service build sends a bare `orbii://voice-sos`.
+        const q = (key: string): string | undefined => {
+          const m = url.match(new RegExp(`[?&]${key}=([^&]+)`));
+          return m ? decodeURIComponent(m[1]) : undefined;
+        };
+        const phrase = q('phrase');
+        const preroll = q('preroll');
+        const source = q('source');
+        // A scream or a shake is not the metered voice convenience. Both are
+        // emergency triggers in their own right, like the SOS button, and the
+        // button has never been behind a quota. They skip the gate below.
+        if (source === 'scream' || source === 'shake') {
+          // @ts-expect-error - SOSCountdown is in the AppStack only.
+          navigationRef.navigate('SOSCountdown', {
+            scream: source === 'scream',
+            shake: source === 'shake',
+            silent: source === 'shake' || q('silent') === '1',
+            preroll,
+          });
+          return;
+        }
         // Premium gate: hands-free Voice SOS is metered on the free tier
-        // (2/month); Premium is unlimited. This NEVER blocks a real emergency
-        // — the manual SOS button stays free and unlimited — it only gates the
+        // (2/month); Premium is unlimited. This NEVER blocks a real emergency,
+        // the manual SOS button stays free and unlimited, it only gates the
         // voice convenience and nudges the upgrade.
         const isPremium = store.getState().user.profile?.isPremium ?? false;
         const quota = await voiceSOSStatus(isPremium);
@@ -697,15 +721,6 @@ function RootNavigator() {
           );
           return;
         }
-        // Trigger metadata from VoiceGuardService: which phrase fired, and the
-        // pre-roll clip captured BEFORE she spoke. Both optional — an older
-        // service build sends a bare `orbii://voice-sos`.
-        const q = (key: string): string | undefined => {
-          const m = url.match(new RegExp(`[?&]${key}=([^&]+)`));
-          return m ? decodeURIComponent(m[1]) : undefined;
-        };
-        const phrase = q('phrase');
-        const preroll = q('preroll');
         // Quota is recorded by CountdownScreen only when the SOS actually
         // fires, so a cancelled countdown doesn't burn a free activation.
         // @ts-expect-error - SOSCountdown is in the AppStack only.

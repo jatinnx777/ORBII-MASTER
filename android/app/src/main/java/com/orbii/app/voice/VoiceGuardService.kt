@@ -51,6 +51,8 @@ class VoiceGuardService : Service() {
     private const val ALERT_ID = 4102
     private const val CH_ONGOING = "orbii-protection"
     private const val CH_ALERT = "orbii-voice-alert"
+    /** A silent SOS: no sound, no vibration, nothing readable on the lock screen. */
+    private const val CH_SILENT = "orbii-silent-sos"
     private const val SAMPLE_RATE = 16000
     // English ships INSIDE the apk (assets/vosk-model-en, copied to filesDir
     // once). Hindi is an optional on-demand download that lands directly in
@@ -206,6 +208,19 @@ class VoiceGuardService : Service() {
   @Volatile private var lastWeakLabel = ""
   /** Proximity, light and accelerometer. Adds confidence, never vetoes. */
   private var sensors: SensorContext? = null
+  /**
+   * A trigger that is not a word, waiting for the audio thread: "scream" or
+   * "shake". Set by the detector callbacks and consumed by the listen loop, so
+   * the pre-roll is always dumped on the thread that writes it.
+   */
+  @Volatile private var pendingSensorTrigger: String? = null
+  /** The deliberate-shake detector. Null unless she has switched it on. */
+  private var shakeDetector: ShakeDetector? = null
+  /** A field, not a local: SharedPreferences only holds listeners weakly. */
+  private val shakePrefListener =
+    android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+      if (key == "shake_trigger") main.post { applyShakeSetting(p.getBoolean(key, false)) }
+    }
 
   // ── evidence packaging ──
   /** Where encrypted evidence lands. Separate from PREROLL_DIR, which is raw. */
@@ -399,6 +414,17 @@ class VoiceGuardService : Service() {
       ScreamDetector(
         this,
         onDanger = { label, score ->
+          // OPT-IN, and the one exception to the rule described below. With
+          // "Scream starts an SOS" switched on in Settings, a confident scream
+          // on its own may open the countdown. Read live from prefs so the
+          // switch takes effect without restarting the service. Only screams:
+          // crying and breaking glass still only corroborate a word.
+          if (label == "scream" &&
+            getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+              .getBoolean("scream_trigger", false)
+          ) {
+            pendingSensorTrigger = "scream"
+          }
           // A distress SOUND on its own (scream / crying / glass) NO LONGER
           // fires an SOS by itself. On-device sound classification false-fires
           // on TV, music, laughter, children playing and household noise, which
@@ -451,6 +477,11 @@ class VoiceGuardService : Service() {
     preRoll = PreRollBuffer(SAMPLE_RATE, PREROLL_SECONDS)
     denoiser = VoiceDenoiser(SAMPLE_RATE)
     sensors = SensorContext(this).also { it.start() }
+    // The deliberate shake, when she has switched it on. Watched live, so the
+    // Settings switch starts and stops the fast accelerometer without a restart.
+    val guardPrefs = getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+    guardPrefs.registerOnSharedPreferenceChangeListener(shakePrefListener)
+    applyShakeSetting(guardPrefs.getBoolean("shake_trigger", false))
     prunePreRolls()
     VoiceMetrics.running = true
     var speechStart = 0L
@@ -550,6 +581,10 @@ class VoiceGuardService : Service() {
           }
         }
         screamDetector?.feed(buffer, n)
+        pendingSensorTrigger?.let { src ->
+          pendingSensorTrigger = null
+          triggerFromSensor(src)
+        }
       }
     } catch (e: Exception) {
       Log.e(TAG, "listen loop error", e)
@@ -563,6 +598,12 @@ class VoiceGuardService : Service() {
       denoiser = null
       sensors?.stop()
       sensors = null
+      try {
+        getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+          .unregisterOnSharedPreferenceChangeListener(shakePrefListener)
+      } catch (_: Exception) {}
+      shakeDetector?.stop()
+      shakeDetector = null
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
@@ -837,6 +878,42 @@ class VoiceGuardService : Service() {
     }
   }
 
+  /** Start or stop the deliberate-shake detector to match the Settings switch. */
+  private fun applyShakeSetting(enabled: Boolean) {
+    if (enabled) {
+      if (shakeDetector == null) {
+        shakeDetector = ShakeDetector(this) { pendingSensorTrigger = "shake" }
+          .also { it.start() }
+      }
+    } else {
+      shakeDetector?.stop()
+      shakeDetector = null
+    }
+  }
+
+  /**
+   * An opt-in trigger that is not a spoken word: a confident scream, or the
+   * deliberate shake. Same debounce, pre-roll and evidence as a word, so the
+   * seconds before either one are kept. A shake asks for a SILENT countdown.
+   * Neither can send an SOS by itself: both only open the countdown.
+   */
+  private fun triggerFromSensor(source: String) {
+    val now = System.currentTimeMillis()
+    if (now - lastFire < 6000) return // debounce, shared with the word paths
+    lastFire = now
+    VoiceMetrics.lastTriggerPhrase = "[$source]"
+    VoiceMetrics.lastTriggerAtMs = now
+    VoiceMetrics.triggerCount += 1
+    val preRollPath = try {
+      preRoll?.dumpWav(File(filesDir, PREROLL_DIR), "preroll_$now.wav")?.absolutePath
+    } catch (e: Exception) {
+      Log.w(TAG, "pre-roll dump failed", e)
+      null
+    }
+    fireSos(phrase = null, preRollPath = preRollPath, source = source, silent = source == "shake")
+    encodeEvidenceAsync(now)
+  }
+
   private fun triggerNow(hit: String, speechStart: Long) {
     val now = System.currentTimeMillis()
     if (now - lastFire < 6000) return // debounce
@@ -973,14 +1050,23 @@ class VoiceGuardService : Service() {
     }
   }
 
-  private fun fireSos(phrase: String? = null, preRollPath: String? = null) {
+  private fun fireSos(
+    phrase: String? = null,
+    preRollPath: String? = null,
+    source: String? = null,
+    silent: Boolean = false,
+  ) {
     // Carry the trigger metadata to the JS layer: `phrase` lets us measure the
     // false-positive rate per phrase (a cancelled countdown IS a false
-    // positive), and `preroll` points at the audio from before she spoke.
+    // positive), `preroll` points at the audio from before she spoke,
+    // `source` names a trigger that is not a word (scream, shake), and
+    // `silent` asks the countdown to make no sound and show a dark screen.
     val uri = StringBuilder("orbii://voice-sos")
     val params = mutableListOf<String>()
     phrase?.let { params.add("phrase=" + Uri.encode(it)) }
     preRollPath?.let { params.add("preroll=" + Uri.encode(it)) }
+    source?.let { params.add("source=" + Uri.encode(it)) }
+    if (silent) params.add("silent=1")
     if (params.isNotEmpty()) uri.append("?").append(params.joinToString("&"))
 
     val deepLink = Intent(Intent.ACTION_VIEW, Uri.parse(uri.toString())).apply {
@@ -991,10 +1077,12 @@ class VoiceGuardService : Service() {
       this, 0, deepLink,
       PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
     )
-    val n = Notification.Builder(this, CH_ALERT)
+    // A silent SOS posts on a channel with no sound and no vibration, and its
+    // text says nothing an onlooker could read as an emergency.
+    val n = Notification.Builder(this, if (silent) CH_SILENT else CH_ALERT)
       .setSmallIcon(resources.getIdentifier("notification_icon", "drawable", packageName))
-      .setContentTitle("ORBII SOS")
-      .setContentText("Opening emergency…")
+      .setContentTitle(if (silent) "ORBII" else "ORBII SOS")
+      .setContentText(if (silent) "Tap to open" else "Opening emergency…")
       .setPriority(Notification.PRIORITY_MAX)
       .setCategory(Notification.CATEGORY_ALARM)
       .setFullScreenIntent(pi, true)
@@ -1119,6 +1207,16 @@ class VoiceGuardService : Service() {
     )
     mgr.createNotificationChannel(
       NotificationChannel(CH_ALERT, "Voice SOS", NotificationManager.IMPORTANCE_HIGH),
+    )
+    // No sound, no vibration, and hidden on the lock screen. Still HIGH
+    // importance, because that is what lets the full-screen intent open the
+    // countdown at all.
+    mgr.createNotificationChannel(
+      NotificationChannel(CH_SILENT, "Silent SOS", NotificationManager.IMPORTANCE_HIGH).apply {
+        setSound(null, null)
+        enableVibration(false)
+        lockscreenVisibility = Notification.VISIBILITY_SECRET
+      },
     )
   }
 

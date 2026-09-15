@@ -290,14 +290,24 @@ Deno.serve(async (req) => {
           // so she may be unable to pick up and the useful response is to GO.
           // Saying which one this is changes what the reader does in the first
           // thirty seconds, which is the only part that matters.
+          //
+          // A SHAKE is a silent SOS, and that changes the first move the other
+          // way: she chose not to make a sound, so ringing her phone can give
+          // her away. The body says so before anyone reaches for the call button.
           title:
             sos.trigger === 'impact'
               ? `🆘 ${name} may have had a fall or crash`
-              : `🆘 ${name} needs help`,
+              : sos.trigger === 'scream'
+                ? `🆘 ${name}'s phone heard a scream`
+                : `🆘 ${name} needs help`,
           body:
             sos.trigger === 'impact'
               ? 'Their phone detected a hard impact and they did not respond. Tap for their location.'
-              : 'Tap to see their live location and respond.',
+              : sos.trigger === 'scream'
+                ? 'ORBII heard a scream and the countdown was not cancelled. Tap for their live location.'
+                : sos.trigger === 'shake'
+                  ? 'They sent a silent SOS and may not be able to talk. Do not call them first. Tap for their location.'
+                  : 'Tap to see their live location and respond.',
           sound: 'default',
           priority: 'high',
           channelId: 'sos',
