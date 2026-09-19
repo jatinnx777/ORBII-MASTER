@@ -1,7 +1,8 @@
 import React, { ReactNode } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
+import { PressableScale } from './PressableScale';
 
 // Settings rows, grouped.
 //
@@ -90,14 +91,24 @@ export function Row({
     </View>
   );
 
+  // Scale rather than the old android_ripple. A ripple is Material's language
+  // and ORBII is not a Material app, so it only ever appeared on one platform
+  // and made the same row feel like two different products. The scale reads the
+  // same on both, and it takes the icon and label with it, which a background
+  // tint never did.
   const body = onPress ? (
-    <Pressable
+    <PressableScale
       onPress={onPress}
-      android_ripple={{ color: colors.creamDeep }}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+      style={styles.row}
+      accessibilityLabel={label}
+      accessibilityHint={value}
+      // A settings row is 62pt tall and full width, so it already clears the
+      // touch target comfortably. Extra hit slop here would overlap the row
+      // above and below and steal their presses.
+      hitSlop={0}
     >
       {content}
-    </Pressable>
+    </PressableScale>
   ) : (
     <View style={styles.row}>{content}</View>
   );

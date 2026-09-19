@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { currentUser, supabase } from './supabase';
 
 // Helper economy: real DB-backed earnings + payout requests.
 // Money is handled in PAISE end-to-end (matches sql/28) to avoid float errors.
@@ -81,7 +81,7 @@ export type PayoutRow = {
 /** The helper's own payout history. */
 export async function loadMyPayouts(): Promise<PayoutRow[]> {
   try {
-    const uid = (await supabase.auth.getUser()).data.user?.id;
+    const uid = (await currentUser())?.id;
     if (!uid) return [];
     const { data } = await supabase
       .from('payout_requests')

@@ -35,6 +35,7 @@ export { PremiumLock } from './PremiumLock';
 export { PrivacyPolicyModal } from './PrivacyPolicyModal';
 export { PermissionDisclosureModal } from './PermissionDisclosureModal';
 export { Row, RowGroup, RowSection } from './Row';
+export { PressableScale } from './PressableScale';
 export { GlassPanel, GlassButton } from './Glass';
 export { CircleSwitcher, CircleSwitcherTrigger } from './CircleSwitcher';
 export { ScreenContainer } from './ScreenContainer';

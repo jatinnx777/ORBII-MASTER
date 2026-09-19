@@ -90,6 +90,7 @@ import {
   ENABLE_IMPACT_DETECTION,
   SHADOW_MODE,
 } from '@/services/volumetricShock';
+import { flushCrashLog } from '@/services/crash-log';
 import { flushPendingSosAudio } from '@/services/sos-audio';
 // Side-effect import: registers the background victim-location task with the OS
 // so a headless invocation (app killed mid-SOS) can still find it.
@@ -540,6 +541,22 @@ function RootNavigator() {
   // without arming it for everybody at once. It reads a per-device setting that
   // defaults OFF, so shadow logging continues for everyone else and the data
   // that would fix the thresholds keeps accruing either way.
+  // Ship the crash detector's shadow log whenever she opens the app.
+  //
+  // CrashDetector records from inside the Voice SOS foreground service, which
+  // has no network stack of its own, so the lines sit in SharedPreferences
+  // until something drains them. Nothing here is time critical: it is the
+  // diagnostics that decide when crash detection can stop running blind, and
+  // without this the thresholds in CrashPattern stay guesses forever.
+  useEffect(() => {
+    if (status !== 'authenticated') return;
+    void flushCrashLog();
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void flushCrashLog();
+    });
+    return () => sub.remove();
+  }, [status]);
+
   const [impactArmed, setImpactArmed] = useState(false);
   useEffect(() => {
     if (status !== 'authenticated') return;
@@ -685,14 +702,17 @@ function RootNavigator() {
         const phrase = q('phrase');
         const preroll = q('preroll');
         const source = q('source');
-        // A scream or a shake is not the metered voice convenience. Both are
-        // emergency triggers in their own right, like the SOS button, and the
-        // button has never been behind a quota. They skip the gate below.
-        if (source === 'scream' || source === 'shake') {
+        // A scream, a shake or a detected crash is not the metered voice
+        // convenience. All three are emergency triggers in their own right, like
+        // the SOS button, and the button has never been behind a quota. They
+        // skip the gate below. Metering a crash would be indefensible: she is
+        // not asking for a convenience, and she may be unconscious.
+        if (source === 'scream' || source === 'shake' || source === 'crash') {
           // @ts-expect-error - SOSCountdown is in the AppStack only.
           navigationRef.navigate('SOSCountdown', {
             scream: source === 'scream',
             shake: source === 'shake',
+            crash: source === 'crash',
             silent: source === 'shake' || q('silent') === '1',
             preroll,
           });

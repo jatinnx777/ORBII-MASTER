@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { currentUser, supabase } from './supabase';
 
 // Product analytics. This used to console.log in __DEV__ and do NOTHING in a
 // release build, so every trackEvent call in the app, dozens of them, was
@@ -53,6 +53,10 @@ type EventName =
   // Impact detection running in shadow: what it WOULD have done, never what it
   // did. Reading these back is the only way its thresholds stop being guesses.
   | 'impact_shadow'
+  // The same idea for the speed-gated crash detector, which records from inside
+  // the foreground service and cannot reach the network itself. Until a week of
+  // these exists, CRASH_SHADOW_MODE stays true and the feature fires nothing.
+  | 'crash_shadow'
   | 'mesh_capability_probe'
   | 'offline_helper_accept'
   | 'screen_viewed';
@@ -61,7 +65,7 @@ type EventName =
 // on the SOS path where an analytics hiccup must not cost a rescue.
 async function send(name: EventName, params: Record<string, unknown>): Promise<void> {
   try {
-    const uid = (await supabase.auth.getUser()).data.user?.id ?? null;
+    const uid = (await currentUser())?.id ?? null;
     await supabase.from('app_events').insert({ user_id: uid, name, params });
   } catch {
     // Analytics is never worth surfacing or retrying.

@@ -90,11 +90,19 @@ export type SOSRecord = {
   status: SOSStatus;
   kind?: SOSKind;
   /**
-   * What set it off: manual, voice, impact, geofence, disaster, and since
-   * sql/129 scream and shake. Defaults to manual, which is true of every SOS
-   * raised before sql/120 existed.
+   * What set it off: manual, voice, impact, geofence, disaster, since sql/129
+   * scream and shake, and since sql/130 crash. Defaults to manual, which is
+   * true of every SOS raised before sql/120 existed.
    */
-  trigger?: 'manual' | 'voice' | 'impact' | 'geofence' | 'disaster' | 'scream' | 'shake';
+  trigger?:
+    | 'manual'
+    | 'voice'
+    | 'impact'
+    | 'geofence'
+    | 'disaster'
+    | 'scream'
+    | 'shake'
+    | 'crash';
   /**
    * Who ORBII set out to alert, captured on this phone at the moment the SOS was
    * sent, for the incident report. A list rebuilt later from today's circle would

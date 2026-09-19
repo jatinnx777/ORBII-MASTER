@@ -8,7 +8,8 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoute, RouteProp } from '@react-navigation/native';
+import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAudioPlayer } from 'expo-audio';
 import * as Sharing from 'expo-sharing';
 import {
@@ -26,6 +27,7 @@ import { exportIncidentReport } from '@/services/incident-report';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Route = RouteProp<AppStackParamList, 'IncidentDetail'>;
+type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 export function IncidentDetailScreen() {
   const route = useRoute<Route>();
@@ -34,6 +36,7 @@ export function IncidentDetailScreen() {
   );
   const profileName = useAppSelector((s) => s.user.profile?.name ?? null);
   const [exporting, setExporting] = useState(false);
+  const navigation = useNavigation<Nav>();
 
   if (!record) {
     return (
@@ -133,6 +136,41 @@ export function IncidentDetailScreen() {
           <Ionicons name="document-text-outline" size={20} color={colors.textInverse} />
           <Text style={styles.reportText}>
             {exporting ? 'Creating PDF…' : 'Export incident report'}
+          </Text>
+        </Pressable>
+
+        {/* The PDF is only half of it. Most people do not know that an FIR can
+            be filed at any station, that treatment is free, or that legal aid
+            costs nothing, and the hours after an incident are exactly when
+            somebody tells them otherwise. */}
+        <Pressable
+          onPress={() => navigation.navigate('AfterAnIncident')}
+          style={({ pressed }) => [
+            {
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: spacing.sm,
+              paddingVertical: 12,
+              borderRadius: radius.circle,
+              borderWidth: 1,
+              borderColor: colors.border,
+            },
+            pressed && { opacity: 0.85 },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="What to do after an incident"
+        >
+          <Ionicons name="shield-checkmark-outline" size={18} color={colors.textPrimary} />
+          <Text
+            style={{
+              fontFamily: fontFamilies.poppinsSemiBold,
+              fontSize: 14,
+              color: colors.textPrimary,
+            }}
+          >
+            What to do next: FIR, treatment, legal aid
           </Text>
         </Pressable>
       </Card>

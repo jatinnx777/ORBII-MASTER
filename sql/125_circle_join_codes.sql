@@ -173,9 +173,16 @@ begin
     raise exception 'that circle is full';
   end if;
 
+  -- circle_members_active_uq (sql/84) is a PARTIAL unique index, over live
+  -- rows only. Postgres will not infer a partial index from a bare
+  -- ON CONFLICT (cols): the inference clause has to repeat the predicate or it
+  -- matches nothing and raises 42P10. Shipping this without the predicate is
+  -- what broke circle creation for every user on 19 September 2026, via the
+  -- two owner-membership triggers that had the same omission.
   insert into circle_members (circle_id, user_id, role)
   values (target, auth.uid(), 'member')
-  on conflict (circle_id, user_id) do update set deleted_at = null;
+  on conflict (circle_id, user_id) where deleted_at is null
+  do update set deleted_at = null;
 
   return target;
 end $$;
@@ -252,10 +259,23 @@ select 'a new circle gets one automatically',
        (exists (select 1 from pg_trigger where tgname = 'circles_join_code'))::text
 union all
 select 'the app can join by code (must be true)',
-       public.orbii_can_exec('authenticated', 'public.join_circle_by_code(text)')
+       case when to_regprocedure('public.orbii_can_exec(text,text)') is null
+            then has_function_privilege(
+                   'authenticated', 'public.join_circle_by_code(text)', 'execute')::text
+            else public.orbii_can_exec(
+                   'authenticated', 'public.join_circle_by_code(text)')
+       end
 union all
-select 'a wrong code returns nothing rather than erroring (must be blank)',
-       coalesce(public.join_circle_by_code('ZZZZZZ')::text, '')
+-- Calling join_circle_by_code here raises `auth required`, because the SQL
+-- editor runs with no JWT and the function refuses an anonymous caller, which
+-- is correct behaviour. An exception inside a verify aborts the whole script
+-- and rolls the migration back with it, so this check has to stand down when
+-- there is nobody signed in. CASE is lazy, so the call is not made at all.
+select 'a wrong code returns nothing rather than erroring',
+       case when auth.uid() is null
+            then 'skipped: no signed-in user in the SQL editor'
+            else coalesce(public.join_circle_by_code('ZZZZZZ')::text, 'blank, correct')
+       end
 union all
 select 'phone lookup is closed to the app (must be false)',
        has_function_privilege('authenticated', 'public.find_user_by_phone(text,uuid)', 'execute')::text

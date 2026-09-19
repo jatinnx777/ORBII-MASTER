@@ -60,12 +60,17 @@ const KEYS = {
   // SharedPreferences, which is what actually decides.
   screamTrigger: 'orbii:scream-trigger',
   shakeTrigger: 'orbii:shake-trigger',
+  crashTrigger: 'orbii:crash-trigger',
   // The two screens before sign-in: language, then what ORBII is.
   introDone: 'orbii:intro-done',
   onboardingLang: 'orbii:onboarding-lang',
   sosQueue: 'orbii:sos-queue',
   // Ten booleans. Whether this user's voice triggers tend to be real.
   voiceOutcomes: 'orbii:voice-outcomes',
+  // Saved Safe Journey presets, newest first. The same trip five nights a week
+  // should not be the same four taps five times. Prefills the start screen and
+  // nothing else: no preset can start a journey by itself.
+  journeyPresets: 'orbii:journey-presets',
 } as const;
 
 export const storageKeys = KEYS;

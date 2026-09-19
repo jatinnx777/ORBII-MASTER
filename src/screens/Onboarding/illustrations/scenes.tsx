@@ -1,209 +1,108 @@
 import React from 'react';
-import { Text as SvgText } from 'react-native-svg';
-import { Scene } from './Scene';
-import { Bag, Bubble, Figure, Phone, Shadow, SoundWaves } from './Figures';
+import { Image, StyleSheet, type ImageSourcePropType } from 'react-native';
 
 /**
- * One scene per onboarding screen.
+ * One illustration per onboarding screen.
  *
- * Each says the screen's idea in a picture, so the heading confirms what the
- * illustration already told you. If a scene could be swapped between two
- * screens without anyone noticing, it is decoration and should be cut.
+ * THESE USED TO BE HAND-BUILT SVG SCENES. Scene.tsx and Figures.tsx drew a
+ * lilac city, a figure and a few props in code, and the README in
+ * assets/onboarding said plainly what they were: placeholders, to be replaced
+ * the moment the painted art existed. The art has been sitting in
+ * assets/onboarding since 23 August and nothing ever picked it up, so the app
+ * kept shipping the stand-ins.
  *
- * Palette is the reference's: saturated yellow, orange, blue, red and green
- * blocks against the lilac sky, black speech bubbles, and a second tone on each
- * figure so no torso is a single flat slab.
+ * Scene.tsx and Figures.tsx are left in the repo rather than deleted. They are
+ * the only record of the palette and composition the painted art was specified
+ * against, and they still render if a file here ever goes missing.
+ *
+ * SHAPE. Every image is 1024x1536, portrait, full body, with the figure's
+ * shoes near the bottom edge. Pass `sceneAspect={2 / 3}` to Step alongside
+ * them: that is the files' own ratio, so the slot matches the artwork exactly
+ * and there is nothing to crop, letterbox or stretch. Any other ratio either
+ * cuts her feet off or leaves bars down the sides.
+ *
+ * WEIGHT. About 1.4MB each, 8.5MB for the set, uncompressed PNG. That is worth
+ * knowing before a seventh is added: they are bundled into the APK, not
+ * downloaded, so every one of them is paid for by every install including the
+ * people who see onboarding once.
  */
 
-const F = 'Poppins_700Bold';
+function Art({ source, label }: { source: ImageSourcePropType; label: string }) {
+  return (
+    <Image
+      source={source}
+      style={styles.art}
+      resizeMode="cover"
+      // Onboarding is the one place where the illustration IS the explanation,
+      // so a screen reader that skips it loses the screen's point, not just a
+      // decoration.
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={label}
+    />
+  );
+}
 
-/** 1. The word. Phone raised, sound leaving it, "help!" above her. */
+/** 1. The word. She says it out loud and the phone hears her. */
 export function SceneVoice() {
   return (
-    <Scene>
-      <Shadow x={186} y={272} rx={30} />
-      <Figure
-        x={186}
-        y={272}
-        scale={1.1}
-        skin="mid"
-        jacket="#FFC940"
-        shirt="#FFFFFF"
-        bottom="#E0483C"
-        hair="buns"
-        waving
-      />
-      <Phone x={264} y={176} scale={1.1} rotate={8} />
-      <SoundWaves x={282} y={176} />
-      <Bubble x={92} y={86} w={86}>
-        <SvgText x={135} y={104} fill="#FFF" fontSize={15} fontFamily={F} textAnchor="middle">
-          help!
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/voice.png')}
+      label="A woman waving, saying help out loud, with her phone listening beside her"
+    />
   );
 }
 
-/** 2. Hands free. Phone in the bag, still listening. */
+/** 2. Hands free. The phone is in the bag and still listening. */
 export function SceneHandsFree() {
   return (
-    <Scene>
-      <Shadow x={196} y={274} rx={31} />
-      <Figure
-        x={196}
-        y={274}
-        scale={1.12}
-        skin="deep"
-        jacket="#2F7DD1"
-        shirt="#EAF2FB"
-        bottom="#2A2A55"
-        hair="crop"
-      />
-      <Bag x={238} y={214} scale={1.05} />
-      <SoundWaves x={266} y={214} />
-      <Bubble x={78} y={98} w={112}>
-        <SvgText x={134} y={116} fill="#FFF" fontSize={13} fontFamily={F} textAnchor="middle">
-          hands free
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/handsfree.png')}
+      label="A woman walking with her phone in her bag, still listening for her"
+    />
   );
 }
 
-/** 3. No signal, still sent. Sound going out both ways with nothing to carry it. */
+/** 3. Offline. No signal, the alert still leaves. */
 export function SceneOffline() {
   return (
-    <Scene>
-      <Shadow x={200} y={274} rx={30} />
-      <Figure
-        x={200}
-        y={274}
-        scale={1.12}
-        skin="light"
-        jacket="#F2662F"
-        shirt="#FFE8D6"
-        bottom="#3B3B7A"
-        hair="pony"
-        waving
-      />
-      <SoundWaves x={266} y={196} />
-      <SoundWaves x={134} y={196} flip />
-      <Bubble x={82} y={84} w={130}>
-        <SvgText x={147} y={102} fill="#FFF" fontSize={12.5} fontFamily={F} textAnchor="middle">
-          no signal, still sent
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/offline.png')}
+      label="A woman with no network bars, her alert going out anyway"
+    />
   );
 }
 
-/** 4. Somebody comes. Two figures converging. */
+/** 4. Helpers. The people who come. */
 export function SceneHelpers() {
   return (
-    <Scene>
-      <Shadow x={142} y={274} rx={27} />
-      <Shadow x={258} y={274} rx={27} />
-      <Figure
-        x={142}
-        y={274}
-        scale={1.04}
-        skin="mid"
-        jacket="#FFC940"
-        shirt="#FFFFFF"
-        bottom="#E0483C"
-        hair="buns"
-        waving
-      />
-      <Figure
-        x={258}
-        y={274}
-        scale={1.04}
-        skin="deep"
-        jacket="#3FBE8F"
-        shirt="#E6F7F0"
-        bottom="#2A2A55"
-        hair="crop"
-        waving
-        flip
-      />
-      <Bubble x={54} y={82} w={98}>
-        <SvgText x={103} y={100} fill="#FFF" fontSize={13} fontFamily={F} textAnchor="middle">
-          on my way
-        </SvgText>
-      </Bubble>
-      <Bubble x={252} y={70} w={86}>
-        <SvgText x={295} y={88} fill="#FFF" fontSize={13} fontFamily={F} textAnchor="middle">
-          I'm here
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/helpers.png')}
+      label="Two people heading towards a woman who has raised an alert"
+    />
   );
 }
 
-/** 5. Privacy. Phone held close, nothing leaving it. */
+/** 5. Private. Nothing leaves until she says so. */
 export function ScenePrivate() {
   return (
-    <Scene>
-      <Shadow x={200} y={274} rx={30} />
-      <Figure
-        x={200}
-        y={274}
-        scale={1.12}
-        skin="mid"
-        jacket="#8672CE"
-        shirt="#EDE6FA"
-        bottom="#2A2A55"
-        hair="bob"
-      />
-      <Phone x={240} y={206} scale={1.15} rotate={-6} />
-      <Bubble x={74} y={92} w={148}>
-        <SvgText x={148} y={110} fill="#FFF" fontSize={12} fontFamily={F} textAnchor="middle">
-          stays on your phone
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/private.png')}
+      label="A woman beside a locked phone, her location held privately"
+    />
   );
 }
 
-/** 6. Ready. Both waving, the send-off. */
+/** 6. Ready. Set up, armed, nothing left to do. */
 export function SceneReady() {
   return (
-    <Scene>
-      <Shadow x={144} y={274} rx={27} />
-      <Shadow x={256} y={274} rx={27} />
-      <Figure
-        x={144}
-        y={274}
-        scale={1.06}
-        skin="light"
-        jacket="#FFC940"
-        shirt="#FFFFFF"
-        bottom="#E0483C"
-        hair="pony"
-        waving
-      />
-      <Figure
-        x={256}
-        y={274}
-        scale={1.06}
-        skin="deep"
-        jacket="#2F7DD1"
-        shirt="#EAF2FB"
-        bottom="#3FBE8F"
-        hair="buns"
-        waving
-        flip
-      />
-      <Bubble x={50} y={76} w={104}>
-        <SvgText x={102} y={94} fill="#FFF" fontSize={13} fontFamily={F} textAnchor="middle">
-          you're set
-        </SvgText>
-      </Bubble>
-      <Bubble x={248} y={92} w={92}>
-        <SvgText x={294} y={110} fill="#FFF" fontSize={13} fontFamily={F} textAnchor="middle">
-          let's go
-        </SvgText>
-      </Bubble>
-    </Scene>
+    <Art
+      source={require('../../../../assets/onboarding/ready.png')}
+      label="A woman standing ready, her phone set up and watching for her"
+    />
   );
 }
+
+const styles = StyleSheet.create({
+  art: { width: '100%', height: '100%' },
+});

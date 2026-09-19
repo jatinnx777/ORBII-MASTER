@@ -24,6 +24,11 @@ function isSensitive(key: string): boolean {
   return SECURE_KEY_PREFIXES.some((p) => key.startsWith(p));
 }
 
+// The size and integrity rules live in their own module so they can be tested
+// without pulling expo-secure-store, and therefore expo-modules-core, into a
+// test runner that has no native globals. Same split as incident-report-html.
+import { looksTruncated, tooBigForKeystore } from './secure-store-rules';
+
 const secureSupported = Platform.OS === 'android' || Platform.OS === 'ios';
 
 export const secureStorage = {
@@ -31,7 +36,18 @@ export const secureStorage = {
     if (secureSupported && isSensitive(key)) {
       try {
         const v = await SecureStore.getItemAsync(key);
-        return v ?? null;
+        if (v != null && !looksTruncated(v)) return v;
+        // A MISS IS NOT AN ANSWER, AND RETURNING IT HERE WAS THE BUG.
+        //
+        // setItem below falls back to AsyncStorage whenever the value will not
+        // fit in the keystore, which is every Google session. This branch used
+        // to `return v ?? null` on a successful empty read, so it answered
+        // "no session" without ever looking where the write had actually put
+        // it. Supabase then treated the user as signed out, retried a refresh
+        // it could never complete, and finally sent the request as `anon`,
+        // which matches no RLS policy and fails with "new row violates
+        // row-level security policy". Falling through is the entire point of a
+        // hybrid store.
       } catch (err) {
         // Keystore can throw on locked-screen / corrupt keystore. Fall
         // through to AsyncStorage so the user isn't locked out.
@@ -41,7 +57,7 @@ export const secureStorage = {
     return AsyncStorage.getItem(key);
   },
   setItem: async (key: string, value: string): Promise<void> => {
-    if (secureSupported && isSensitive(key)) {
+    if (secureSupported && isSensitive(key) && !tooBigForKeystore(value)) {
       try {
         await SecureStore.setItemAsync(key, value);
         // Clean stale plaintext copy from AsyncStorage if it was there
@@ -51,6 +67,12 @@ export const secureStorage = {
       } catch (err) {
         console.warn('[secure-store] setItem fallback', key, err);
       }
+    }
+    // Either not sensitive, too large for the keystore, or the keystore
+    // refused it. Drop any stale keystore copy first: leaving an old session
+    // there would let getItem return it in preference to this newer one.
+    if (secureSupported && isSensitive(key)) {
+      await SecureStore.deleteItemAsync(key).catch(() => undefined);
     }
     await AsyncStorage.setItem(key, value);
   },

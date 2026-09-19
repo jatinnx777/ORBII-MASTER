@@ -106,10 +106,14 @@ export function CountdownScreen() {
   // built from a voice, so both get the plain countdown.
   const isScream = route.params?.scream === true;
   const isShake = route.params?.shake === true;
+  // The speed-gated crash detector. Like impact, this is a sensor speaking for
+  // her rather than a person asking, so the copy has to say so: her circle
+  // needs to know she may be unable to answer rather than simply not answering.
+  const isCrash = route.params?.crash === true;
   const isSilent = route.params?.silent === true;
   // Raised by the service that owns the microphone. The countdown must not open
   // a second recorder against it; the service's own pre-roll is uploaded instead.
-  const fromGuard = isVoice || isScream || isShake;
+  const fromGuard = isVoice || isScream || isShake || isCrash;
 
   // Deadline-based countdown. We compute remaining time off Date.now() each
   // tick rather than decrementing a counter, that way an incoming phone
@@ -387,15 +391,17 @@ export function CountdownScreen() {
         profile,
         location,
         isTest ? 'test' : 'real',
-        isImpact
-          ? 'impact'
-          : isScream
-            ? 'scream'
-            : isShake
-              ? 'shake'
-              : isVoice
-                ? 'voice'
-                : 'manual',
+        isCrash
+          ? 'crash'
+          : isImpact
+            ? 'impact'
+            : isScream
+              ? 'scream'
+              : isShake
+                ? 'shake'
+                : isVoice
+                  ? 'voice'
+                  : 'manual',
       );
       // Stop the countdown recording and keep it as this SOS's pre-roll. Done
       // BEFORE navigating so the mic is free when ActiveSOS starts the main clip.
@@ -431,9 +437,10 @@ export function CountdownScreen() {
           void uploadPreRoll(profile.uid, record.id, preroll);
         }
       }
-      // Scream and shake come from the guard service too, which kept the
-      // seconds before the trigger. Upload that pre-roll the same way.
-      if ((isScream || isShake) && !isTest && route.params?.preroll) {
+      // Scream, shake and crash come from the guard service too, which kept the
+      // seconds before the trigger. Upload that pre-roll the same way. On a
+      // crash those seconds are the impact itself.
+      if ((isScream || isShake || isCrash) && !isTest && route.params?.preroll) {
         void uploadPreRoll(profile.uid, record.id, route.params.preroll);
       }
       // Frozen now: a list rebuilt later from today's circle would name people
@@ -573,10 +580,12 @@ export function CountdownScreen() {
                 ? 'PRACTICE · NO ALERTS SENT'
                 : isSilent
                   ? 'SILENT SOS'
-                  : isImpact
-                    ? 'HARD IMPACT DETECTED'
-                    : isScream
-                      ? 'SCREAM DETECTED'
+                  : isCrash
+                    ? 'POSSIBLE CRASH DETECTED'
+                    : isImpact
+                      ? 'HARD IMPACT DETECTED'
+                      : isScream
+                        ? 'SCREAM DETECTED'
                       : route.params?.journey === true
                         ? 'SAFE JOURNEY OVERDUE'
                         : 'EMERGENCY SOS'}
@@ -595,10 +604,12 @@ export function CountdownScreen() {
               ? 'Practice SOS in'
               : isSilent
                 ? 'Sending silently in'
-                : isImpact
-                  ? 'Are you okay? Sending your SOS in'
-                  : isScream
-                    ? 'Did you scream? Sending your SOS in'
+                : isCrash
+                  ? 'Looks like a crash. Sending your SOS in'
+                  : isImpact
+                    ? 'Are you okay? Sending your SOS in'
+                    : isScream
+                      ? 'Did you scream? Sending your SOS in'
                     : route.params?.journey === true
                       ? "You haven't marked yourself safe. Sending your SOS in"
                       : 'Sending your SOS in'}

@@ -24,3 +24,18 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     flowType: 'pkce',
   },
 });
+
+// The signed-in user, read from the session already held in memory.
+//
+// `supabase.auth.getUser()` is not a local read: it is a network round trip to
+// /auth/v1/user on every call. The Supabase edge logs from 19 September 2026
+// showed hundreds of them firing back to back, one per analytics event and one
+// per circles read, and that queue is most of what people felt as "creating a
+// circle takes minutes". getSession() reads memory and refreshes the token
+// only when it has actually expired.
+//
+// Use this anywhere the user id is all that is needed. Call getUser() only
+// when the token genuinely has to be revalidated against the server.
+export async function currentUser() {
+  return (await supabase.auth.getSession()).data.session?.user ?? null;
+}

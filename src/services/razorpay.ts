@@ -1,5 +1,5 @@
 import RazorpayCheckout from 'react-native-razorpay';
-import { supabase } from './supabase';
+import { currentUser, supabase } from './supabase';
 import { getItem, setItem, storageKeys } from './storage';
 
 // Razorpay TEST-mode checkout for ORBII paid plans (Solo / Family). The secret
@@ -35,7 +35,7 @@ export async function tipHelper(
   const amount = Math.round(amountRupees * 100);
   if (amount < 100) return { ok: false, error: 'Minimum tip is ₹1' };
   try {
-    const profile = (await supabase.auth.getUser()).data.user;
+    const profile = (await currentUser());
     const payment = await RazorpayCheckout.open({
       key: RAZORPAY_TEST_KEY_ID,
       amount,

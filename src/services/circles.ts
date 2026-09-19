@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { currentUser, supabase } from './supabase';
 import type { GeoPoint } from '@/types';
 
 // Circle = a private group of trusted people. A user belongs to many circles
@@ -301,7 +301,7 @@ function rowToTrip(row: TripRow): SharedTrip {
 
 // Returns every circle the signed-in user belongs to, sorted by recency.
 export async function listCircles(): Promise<Circle[]> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) return [];
   // Pull circle ids via membership, then fetch the circle rows. We do this
   // in two hops because Supabase RLS makes the obvious join awkward.
@@ -398,7 +398,7 @@ export async function deleteCircle(circleId: string): Promise<void> {
 // Drops the current user from a circle. Owners cannot leave; they must
 // delete the circle instead.
 export async function leaveCircle(circleId: string): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) throw new Error('Sign in to leave a circle.');
   const { error } = await supabase
     .from('circle_members')
@@ -441,7 +441,7 @@ export async function inviteByUsername(
   circleId: string,
   username: string,
 ): Promise<CircleInvite> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) throw new Error('Sign in to invite.');
   const trimmed = username.replace(/^@/, '').trim();
   if (!trimmed) throw new Error('Enter a username.');
@@ -462,7 +462,7 @@ export async function inviteByPhone(
   circleId: string,
   phoneE164: string,
 ): Promise<CircleInvite> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) throw new Error('Sign in to invite.');
   const { data, error } = await supabase
     .from('circle_invites')
@@ -479,7 +479,7 @@ export async function inviteByPhone(
 
 // Pending invites the current user has been sent (by username match).
 export async function listIncomingInvites(): Promise<CircleInvite[]> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) return [];
   const { data: profile } = await supabase
     .from('users_public')
@@ -519,7 +519,7 @@ export async function resolveInviterNames(
 }
 
 export async function acceptInvite(invite: CircleInvite): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) throw new Error('Sign in first.');
   // Two writes; the second only runs if the first succeeded. RLS makes
   // sure the invitee is actually the one accepting.
@@ -543,7 +543,7 @@ export async function acceptInvite(invite: CircleInvite): Promise<void> {
 export async function acceptInviteByToken(
   token: string,
 ): Promise<{ circleId: string }> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) throw new Error('Sign in to accept this invite.');
   // Find the invite. We don't filter on invitee_username here, the
   // token is the proof of legitimacy.
@@ -609,7 +609,7 @@ export async function recordCircleEvent(
   kind: string,
   payload: Record<string, unknown> = {},
 ): Promise<void> {
-  const user = (await supabase.auth.getUser()).data.user;
+  const user = (await currentUser());
   if (!user) return;
   await supabase.from('circle_events').insert({
     circle_id: circleId,

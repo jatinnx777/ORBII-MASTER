@@ -129,6 +129,17 @@ export function SupportScreen() {
             />
           </View>
 
+          {/* ── After an incident ── */}
+          <Text style={styles.sectionLabel}>AFTER AN INCIDENT</Text>
+          <View style={styles.card}>
+            <Row
+              icon="document-text"
+              title="What to do after an incident"
+              body="Zero FIR, free medical treatment, free legal aid, and what police must do."
+              onPress={() => navigation.navigate('AfterAnIncident')}
+            />
+          </View>
+
           {/* ── App help ── */}
           <Text style={styles.sectionLabel}>APP HELP</Text>
           <View style={styles.card}>

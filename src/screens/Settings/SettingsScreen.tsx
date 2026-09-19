@@ -42,7 +42,7 @@ import { clearPin } from '@/services/safety-pin';
 import { useIsResponder } from '@/services/roles';
 import { requestNotificationPermission } from '@/services/notifications';
 import { APP_VERSION, COPYRIGHT_LINE } from '@/services/app-info';
-import { setScreamTrigger, setShakeTrigger } from '@/services/voice-detection';
+import { setCrashTrigger, setScreamTrigger, setShakeTrigger } from '@/services/voice-detection';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -91,6 +91,9 @@ export function SettingsScreen() {
   const [impactDetection, setImpactDetection] = useState(false);
   const [screamTrigger, setScreamTriggerOn] = useState(false);
   const [shakeTrigger, setShakeTriggerOn] = useState(false);
+  // Defaults ON, matching the native default in VoiceGuardService. Somebody
+  // riding home at night should not have had to find a switch first.
+  const [crashTrigger, setCrashTriggerOn] = useState(true);
   useEffect(() => {
     let alive = true;
     void isMeshRelayEnabled().then((v) => {
@@ -125,6 +128,11 @@ export function SettingsScreen() {
     void getItem<boolean>(storageKeys.shakeTrigger).then((v) => {
       if (!cancelled) setShakeTriggerOn(v === true);
     });
+    // `!== false` rather than `=== true`: an unset key means she has never
+    // touched this, and the default is on. Only an explicit off turns it off.
+    void getItem<boolean>(storageKeys.crashTrigger).then((v) => {
+      if (!cancelled) setCrashTriggerOn(v !== false);
+    });
     return () => {
       cancelled = true;
     };
@@ -140,6 +148,19 @@ export function SettingsScreen() {
       sheet.notify({
         title: 'A scream can start an SOS',
         body: 'While Voice SOS is on, a clear scream on its own opens the countdown. Cancel it and nobody is told. A TV or children playing can set it off, which is why the countdown is always there.',
+        tone: 'neutral',
+      });
+    }
+  };
+
+  const handleCrashTrigger = async (next: boolean) => {
+    setCrashTriggerOn(next);
+    await setItem(storageKeys.crashTrigger, next);
+    await setCrashTrigger(next);
+    if (next) {
+      sheet.notify({
+        title: 'A crash can start an SOS',
+        body: 'While Voice SOS is on and you are moving at vehicle speed, a hard impact followed by the vehicle stopping opens the countdown. Cancel it and nobody is told. It cannot tell a crash from a pothole taken badly, which is why the countdown is always there.',
         tone: 'neutral',
       });
     }
@@ -455,6 +476,34 @@ export function SettingsScreen() {
               />
             }
           />
+          <Row
+            icon="car-sport-outline"
+            label="A crash starts an SOS"
+            value={
+              crashTrigger
+                ? 'On. While Voice SOS is on and you are travelling at vehicle speed, a hard impact followed by the vehicle stopping opens the countdown. Cancel it and nothing is sent.'
+                : 'Off. Turn this on and ORBII watches for a crash while you are driving or riding, and opens a countdown you can cancel.'
+            }
+            right={
+              <Switch
+                value={crashTrigger}
+                onValueChange={(v) => void handleCrashTrigger(v)}
+                trackColor={{ true: colors.brand, false: colors.border }}
+                thumbColor={colors.surface}
+              />
+            }
+          />
+          {crashTrigger ? (
+            // The limits, stated rather than implied. Somebody who reads
+            // "crash detection" pictures an airbag sensor, and this is a phone
+            // in a bag doing physics on a 50Hz accelerometer. Overstating it on
+            // a safety app is worse than not shipping it.
+            <Row
+              icon="information-circle-outline"
+              label="What this cannot do"
+              value="It needs Voice SOS running, and it only watches once GPS says you are moving at vehicle speed, so it does nothing on foot or with the phone at rest. The thresholds are still being tuned against real road data. It is not a substitute for calling 112."
+            />
+          ) : null}
           <Row
             icon="phone-portrait-outline"
             label="Shake for a silent SOS"

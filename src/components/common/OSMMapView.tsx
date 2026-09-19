@@ -64,12 +64,23 @@ type Props = {
   // Fires when the user taps the map, with the tapped coordinate. Used to drop
   // pins (e.g. the geofence corner editor).
   onMapPress?: (coord: GeoPoint) => void;
+  // Hide the street/satellite toggle. Circles shows satellite only: on a map
+  // whose job is "which building is she outside", the street rendering is a
+  // worse answer to the same question, and the toggle is one more control on
+  // a screen that already has several.
+  showLayerToggle?: boolean;
 };
 
-// CARTO "Voyager": a clean, modern, high-DPI basemap (looks like a premium app,
-// not the dated raw-OSM tiles). {r} + detectRetina serve @2x tiles on good screens.
-const TILE_URL = 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-const TILE_ATTRIBUTION = '© OpenStreetMap © CARTO';
+// CARTO IS GONE. Its free raster basemap now stamps "API KEY REQUIRED" across
+// every tile, which rendered as a watermark over the whole map on Circles.
+// Nothing was misconfigured on our side; CARTO closed the keyless tier.
+//
+// Esri's World_Street_Map is the replacement: keyless, no watermark, and the
+// same provider already serving the satellite layer below, so the two bases
+// come from one source and one attribution line covers both.
+const TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+const TILE_ATTRIBUTION = '© Esri';
 
 function defaultIconHtml(kind: OSMMarker['kind'] = 'helper'): string {
   switch (kind) {
@@ -181,7 +192,9 @@ function buildHtml(
   // (Esri, free, no key) so you can literally see a building/college and place
   // pins on it even when the map's search or labels miss it.
   var streetLayer = L.tileLayer('${TILE_URL}', {
-    maxZoom: 20, subdomains: 'abcd', detectRetina: true,
+    // No subdomains and no {r}: the Esri endpoint serves neither, and leaving
+    // detectRetina on would request @2x tiles that come back 404 and flash.
+    maxZoom: 20,
     updateWhenIdle: false, keepBuffer: 4, crossOrigin: true,
     attribution: '${TILE_ATTRIBUTION}',
   });
@@ -374,6 +387,7 @@ export function OSMMapView({
   onMarkerPress,
   onMapPress,
   defaultLayer = 'street',
+  showLayerToggle = true,
 }: Props) {
   const zoomControls = showZoomControls ?? interactive;
   const webviewRef = useRef<WebView>(null);
@@ -474,7 +488,7 @@ export function OSMMapView({
         bounces={false}
         automaticallyAdjustContentInsets={false}
       />
-      {interactive ? (
+      {interactive && showLayerToggle ? (
         <Pressable onPress={toggleLayer} style={styles.layerBtn} accessibilityRole="button" accessibilityLabel="Toggle satellite">
           <Text style={styles.layerBtnText}>{layer === 'street' ? 'Satellite' : 'Map'}</Text>
         </Pressable>

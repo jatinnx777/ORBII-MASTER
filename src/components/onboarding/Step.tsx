@@ -61,6 +61,17 @@ export type StepProps = {
    */
   scene?: React.ReactNode;
   /**
+   * Shape of the illustration slot, as width / height. Defaults to 4:3.
+   *
+   * The hand-drawn scenes were authored in a 400x300 viewBox. The painted
+   * illustrations that replaced them are 1024x1536, portrait, full-body, with
+   * the figure's shoes close to the bottom edge, so a landscape slot would
+   * crop her feet off. Pass a value below 1 and the slot goes portrait and
+   * narrows itself, because a full-width portrait picture is taller than the
+   * phone and pushes the title off screen.
+   */
+  sceneAspect?: number;
+  /**
    * Hides the progress bar and the "2 of 8" counter.
    *
    * For signing back in, which is not a wizard. A returning user is doing one
@@ -86,6 +97,7 @@ export function Step({
   icon,
   tint,
   scene,
+  sceneAspect = 4 / 3,
   bare,
   title,
   blurb,
@@ -214,7 +226,18 @@ export function Step({
             </View>
 
             {scene ? (
-              <View style={styles.scene}>{scene}</View>
+              <View
+                style={[
+                  styles.scene,
+                  { aspectRatio: sceneAspect },
+                  // A portrait picture at full width is roughly 520pt tall on a
+                  // normal phone, which buries the heading. Narrowed and
+                  // centred it reads as an illustration rather than a banner.
+                  sceneAspect < 1 ? styles.scenePortrait : null,
+                ]}
+              >
+                {scene}
+              </View>
             ) : (
               <View style={[styles.badge, { backgroundColor: tint + '1A' }]}>
                 <Ionicons name={icon} size={26} color={tint} />
@@ -289,15 +312,18 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     color: colors.textMuted,
   },
-  // 4:3, matching the scenes' 400x300 viewBox, so nothing is cropped and the
-  // horizon sits where it was drawn to sit.
+  // Shape comes from the sceneAspect prop; this holds everything else.
   scene: {
-    aspectRatio: 4 / 3,
     width: '100%',
     borderRadius: radius.lg,
     overflow: 'hidden',
     marginBottom: spacing.lg,
   },
+  // 2:3 is the illustrations' native shape, so the slot matches the file and
+  // nothing is cropped, letterboxed or stretched. Width is what keeps a
+  // portrait picture from running past the fold: at 64% it is about 250pt wide
+  // and 375pt tall on a normal phone, which leaves the heading on screen.
+  scenePortrait: { width: '64%', alignSelf: 'center' },
   badge: {
     width: 56,
     height: 56,

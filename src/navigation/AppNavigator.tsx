@@ -7,6 +7,7 @@ import { HelperResponseScreen } from '@/screens/SOS/HelperResponseScreen';
 import { IncidentDetailScreen } from '@/screens/History/IncidentDetailScreen';
 import { EmergencyContactsScreen } from '@/screens/Profile/EmergencyContactsScreen';
 import { SafetyReadinessScreen } from '@/screens/SafetyReadiness/SafetyReadinessScreen';
+import { AfterAnIncidentScreen } from '@/screens/Support/AfterAnIncidentScreen';
 import { VoiceDonationScreen } from '@/screens/Profile/VoiceDonationScreen';
 import { GeofencesScreen } from '@/screens/Geofence/GeofencesScreen';
 import { ZoneEditorScreen } from '@/screens/Geofence/ZoneEditorScreen';
@@ -160,6 +161,11 @@ export function AppNavigator() {
         name="SafetyReadiness"
         component={SafetyReadinessScreen}
         options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="AfterAnIncident"
+        component={AfterAnIncidentScreen}
+        options={{ headerShown: false, animation: 'slide_from_right' }}
       />
       <Stack.Screen
         name="VoiceDonation"

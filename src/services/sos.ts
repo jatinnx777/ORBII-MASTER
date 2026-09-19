@@ -52,7 +52,12 @@ export type SOSTrigger =
   | 'geofence'
   | 'disaster'
   | 'scream'
-  | 'shake';
+  | 'shake'
+  // Distinct from 'impact' on purpose. Impact is an accelerometer alone and had
+  // to be conservative because it cannot tell a collision from a dropped phone.
+  // Crash is speed-gated: she was travelling, something hit hard, and the speed
+  // collapsed. Her circle should read those two differently.
+  | 'crash';
 
 export async function createSOS(
   user: UserProfile,

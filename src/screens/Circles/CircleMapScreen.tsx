@@ -562,6 +562,13 @@ export function CircleMapScreen() {
         circles={[...rings, ...stopRings, ...breadcrumbs]}
         polylines={trailLines}
         fitAll={markers.length > 0}
+        // Satellite, and only satellite. The question this screen answers is
+        // "where is she, and what is she next to", and a street rendering
+        // cannot show the building, the gate or the parked cars. The toggle is
+        // hidden rather than defaulted, so nobody lands on the weaker map by
+        // tapping something they meant to dismiss.
+        defaultLayer="satellite"
+        showLayerToggle={false}
       />
 
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['top', 'bottom']} pointerEvents="box-none">

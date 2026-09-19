@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { currentUser, supabase } from './supabase';
 import { reportError } from './error-reporting';
 
 // Responder profile for the ORBII Helpers app, verification + trust +
@@ -120,7 +120,7 @@ export async function loadHelperProfileSafe(userId: string): Promise<HelperProfi
 export async function setHelperCategory(category: string): Promise<void> {
   try {
     await supabase.auth.getSession();
-    const uid = (await supabase.auth.getUser()).data.user?.id;
+    const uid = (await currentUser())?.id;
     if (!uid) return;
     await supabase.from('helper_profiles').update({ category }).eq('user_id', uid);
   } catch {

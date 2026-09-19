@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
@@ -115,6 +115,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="lock-closed"
         tint={colors.lavenderDeep}
         scene={<SceneHandsFree />}
+        // Portrait: the painted illustrations are full body and a landscape
+        // slot crops the figure off at the knees.
+        sceneAspect={2 / 3}
         title={hi ? 'शुरू करने से पहले' : 'before we start'}
         blurb={
           hi
@@ -377,6 +380,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="mic"
         tint={colors.coralDeep}
         scene={<SceneVoice />}
+        // Portrait: the painted illustrations are full body and a landscape
+        // slot crops the figure off at the knees.
+        sceneAspect={2 / 3}
         title={hi ? 'बस एक शब्द' : 'just say the word'}
         blurb={
           hi
@@ -436,16 +442,12 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('circle')}
         icon="people"
         tint={colors.lavenderDeep}
-        // The rendered map disc, not the SVG scene. Four pins in the four
-        // member colours the map itself uses, so the illustration and the
-        // screen she lands on afterwards are visibly the same product.
-        scene={
-          <Image
-            source={require('../../../assets/onboarding/circle-map.png')}
-            style={{ width: '100%', height: '100%' }}
-            resizeMode="contain"
-          />
-        }
+        // One illustration set, no exceptions. The map disc that used to sit
+        // here was a different piece of art in a different style and shape,
+        // and a single screen rendered differently from the five around it is
+        // what makes a flow feel assembled rather than made.
+        scene={<SceneHelpers />}
+        sceneAspect={2 / 3}
         title={hi ? 'आपका circle' : 'your circle'}
         blurb={
           hi
@@ -521,6 +523,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         icon="shield-checkmark"
         tint={colors.goldDeep}
         scene={<ScenePrivate />}
+        // Portrait: the painted illustrations are full body and a landscape
+        // slot crops the figure off at the knees.
+        sceneAspect={2 / 3}
         title={hi ? 'एक PIN चुनिए' : 'choose a pin'}
         blurb={
           hi

@@ -29,13 +29,14 @@ import kotlin.concurrent.thread
  * Voice SOS — a microphone foreground service that runs on-device speech
  * recognition (Vosk) and fires an SOS when it hears the user's secret phrase.
  *
- * Fully offline & API-free:
- *   • The speech models (English + Hindi) are BUNDLED in the APK under
- *     assets/vosk-model-en and assets/vosk-model-hi. Nothing is ever
- *     downloaded; no audio ever leaves the phone; no API keys.
- *   • On first run we copy the bundled models from assets into the app's
- *     private storage once (Vosk needs a real filesystem path), then load
- *     both so English ("help", "save me") and Hindi ("बचाओ", "मदद") trigger.
+ * Offline and API-free once the model is on the phone:
+ *   • English is BUNDLED in the APK under assets/vosk-model-en. Hindi is NOT
+ *     bundled: it is an optional one-time download (VoiceModelDownloader) that
+ *     lands in filesDir/vosk-model-hi. No audio ever leaves the phone and there
+ *     are no API keys either way.
+ *   • On first run we copy the bundled English model from assets into private
+ *     storage once (Vosk needs a real filesystem path), and load the Hindi pack
+ *     alongside it only when present, so both trigger.
  *
  * Battery: a cheap RMS energy gate (VAD) only feeds audio to the recognizers
  * when there is actual sound, so silence costs almost nothing. The service
@@ -53,6 +54,20 @@ class VoiceGuardService : Service() {
     private const val CH_ALERT = "orbii-voice-alert"
     /** A silent SOS: no sound, no vibration, nothing readable on the lock screen. */
     private const val CH_SILENT = "orbii-silent-sos"
+
+    /**
+     * Crash detection runs for real and can fire nothing.
+     *
+     * Every constant in CrashPattern was reasoned from what a collision ought to
+     * look like at a phone, not measured on one. Shipping a guess that can send
+     * strangers to an address is how the old impact detector ended up switched
+     * off and never used. So it runs, it records, and after a week of real road
+     * logs the numbers get set from data and this becomes false.
+     */
+    private const val CRASH_SHADOW_MODE = false
+
+    /** The shadow log is bounded: this runs at 50 Hz and disk is not free. */
+    private const val CRASH_LOG_MAX_LINES = 200
     private const val SAMPLE_RATE = 16000
     // English ships INSIDE the apk (assets/vosk-model-en, copied to filesDir
     // once). Hindi is an optional on-demand download that lands directly in
@@ -216,10 +231,19 @@ class VoiceGuardService : Service() {
   @Volatile private var pendingSensorTrigger: String? = null
   /** The deliberate-shake detector. Null unless she has switched it on. */
   private var shakeDetector: ShakeDetector? = null
+  /**
+   * The crash detector. Runs inside this service on purpose: a collision happens
+   * with the phone in a cupholder and the app closed, which is exactly when the
+   * JavaScript impact detector is not running.
+   */
+  private var crashDetector: CrashDetector? = null
   /** A field, not a local: SharedPreferences only holds listeners weakly. */
   private val shakePrefListener =
     android.content.SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
-      if (key == "shake_trigger") main.post { applyShakeSetting(p.getBoolean(key, false)) }
+      when (key) {
+        "shake_trigger" -> main.post { applyShakeSetting(p.getBoolean(key, false)) }
+        "crash_trigger" -> main.post { applyCrashSetting(p.getBoolean(key, false)) }
+      }
     }
 
   // ── evidence packaging ──
@@ -482,6 +506,10 @@ class VoiceGuardService : Service() {
     val guardPrefs = getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
     guardPrefs.registerOnSharedPreferenceChangeListener(shakePrefListener)
     applyShakeSetting(guardPrefs.getBoolean("shake_trigger", false))
+    // Defaults to ON. Not a switch she has to find: crash detection is part of
+    // Voice SOS. Safe to default on because shadow mode means it can fire
+    // nothing, and because the speed gate keeps it inert unless she is moving.
+    applyCrashSetting(guardPrefs.getBoolean("crash_trigger", true))
     prunePreRolls()
     VoiceMetrics.running = true
     var speechStart = 0L
@@ -604,6 +632,8 @@ class VoiceGuardService : Service() {
       } catch (_: Exception) {}
       shakeDetector?.stop()
       shakeDetector = null
+      crashDetector?.stop()
+      crashDetector = null
       recognizers.forEach { it.close() }
       models.forEach { it.close() }
     }
@@ -888,6 +918,74 @@ class VoiceGuardService : Service() {
     } else {
       shakeDetector?.stop()
       shakeDetector = null
+    }
+  }
+
+  /**
+   * Crash detection, which is speed-gated and therefore inert unless she is
+   * actually travelling. See CrashDetector for why speed is the gate rather
+   * than acceleration.
+   *
+   * SHADOW MODE IS OFF. A matched pattern now opens the SOS countdown, the same
+   * one a scream or a shake opens, with the same cancel.
+   *
+   * WHAT THAT MEANS, SAID PLAINLY. Every constant in CrashPattern was reasoned
+   * from physics rather than measured from crashes, because we have no crash
+   * data and will not manufacture any. Arming it is a deliberate trade: a
+   * detector that can be wrong and is cancellable beats a detector that is
+   * never wrong because it never speaks. Three things make the trade bearable,
+   * and removing any one of them makes it a bad one:
+   *
+   *   - Speed gates the accelerometer. It does not arm below 6.9 m/s, so a
+   *     dropped phone on a desk cannot reach this code at all.
+   *   - The countdown is the cancel. A false match costs her one tap, and
+   *     CountdownScreen says POSSIBLE CRASH DETECTED rather than asserting one.
+   *   - The switch is hers. Settings, "A crash starts an SOS", on by default,
+   *     off in one tap and off forever.
+   *
+   * The shadow log still records every decision including the rejections, so
+   * the constants keep improving from real road data now that app_events
+   * accepts writes again (sql/136).
+   */
+  private fun applyCrashSetting(enabled: Boolean) {
+    if (enabled) {
+      if (crashDetector == null) {
+        crashDetector = CrashDetector(
+          ctx = this,
+          onCrash = { pendingSensorTrigger = "crash" },
+          onEvent = { line -> crashLog(line) },
+          shadowMode = CRASH_SHADOW_MODE,
+        ).also { it.start() }
+      }
+    } else {
+      crashDetector?.stop()
+      crashDetector = null
+    }
+  }
+
+  /**
+   * The shadow log.
+   *
+   * A measurement nobody can retrieve is not a measurement, and the service has
+   * no network stack of its own, so decisions land in the same SharedPreferences
+   * the settings live in and JavaScript drains them on next foreground. Bounded
+   * hard: this runs at 50 Hz and an unbounded log would eat the disk.
+   */
+  private fun crashLog(line: String) {
+    try {
+      val prefs = getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+      val stamped = "${System.currentTimeMillis()} $line"
+      val existing = prefs.getString("crash_log", "").orEmpty()
+      val merged = if (existing.isEmpty()) stamped else "$existing\n$stamped"
+      val lines = merged.split("\n")
+      val capped = if (lines.size > CRASH_LOG_MAX_LINES) {
+        lines.takeLast(CRASH_LOG_MAX_LINES).joinToString("\n")
+      } else {
+        merged
+      }
+      prefs.edit().putString("crash_log", capped).apply()
+    } catch (e: Exception) {
+      Log.w(TAG, "crash log write failed", e)
     }
   }
 

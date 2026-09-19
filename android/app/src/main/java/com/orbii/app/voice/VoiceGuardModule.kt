@@ -144,6 +144,43 @@ class VoiceGuardModule(private val ctx: ReactApplicationContext) :
     }
   }
 
+  /**
+   * Crash detection. Deliberately NOT a settings switch: it is part of Voice
+   * SOS, on by default, and it is speed-gated so it is inert unless she is
+   * actually travelling. This exists only so it can be turned off if a handset
+   * turns out to behave badly, not as something a user is asked to decide.
+   */
+  @ReactMethod
+  fun setCrashTrigger(enabled: Boolean, promise: Promise) {
+    try {
+      ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+        .edit().putBoolean("crash_trigger", enabled).apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("crash_failed", e)
+    }
+  }
+
+  /**
+   * Read back and clear the crash shadow log.
+   *
+   * The detector runs inside a foreground service with no network stack, so it
+   * records its decisions to SharedPreferences and JavaScript ships them. This
+   * drains rather than reads, so the same lines are never uploaded twice.
+   * Returns a newline-separated string, empty when there is nothing to send.
+   */
+  @ReactMethod
+  fun drainCrashLog(promise: Promise) {
+    try {
+      val prefs = ctx.getSharedPreferences("voiceguard", Context.MODE_PRIVATE)
+      val log = prefs.getString("crash_log", "").orEmpty()
+      if (log.isNotEmpty()) prefs.edit().remove("crash_log").apply()
+      promise.resolve(log)
+    } catch (e: Exception) {
+      promise.reject("crash_log_failed", e)
+    }
+  }
+
   @ReactMethod
   fun stopGuard(promise: Promise) {
     try {

@@ -132,19 +132,6 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
     const chosen = KIND_OPTIONS.find((k) => k.kind === kind) ?? KIND_OPTIONS[0];
     setSubmitting(true);
     try {
-      // Save the photo first if it changed, so members see a face on the map the
-      // moment they join. A failure here must not cost them the circle.
-      if (profile && photoUri && photoUri !== profile.photoUri) {
-        try {
-          const updated = await updateProfile(profile, {
-            name: profile.name ?? '',
-            photoUri,
-          });
-          dispatch(profileUpdated(updated));
-        } catch {
-          /* non-fatal, they can add it later from Profile */
-        }
-      }
       const circle = await createCircle({
         name: name.trim() || 'My circle',
         kind: chosen.kind,
@@ -163,6 +150,34 @@ export function CircleCreateScreen({ navigation }: AppScreenProps<'CircleCreate'
       // The next screen needs the circle id and that is all it is given.
       navigation.replace('CircleInvite', { circleId: circle.id });
       void setActiveCircle(circle.id);
+
+      // THE PHOTO UPLOAD RUNS AFTER THE CIRCLE EXISTS, AND IS NOT AWAITED.
+      //
+      // This used to sit above createCircle, awaited. updateProfile calls
+      // uploadAvatar, which reads the whole picked image into memory and PUTs
+      // it to storage with no resize and no compression. expo-image-picker at
+      // quality 0.7 still hands back 1 to 3 MB from a modern camera, so on an
+      // Indian mobile uplink the person who tapped "Create circle" waited out
+      // a multi-megabyte upload before the insert was even sent. Measured at
+      // one to two minutes on 19 September 2026.
+      //
+      // Nothing about the circle depends on the photo. It is a profile change
+      // that happens to be collected on the same screen, so it belongs after
+      // the navigation, where its latency costs nobody anything. A failure is
+      // still silent: they can set the photo later from Profile.
+      if (profile && photoUri && photoUri !== profile.photoUri) {
+        void (async () => {
+          try {
+            const updated = await updateProfile(profile, {
+              name: profile.name ?? '',
+              photoUri,
+            });
+            dispatch(profileUpdated(updated));
+          } catch {
+            /* non-fatal, they can add it later from Profile */
+          }
+        })();
+      }
     } catch (err) {
       if (err instanceof CirclesNotInstalledError) {
         appAlert(

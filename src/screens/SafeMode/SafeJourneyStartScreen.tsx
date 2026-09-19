@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { appAlert } from '@/components/common';
 import {
   Pressable,
@@ -21,6 +21,14 @@ import {
 } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { safeJourneyStarted } from '@/redux/slices/appSlice';
+import {
+  addPreset,
+  loadJourneyPresets,
+  normalisePreset,
+  removePreset,
+  saveJourneyPresets,
+  type JourneyPreset,
+} from '@/services/journey-presets';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -44,8 +52,19 @@ export function SafeJourneyStartScreen() {
   const [contactId, setContactId] = useState<string | null>(
     profile?.emergencyContacts[0]?.id ?? null,
   );
+  const [presets, setPresets] = useState<JourneyPreset[]>([]);
 
   const contacts = profile?.emergencyContacts ?? [];
+
+  useEffect(() => {
+    let alive = true;
+    void loadJourneyPresets().then((list) => {
+      if (alive) setPresets(list);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const etaText = useMemo(() => {
     const arrival = new Date(Date.now() + minutes * 60_000);
@@ -54,6 +73,62 @@ export function SafeJourneyStartScreen() {
       minute: '2-digit',
     });
   }, [minutes]);
+
+  /**
+   * Filling the form from a saved trip.
+   *
+   * The one case that must not be silent is a preset pointing at a contact who
+   * has since been deleted. Falling back quietly would start a journey with
+   * nobody watching it, which looks identical on screen to one that is being
+   * watched. So it falls back to the first contact AND says so.
+   */
+  const applyPreset = useCallback(
+    (p: JourneyPreset) => {
+      setLabel(p.label);
+      setMinutes(p.minutes);
+
+      const stillThere = p.contactId
+        ? contacts.some((c) => c.id === p.contactId)
+        : false;
+
+      if (p.contactId && !stillThere) {
+        const fallback = contacts[0] ?? null;
+        setContactId(fallback?.id ?? null);
+        appAlert(
+          'Check who is watching',
+          fallback
+            ? `The contact saved with "${p.label}" is no longer in your contacts, so ${fallback.name} is selected instead.`
+            : `The contact saved with "${p.label}" is no longer in your contacts, and you have none left. Add one before starting.`,
+        );
+        return;
+      }
+
+      setContactId(p.contactId ?? contacts[0]?.id ?? null);
+    },
+    [contacts],
+  );
+
+  const saveCurrent = useCallback(async () => {
+    const preset = normalisePreset({ label, minutes, contactId });
+    if (!preset) {
+      appAlert('Name the trip', 'Give this journey a label before saving it.');
+      return;
+    }
+    const next = addPreset(presets, preset);
+    setPresets(next);
+    await saveJourneyPresets(next);
+    appAlert('Trip saved', `"${preset.label}" is now one tap away.`);
+  }, [contactId, label, minutes, presets]);
+
+  const forgetPreset = useCallback(
+    async (p: JourneyPreset) => {
+      const next = removePreset(presets, p.id);
+      setPresets(next);
+      await saveJourneyPresets(next);
+      appAlert('Trip removed', `"${p.label}" is no longer saved.`);
+    },
+    [presets],
+  );
 
   const handleStart = () => {
     if (!label.trim()) {
@@ -91,6 +166,34 @@ export function SafeJourneyStartScreen() {
           We'll watch over your trip. If you don't mark yourself safe by the
           arrival time, ORBII auto-fires SOS and alerts your trusted contact.
         </Text>
+
+        {presets.length > 0 ? (
+          <>
+            <Text style={styles.sectionLabel}>SAVED TRIPS</Text>
+            <View style={styles.chipRow}>
+              {presets.map((p) => (
+                <Pressable
+                  key={p.id}
+                  onPress={() => applyPreset(p)}
+                  onLongPress={() => void forgetPreset(p)}
+                  delayLongPress={600}
+                  style={styles.preset}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Use saved trip ${p.label}, ${p.minutes} minutes. Long press to remove.`}
+                >
+                  <Ionicons name="bookmark" size={13} color={colors.primary} />
+                  <Text style={styles.presetText} numberOfLines={1}>
+                    {p.label}
+                  </Text>
+                  <Text style={styles.presetMeta}>
+                    {p.minutes < 60 ? `${p.minutes}m` : `${Math.round((p.minutes / 60) * 10) / 10}h`}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+            <Text style={styles.presetHint}>Tap to fill this in. Hold to remove.</Text>
+          </>
+        ) : null}
 
         <Text style={styles.sectionLabel}>WHAT ARE YOU DOING?</Text>
         <View style={styles.chipRow}>
@@ -187,6 +290,16 @@ export function SafeJourneyStartScreen() {
           </View>
         )}
 
+        <Pressable
+          onPress={() => void saveCurrent()}
+          style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Save this trip for next time"
+        >
+          <Ionicons name="bookmark-outline" size={16} color={colors.textPrimary} />
+          <Text style={styles.saveText}>Save this trip for next time</Text>
+        </Pressable>
+
         <View style={{ height: spacing.xl }} />
       </ScrollView>
 
@@ -265,6 +378,34 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: colors.textInverse,
+  },
+  preset: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '100%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: radius.circle,
+    backgroundColor: colors.background,
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  presetText: {
+    ...typography.bodyMedium,
+    fontSize: 14,
+    color: colors.textPrimary,
+    flexShrink: 1,
+  },
+  presetMeta: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  presetHint: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   durationCard: {
     backgroundColor: colors.surface,
@@ -355,6 +496,23 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.textPrimary,
+  },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: spacing.lg,
+    paddingVertical: 14,
+    borderRadius: radius.circle,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  saveText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14,
+    color: colors.textPrimary,
   },
   footer: {
     padding: spacing.lg,

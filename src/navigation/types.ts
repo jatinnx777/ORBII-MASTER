@@ -50,6 +50,13 @@ export type AppStackParamList = {
         scream?: boolean;
         /** The opt-in deliberate shake. Always arrives with silent: true. */
         shake?: boolean;
+        /**
+         * The speed-gated crash detector in the Voice SOS service matched: she
+         * was travelling, something hit hard, and the speed collapsed and
+         * stayed collapsed. Never silent, because a crash countdown should be
+         * as loud as possible for someone who may be dazed.
+         */
+        crash?: boolean;
         /** No sound, no haptics, and a dark screen, through the live SOS. */
         silent?: boolean;
         /** Which phrase/sound fired the voice trigger, for false-positive tuning. */
@@ -78,6 +85,8 @@ export type AppStackParamList = {
   IncidentDetail: { recordId: string };
   EmergencyContacts: undefined;
   SafetyReadiness: undefined;
+  // What to do after something has happened: Zero FIR, free treatment, legal aid.
+  AfterAnIncident: undefined;
   VoiceDonation: undefined;
   Geofences: undefined;
   Recordings: undefined;

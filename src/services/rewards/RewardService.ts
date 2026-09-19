@@ -1,4 +1,4 @@
-import { supabase } from '@/services/supabase';
+import { currentUser, supabase } from '@/services/supabase';
 import { REWARD } from './config';
 
 // RewardService, the app's doorway to the server reward engine. Every method
@@ -148,7 +148,7 @@ export const RewardService = {
   },
 
   async myRewards(): Promise<RewardRow[]> {
-    const uid = (await supabase.auth.getUser()).data.user?.id;
+    const uid = (await currentUser())?.id;
     if (!uid) return [];
     const { data } = await supabase
       .from('rescue_rewards')

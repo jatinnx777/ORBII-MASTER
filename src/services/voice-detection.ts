@@ -32,6 +32,14 @@ const { VoiceGuard } = NativeModules as {
     setWhisperMode(enabled: boolean): Promise<boolean>;
     setScreamTrigger?(enabled: boolean): Promise<boolean>;
     setShakeTrigger?(enabled: boolean): Promise<boolean>;
+    /** The crash switch. See CrashDetector.kt. */
+    setCrashTrigger?(enabled: boolean): Promise<boolean>;
+    /**
+     * Read back and clear the crash shadow log. The detector runs inside a
+     * foreground service with no network of its own, so it records decisions to
+     * SharedPreferences and this hands them over exactly once.
+     */
+    drainCrashLog?(): Promise<string>;
     stopGuard(): Promise<boolean>;
     cancelSosAlert?(): Promise<boolean>;
   };
@@ -111,6 +119,26 @@ export async function setShakeTrigger(enabled: boolean): Promise<void> {
   if (!available || !VoiceGuard!.setShakeTrigger) return;
   try {
     await VoiceGuard!.setShakeTrigger(enabled);
+  } catch {
+    // stays at its previous value
+  }
+}
+
+/**
+ * A crash opens the SOS countdown.
+ *
+ * On by default, because the person this is for is driving or riding pillion
+ * and is not going to find a switch first. The detector is speed-gated, so
+ * with this on and the phone sitting still nothing is running: the
+ * accelerometer only arms once GPS says she is moving at vehicle speed.
+ *
+ * Off is honoured immediately. The service watches the switch and stops the
+ * detector outright, rather than leaving it running and discarding matches.
+ */
+export async function setCrashTrigger(enabled: boolean): Promise<void> {
+  if (!available || !VoiceGuard!.setCrashTrigger) return;
+  try {
+    await VoiceGuard!.setCrashTrigger(enabled);
   } catch {
     // stays at its previous value
   }
