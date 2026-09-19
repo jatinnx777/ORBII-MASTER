@@ -14,25 +14,42 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, fontFamilies, radius, spacing } from '@/theme';
-import { SoftGround } from './SoftGround';
+import { colors, fontFamilies, radius } from '@/theme';
 
 /**
- * One screen of first run, and the only place motion is defined for it.
+ * One screen of first run.
  *
- * MOTION DECISIONS, made once here so no screen has to make them again:
+ * THE LAYOUT IS REVOLUT'S, deliberately and closely.
  *
- * - Onboarding steps are the "occasional" tier: seen once, never repeated. That
- *   earns a standard animation, not the near-zero budget a tab switch gets.
- * - Purpose is EXPLANATION. Each step arrives from below and settles, so the
- *   flow reads as forward movement through one thing rather than as six
- *   unrelated screens replacing each other.
- * - transform and opacity only, on the native driver, so a mid-range Android
- *   under load animates at the same rate as a flagship.
- * - ease-out on enter. Never ease-in on UI: it starts slow and delays the exact
- *   moment the user is looking.
- * - Reduced motion drops the translation and keeps the fade, because the fade
- *   is what says "this is a new step" and the movement is only decoration.
+ * What their onboarding does, and what this now does:
+ *
+ *   - A flat, near-white ground. No drifting gradient behind the content, no
+ *     soft field, no texture. The screen is a sheet of paper with a question
+ *     on it.
+ *   - One enormous heading, left aligned, tight. Roughly twice the size a
+ *     heading usually is, owning the top third of the screen on its own. This
+ *     is the single biggest reason their flow reads as calm: there is visibly
+ *     one thing per screen.
+ *   - A grey sentence under it, and nothing else competing.
+ *   - No progress bar and no "2 of 8" counter. Revolut never tells you how far
+ *     through you are and the flow feels shorter for it. Our old shell had
+ *     both, and a counter reading two of eight is a number that closes apps.
+ *   - A bare back arrow, top left. No word "Back", no chip, no circle.
+ *   - Deliberate empty space in the middle. Where an illustration exists it
+ *     sits in that space, centred, the way the flag does on their citizenship
+ *     screen.
+ *   - The action is a full width pill pinned to the bottom, in the same place
+ *     on every step. Disabled is a pale tint of the same colour rather than
+ *     grey, so the button never looks broken, only not ready.
+ *
+ * WHAT IS NOT COPIED: the colour. Revolut's blue is Revolut's. The pill is
+ * ORBII lavender and the ground is a hair warm, so the layout is theirs and
+ * the product is still ours.
+ *
+ * MOTION. Steps are seen once, so they get a standard animation rather than
+ * the near-zero budget a tab switch gets: each arrives from below and settles,
+ * transform and opacity only, native driver, ease-out. Reduced motion keeps
+ * the fade and drops the movement.
  */
 
 /** Strong ease-out. The platform's own easings are too weak to read as motion. */
@@ -40,43 +57,25 @@ const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
 const ENTER_MS = 260;
 const PRESS_MS = 120;
-/** The one place the progress bar is timed, so it can never drift from the step. */
-const PROGRESS_MS = 320;
 
 export type StepProps = {
-  /** 1-based, for the progress bar and the screen reader. */
+  /** 1-based. Kept for the screen reader; nothing is drawn from it any more. */
   index: number;
   total: number;
-  /** Gives the step a face. Without one, six screens of type look identical. */
-  icon: React.ComponentProps<typeof Ionicons>['name'];
-  /** The icon's colour. Each step gets its own so the flow has a palette. */
-  tint: string;
+  /** Unused by this layout. Kept so every caller need not change at once. */
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
+  tint?: string;
   /**
-   * A full-bleed illustration instead of the icon badge.
+   * An illustration, centred in the empty middle of the screen.
    *
-   * Only on steps that EXPLAIN. A step that collects an email wants the field
-   * near the top of the screen, and a 200pt picture above it pushes the input
-   * under the keyboard on a small phone. Picture where there is something to
-   * say, badge where there is something to fill in.
+   * Optional, and most steps should not have one. Revolut's flow is mostly
+   * type and space, and a picture on every screen is what makes an onboarding
+   * feel padded.
    */
   scene?: React.ReactNode;
-  /**
-   * Shape of the illustration slot, as width / height. Defaults to 4:3.
-   *
-   * The hand-drawn scenes were authored in a 400x300 viewBox. The painted
-   * illustrations that replaced them are 1024x1536, portrait, full-body, with
-   * the figure's shoes close to the bottom edge, so a landscape slot would
-   * crop her feet off. Pass a value below 1 and the slot goes portrait and
-   * narrows itself, because a full-width portrait picture is taller than the
-   * phone and pushes the title off screen.
-   */
+  /** Width over height. The painted illustrations are 1024x1536, so 2/3. */
   sceneAspect?: number;
-  /**
-   * Hides the progress bar and the "2 of 8" counter.
-   *
-   * For signing back in, which is not a wizard. A returning user is doing one
-   * thing, and a progress bar over it invents a journey she is not on.
-   */
+  /** Kept for the sign-in path, which is not a wizard. Draws nothing now. */
   bare?: boolean;
   title: string;
   /** One sentence under the title. Optional: some steps are the sentence. */
@@ -86,7 +85,7 @@ export type StepProps = {
   onNext: () => void | Promise<void>;
   ctaDisabled?: boolean;
   busy?: boolean;
-  /** Shown small and quiet under the button. Never a second button. */
+  /** Shown small and quiet above the button. Never a second button. */
   footnote?: string;
   onBack?: () => void;
 };
@@ -94,11 +93,8 @@ export type StepProps = {
 export function Step({
   index,
   total,
-  icon,
-  tint,
   scene,
-  sceneAspect = 4 / 3,
-  bare,
+  sceneAspect = 2 / 3,
   title,
   blurb,
   children,
@@ -124,28 +120,11 @@ export function Step({
     enter.setValue(0);
     Animated.timing(enter, {
       toValue: 1,
-      duration: reduced ? 160 : ENTER_MS,
+      duration: ENTER_MS,
       easing: EASE_OUT,
       useNativeDriver: true,
     }).start();
-    // Announced rather than left to the reader to discover, because the screen
-    // replaces itself in place and a screen reader has nothing to notice.
-    AccessibilityInfo.announceForAccessibility(
-      bare ? title : `Step ${index} of ${total}. ${title}`,
-    );
-  }, [index, reduced, enter, title, total, bare]);
-
-  // Absolutely positioned, no children, so animating width is the documented
-  // exception rather than a layout pass: nothing else re-lays out.
-  const progress = useRef(new Animated.Value((index - 1) / total)).current;
-  useEffect(() => {
-    Animated.timing(progress, {
-      toValue: index / total,
-      duration: reduced ? 0 : PROGRESS_MS,
-      easing: EASE_OUT,
-      useNativeDriver: false,
-    }).start();
-  }, [index, total, reduced, progress]);
+  }, [enter, title]);
 
   const press = useRef(new Animated.Value(0)).current;
   const setPressed = (down: boolean) =>
@@ -159,24 +138,7 @@ export function Step({
   const disabled = !!ctaDisabled || !!busy;
 
   return (
-    <SoftGround reduced={reduced}>
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right', 'bottom']}>
-      {!bare ? (
-        <View style={styles.track}>
-          <Animated.View
-            style={[
-              styles.fill,
-              {
-                width: progress.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: ['0%', '100%'],
-                }),
-              },
-            ]}
-          />
-        </View>
-      ) : null}
-
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -204,52 +166,49 @@ export function Step({
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
+            {/* A bare arrow. Revolut spends nothing on going back, because
+                going back is not what the screen is for. */}
             <View style={styles.topRow}>
               {onBack ? (
-                <Pressable onPress={onBack} hitSlop={12} style={styles.backHit}>
-                  <Ionicons name="chevron-back" size={20} color={colors.textSecondary} />
-                  <Text style={styles.back}>Back</Text>
+                <Pressable
+                  onPress={onBack}
+                  hitSlop={16}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back"
+                  style={styles.backHit}
+                >
+                  <Ionicons name="arrow-back" size={26} color={colors.textPrimary} />
                 </Pressable>
-              ) : (
-                <View />
-              )}
-              {/* Said out loud rather than left to a 3px bar. Knowing there are
-                  six and this is the second is most of what makes a flow feel
-                  short, and the old one never said. */}
-              {!bare ? (
-                <Text style={styles.counter}>
-                  {index} of {total}
-                </Text>
-              ) : (
-                <View />
-              )}
+              ) : null}
             </View>
 
+            <Text
+              style={styles.title}
+              accessibilityRole="header"
+              // The counter is off the screen now, so this is the only place
+              // the position still exists for somebody using a screen reader.
+              accessibilityLabel={`${title}. Step ${index} of ${total}.`}
+            >
+              {title}
+            </Text>
+            {blurb ? <Text style={styles.blurb}>{blurb}</Text> : null}
+
+            {children ? <View style={styles.slot}>{children}</View> : null}
+
+            {/* The empty middle, and the illustration in it when there is one.
+                flexGrow on the scroll content is what pushes this down and
+                holds the action at the bottom on a tall phone. */}
             {scene ? (
-              <View
-                style={[
-                  styles.scene,
-                  { aspectRatio: sceneAspect },
-                  // A portrait picture at full width is roughly 520pt tall on a
-                  // normal phone, which buries the heading. Narrowed and
-                  // centred it reads as an illustration rather than a banner.
-                  sceneAspect < 1 ? styles.scenePortrait : null,
-                ]}
-              >
-                {scene}
+              <View style={styles.sceneWrap}>
+                <View style={[styles.scene, { aspectRatio: sceneAspect }]}>{scene}</View>
               </View>
             ) : (
-              <View style={[styles.badge, { backgroundColor: tint + '1A' }]}>
-                <Ionicons name={icon} size={26} color={tint} />
-              </View>
+              <View style={styles.spacer} />
             )}
-
-            <Text style={styles.title}>{title}</Text>
-            {blurb ? <Text style={styles.blurb}>{blurb}</Text> : null}
-            {children ? <View style={styles.slot}>{children}</View> : null}
           </ScrollView>
 
           <View style={styles.footer}>
+            {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
             <Animated.View
               style={{
                 transform: [
@@ -275,107 +234,92 @@ export function Step({
                 style={[styles.cta, disabled && styles.ctaOff]}
               >
                 <Text style={[styles.ctaText, disabled && styles.ctaTextOff]}>
-                  {busy ? 'one moment' : ctaLabel}
+                  {busy ? 'One moment' : ctaLabel}
                 </Text>
               </Pressable>
             </Animated.View>
-            {footnote ? <Text style={styles.footnote}>{footnote}</Text> : null}
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
     </SafeAreaView>
-    </SoftGround>
   );
 }
 
+/** The flat ground. Near-white, a hair warm, so it is not Revolut's grey. */
+const GROUND = '#F7F6F2';
+
 const styles = StyleSheet.create({
-  // Transparent: SoftGround paints behind this now. A cream fill here would
-  // cover the drifting field entirely.
-  safe: { flex: 1, backgroundColor: 'transparent' },
-  track: { height: 3, backgroundColor: 'rgba(23,22,28,0.07)', width: '100%' },
-  fill: { position: 'absolute', left: 0, top: 0, bottom: 0, backgroundColor: colors.brandDeep },
+  safe: { flex: 1, backgroundColor: GROUND },
+  body: { flex: 1, backgroundColor: GROUND },
 
-  body: { flex: 1 },
-  scroll: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.lg,
-    minHeight: 28,
-  },
-  backHit: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingVertical: spacing.xs },
-  back: { fontFamily: fontFamilies.interRegular, fontSize: 15, color: colors.textSecondary },
-  counter: {
-    fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 12.5,
-    letterSpacing: 0.4,
-    color: colors.textMuted,
-  },
-  // Shape comes from the sceneAspect prop; this holds everything else.
-  scene: {
-    width: '100%',
-    borderRadius: radius.lg,
-    overflow: 'hidden',
-    marginBottom: spacing.lg,
-  },
-  // 2:3 is the illustrations' native shape, so the slot matches the file and
-  // nothing is cropped, letterboxed or stretched. Width is what keeps a
-  // portrait picture from running past the fold: at 64% it is about 250pt wide
-  // and 375pt tall on a normal phone, which leaves the heading on screen.
-  scenePortrait: { width: '64%', alignSelf: 'center' },
-  badge: {
-    width: 56,
-    height: 56,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.lg,
+  // flexGrow is load-bearing: it lets the spacer expand and hold the action at
+  // the bottom of a tall screen, while still scrolling on a short one.
+  scroll: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 4,
+    paddingBottom: 16,
   },
 
-  // Bigger and tighter than the app's usual heading. Onboarding asks one
-  // question per screen and the question should own the screen.
+  topRow: { height: 44, justifyContent: 'center' },
+  backHit: { width: 44, height: 44, justifyContent: 'center', marginLeft: -6 },
+
+  // THE HEADING IS THE DESIGN. 40pt, tight leading, tight tracking, left
+  // aligned, nothing sharing its line. Two lines of this fills the top third
+  // of the screen, which is exactly what theirs does.
   title: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 34,
-    lineHeight: 40,
-    letterSpacing: -1,
+    fontSize: 40,
+    lineHeight: 44,
+    letterSpacing: -1.4,
     color: colors.textPrimary,
+    marginTop: 16,
   },
   blurb: {
     fontFamily: fontFamilies.interRegular,
-    fontSize: 16,
-    lineHeight: 24,
+    fontSize: 17,
+    lineHeight: 25,
     color: colors.textSecondary,
-    marginTop: spacing.sm,
+    marginTop: 12,
   },
-  slot: { marginTop: spacing.xl, gap: spacing.md },
 
-  footer: { paddingHorizontal: spacing.lg, paddingBottom: spacing.sm, gap: spacing.sm },
-  // Near-black, not the brand colour. There is exactly one action per screen
-  // and it has to be unmissable against a pale drifting ground; lavender on
-  // cream is pleasant and low contrast, which is right for a button competing
-  // with other content and wrong for the only one on the page. The brand shows
-  // up in the field behind it instead.
+  slot: { marginTop: 28, gap: 12 },
+
+  // Nothing in it. It exists to push the action to the bottom.
+  spacer: { flexGrow: 1, minHeight: 24 },
+
+  sceneWrap: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 24 },
+  // 62% keeps a 2:3 portrait to about 240 by 360 on a normal phone, so it sits
+  // in the empty middle the way their flag does instead of becoming a banner.
+  scene: { width: '62%', borderRadius: radius.lg, overflow: 'hidden' },
+
+  footer: { paddingHorizontal: 24, paddingBottom: 12, gap: 14 },
+
+  // The pill. Taller than our usual button because it is the only one on the
+  // screen, and in the same place on every step.
   cta: {
-    height: 56,
+    height: 62,
     borderRadius: radius.pill,
-    backgroundColor: colors.textPrimary,
+    backgroundColor: colors.brandDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ctaOff: { backgroundColor: 'rgba(23,22,28,0.20)' },
+  // A pale tint of the same colour, not grey. Their disabled button still
+  // reads as the button: not ready, rather than broken.
+  ctaOff: { backgroundColor: '#D9D0F0' },
   ctaText: {
     fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 17,
+    fontSize: 17.5,
     color: colors.textInverse,
   },
-  ctaTextOff: { color: colors.textMuted },
+  ctaTextOff: { color: '#FFFFFF' },
+
   footnote: {
     fontFamily: fontFamilies.interRegular,
-    fontSize: 12.5,
-    lineHeight: 18,
+    fontSize: 13,
+    lineHeight: 19,
     color: colors.textMuted,
     textAlign: 'center',
+    paddingHorizontal: 8,
   },
 });

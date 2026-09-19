@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors, fontFamilies, radius, spacing } from '@/theme';
 import { Step } from '@/components/onboarding/Step';
 import { CodeBoxes, PillInput } from '@/components/onboarding/Pill';
+import { AddressField } from '@/components/onboarding/AddressField';
 import { Protected } from '@/components/onboarding/Protected';
 import { Listening } from '@/components/onboarding/Listening';
 import { PermissionCards } from '@/components/onboarding/PermissionCards';
@@ -17,6 +18,7 @@ import { armVoiceSos } from '@/services/voice-detection';
 import { setPin } from '@/services/safety-pin';
 import { acceptInviteByToken } from '@/services/circles';
 import { toE164India } from '@/utils/validation';
+import { isUsableAddress, saveHomeAddress } from '@/services/home-address';
 import {
   SceneHandsFree,
   SceneHelpers,
@@ -62,6 +64,7 @@ type StepId =
   | 'auth'
   | 'code'
   | 'profile'
+  | 'address'
   | 'permissions'
   | 'voice'
   | 'circle'
@@ -73,6 +76,7 @@ const ORDER: StepId[] = [
   'auth',
   'code',
   'profile',
+  'address',
   'permissions',
   'voice',
   'circle',
@@ -97,6 +101,10 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
   const [role, setRole] = useState<string>('Parent');
+  const [line1, setLine1] = useState('');
+  const [landmark, setLandmark] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
   const [perms, setPerms] = useState<string[]>([]);
   const [voiceArmed, setVoiceArmed] = useState(false);
   const [invite, setInvite] = useState('');
@@ -308,7 +316,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             dispatch(contactAdded(saved ?? contact));
           } finally {
             setBusy(false);
-            go('permissions');
+            go('address');
           }
         }}
       >
@@ -344,6 +352,98 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             </Pressable>
           ))}
         </View>
+      </Step>
+    );
+  }
+
+  // ---- home ----------------------------------------------------------------
+  // WHY ORBII ASKS WHERE SHE LIVES, and why the screen says it out loud.
+  //
+  // DPDP section 6 ties consent to a stated purpose, so "useful later" is not
+  // a reason we are allowed to collect this, and on this product it would not
+  // be an honest one either. A home address belonging to a woman who installed
+  // a personal safety app is the most sensitive row in the database. There are
+  // three real uses and the blurb names them in the order she will meet them:
+  //
+  //   1. Arrival. A Safe Journey with no destination can only say she stopped
+  //      moving. With home known it can say she got there.
+  //   2. The address a responder is handed. Her circle gets coordinates, and
+  //      coordinates are not what you read out to a driver or a guard.
+  //   3. The first safe zone, so the map is not blank.
+  //
+  // SKIPPABLE, and the skip is a real one: the footnote says so and the CTA
+  // changes to "Skip for now" when the form is empty, instead of a disabled
+  // button that traps somebody who does not want to answer.
+  if (step === 'address') {
+    const usable = isUsableAddress({ line1, city });
+    const blank = line1.trim().length === 0 && city.trim().length === 0;
+    return (
+      <Step
+        {...common('address')}
+        title={hi ? 'घर कहाँ है' : 'Home address'}
+        blurb={
+          hi
+            ? 'ताकि ORBII बता सके कि आप घर पहुँच गईं, और ज़रूरत पड़ने पर मदद को पता दे सके। इसे सिर्फ़ आप देख सकती हैं। चाहें तो छोड़ दें।'
+            : 'So ORBII can tell your circle you got home, and can give a real address to whoever comes for you. Only you can see this. You can skip it.'
+        }
+        ctaLabel={
+          blank ? (hi ? 'अभी छोड़ें' : 'Skip for now') : hi ? 'सहेजें' : 'Save address'
+        }
+        ctaDisabled={!blank && !usable}
+        footnote={
+          hi
+            ? 'सिर्फ़ आपके अकाउंट में दिखता है। आपका circle इसे नहीं पढ़ सकता। Profile से कभी भी हटा सकती हैं।'
+            : 'Stored against your account only. Your circle cannot read it. Delete it any time from Profile.'
+        }
+        onBack={() => go('profile')}
+        onNext={async () => {
+          if (blank) {
+            go('permissions');
+            return;
+          }
+          setBusy(true);
+          try {
+            // A failure here is never worth trapping her on an optional step.
+            await saveHomeAddress({ line1, landmark, city, pincode });
+          } finally {
+            setBusy(false);
+            go('permissions');
+          }
+        }}
+      >
+        <AddressField
+          value={line1}
+          onChangeText={setLine1}
+          placeholder={hi ? 'मकान नंबर, गली, इलाक़ा' : 'House number, street, area'}
+          hint={hi ? 'जैसे: 12 MG Road, Sector 14' : 'E.g.: 12 MG Road, Sector 14'}
+          max={80}
+          autoCapitalize="words"
+        />
+        <AddressField
+          value={landmark}
+          onChangeText={setLandmark}
+          placeholder={hi ? 'पास में क्या है' : 'Nearby landmark'}
+          // A landmark is how an Indian address is actually found. A driver
+          // asked for "Sector 14" will ask what it is near.
+          hint={hi ? 'जैसे: Axis Bank के सामने' : 'E.g.: opposite Axis Bank'}
+          max={60}
+          autoCapitalize="words"
+        />
+        <AddressField
+          value={city}
+          onChangeText={setCity}
+          placeholder={hi ? 'शहर' : 'City'}
+          hint={hi ? 'जैसे: Sonipat' : 'E.g.: Sonipat'}
+          max={40}
+          autoCapitalize="words"
+        />
+        <AddressField
+          value={pincode}
+          onChangeText={(v) => setPincode(v.replace(/\D/g, '').slice(0, 6))}
+          placeholder={hi ? 'पिन कोड' : 'PIN code'}
+          hint={hi ? 'जैसे: 131001' : 'E.g.: 131001'}
+          keyboardType="number-pad"
+        />
       </Step>
     );
   }

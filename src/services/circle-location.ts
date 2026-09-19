@@ -12,9 +12,21 @@ import { reportError } from './error-reporting';
 // updates and forgets the last position. Privacy-first: strictly opt-in, only
 // visible to your own circles, pausable any time.
 //
-// ALWAYS time-bounded: sharing is armed for a duration the user picks (max 8h),
-// never "forever". The background task self-stops the moment that window is up,
-// even with the app closed, and a notification warns her an hour before.
+// TIME-BOUNDED BY DEFAULT, NOT ALWAYS. The duration picker offers 30 minutes
+// to 8 hours in half-hour steps, and the background task self-stops the moment
+// that window is up, even with the app closed, with a notification an hour
+// before it ends.
+//
+// It also offers "Until I turn it off", which passes 0 and means exactly that:
+// no expiry is stored and no wind-down warning is scheduled, so sharing runs
+// until someone stops it. That option exists because a parent and an adult
+// daughter who both want continuous sharing should not have to re-arm it three
+// times a day, and forcing them to would train them to ignore the prompt.
+//
+// This header used to claim sharing was never permanent. It was wrong, and on
+// a privacy-critical path a comment that understates what the code does is
+// worse than no comment. The microphone deliberately does NOT get this option:
+// see VoiceDurationSheet's allowAlways.
 
 export const CIRCLE_LOCATION_TASK = 'ORBII_CIRCLE_LOCATION';
 export const SHARE_MAX_HOURS = 8;

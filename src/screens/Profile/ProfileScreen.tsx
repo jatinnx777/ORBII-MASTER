@@ -20,6 +20,7 @@ import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/th
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { signedOut } from '@/redux/slices/userSlice';
 import { signOutFromGoogle, deleteAccount } from '@/services/auth';
+import { deleteHomeAddress, loadHomeAddress, type HomeAddress } from '@/services/home-address';
 import { clearCachedContacts } from '@/services/emergency-contacts';
 import { clearCachedProfile } from '@/services/profile-cache';
 import { clearPin } from '@/services/safety-pin';
@@ -67,6 +68,41 @@ export function ProfileScreen() {
         // never chose (and can't cancel an SOS).
         await clearPin().catch(() => undefined);
         dispatch(signedOut());
+      },
+    });
+  };
+
+  // HOME ADDRESS. The privacy policy and the onboarding step both promise this
+  // can be removed from Profile in one tap, so it exists here. A claim about
+  // deleting somebody's home address is not one to leave for a later release.
+  const [home, setHome] = React.useState<HomeAddress | null>(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    void loadHomeAddress().then((a) => {
+      if (!cancelled) setHome(a);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleDeleteHome = () => {
+    sheet.confirm({
+      title: 'Remove your home address?',
+      body: 'ORBII will stop telling your circle when you get home, and an SOS will send coordinates instead of an address. Nothing else changes, and you can add it again later.',
+      destructive: true,
+      confirmLabel: 'Remove it',
+      icon: 'home',
+      onConfirm: async () => {
+        const ok = await deleteHomeAddress();
+        if (ok) setHome(null);
+        sheet.notify({
+          title: ok ? 'Home address removed' : 'Could not remove it',
+          body: ok
+            ? 'It is gone from our database. Nobody could read it but you, and now nobody can.'
+            : 'Something went wrong. Check your connection and try again.',
+          tone: ok ? 'success' : 'warning',
+        });
       },
     });
   };
@@ -344,6 +380,19 @@ export function ProfileScreen() {
               label="About ORBII"
               onPress={() => navigation.navigate('About')}
             />
+            {/* Only shown when there is one. A row offering to delete
+                something that does not exist is a row that makes people think
+                we hold something we do not. */}
+            {home ? (
+              <>
+                <View style={styles.divider} />
+                <SettingRow
+                  icon="home-outline"
+                  label="Home address"
+                  onPress={handleDeleteHome}
+                />
+              </>
+            ) : null}
           </View>
 
           {/* ── Danger zone ── */}
