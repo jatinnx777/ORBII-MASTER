@@ -58,9 +58,25 @@ function rowToUser(row: PublicUserRow): PublicUser {
 }
 
 // Push the signed-in user's public record. Called from profile-sync after
-// every profile change so search results stay fresh. Now also stores
-// `phone` so the circle-invite flow can match registered friends by
-// phone number.
+// every profile change so search results stay fresh.
+//
+// IT NO LONGER WRITES `phone`, for two reasons that happen to agree.
+//
+// The privacy one: sql/125 closed the phone directory when join codes replaced
+// it, and revoked find_user_by_phone. Nothing has read this column since. A
+// phone number sitting in a shared table that nothing reads is pure exposure
+// with no use on the other side of it.
+//
+// The mechanical one: this upsert has been failing for every user with 42501
+// permission denied. ON CONFLICT DO UPDATE has to read the conflicting row, so
+// it needs SELECT on every column in its SET list, and sql/18 granted SELECT
+// on (id, username, name, photo_url) only, precisely so `phone` stays
+// unreadable. Including phone in the SET list therefore made the statement
+// unrunnable by design. Proved with sql/checks/users_public_which_column.sql:
+// the same upsert passes without phone and fails with it.
+//
+// `updated_at` was the other missing grant and is granted by sql/137, a
+// timestamp being nothing to protect.
 export async function syncUsersPublic(profile: UserProfile): Promise<void> {
   if (!profile.username) return;
   try {
@@ -70,7 +86,6 @@ export async function syncUsersPublic(profile: UserProfile): Promise<void> {
         username: profile.username,
         name: profile.name,
         photo_url: profile.photoUri,
-        phone: profile.phone ?? null,
         updated_at: new Date().toISOString(),
       },
       { onConflict: 'id' },
