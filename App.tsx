@@ -1359,7 +1359,7 @@ const styles = StyleSheet.create({
   },
   launch: {
     // Exact native-splash colour so the hand-off is a seamless single surface.
-    backgroundColor: '#bc95ec',
+    backgroundColor: '#a78ede',
     zIndex: 999,
   },
 });

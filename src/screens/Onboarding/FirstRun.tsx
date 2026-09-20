@@ -20,12 +20,6 @@ import { setPin } from '@/services/safety-pin';
 import { acceptInviteByToken } from '@/services/circles';
 import { toE164India } from '@/utils/validation';
 import { isUsableAddress, saveHomeAddress } from '@/services/home-address';
-import {
-  SceneHandsFree,
-  SceneHelpers,
-  ScenePrivate,
-  SceneVoice,
-} from '@/screens/Onboarding/illustrations/scenes';
 import type { OnboardingLang } from '@/onboardingVideos';
 
 /**
@@ -128,17 +122,13 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('consent')}
         icon="lock-closed"
         tint={colors.lavenderDeep}
-        scene={<SceneHandsFree />}
-        // Portrait: the painted illustrations are full body and a landscape
-        // slot crops the figure off at the knees.
-        sceneAspect={2 / 3}
-        title={hi ? 'शुरू करने से पहले' : 'before we start'}
+        title={hi ? 'शुरू करने से पहले' : 'Before we start'}
         blurb={
           hi
             ? 'ORBII आपकी आवाज़ आपके फ़ोन पर ही पहचानता है। कुछ भी अपलोड नहीं होता।'
             : 'Silent, hands-free protection for the people you trust. Your voice is recognised on your phone and never uploaded.'
         }
-        ctaLabel={hi ? 'आगे' : 'continue'}
+        ctaLabel={hi ? 'आगे' : 'Continue'}
         ctaDisabled={!adult}
         footnote={
           hi
@@ -180,9 +170,9 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('auth')}
         icon="mail"
         tint={colors.brandDeep}
-        title={hi ? 'आपका ईमेल' : 'give us your email'}
-        blurb={hi ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।' : 'no password. we send you a code.'}
-        ctaLabel={hi ? 'कोड भेजिए' : 'send me a code'}
+        title={hi ? 'आपका ईमेल' : 'Your email'}
+        blurb={hi ? 'कोई पासवर्ड नहीं। हम एक कोड भेजेंगे।' : 'No password. We send you a code.'}
+        ctaLabel={hi ? 'कोड भेजिए' : 'Send me a code'}
         ctaDisabled={!/^\S+@\S+\.\S+$/.test(email.trim())}
         onBack={() => go('consent')}
         onNext={async () => {
@@ -253,7 +243,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         tint={colors.brandDeep}
         title={hi ? 'ईमेल देखिए' : 'verify'}
         blurb={email.trim().toLowerCase()}
-        ctaLabel={hi ? 'आगे' : 'continue'}
+        ctaLabel={hi ? 'आगे' : 'Continue'}
         ctaDisabled={code.replace(/\D/g, '').length < 6}
         onBack={() => go('auth')}
         onNext={async () => {
@@ -576,10 +566,6 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('voice')}
         icon="mic"
         tint={colors.coralDeep}
-        scene={<SceneVoice />}
-        // Portrait: the painted illustrations are full body and a landscape
-        // slot crops the figure off at the knees.
-        sceneAspect={2 / 3}
         title={hi ? 'बस एक शब्द' : 'just say the word'}
         blurb={
           hi
@@ -639,12 +625,6 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('circle')}
         icon="people"
         tint={colors.lavenderDeep}
-        // One illustration set, no exceptions. The map disc that used to sit
-        // here was a different piece of art in a different style and shape,
-        // and a single screen rendered differently from the five around it is
-        // what makes a flow feel assembled rather than made.
-        scene={<SceneHelpers />}
-        sceneAspect={2 / 3}
         title={hi ? 'आपका circle' : 'your circle'}
         blurb={
           hi
@@ -719,10 +699,6 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         {...common('pin')}
         icon="shield-checkmark"
         tint={colors.goldDeep}
-        scene={<ScenePrivate />}
-        // Portrait: the painted illustrations are full body and a landscape
-        // slot crops the figure off at the knees.
-        sceneAspect={2 / 3}
         title={hi ? 'एक PIN चुनिए' : 'choose a pin'}
         blurb={
           hi
@@ -805,28 +781,36 @@ const s = StyleSheet.create({
   orLine: { flex: 1, height: 1, backgroundColor: colors.border },
   orText: { fontFamily: fontFamilies.interRegular, fontSize: 13, color: colors.textMuted },
 
+  // Matched to the input fields on every other step: filled, no border, same
+  // height, same radius. It was a white card with a hairline round it, which
+  // is the one element on the screen that still looked like a form.
   check: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
+    gap: 14,
+    height: 64,
+    paddingHorizontal: 18,
     borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  checkOn: { borderColor: colors.brandDeep },
-  box: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: colors.border,
+    borderColor: 'transparent',
+    backgroundColor: '#ECEAE4',
+  },
+  checkOn: { borderColor: colors.brandDeep, backgroundColor: colors.brandSoft },
+  box: {
+    width: 24,
+    height: 24,
+    borderRadius: 7,
+    borderWidth: 2,
+    borderColor: 'rgba(23,22,28,0.22)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   boxOn: { backgroundColor: colors.brandDeep, borderColor: colors.brandDeep },
-  checkText: { fontFamily: fontFamilies.interRegular, fontSize: 15, color: colors.textPrimary },
+  checkText: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 16.5,
+    color: colors.textPrimary,
+  },
   pressed: { opacity: 0.9 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
