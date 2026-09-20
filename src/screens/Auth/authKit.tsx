@@ -27,20 +27,35 @@ import { fontFamilies } from '@/theme';
  * background is harder to read.
  */
 
+/**
+ * The auth flow's tokens, now the SAME ones the onboarding steps use.
+ *
+ * This kit used to carry its own palette: white fields with grey borders and a
+ * near-black button. That made the auth screens a third design language, so
+ * signing in, setting up a profile and first run each looked like a different
+ * product, and the join between them is exactly where a new user is deciding
+ * whether this thing is serious.
+ *
+ * Changing them here changes every auth screen at once: sign in, login, phone
+ * sign-in, phone verify and profile setup.
+ */
 export const A = {
-  ink: '#141527',
-  body: '#6B6B7B',
-  field: '#FFFFFF',
-  fieldBorder: '#E6E4EE',
-  fieldText: '#141527',
-  placeholder: '#A8A6B8',
-  btn: '#141527',
+  ink: '#17161C',
+  body: '#6B6560',
+  /** Filled, not outlined. A border round every field is four rectangles
+   *  competing with the heading; a soft fill is quiet until you touch it. */
+  field: '#ECEAE4',
+  fieldBorder: 'transparent',
+  fieldText: '#17161C',
+  placeholder: '#9A948C',
+  /** ORBII lavender, not near-black. */
+  btn: '#6E58B6',
   btnText: '#FFFFFF',
   /** The social row's orchid, straight from the reference. */
   social: '#D98FE0',
   socialPressed: '#CB7ED3',
-  divider: '#E6E4EE',
-  link: '#141527',
+  divider: 'rgba(23,22,28,0.08)',
+  link: '#6E58B6',
 };
 
 /** Screen heading: back chevron, centred title. */
@@ -237,27 +252,32 @@ const s = StyleSheet.create({
     color: A.ink,
     marginBottom: 8,
   },
+  // 64pt and 17.5pt text, matching the onboarding fields. The old 52/14.5 was
+  // small enough that a thumb aimed at it hit the label above as often as the
+  // box, and it read as a form rather than a question.
   field: {
-    height: 52,
-    borderRadius: 14,
-    borderWidth: 1,
+    height: 64,
+    borderRadius: 16,
+    borderWidth: 1.5,
     borderColor: A.fieldBorder,
     backgroundColor: A.field,
-    paddingHorizontal: 16,
-    fontFamily: fontFamilies.poppinsRegular,
-    fontSize: 14.5,
+    paddingHorizontal: 18,
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 17.5,
     color: A.fieldText,
   },
 
   primary: {
-    height: 56,
-    borderRadius: 28,
+    height: 62,
+    borderRadius: 999,
     backgroundColor: A.btn,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  primaryOff: { opacity: 0.45 },
-  primaryText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: A.btnText },
+  // A pale tint of the same colour rather than a faded dark slab, so a button
+  // that is not ready yet never reads as a button that is broken.
+  primaryOff: { backgroundColor: '#D9D0F0' },
+  primaryText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 17.5, color: A.btnText },
 
   ghost: {
     height: 56,

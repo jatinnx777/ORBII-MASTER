@@ -404,10 +404,17 @@ function ConsentGate({ onAccept }: { onAccept: (isAdult: boolean) => Promise<voi
         </Text>
       </View>
 
-      <View style={styles.consentCard}>
-        {points.map((p) => (
-          <View key={p.text} style={styles.consentPoint}>
-            <Ionicons name={p.icon} size={18} color={colors.brandDeep} style={{ marginTop: 1 }} />
+      {/* FOUR PROMISES, NOT A BOX OF SMALL PRINT.
+          These were inside one grey card, which is how a privacy notice ends
+          up read as a block to scroll past. Each one gets its own line, its
+          own icon tile and a rule between, so it reads as four statements a
+          person could quote back at us. */}
+      <View style={styles.promises}>
+        {points.map((p, i) => (
+          <View key={p.text} style={[styles.promise, i > 0 && styles.promiseTop]}>
+            <View style={styles.promiseIcon}>
+              <Ionicons name={p.icon} size={17} color={colors.brandDeep} />
+            </View>
             <Text style={styles.consentPointText}>{p.text}</Text>
           </View>
         ))}
@@ -415,6 +422,9 @@ function ConsentGate({ onAccept }: { onAccept: (isAdult: boolean) => Promise<voi
 
       <View style={styles.dobBlock}>
         <Text style={styles.dobLabel}>Your date of birth</Text>
+        <Text style={styles.dobWhy}>
+          Asked once. We remember it and will not ask again.
+        </Text>
         <Input
           value={dob}
           onChangeText={(v: string) => {
@@ -771,9 +781,28 @@ const styles = StyleSheet.create({
     backgroundColor: A.ink,
   },
   titleBlock: { alignItems: 'flex-start', marginBottom: 24 },
-  dobBlock: { marginBottom: spacing.md, gap: spacing.xs },
-  dobLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
-  dobNote: { ...typography.caption, fontSize: 12, lineHeight: 17, color: colors.textSecondary },
+  dobBlock: { marginBottom: 26 },
+  dobLabel: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 21,
+    letterSpacing: -0.4,
+    color: colors.textPrimary,
+  },
+  dobWhy: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: colors.textMuted,
+    marginTop: 5,
+    marginBottom: 14,
+  },
+  dobNote: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+    marginTop: 12,
+  },
   dobNoteWarn: { color: colors.brandDeep, fontFamily: fontFamilies.interMedium },
   stepMascot: {
     marginBottom: spacing.sm,
@@ -906,12 +935,23 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     color: colors.error,
   },
-  consentCard: {
-    backgroundColor: 'rgba(23,22,28,0.035)',
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.md,
-    marginBottom: spacing.lg,
+  promises: { marginBottom: 28 },
+  promise: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+    paddingVertical: 15,
+  },
+  // A hairline between statements, not a box around all four.
+  promiseTop: { borderTopWidth: 1, borderTopColor: 'rgba(23,22,28,0.07)' },
+  // A rounded square, not a circle. Circles were asked to go.
+  promiseIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 11,
+    backgroundColor: colors.brandSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   consentPoint: {
     flexDirection: 'row',
@@ -920,10 +960,11 @@ const styles = StyleSheet.create({
   },
   consentPointText: {
     flex: 1,
-    fontFamily: fontFamilies.interMedium,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textPrimary,
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textSecondary,
+    paddingTop: 5,
   },
   checkRow: {
     flexDirection: 'row',
