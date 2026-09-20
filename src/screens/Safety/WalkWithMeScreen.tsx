@@ -10,6 +10,8 @@ import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { Mascot } from '@/components/common';
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
+import { endSafeJourney, startSafeJourney } from '@/services/circles';
+import { isCircleSharing, startCircleSharing, stopCircleSharing } from '@/services/circle-location';
 import type { AppStackParamList } from '@/navigation/types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
@@ -37,6 +39,23 @@ export function WalkWithMeScreen() {
   const firstName = (profile?.name ?? '').trim().split(/\s+/)[0] || 'there';
 
   const [walking, setWalking] = useState(false);
+  /**
+   * The circle this walk is announced to, and the journey row it created.
+   *
+   * WALK WITH ME IS A SAFETY JOURNEY NOW, not a second system. It was an
+   * on-device voice companion that never touched the circle: Orbi talked to
+   * her, and if she stopped answering it raised an SOS, which is genuinely
+   * useful and entirely invisible to the four people it was for.
+   *
+   * It keeps every bit of that and adds the announcement, so the same walk is
+   * both "somebody is talking to me" and "my circle knows I am walking". The
+   * kind is 'walk', the ETA is the duration she picked, and the map, the
+   * overdue sweep and the arrival handling are all inherited from sql/139. No
+   * new table, no new Edge Function.
+   */
+  const circleId = useAppSelector((st) => st.circles.activeCircleId);
+  const tripRef = useRef<string | null>(null);
+  const [minutes, setMinutes] = useState(30);
   const [awaiting, setAwaiting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(RESPOND_WINDOW_MS / 1000);
   const [checkIns, setCheckIns] = useState(0);
@@ -108,6 +127,31 @@ export function WalkWithMeScreen() {
     speak(`Okay ${firstName}, I'm walking with you.${nightBit}`);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
     checkTimer.current = setInterval(openWindow, CHECK_EVERY_MS);
+
+    // TELL THE CIRCLE. Not awaited: the voice companion and the escalation
+    // above are the safety net and they work with no network at all. This is
+    // the part that tells other people, and it must never be able to delay the
+    // walk starting.
+    void (async () => {
+      try {
+        if (!circleId) return;
+        const id = await startSafeJourney({
+          circleId,
+          label: 'Walking home',
+          kind: 'walk',
+          etaMs: Date.now() + minutes * 60_000,
+        });
+        tripRef.current = id;
+        // Sharing runs slightly past the walk, so being a few minutes slow is
+        // not the moment her pin goes dark.
+        if (!(await isCircleSharing())) {
+          await startCircleSharing(Math.max(0.5, minutes / 60 + 0.25));
+        }
+      } catch {
+        // Silent. She is walking; a failed announcement is not something to
+        // interrupt her with.
+      }
+    })();
   };
 
   const confirmOkay = () => {
@@ -125,6 +169,28 @@ export function WalkWithMeScreen() {
     setWalking(false);
     setAwaiting(false);
     speak('Glad you’re safe. Bye for now.');
+
+    // Close it for the circle and stop the sharing the walk armed. Leaving
+    // either running would keep her visible for a walk that finished, which is
+    // the failure a bounded-sharing product is least allowed to have.
+    const trip = tripRef.current;
+    tripRef.current = null;
+    void (async () => {
+      try {
+        if (trip) await endSafeJourney(trip, true);
+      } catch {
+        // The sweep leaves arrived journeys alone; a stale row is the smaller
+        // harm compared with blocking her on a network call.
+      }
+      try {
+        // notify: false. They are being told she arrived; a second alert saying
+        // her location stopped describes the same event twice.
+        if (await isCircleSharing()) await stopCircleSharing({ notify: false });
+      } catch {
+        // ignore
+      }
+    })();
+
     navigation.goBack();
   };
 
@@ -168,6 +234,32 @@ export function WalkWithMeScreen() {
                 <Ionicons name="volume-high" size={14} color={colors.sageDeep} />
                 <Text style={styles.noteText}>Voice plays from your phone. Nothing is recorded.</Text>
               </View>
+
+              {/* HOW LONG THE WALK SHOULD TAKE.
+                  Not decoration: this is the ETA her circle sees, and it is
+                  what the overdue sweep counts from. Four presets rather than a
+                  picker, because somebody about to walk home in the dark should
+                  be choosing between four taps, not scrolling a wheel. */}
+              <Text style={styles.durationLabel}>How long should this take?</Text>
+              <View style={styles.durationRow}>
+                {[15, 30, 45, 60].map((m) => (
+                  <Pressable
+                    key={m}
+                    onPress={() => {
+                      setMinutes(m);
+                      Haptics.selectionAsync().catch(() => undefined);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: minutes === m }}
+                    style={[styles.duration, minutes === m && styles.durationOn]}
+                  >
+                    <Text style={[styles.durationText, minutes === m && styles.durationTextOn]}>
+                      {m} min
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
               <Pressable onPress={start} style={({ pressed }) => [styles.cta, pressed && styles.pressed]}>
                 <Ionicons name="walk" size={18} color={colors.textPrimary} />
                 <Text style={styles.ctaText}>Start walking</Text>
@@ -206,6 +298,30 @@ export function WalkWithMeScreen() {
 }
 
 const styles = StyleSheet.create({
+  durationLabel: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 13.5,
+    color: colors.textMuted,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+    textAlign: 'center',
+  },
+  durationRow: { flexDirection: 'row', gap: 8, justifyContent: 'center', flexWrap: 'wrap' },
+  duration: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  durationOn: { borderColor: colors.brandDeep, backgroundColor: colors.brandSoft },
+  durationText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 14.5,
+    color: colors.textSecondary,
+  },
+  durationTextOn: { color: colors.brandDeep },
   root: { flex: 1, backgroundColor: colors.cream },
   header: {
     flexDirection: 'row',

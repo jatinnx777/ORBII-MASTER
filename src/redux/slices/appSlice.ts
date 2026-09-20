@@ -16,6 +16,15 @@ export type SafeJourney = {
   destination?: GeoPoint;
   // When the journey was started.
   startedAtMs: number;
+  /**
+   * The shared_trips row this journey announced itself as, or null.
+   *
+   * Null is normal and not a failure: she may have no circle, or the write may
+   * have failed in a dead spot. The local guard does not depend on it. It is
+   * here only so arriving can close the row the circle is watching, rather
+   * than leaving a journey that looks live forever.
+   */
+  tripId?: string | null;
 };
 
 type AppState = {
@@ -94,6 +103,17 @@ const appSlice = createSlice({
         startedAtMs: Date.now(),
       };
     },
+    /**
+     * The server row's id, attached after the announcement returns.
+     *
+     * Separate from safeJourneyStarted because the local journey must begin
+     * immediately and the network call finishes later, if at all. Ignored when
+     * no journey is running, so a late reply for a journey she already ended
+     * cannot resurrect anything.
+     */
+    safeJourneyLinked(state, action: PayloadAction<string>) {
+      if (state.safeJourney) state.safeJourney.tripId = action.payload;
+    },
     safeJourneyEnded(state) {
       state.safeJourney = null;
     },
@@ -115,6 +135,7 @@ export const {
   pushEnabledSet,
   helperModeSet,
   safeJourneyStarted,
+  safeJourneyLinked,
   safeJourneyEnded,
   policyAccepted,
   policyRevoked,

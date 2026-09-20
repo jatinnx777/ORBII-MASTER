@@ -108,9 +108,9 @@ export function CirclesScreen() {
       promptUpgrade({
         feature: 'More circles',
         body:
-          'Your first circle is free. A second one is part of ORBII Plus ' +
-          '(₹149/month). Everyone you invite joins for free, however many ' +
-          'circles you have.',
+          `Free accounts can create ${FREE_CIRCLE_LIMIT} circles. More is part of ` +
+          'ORBII Plus (₹149/month). Being in another person’s circle is always ' +
+          'free and unlimited, however many you are in.',
         onUpgrade: () => navigation.navigate('PremiumUpgrade'),
       });
       return;

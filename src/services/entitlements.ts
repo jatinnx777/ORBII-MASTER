@@ -104,7 +104,19 @@ export const FREE_CONTACT_LIMIT = 3;
  * Being IN somebody else's circle has never counted against this and never
  * will. You cannot be charged for being on your mother's list.
  */
-export const FREE_CIRCLE_LIMIT = 1;
+/**
+ * Circles a free account may OWN. Joining somebody else's is always unlimited.
+ *
+ * MUST MATCH free_owned_circle_limit() IN sql/142. The server is the real
+ * limit now, enforced by a BEFORE INSERT trigger on circles; this constant
+ * exists so the app can say so before the round trip instead of letting
+ * somebody fill in a whole creation flow and then be refused.
+ *
+ * If the two ever disagree the server wins, and the symptom is a create that
+ * fails with the server's sentence. That is the right way round: a prompt that
+ * is slightly wrong is better than a paywall that is.
+ */
+export const FREE_CIRCLE_LIMIT = 2;
 
 // During early access, everything EXCEPT the always-gated set is unlocked and
 // free (no in-app billing yet, which also keeps us clear of Google Play's

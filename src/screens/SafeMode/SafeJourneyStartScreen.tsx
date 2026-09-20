@@ -20,7 +20,9 @@ import {
   typography,
 } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
-import { safeJourneyStarted } from '@/redux/slices/appSlice';
+import { safeJourneyLinked, safeJourneyStarted } from '@/redux/slices/appSlice';
+import { startSafeJourney } from '@/services/circles';
+import { isCircleSharing, startCircleSharing } from '@/services/circle-location';
 import {
   addPreset,
   loadJourneyPresets,
@@ -46,6 +48,10 @@ export function SafeJourneyStartScreen() {
   const navigation = useNavigation<Nav>();
   const dispatch = useAppDispatch();
   const profile = useAppSelector((s) => s.user.profile);
+  // The circle told about this journey. Null when she has none yet, in which
+  // case the journey still runs locally and simply announces itself to
+  // nobody.
+  const circleId = useAppSelector((s) => s.circles.activeCircleId);
 
   const [label, setLabel] = useState('Walk home');
   const [minutes, setMinutes] = useState(30);
@@ -135,14 +141,56 @@ export function SafeJourneyStartScreen() {
       appAlert('Pick a label', 'Tell us what this journey is.');
       return;
     }
+    const etaMs = Date.now() + minutes * 60_000;
+
+    // THE LOCAL GUARD STARTS FIRST, AND IS AUTHORITATIVE.
+    //
+    // This dispatch is what arms the countdown that fires an SOS if the ETA
+    // lapses, and it needs no network at all. Everything below it is about
+    // telling other people, and none of it is allowed to delay or block this.
+    // A woman walking home through a dead spot must not lose her safety net
+    // because a write failed.
     dispatch(
       safeJourneyStarted({
         label: label.trim(),
-        etaMs: Date.now() + minutes * 60_000,
+        etaMs,
         trustedContactId: contactId,
       }),
     );
     navigation.replace('SafeJourneyActive');
+
+    // TELL THE CIRCLE. Not awaited, on purpose: see above.
+    //
+    // Until this existed the loop broke here. Her phone knew she was on the
+    // way and her circle knew nothing, which made "my trusted people know" a
+    // step the product claimed and did not perform.
+    void (async () => {
+      try {
+        if (!circleId) return;
+        const tripId = await startSafeJourney({
+          circleId,
+          label: label.trim(),
+          kind: 'custom',
+          etaMs,
+        });
+        if (tripId) dispatch(safeJourneyLinked(tripId));
+        // A journey with nobody able to see where she is tells her circle a
+        // destination and an ETA and nothing else, so sharing is armed for
+        // slightly longer than the journey itself: arriving four minutes late
+        // should not be the moment her pin goes dark.
+        //
+        // This is the ONE position pipeline. The journey row carries no
+        // coordinates of its own (sql/139), so precision, freshness and
+        // `unreachable` keep being decided in the one place that already gets
+        // them right.
+        if (!(await isCircleSharing())) {
+          await startCircleSharing(Math.max(0.5, minutes / 60 + 0.25));
+        }
+      } catch {
+        // Silent. The journey is running and the guard is armed; a failed
+        // announcement is not something to interrupt her with as she leaves.
+      }
+    })();
   };
 
   return (

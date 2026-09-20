@@ -20,12 +20,13 @@ import {
   type OSMCircle,
 } from '@/components/common';
 import { MemberCard } from '@/components/circles/MemberCard';
+import { JourneyStrip } from '@/components/circles/JourneyStrip';
 import { useGlide } from '@/hooks/useGlide';
 import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
 import { supabase } from '@/services/supabase';
 import { getCurrentLocation } from '@/services/location';
 import { useAppSelector } from '@/redux/store';
-import { listCircleMembers } from '@/services/circles';
+import { listCircleMembers, listLiveJourneys, type SharedTrip } from '@/services/circles';
 import { logConsentEvent, getAgeStatus } from '@/services/consent';
 import {
   isCircleSharing,
@@ -135,6 +136,8 @@ export function CircleMapScreen() {
 
   const sheet = useBrandSheet();
   const [members, setMembers] = useState<MemberLocation[]>([]);
+  const [journeys, setJourneys] = useState<SharedTrip[]>([]);
+  const [memberNames, setMemberNames] = useState<Map<string, string>>(new Map());
   const [sharing, setSharing] = useState(false);
   const [center, setCenter] = useState<GeoPoint | null>(null);
   // My own position, kept separate from `center` (which moves when you tap a
@@ -224,8 +227,21 @@ export function CircleMapScreen() {
     let alive = true;
     setMemberIds(null);
     listCircleMembers(selectedCircleId)
-      .then((ms) => alive && setMemberIds(new Set(ms.map((m) => m.userId))))
-      .catch(() => alive && setMemberIds(new Set()));
+      .then((ms) => {
+        if (!alive) return;
+        setMemberIds(new Set(ms.map((m) => m.userId)));
+        // Names, kept separately from positions. A journey belongs to somebody
+        // who may not be sharing location at all, and "Someone is on the way"
+        // is a worse sentence than it needs to be when the roster knows who.
+        setMemberNames(
+          new Map(ms.map((m) => [m.userId, (m.name ?? m.username ?? '').trim()])),
+        );
+      })
+      .catch(() => {
+        if (!alive) return;
+        setMemberIds(new Set());
+        setMemberNames(new Map());
+      });
     return () => {
       alive = false;
     };
@@ -289,7 +305,18 @@ export function CircleMapScreen() {
   const refresh = useCallback(async () => {
     const next = await refreshMemberLocations();
     setMembers((prev) => (sameMemberLocations(prev, next) ? prev : next));
-  }, []);
+    // Journeys ride the same refresh as locations rather than getting a timer
+    // of their own. They change on the same events (she set off, she arrived)
+    // and a second poller would be a second thing to keep in step.
+    if (selectedCircleId) {
+      try {
+        setJourneys(await listLiveJourneys(selectedCircleId));
+      } catch {
+        // A journey strip that fails to load is a missing strip, not a broken
+        // map. The pins are the part that matters.
+      }
+    }
+  }, [selectedCircleId]);
 
   // Frame one, off the device, before any network call. Every row carries its
   // own age and an `unreachable` flag, so a restored pin says how old it is
@@ -591,6 +618,14 @@ export function CircleMapScreen() {
           />
           <GlassButton icon="refresh" onPress={() => void refresh()} />
         </View>
+
+        {/* Where people are GOING. The pins say where they are. */}
+        <JourneyStrip
+          journeys={journeys}
+          nameFor={(uid) =>
+            memberNames.get(uid) || members.find((m) => m.userId === uid)?.name || null
+          }
+        />
 
 
         <View style={{ flex: 1 }} pointerEvents="box-none" />

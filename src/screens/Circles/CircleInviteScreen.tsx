@@ -3,12 +3,14 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
+  Linking,
   Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import { INVITE_LINK_BASE } from '@/services/circles';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -61,19 +63,57 @@ export function CircleInviteScreen({ route, navigation }: AppScreenProps<'Circle
     setCopied(true);
     setTimeout(() => setCopied(false), 1800);
   }, [code]);
+  /**
+   * The message, with a link AND the code.
+   *
+   * THE LINK DOES NOT JOIN ANYBODY. This screen refused a deep link for a
+   * while and the reason was right: a tappable link forwarded into a group
+   * chat would let anyone who scrolled past it into somebody's safety circle
+   * with one thumb, and typing six letters is friction that takes a decision.
+   *
+   * What ships instead keeps the decision and drops the typing. The link opens
+   * ORBII and ASKS (see App.tsx), so joining is still deliberate and still
+   * impossible to do by accident while reading a chat.
+   *
+   * The code stays under the link, because the link is useless to somebody who
+   * has not installed ORBII yet and the six letters are not.
+   */
+  const inviteMessage = useMemo(() => {
+    if (!code) return '';
+    return (
+      `Join my ORBII circle${circle?.name ? ` "${circle.name}"` : ''}.` +
+      `
+
+${INVITE_LINK_BASE}?c=${code}
+
+` +
+      `Or open ORBII, tap Join, and enter this code: ${code}`
+    );
+  }, [code, circle?.name]);
+
+  /**
+   * WhatsApp first, the Android share sheet as the fallback.
+   *
+   * whatsapp:// needs no account, no Business API approval and no token, which
+   * is the entire reason it is the right tool here. If WhatsApp is not
+   * installed the URL cannot open, and the share sheet is what somebody on
+   * Telegram or SMS needs anyway, so the fallback is not a degraded path.
+   */
+  const shareWhatsApp = useCallback(async () => {
+    if (!inviteMessage) return;
+    try {
+      await Linking.openURL(`whatsapp://send?text=${encodeURIComponent(inviteMessage)}`);
+      return;
+    } catch {
+      // not installed, or the OS refused it
+    }
+    await Share.share({ message: inviteMessage }).catch(() => undefined);
+  }, [inviteMessage]);
 
   const share = useCallback(async () => {
-    if (!code) return;
-    // No deep link. A tappable link opens ORBII and joins with one tap, and it
-    // also means a code forwarded into a group chat can be joined by anyone
-    // who scrolls past it. Six letters that have to be typed is slower on
-    // purpose: it takes a decision, not a tap.
-    await Share.share({
-      message:
-        `Join my ORBII circle${circle?.name ? ` "${circle.name}"` : ''}.\n\n` +
-        `Open ORBII, go to Circles, tap Join, and enter this code:\n\n${code}`,
-    }).catch(() => undefined);
-  }, [code, circle?.name]);
+    if (!inviteMessage) return;
+    await Share.share({ message: inviteMessage }).catch(() => undefined);
+  }, [inviteMessage]);
 
   const roll = useCallback(() => {
     appAlert(
@@ -143,13 +183,25 @@ export function CircleInviteScreen({ route, navigation }: AppScreenProps<'Circle
           )}
         </Pressable>
 
+        {/* WhatsApp first, because in India that is where this conversation
+            already is. Falls back to the share sheet by itself when WhatsApp
+            is not installed, so it is never a dead button. */}
         <Pressable
-          onPress={share}
+          onPress={shareWhatsApp}
           disabled={!code}
           style={({ pressed }) => [s.cta, !code && s.ctaOff, pressed && { transform: [{ scale: 0.98 }] }]}
         >
-          <Ionicons name="share-outline" size={18} color={colors.textInverse} />
-          <Text style={s.ctaText}>Share the code</Text>
+          <Ionicons name="logo-whatsapp" size={18} color={colors.textInverse} />
+          <Text style={s.ctaText}>Send on WhatsApp</Text>
+        </Pressable>
+
+        <Pressable
+          onPress={share}
+          disabled={!code}
+          style={({ pressed }) => [s.ctaAlt, !code && s.ctaOff, pressed && { transform: [{ scale: 0.98 }] }]}
+        >
+          <Ionicons name="share-outline" size={18} color={colors.brandDeep} />
+          <Text style={s.ctaAltText}>Share another way</Text>
         </Pressable>
 
         <Pressable onPress={roll} disabled={!code || rolling} style={s.roll}>
@@ -244,6 +296,21 @@ const s = StyleSheet.create({
     height: 54,
     borderRadius: radius.pill,
     backgroundColor: colors.brandDeep,
+  },
+  ctaAlt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 54,
+    borderRadius: radius.pill,
+    backgroundColor: colors.brandSoft,
+    marginTop: spacing.sm,
+  },
+  ctaAltText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    color: colors.brandDeep,
   },
   ctaOff: { backgroundColor: colors.creamDeep },
   ctaText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 16, color: colors.textInverse },

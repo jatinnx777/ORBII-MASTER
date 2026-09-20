@@ -20,6 +20,8 @@ import { Button, PinPrompt, ScreenContainer } from '@/components/common';
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { safeJourneyEnded } from '@/redux/slices/appSlice';
+import { endSafeJourney } from '@/services/circles';
+import { isCircleSharing, stopCircleSharing } from '@/services/circle-location';
 import { getCurrentLocation } from '@/services/location';
 import { isPinSet, verifyPin } from '@/services/safety-pin';
 import type { AppStackParamList } from '@/navigation/types';
@@ -113,6 +115,33 @@ export function SafeJourneyActiveScreen() {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(
       () => undefined,
     );
+
+    // CLOSE IT FOR THE CIRCLE TOO, and stop the sharing the journey armed.
+    //
+    // "Sharing ends" is the last step of the loop and the one a safety product
+    // is most tempted to skip, because leaving it on is easier and looks like
+    // more safety. It is not: a journey that never closes leaves her visible
+    // to four people for a walk that finished on Tuesday, and it leaves a
+    // circle staring at a live-looking journey with nobody on it.
+    //
+    // Not awaited. She has arrived; she should not watch a spinner to say so.
+    const trip = journey?.tripId ?? null;
+    void (async () => {
+      try {
+        if (trip) await endSafeJourney(trip, true);
+      } catch {
+        // The overdue sweep will not touch an arrived journey, and a stale
+        // active row is a smaller harm than blocking her arrival on a network.
+      }
+      try {
+        // notify: false. The circle is being told she arrived; a second alert
+        // saying her location stopped is the same event described twice.
+        if (await isCircleSharing()) await stopCircleSharing({ notify: false });
+      } catch {
+        // ignore
+      }
+    })();
+
     dispatch(safeJourneyEnded());
     appAlert('Welcome back', "We're glad you're safe.", [
       { text: 'Done', onPress: () => navigation.goBack() },

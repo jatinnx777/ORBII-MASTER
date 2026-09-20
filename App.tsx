@@ -111,7 +111,7 @@ import {
   refreshCircles,
   setActiveCircle,
 } from '@/services/circles-bootstrap';
-import { acceptInviteByToken } from '@/services/circles';
+import { acceptInviteByToken, joinCircleByCode } from '@/services/circles';
 import { circlesReset } from '@/redux/slices/circlesSlice';
 import { safeJourneyEnded, safeJourneyStarted } from '@/redux/slices/appSlice';
 import { isPinSet, clearPin } from '@/services/safety-pin';
@@ -747,6 +747,67 @@ function RootNavigator() {
         navigationRef.navigate('SOSCountdown', { voice: true, phrase, preroll });
         return;
       }
+      // A JOIN CODE AND AN INVITE TOKEN ARE DIFFERENT THINGS.
+      //
+      // The token is a one-per-person row in circle_invites. The code is the
+      // circle's own six letters (sql/125), rotatable, rate limited, and the
+      // thing a WhatsApp link carries, because a link that expires per
+      // recipient cannot be forwarded to the sister who was also meant to be
+      // in the circle.
+      //
+      // Codes are checked first: a link carrying both is carrying a code.
+      const code = extractJoinCode(url);
+      if (code) {
+        // IT ASKS. IT DOES NOT JOIN.
+        //
+        // CircleInviteScreen refused to ship a deep link at all, for a good
+        // reason: a tappable link forwarded into a group chat lets anybody who
+        // scrolls past it into somebody's safety circle with one thumb, and
+        // six letters typed by hand is friction that takes a decision.
+        //
+        // This keeps the decision and removes the typing. The link carries the
+        // code, ORBII opens, and she confirms. One tap of real consent instead
+        // of six letters of it, and still nothing that joins by accident from
+        // a chat somebody was only reading.
+        appAlert(
+          'Join this circle?',
+          `You were sent an invite code, ${code.slice(0, 3)} ${code.slice(3)}. ` +
+            'Joining lets the people in it see the safety alerts you send.',
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Join',
+              onPress: () => {
+                void (async () => {
+                  try {
+                    const circleId = await joinCircleByCode(code);
+                    if (!circleId) {
+                      appAlert('That code did not match', 'Ask them to send it again.');
+                      return;
+                    }
+                    await refreshCircles();
+                    await setActiveCircle(circleId);
+                    if (navigationRef.isReady()) {
+                      // @ts-expect-error - CircleDetail is in the AppStack only.
+                      navigationRef.navigate('CircleDetail', { circleId });
+                    }
+                  } catch (err) {
+                    // The server's sentences are the useful ones here: the
+                    // circle is full, you were removed from it, too many
+                    // attempts in an hour.
+                    appAlert(
+                      'Could not join circle',
+                      err instanceof Error ? err.message : 'That code did not work.',
+                    );
+                  }
+                })();
+              },
+            },
+          ],
+        );
+        return;
+      }
+
       const token = extractJoinToken(url);
       if (!token) return;
       try {
@@ -1262,6 +1323,23 @@ function LaunchOverlay({ onDone }: { onDone: () => void }) {
 //   https://orbii.app/join?token=<token>
 // Returns null when the URL is not a join link, so any other deep link
 // (auth callback, etc.) falls through to its own handler.
+/**
+ * The six-letter circle code out of a link, or null.
+ *
+ * Accepts `orbii://join?code=ABCDEF` and `https://www.orbii.in/i?c=ABCDEF`,
+ * which is what the WhatsApp share builds. Deliberately strict: exactly six
+ * letters from the sql/125 alphabet, so a stray query parameter on some other
+ * link can never be mistaken for an invitation.
+ */
+function extractJoinCode(url: string): string | null {
+  try {
+    const m = url.match(/[?&](?:code|c)=([A-Za-z]{6})(?:[&#]|$)/);
+    return m ? m[1].toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
 function extractJoinToken(url: string): string | null {
   try {
     const match = url.match(/(?:orbii:\/\/|https?:\/\/[^/]+\/)join\/?\??([^?&/#]+)/i);

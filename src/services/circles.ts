@@ -188,16 +188,69 @@ export type CircleInvite = {
   respondedAt: number | null;
 };
 
+/**
+ * A Safe Journey, as the circle sees it.
+ *
+ * NO POSITION ON THIS TYPE, deliberately. Where she is comes from the member
+ * location stream, which already snaps to her chosen precision server-side
+ * (sql/123) and carries server-computed freshness and `unreachable` (sql/118).
+ * A second position here would mean two freshness clocks and a journey pin
+ * that can disagree with the member pin.
+ *
+ * A journey therefore says where she is GOING; the location layer says where
+ * she IS.
+ */
 export type SharedTrip = {
   id: string;
   circleId: string;
   ownerId: string;
   label: string;
+  kind: JourneyKind;
   destination: GeoPoint | null;
+  destinationLabel: string | null;
   startAt: number;
+  /** When she expected to arrive. Null = open-ended, never marked overdue. */
+  etaAt: number | null;
   endAt: number | null;
-  status: 'active' | 'arrived' | 'expired' | 'cancelled';
+  status: JourneyStatus;
 };
+
+/**
+ * Where an invite link points.
+ *
+ * A page on our own site rather than a Supabase Edge Function, for two
+ * reasons. Edge Functions verify a JWT by default, so a plain link pasted into
+ * WhatsApp would come back 401. And a 302 to a custom scheme is unreliable in
+ * Chrome on Android, which would defeat the whole flow on the exact browser
+ * most of our users have.
+ *
+ * NOT an Android App Link. Those need a verified domain, an assetlinks.json
+ * carrying the release signing fingerprint, and autoVerify. Get any of it
+ * wrong and Android shows a disambiguation dialog instead of opening the app,
+ * which is worse than the page we control.
+ */
+export const INVITE_LINK_BASE = 'https://www.orbii.in/i';
+
+export type JourneyKind = 'walk' | 'cab' | 'commute' | 'travel' | 'custom';
+
+/**
+ * `overdue` is a SIGNAL, not an emergency. It means the ETA passed and nobody
+ * said anything, which is what a slow bus looks like as often as anything
+ * worse. Every string shown for it has to say what happened and nothing more.
+ *
+ * `attention` is reserved: the state exists so the enum need not change again,
+ * and nothing sets it yet.
+ */
+export type JourneyStatus =
+  | 'active'
+  | 'overdue'
+  | 'attention'
+  | 'arrived'
+  | 'expired'
+  | 'cancelled';
+
+/** The states worth showing on a map. */
+export const LIVE_JOURNEY_STATES: JourneyStatus[] = ['active', 'overdue', 'attention'];
 
 type CircleRow = {
   id: string;
@@ -239,10 +292,13 @@ type TripRow = {
   circle_id: string;
   owner_id: string;
   label: string;
+  kind?: JourneyKind | null;
   destination: GeoPoint | null;
+  destination_label?: string | null;
   start_at: string;
+  eta_at?: string | null;
   end_at: string | null;
-  status: SharedTrip['status'];
+  status: JourneyStatus;
 };
 
 function rowToCircle(row: CircleRow): Circle {
@@ -292,8 +348,11 @@ function rowToTrip(row: TripRow): SharedTrip {
     circleId: row.circle_id,
     ownerId: row.owner_id,
     label: row.label,
+    kind: row.kind ?? 'custom',
     destination: row.destination,
+    destinationLabel: row.destination_label ?? null,
     startAt: Date.parse(row.start_at),
+    etaAt: row.eta_at ? Date.parse(row.eta_at) : null,
     endAt: row.end_at ? Date.parse(row.end_at) : null,
     status: row.status,
   };
@@ -601,6 +660,75 @@ export async function listSharedTrips(circleId: string): Promise<SharedTrip[]> {
     .limit(20);
   if (error) throw wrap(error);
   return (data ?? []).map((r) => rowToTrip(r as TripRow));
+}
+
+/**
+ * The journeys a circle should be looking at right now.
+ *
+ * Separate from listSharedTrips, which returns history. A map wants live
+ * journeys and nothing else, and filtering twenty rows on the client to find
+ * the one that matters is work the index in sql/139 already does.
+ */
+export async function listLiveJourneys(circleId: string): Promise<SharedTrip[]> {
+  const { data, error } = await supabase
+    .from('shared_trips')
+    .select('*')
+    .eq('circle_id', circleId)
+    .in('status', LIVE_JOURNEY_STATES)
+    .order('start_at', { ascending: false });
+  if (error) throw wrap(error);
+  return (data ?? []).map((r) => rowToTrip(r as TripRow));
+}
+
+/**
+ * Tell a circle she is on her way.
+ *
+ * Goes through start_safe_journey (sql/139) rather than inserting directly, so
+ * membership and revocation are checked on the server and any previous live
+ * journey in the same circle is closed in the same transaction. Two active
+ * journeys for one person would show a circle two destinations for somebody
+ * who is in one place.
+ *
+ * THIS IS NOT THE SAFETY GUARD. The local Safe Journey in Redux is what fires
+ * the SOS if the ETA lapses, and it works with no network at all. This is the
+ * part that tells other people, and callers must treat it as best effort: if
+ * it throws, the journey still runs and the guard still fires. A woman walking
+ * home in a dead spot does not lose her safety net because a write failed.
+ */
+export async function startSafeJourney(input: {
+  circleId: string;
+  label: string;
+  kind?: JourneyKind;
+  destination?: GeoPoint | null;
+  destinationLabel?: string | null;
+  etaMs?: number | null;
+}): Promise<string | null> {
+  const { data, error } = await supabase.rpc('start_safe_journey', {
+    p_circle: input.circleId,
+    p_label: input.label.trim(),
+    p_kind: input.kind ?? 'custom',
+    p_destination: input.destination ?? null,
+    p_dest_label: input.destinationLabel ?? null,
+    p_eta_at: input.etaMs ? new Date(input.etaMs).toISOString() : null,
+  });
+  if (error) throw new Error(error.message);
+  return typeof data === 'string' ? data : null;
+}
+
+/**
+ * Close it. `arrived` and `cancelled` are different things to the people
+ * watching, which is why this takes the distinction rather than inferring it.
+ *
+ * Returns false when nothing was updated, which happens when the journey was
+ * already closed. That is not an error and callers should not surface it.
+ */
+export async function endSafeJourney(tripId: string, arrived: boolean): Promise<boolean> {
+  const { data, error } = await supabase.rpc('end_safe_journey', {
+    p_trip: tripId,
+    p_arrived: arrived,
+  });
+  if (error) throw new Error(error.message);
+  return data === true;
 }
 
 // Logs an event on a circle. Soft-fails so callers don't have to wrap.

@@ -12,6 +12,7 @@ import { useAppDispatch, useAppSelector } from '@/redux/store';
 import { contactAdded, profileUpdated, signInSucceeded } from '@/redux/slices/userSlice';
 import { historyHydrated } from '@/redux/slices/historySlice';
 import { sendEmailOtp, signInWithGoogle, updateProfile, verifyEmailOtp } from '@/services/auth';
+import { syncProfile } from '@/services/profile-sync';
 import { recordConsent, logConsentEvent } from '@/services/consent';
 import { upsertEmergencyContact } from '@/services/emergency-contacts';
 import { armVoiceSos } from '@/services/voice-detection';
@@ -63,7 +64,9 @@ type StepId =
   | 'consent'
   | 'auth'
   | 'code'
-  | 'profile'
+  | 'name'
+  | 'phone'
+  | 'contact'
   | 'address'
   | 'permissions'
   | 'voice'
@@ -75,7 +78,9 @@ const ORDER: StepId[] = [
   'consent',
   'auth',
   'code',
-  'profile',
+  'name',
+  'phone',
+  'contact',
   'address',
   'permissions',
   'voice',
@@ -98,6 +103,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
+  const [myPhone, setMyPhone] = useState('');
   const [cName, setCName] = useState('');
   const [cPhone, setCPhone] = useState('');
   const [role, setRole] = useState<string>('Parent');
@@ -203,7 +209,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
               dispatch(signInSucceeded({ profile: r.profile, needsProfile: r.needsProfile }));
               dispatch(historyHydrated(r.history));
               setName(r.profile.name ?? '');
-              go('profile');
+              go('name');
             } catch (err) {
               const m = err instanceof Error ? err.message : 'Google sign-in failed.';
               if (!/cancel/i.test(m)) Alert.alert(hi ? 'साइन इन नहीं हुआ' : 'Could not sign in', m);
@@ -257,7 +263,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             dispatch(signInSucceeded({ profile: r.profile, needsProfile: r.needsProfile }));
             dispatch(historyHydrated(r.history));
             setName(r.profile.name ?? '');
-            go('profile');
+            go('name');
           } catch (err) {
             Alert.alert(
               hi ? 'कोड ग़लत है' : 'That code did not work',
@@ -277,28 +283,31 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
     );
   }
 
-  // ---- profile and the one contact ----------------------------------------
-  if (step === 'profile') {
+  // ---- her name ------------------------------------------------------------
+  // ONE QUESTION PER SCREEN, from here to the end of the personal details.
+  //
+  // These three used to be a single screen carrying her name, somebody else's
+  // name and somebody else's phone number, which is three unrelated questions
+  // wearing one heading. The reference flow asks one thing at a time and it is
+  // why that flow reads as calm: a person answering "what is your name" is not
+  // simultaneously deciding who would come for them at 2am.
+  if (step === 'name') {
     return (
       <Step
-        {...common('profile')}
-        icon="person-add"
-        tint={colors.sageDeep}
-        title={hi ? 'एक भरोसेमंद नंबर' : 'one person who picks up'}
+        {...common('name')}
+        title={hi ? 'आपका नाम क्या है' : 'What should we call you?'}
         blurb={
           hi
-            ? 'एक ऐसा इंसान जो रात दो बजे सच में फ़ोन उठाए। पाँच लोग नहीं जो शायद उठाएँ।'
-            : 'One person who will actually pick up at 2am. Not five who might.'
+            ? 'यह नाम आपके circle को alert में दिखेगा। इसके बिना आपकी माँ के पास सिर्फ़ "किसी को मदद चाहिए" पहुँचेगा।'
+            : 'Your circle sees this on an alert. Without it, the message your mother gets says "Someone needs help".'
         }
-        ctaLabel={hi ? 'आगे' : 'continue'}
-        ctaDisabled={name.trim().length < 2 || cName.trim().length < 2 || cPhone.length !== 10}
+        ctaLabel={hi ? 'आगे' : 'Continue'}
+        ctaDisabled={name.trim().length < 2}
         onBack={() => go('code')}
         onNext={async () => {
-          if (!profile) return;
+          if (!profile) return go('phone');
           setBusy(true);
           try {
-            // Her name is not vanity. Without it the alert her mother receives
-            // says "Someone needs help".
             if (name.trim() && name.trim() !== profile.name) {
               const updated = await updateProfile(profile, {
                 name: name.trim(),
@@ -306,6 +315,99 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
               }).catch(() => null);
               if (updated) dispatch(profileUpdated(updated));
             }
+          } finally {
+            setBusy(false);
+            go('phone');
+          }
+        }}
+      >
+        <PillInput
+          value={name}
+          onChangeText={setName}
+          placeholder={hi ? 'आपका नाम' : 'Your name'}
+          autoCapitalize="words"
+          autoFocus
+        />
+      </Step>
+    );
+  }
+
+  // ---- her own number ------------------------------------------------------
+  // WHY ORBII ASKS FOR HER NUMBER, and why the screen says it rather than
+  // implying it. Two reasons, both concrete:
+  //
+  //   1. Somebody coming for her needs to be able to ring her. Her circle sees
+  //      a pin; a pin cannot be asked "which gate are you at".
+  //   2. Getting back into the account on a new phone.
+  //
+  // Optional, and the skip is real. A number is not required for any safety
+  // feature to work, and pretending otherwise to raise a collection rate is
+  // the kind of thing this product is supposed to be the opposite of.
+  if (step === 'phone') {
+    const okPhone = myPhone.length === 10;
+    return (
+      <Step
+        {...common('phone')}
+        title={hi ? 'आपका मोबाइल नंबर' : 'Your mobile number'}
+        blurb={
+          hi
+            ? 'ताकि जो आपकी मदद के लिए आए वो आपको कॉल कर सके, और नया फ़ोन लेने पर आप अपने account में वापस आ सकें।'
+            : 'So whoever comes for you can ring you, and so you can get back into your account on a new phone.'
+        }
+        ctaLabel={
+          myPhone.length === 0 ? (hi ? 'अभी छोड़ें' : 'Skip for now') : hi ? 'आगे' : 'Continue'
+        }
+        ctaDisabled={myPhone.length > 0 && !okPhone}
+        footnote={
+          hi
+            ? 'आपका circle इसे तभी देखता है जब आप SOS भेजती हैं।'
+            : 'Your circle sees this only when you raise an SOS.'
+        }
+        onBack={() => go('name')}
+        onNext={async () => {
+          if (!profile || myPhone.length === 0) return go('contact');
+          setBusy(true);
+          try {
+            const next = { ...profile, phone: toE164India(myPhone) };
+            dispatch(profileUpdated(next));
+            // Best effort. A failed sync must not trap her on an optional step.
+            await syncProfile(next).catch(() => undefined);
+          } finally {
+            setBusy(false);
+            go('contact');
+          }
+        }}
+      >
+        <PillInput
+          value={myPhone}
+          onChangeText={(v) => setMyPhone(v.replace(/\D/g, '').slice(0, 10))}
+          placeholder={hi ? '10 अंकों का नंबर' : '10 digit mobile number'}
+          keyboardType="number-pad"
+          textContentType="telephoneNumber"
+          autoFocus
+        />
+      </Step>
+    );
+  }
+
+  // ---- the one contact -----------------------------------------------------
+  if (step === 'contact') {
+    return (
+      <Step
+        {...common('contact')}
+        title={hi ? 'एक भरोसेमंद नंबर' : 'One person who picks up'}
+        blurb={
+          hi
+            ? 'एक ऐसा इंसान जो रात दो बजे सच में फ़ोन उठाए। पाँच लोग नहीं जो शायद उठाएँ।'
+            : 'One person who will actually pick up at 2am. Not five who might.'
+        }
+        ctaLabel={hi ? 'आगे' : 'Continue'}
+        ctaDisabled={cName.trim().length < 2 || cPhone.length !== 10}
+        onBack={() => go('phone')}
+        onNext={async () => {
+          if (!profile) return go('address');
+          setBusy(true);
+          try {
             const contact = {
               id: `ec_${Date.now()}`,
               name: cName.trim(),
@@ -321,16 +423,11 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         }}
       >
         <PillInput
-          value={name}
-          onChangeText={setName}
-          placeholder={hi ? 'आपका नाम' : 'Your name'}
-          autoCapitalize="words"
-        />
-        <PillInput
           value={cName}
           onChangeText={setCName}
           placeholder={hi ? 'उनका नाम' : 'Their name'}
           autoCapitalize="words"
+          autoFocus
         />
         <PillInput
           value={cPhone}
@@ -338,7 +435,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
           placeholder={hi ? '10 अंकों का नंबर' : '10 digit mobile number'}
           keyboardType="number-pad"
           textContentType="telephoneNumber"
-/>
+        />
         <View style={s.chips}>
           {ROLES.map((r) => (
             <Pressable
@@ -395,7 +492,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
             ? 'सिर्फ़ आपके अकाउंट में दिखता है। आपका circle इसे नहीं पढ़ सकता। Profile से कभी भी हटा सकती हैं।'
             : 'Stored against your account only. Your circle cannot read it. Delete it any time from Profile.'
         }
-        onBack={() => go('profile')}
+        onBack={() => go('contact')}
         onNext={async () => {
           if (blank) {
             go('permissions');
@@ -464,7 +561,7 @@ export function FirstRun({ lang, onDone }: { lang: OnboardingLang; onDone: () =>
         ctaLabel={
           perms.length === 0 ? (hi ? 'अभी छोड़ें' : 'Skip for now') : hi ? 'आगे' : 'Continue'
         }
-        onBack={() => go('profile')}
+        onBack={() => go('name')}
         onNext={() => go('voice')}
       >
         <PermissionCards onChange={(g) => setPerms(g)} />

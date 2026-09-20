@@ -1,16 +1,31 @@
 import React, { useMemo, useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
-import { colors, fontFamilies, radius, shadows, spacing } from '@/theme';
+import { colors, fontFamilies, radius } from '@/theme';
 import { ageFromDob, setDeclaredDob, type AgeStatus } from '@/services/consent';
 
-// Asked ONCE, the first time someone reaches an 18+ feature without a stored
-// date of birth. Everyone who signed up before the DOB field existed lands here,
-// which is why it exists at all: the alternative was treating "we never asked"
-// as "under 18" and locking adults out of their own location sharing.
-//
-// The answer is stored, so this never appears a second time.
+/**
+ * Asked ONCE, the first time somebody reaches an 18+ feature with no stored
+ * date of birth. Everyone who signed up before the field existed lands here,
+ * which is the whole reason it exists: the alternative was reading "we never
+ * asked" as "under 18" and locking adults out of their own location sharing.
+ * The answer is stored, so it never appears twice.
+ *
+ * STYLED TO MATCH ONBOARDING, which means the same rules as Step.tsx:
+ *
+ *   - Flat near-white ground, not a white card on a dim backdrop.
+ *   - One large heading carrying the screen, left aligned, tight.
+ *   - A grey sentence under it and nothing else competing.
+ *   - The icon badge is gone. A calendar in a lavender circle was decoration
+ *     on a question that is one line long, and decoration is what made this
+ *     sheet feel like a different app from the flow it interrupts.
+ *   - One full width pill at the bottom, ORBII lavender, pale tint when not
+ *     ready rather than a faded dark button.
+ *
+ * It stays a sheet rather than becoming a screen: it interrupts the map, and
+ * a person who opened the map to see where somebody is should still be able to
+ * see the map behind the question.
+ */
 
 export function AgeCheckSheet({
   visible,
@@ -61,13 +76,11 @@ export function AgeCheckSheet({
       <Pressable style={styles.backdrop} onPress={onCancel} />
       <View style={styles.sheet}>
         <View style={styles.grabber} />
-        <View style={styles.iconWrap}>
-          <Ionicons name="calendar-outline" size={22} color={colors.brandDeep} />
-        </View>
-        <Text style={styles.title}>One quick thing</Text>
+
+        <Text style={styles.title}>Your date of birth</Text>
         <Text style={styles.sub}>
-          Indian law does not let us share live location for anyone under 18, so we have to ask your
-          date of birth once. We remember it, and you will not be asked again.
+          Indian law does not let us share live location for anyone under 18, so we have to ask
+          once. We remember the answer and will not ask again.
         </Text>
 
         <TextInput
@@ -80,24 +93,28 @@ export function AgeCheckSheet({
           maxLength={14}
           autoFocus
         />
-        {digits.length === 8 && age !== null && age >= 0 && age < 120 ? (
-          <Text style={[styles.hint, age < 18 && styles.hintWarn]}>
-            {age < 18
-              ? `You are ${age}. Live location stays off, but Voice SOS, circle alerts and 112 all work as normal.`
-              : `You are ${age}. All set.`}
-          </Text>
-        ) : (
-          <Text style={styles.hint}>Your safety features work either way.</Text>
-        )}
+
+        {/* The answer to "what happens if I am under 18" is given before she
+            answers, not after, so declaring it honestly never feels like a
+            trap. */}
+        <Text style={[styles.hint, age !== null && age < 18 && styles.hintWarn]}>
+          {ready
+            ? age! < 18
+              ? `You are ${age}. Live location stays off. Voice SOS, circle alerts and 112 work exactly as normal.`
+              : `You are ${age}.`
+            : 'Your safety features work either way.'}
+        </Text>
 
         <Pressable
           onPress={confirm}
           disabled={!ready || busy}
           style={[styles.cta, (!ready || busy) && styles.ctaOff]}
           accessibilityRole="button"
+          accessibilityState={{ disabled: !ready || busy }}
         >
-          <Text style={styles.ctaText}>{busy ? 'Saving…' : 'Continue'}</Text>
+          <Text style={styles.ctaText}>{busy ? 'One moment' : 'Continue'}</Text>
         </Pressable>
+
         <Pressable onPress={onCancel} style={styles.skip} accessibilityRole="button">
           <Text style={styles.skipText}>Not now</Text>
         </Pressable>
@@ -106,56 +123,88 @@ export function AgeCheckSheet({
   );
 }
 
+/** Same ground as the onboarding steps, so the two never read as two apps. */
+const GROUND = '#F7F6F2';
+
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(16,14,20,0.42)' },
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    paddingBottom: spacing.xl + spacing.md,
-    ...shadows.sheet,
+    backgroundColor: GROUND,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 34,
   },
   grabber: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: colors.creamDeep, alignSelf: 'center', marginBottom: spacing.md,
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(23,22,28,0.12)',
+    alignSelf: 'center',
+    marginBottom: 22,
   },
-  iconWrap: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: colors.brandSoft,
-    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.sm,
+
+  // Smaller than a full step's 40pt, because a sheet is not a screen and this
+  // one has a keyboard under it, but the same weight and the same tight
+  // tracking so it belongs to the same family.
+  title: {
+    fontFamily: fontFamilies.poppinsBold,
+    fontSize: 30,
+    lineHeight: 34,
+    letterSpacing: -1,
+    color: colors.textPrimary,
   },
-  title: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 20, color: colors.textPrimary },
   sub: {
-    fontFamily: fontFamilies.poppinsRegular, fontSize: 13.5, lineHeight: 20,
-    color: colors.textMuted, marginTop: 6,
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 16,
+    lineHeight: 23,
+    color: colors.textSecondary,
+    marginTop: 10,
   },
+
   input: {
-    marginTop: spacing.lg,
-    borderRadius: radius.lg,
-    backgroundColor: colors.cream,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 14,
+    marginTop: 24,
+    height: 64,
+    borderRadius: radius.md,
+    backgroundColor: '#ECEAE4',
+    paddingHorizontal: 18,
     fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 17,
-    letterSpacing: 1,
+    fontSize: 19,
+    letterSpacing: 1.5,
     color: colors.textPrimary,
   },
   hint: {
-    fontFamily: fontFamilies.poppinsRegular, fontSize: 12.5, lineHeight: 18,
-    color: colors.textMuted, marginTop: spacing.sm,
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textMuted,
+    marginTop: 10,
+    paddingHorizontal: 4,
   },
   hintWarn: { color: colors.brandDeep },
+
   cta: {
-    marginTop: spacing.lg,
-    backgroundColor: colors.textPrimary,
+    marginTop: 22,
+    height: 62,
     borderRadius: radius.pill,
-    paddingVertical: 16,
+    backgroundColor: colors.brandDeep,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  ctaOff: { opacity: 0.4 },
-  ctaText: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 15.5, color: colors.textInverse },
-  skip: { marginTop: spacing.sm, alignItems: 'center', paddingVertical: 8 },
-  skipText: { fontFamily: fontFamilies.poppinsRegular, fontSize: 13.5, color: colors.textMuted },
+  // A pale tint of the same colour, not a faded dark button. Not ready, rather
+  // than broken.
+  ctaOff: { backgroundColor: '#D9D0F0' },
+  ctaText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 17.5,
+    color: colors.textInverse,
+  },
+
+  skip: { marginTop: 10, alignItems: 'center', paddingVertical: 10 },
+  skipText: {
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 15,
+    color: colors.textMuted,
+  },
 });
