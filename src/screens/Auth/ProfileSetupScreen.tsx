@@ -238,7 +238,8 @@ export function ProfileSetupScreen() {
 
   if (!consented) {
     return (
-      <ScreenContainer scroll>
+      <View style={styles.ground}>
+      <ScreenContainer scroll style={styles.groundInner}>
         <ConsentGate
           onAccept={async (isAdult) => {
             await recordConsent('en', isAdult);
@@ -248,16 +249,21 @@ export function ProfileSetupScreen() {
           }}
         />
       </ScreenContainer>
+      </View>
     );
   }
 
   return (
-    <ScreenContainer scroll>
+    <View style={styles.ground}>
+    <ScreenContainer scroll style={styles.groundInner}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.body}>
-          <ProgressDots index={currentIndex} total={STEPS.length} />
+          {/* No progress dots. The onboarding steps dropped their bar and
+              their "2 of 8" counter because telling somebody how far through
+              they are makes a short flow feel long, and three dots on a
+              three-step screen is the same mistake in miniature. */}
 
           {step === 'identity' ? (
             <IdentityStep
@@ -341,6 +347,7 @@ export function ProfileSetupScreen() {
         </View>
       </KeyboardAvoidingView>
     </ScreenContainer>
+    </View>
   );
 }
 
@@ -386,7 +393,10 @@ function ConsentGate({ onAccept }: { onAccept: (isAdult: boolean) => Promise<voi
   return (
     <View style={styles.body}>
       <View style={styles.titleBlock}>
-        <Mascot pose="wave" size={110} style={styles.stepMascot} />
+        {/* No mascot. This screen asks for a date of birth and consent, which
+            are the two most serious questions in the whole flow, and a waving
+            character over them reads as a cartoon asking for ID. The
+            onboarding steps carry their weight on type alone; so does this. */}
         <Text style={styles.eyebrow}>BEFORE WE BEGIN</Text>
         <Text style={styles.h1}>Your privacy, in plain words</Text>
         <Text style={styles.sub}>
@@ -537,7 +547,9 @@ function StepTitle({
 }) {
   return (
     <View style={styles.titleBlock}>
-      {mascot ? <Mascot pose={mascot} size={110} style={styles.stepMascot} /> : null}
+      {/* `mascot` is accepted and ignored, so callers did not all have to
+          change at once. See the note on the consent screen for why it is not
+          drawn any more. */}
       <Text style={styles.eyebrow}>{eyebrow}</Text>
       <Text style={styles.h1}>{title}</Text>
       <Text style={styles.sub}>{subtitle}</Text>
@@ -727,7 +739,15 @@ function PhoneStep({
 
 const AVATAR_SIZE = 128;
 
+/** Same ground as components/onboarding/Step.tsx, so the auth flow and the
+ *  first-run flow stop looking like two different products. */
+const GROUND = '#F7F6F2';
+
 const styles = StyleSheet.create({
+  ground: { flex: 1, backgroundColor: GROUND },
+  // The inner is transparent so the wrapper's ground shows through;
+  // ScreenContainer paints colors.background on its own root otherwise.
+  groundInner: { backgroundColor: 'transparent' },
   body: {
     flex: 1,
     paddingTop: spacing.lg,
@@ -750,10 +770,7 @@ const styles = StyleSheet.create({
   progressDotActive: {
     backgroundColor: A.ink,
   },
-  titleBlock: {
-    marginBottom: spacing.lg,
-    alignItems: 'center',
-  },
+  titleBlock: { alignItems: 'flex-start', marginBottom: 24 },
   dobBlock: { marginBottom: spacing.md, gap: spacing.xs },
   dobLabel: { fontFamily: fontFamilies.poppinsSemiBold, fontSize: 13.5, color: colors.textPrimary },
   dobNote: { ...typography.caption, fontSize: 12, lineHeight: 17, color: colors.textSecondary },
@@ -763,27 +780,29 @@ const styles = StyleSheet.create({
   },
   eyebrow: {
     fontFamily: fontFamilies.poppinsSemiBold,
-    fontSize: 11,
-    letterSpacing: 1.1,
-    color: A.body,
-    marginBottom: 8,
+    fontSize: 12,
+    letterSpacing: 1.4,
+    color: colors.textMuted,
+    marginBottom: 10,
   },
+  // Matched to the onboarding steps (components/onboarding/Step.tsx). This
+  // screen sits in the auth flow and used to look like a different product
+  // from the one either side of it.
   h1: {
     fontFamily: fontFamilies.poppinsBold,
-    fontSize: 26,
-    lineHeight: 34,
-    letterSpacing: -0.5,
-    color: A.ink,
-    textAlign: 'center',
+    fontSize: 34,
+    lineHeight: 38,
+    letterSpacing: -1.1,
+    color: colors.textPrimary,
+    textAlign: 'left',
   },
   sub: {
-    fontFamily: fontFamilies.poppinsRegular,
-    fontSize: 13.5,
-    lineHeight: 21,
-    color: A.body,
+    fontFamily: fontFamilies.interRegular,
+    fontSize: 16.5,
+    lineHeight: 24,
+    color: colors.textSecondary,
     marginTop: 10,
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
+    textAlign: 'left',
   },
   stepBody: {
     minHeight: 380,
@@ -888,10 +907,8 @@ const styles = StyleSheet.create({
     color: colors.error,
   },
   consentCard: {
-    backgroundColor: colors.surface,
+    backgroundColor: 'rgba(23,22,28,0.035)',
     borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.md,
     gap: spacing.md,
     marginBottom: spacing.lg,

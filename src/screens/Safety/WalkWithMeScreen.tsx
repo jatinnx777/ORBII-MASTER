@@ -7,7 +7,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { Mascot } from '@/components/common';
+
 import { colors, fontFamilies, radius, shadows, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { endSafeJourney, startSafeJourney } from '@/services/circles';
@@ -17,20 +17,100 @@ import type { AppStackParamList } from '@/navigation/types';
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 
 // Walk with me: ORBII keeps her company on the way and checks in by voice.
-// Every CHECK_EVERY_MS Orbi speaks a check-in and opens a response window;
+// Every check interval ORBII speaks a check-in and opens a response window;
 // if she doesn't tap "I'm okay" in time, we escalate to the real SOS
 // countdown (still cancellable, so a missed tap in a rickshaw isn't a false
 // alarm catastrophe). All voice is on-device TTS; nothing is recorded.
-const CHECK_EVERY_MS = 120_000;
+/**
+ * How often ORBII asks, in minutes.
+ *
+ * Her choice, not ours. Every minute is right for the five minutes between a
+ * gate and a hostel door; every five is right for a long walk where being
+ * asked twelve times is what makes somebody turn the feature off. A safety
+ * prompt that becomes annoying gets disabled, and a disabled prompt protects
+ * nobody, so the interval is the setting rather than a constant we defend.
+ */
+const CHECK_OPTIONS = [1, 2, 5] as const;
+const DEFAULT_CHECK_MIN = 2;
+
+/**
+ * How long she has to answer before ORBII treats silence as trouble.
+ *
+ * Deliberately generous. A phone in a bag, a glove, or a hand holding
+ * something else all cost seconds, and the cost of being slightly slow must
+ * not be a false SOS to four people.
+ */
 const RESPOND_WINDOW_MS = 45_000;
 
-function speak(text: string) {
+/**
+ * The best voice this phone actually has, chosen once.
+ *
+ * expo-speech with only a language tag takes whatever the system picked, which
+ * on most Android phones is the lowest-quality installed engine and sounds
+ * like a railway announcement. Android usually also ships a better one, and
+ * the good ones are identifiable: Google's network and local voices carry
+ * `quality` and name themselves `en-in-x-...`.
+ *
+ * Preference order, and the reasoning:
+ *   1. en-IN, because she is being spoken to in her own accent and an American
+ *      voice saying her name wrong at midnight is not comforting.
+ *   2. en-GB, which is closer to Indian English than en-US.
+ *   3. Anything English.
+ *   4. Nothing, and the system default handles it.
+ *
+ * Resolved lazily and cached: getAvailableVoicesAsync is slow enough to matter
+ * on the first spoken line, and the walk starts with one.
+ */
+let cachedVoice: string | null | undefined;
+
+async function resolveVoice(): Promise<string | null> {
+  if (cachedVoice !== undefined) return cachedVoice;
+  cachedVoice = null;
   try {
-    Speech.stop();
-    Speech.speak(text, { language: 'en-IN', pitch: 1.05, rate: 0.98 });
+    const voices = await Speech.getAvailableVoicesAsync();
+    const score = (v: { identifier: string; language: string; quality?: unknown }) => {
+      const lang = (v.language || '').toLowerCase();
+      const id = (v.identifier || '').toLowerCase();
+      let n = 0;
+      if (lang.startsWith('en-in') || lang === 'en_in') n += 100;
+      else if (lang.startsWith('en-gb') || lang === 'en_gb') n += 60;
+      else if (lang.startsWith('en')) n += 30;
+      else return -1;
+      // Enhanced voices report a quality; the default ones usually do not.
+      if (String(v.quality ?? '').toLowerCase().includes('enhanced')) n += 25;
+      if (id.includes('network')) n += 15;
+      if (id.includes('google')) n += 10;
+      return n;
+    };
+    const best = voices
+      .map((v) => ({ v, n: score(v as never) }))
+      .filter((x) => x.n >= 0)
+      .sort((a, b) => b.n - a.n)[0];
+    cachedVoice = best ? best.v.identifier : null;
   } catch {
-    // TTS is a comfort layer; never let it break the walk
+    cachedVoice = null;
   }
+  return cachedVoice;
+}
+
+function speak(text: string) {
+  void (async () => {
+    try {
+      Speech.stop();
+      const voice = await resolveVoice();
+      Speech.speak(text, {
+        language: 'en-IN',
+        // Slightly slower and slightly lower than the old settings. The
+        // previous 1.05 pitch read as chirpy, which is the wrong register for
+        // a voice whose job is to be steady while somebody walks home alone.
+        pitch: 1.0,
+        rate: 0.94,
+        ...(voice ? { voice } : {}),
+      });
+    } catch {
+      // TTS is a comfort layer; never let it break the walk.
+    }
+  })();
 }
 
 export function WalkWithMeScreen() {
@@ -43,7 +123,7 @@ export function WalkWithMeScreen() {
    * The circle this walk is announced to, and the journey row it created.
    *
    * WALK WITH ME IS A SAFETY JOURNEY NOW, not a second system. It was an
-   * on-device voice companion that never touched the circle: Orbi talked to
+   * on-device voice companion that never touched the circle: ORBII talked to
    * her, and if she stopped answering it raised an SOS, which is genuinely
    * useful and entirely invisible to the four people it was for.
    *
@@ -56,6 +136,7 @@ export function WalkWithMeScreen() {
   const circleId = useAppSelector((st) => st.circles.activeCircleId);
   const tripRef = useRef<string | null>(null);
   const [minutes, setMinutes] = useState(30);
+  const [checkEveryMin, setCheckEveryMin] = useState<number>(DEFAULT_CHECK_MIN);
   const [awaiting, setAwaiting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(RESPOND_WINDOW_MS / 1000);
   const [checkIns, setCheckIns] = useState(0);
@@ -126,7 +207,7 @@ export function WalkWithMeScreen() {
     const nightBit = hour >= 21 || hour < 5 ? " It's late, so I'll check in as we go." : " I'll check in as we go.";
     speak(`Okay ${firstName}, I'm walking with you.${nightBit}`);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => undefined);
-    checkTimer.current = setInterval(openWindow, CHECK_EVERY_MS);
+    checkTimer.current = setInterval(openWindow, checkEveryMin * 60_000);
 
     // TELL THE CIRCLE. Not awaited: the voice companion and the escalation
     // above are the safety net and they work with no network at all. This is
@@ -153,6 +234,31 @@ export function WalkWithMeScreen() {
       }
     })();
   };
+
+  /**
+   * She said no.
+   *
+   * Straight to the SOS countdown, with no second confirmation. The countdown
+   * itself is the confirmation and it is still cancellable, so asking "are you
+   * sure" here would be asking the same question twice of somebody who has
+   * already answered it once under pressure.
+   *
+   * The circle is alerted by the SOS pipeline, which is the one place that
+   * knows how to fan out, honour revocation and respect her plan. Sending a
+   * second alert from here would mean two messages for one event.
+   */
+  const answerNo = useCallback(() => {
+    if (windowTimer.current) clearInterval(windowTimer.current);
+    windowTimer.current = null;
+    clearTimers();
+    deactivateKeepAwake('walk-with-me').catch(() => undefined);
+    walkingRef.current = false;
+    setWalking(false);
+    setAwaiting(false);
+    speak('Okay. Starting your S O S now.');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => undefined);
+    navigation.navigate('SOSCountdown');
+  }, [clearTimers, navigation]);
 
   const confirmOkay = () => {
     if (windowTimer.current) clearInterval(windowTimer.current);
@@ -219,15 +325,26 @@ export function WalkWithMeScreen() {
         </View>
 
         <View style={styles.body}>
-          <Animated.View style={{ transform: [{ scale: breathe }] }}>
-            <Mascot size={walking ? 200 : 230} />
-          </Animated.View>
+          {/* NO CIRCLE, AND NOTHING BREATHING.
+              A pulsing round mascot was the largest object on a screen whose
+              job is to ask one question and take one answer. On the check-in
+              state it competed with the countdown; while walking it was
+              decoration on a screen nobody is looking at. What is left is a
+              thin progress line, which says the one thing worth saying: how
+              far through the walk she is. */}
+          {walking ? (
+            <View style={styles.progressTrack}>
+              <Animated.View
+                style={[styles.progressFill, { transform: [{ scaleX: breathe }] }]}
+              />
+            </View>
+          ) : null}
 
           {!walking ? (
             <>
               <Text style={styles.title}>I’ll walk you home.</Text>
               <Text style={styles.sub}>
-                Orbi talks to you on the way and checks in every couple of minutes.
+                ORBII talks to you on the way and checks in every couple of minutes.
                 If you go silent, ORBII starts your SOS, automatically.
               </Text>
               <View style={styles.noteRow}>
@@ -260,6 +377,32 @@ export function WalkWithMeScreen() {
                 ))}
               </View>
 
+              {/* HOW OFTEN SHE WANTS ASKING. Her call, not ours: every
+                  minute suits the five minutes between a gate and a hostel
+                  door, every five suits a long walk where twelve prompts is
+                  what makes somebody switch the feature off. */}
+              <Text style={styles.durationLabel}>Check in on me every</Text>
+              <View style={styles.durationRow}>
+                {CHECK_OPTIONS.map((m) => (
+                  <Pressable
+                    key={m}
+                    onPress={() => {
+                      setCheckEveryMin(m);
+                      Haptics.selectionAsync().catch(() => undefined);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: checkEveryMin === m }}
+                    style={[styles.duration, checkEveryMin === m && styles.durationOn]}
+                  >
+                    <Text
+                      style={[styles.durationText, checkEveryMin === m && styles.durationTextOn]}
+                    >
+                      {m} min
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+
               <Pressable onPress={start} style={({ pressed }) => [styles.cta, pressed && styles.pressed]}>
                 <Ionicons name="walk" size={18} color={colors.textPrimary} />
                 <Text style={styles.ctaText}>Start walking</Text>
@@ -269,22 +412,45 @@ export function WalkWithMeScreen() {
             <>
               <Text style={styles.title}>Are you okay?</Text>
               <Text style={styles.countdown}>{secondsLeft}s</Text>
-              <Text style={styles.sub}>Tap the button or ORBII starts your SOS countdown.</Text>
-              <Pressable onPress={confirmOkay} style={({ pressed }) => [styles.okayBtn, pressed && styles.pressed]}>
-                <Text style={styles.okayText}>I’m okay</Text>
-              </Pressable>
+              <Text style={styles.sub}>
+                No answer in {secondsLeft}s and ORBII starts your SOS countdown.
+              </Text>
+              {/* TWO ANSWERS, NOT ONE.
+                  Before this there was only "I'm okay", so the way to say
+                  anything was wrong was to say nothing and wait out 45
+                  seconds. Somebody who has just realised she is being followed
+                  should not have to stand still and wait for a timer to agree
+                  with her. No is now a button, and it does not wait. */}
+              <View style={styles.answerRow}>
+                <Pressable
+                  onPress={answerNo}
+                  style={({ pressed }) => [styles.noBtn, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="No, I am not okay. Start my SOS."
+                >
+                  <Ionicons name="alert-circle" size={18} color={colors.textInverse} />
+                  <Text style={styles.noText}>No</Text>
+                </Pressable>
+                <Pressable
+                  onPress={confirmOkay}
+                  style={({ pressed }) => [styles.okayBtn, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                >
+                  <Text style={styles.okayText}>I’m okay</Text>
+                </Pressable>
+              </View>
             </>
           ) : (
             <>
               <Text style={styles.title}>Walking with you.</Text>
               <Text style={styles.sub}>
                 {checkIns === 0
-                  ? 'First check-in comes in about 2 minutes. Keep your volume up.'
+                  ? `First check-in in about ${checkEveryMin} minute${checkEveryMin === 1 ? '' : 's'}. Keep your volume up.`
                   : `${checkIns} check-in${checkIns === 1 ? '' : 's'} so far. All good.`}
               </Text>
               <View style={styles.liveRow}>
                 <View style={styles.liveDot} />
-                <Text style={styles.liveText}>Orbi is with you</Text>
+                <Text style={styles.liveText}>ORBII is with you</Text>
               </View>
               <Pressable onPress={endWalk} style={({ pressed }) => [styles.endBtn, pressed && styles.pressed]}>
                 <Text style={styles.endText}>I reached safely, end walk</Text>
@@ -298,6 +464,38 @@ export function WalkWithMeScreen() {
 }
 
 const styles = StyleSheet.create({
+  progressTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(23,22,28,0.08)',
+    alignSelf: 'stretch',
+    marginBottom: spacing.xl,
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: colors.brandDeep,
+    // scaleX is driven from the existing animated value, so the line has a
+    // slow pulse instead of the mascot's. transform only: it stays on the
+    // native driver and off the JS thread.
+    width: '100%',
+  },
+  answerRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  noBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 22,
+    paddingVertical: 15,
+    borderRadius: radius.pill,
+    backgroundColor: colors.coralDeep,
+  },
+  noText: {
+    fontFamily: fontFamilies.poppinsSemiBold,
+    fontSize: 16,
+    color: colors.textInverse,
+  },
   durationLabel: {
     fontFamily: fontFamilies.interRegular,
     fontSize: 13.5,
