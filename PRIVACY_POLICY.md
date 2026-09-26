@@ -9,7 +9,7 @@ near you. This policy explains what we collect, why, who can see it, and your
 choices. We've tried to keep it plain.
 
 **Contact:** orbiisafety@gmail.com
-**Data Protection / Grievance Officer (DPDP Act, 2023):** privacy@orbii.in
+**Data Protection / Grievance Officer (DPDP Act, 2023):** orbiisafety@gmail.com
 
 We act as a **Data Fiduciary** under India's Digital Personal Data Protection
 Act, 2023 (the "DPDP Act"). Our lawful basis for processing is your **consent**,
@@ -21,8 +21,11 @@ which we ask for clearly during sign-up and which you can withdraw at any time.
 - We collect only what's needed to keep you safe: your account details, your
   emergency contacts, and your location (used when the app is open / during an
   SOS).
-- **Your voice and any SOS audio are processed and stored only on your device.
-  They are never uploaded to our servers or shared.**
+- **Voice SOS listening happens entirely on your device.** The words we listen
+  for are detected on your phone and that audio is never uploaded.
+- **A short clip recorded during an active SOS is uploaded** to private storage
+  that only you can read, so that evidence survives if your phone does not. It
+  is deleted after 90 days, and you can delete it sooner.
 - During an SOS, your name and live location are shown to the people you chose
   (your circle / emergency contacts) and to nearby ORBII users who can help.
 - We never sell your data, and we don't use it for advertising.
@@ -46,12 +49,35 @@ which we ask for clearly during sign-up and which you can withdraw at any time.
   you. ORBII does **not** track your location in the background. We do not
   request background-location permission.
 
-**Audio (on-device only)**
-- With your permission, ORBII listens for your chosen safety phrase (e.g. "help
-  help") using on-device speech recognition, and may record a short audio clip
-  when you fire an SOS. **This audio is processed and stored entirely on your
-  device. It is never uploaded to our servers or shared with anyone.** You can
-  play back or delete SOS recordings from your device.
+**Audio**
+
+There are two different things here and an earlier version of this policy wrongly
+described them as one. We have separated them because the difference matters.
+
+- **Voice SOS listening is on-device only.** With your permission, ORBII listens
+  for your chosen safety phrase (e.g. "help help") using on-device speech
+  recognition. That listening audio is processed on your phone, is never
+  uploaded, and is never stored, even by us, even briefly.
+- **An SOS clip is recorded and uploaded.** When you fire a real SOS, ORBII
+  records a short clip and uploads it to a private storage area. This happens
+  automatically on every real SOS; it is not currently something you switch on.
+  The purpose is evidence: a recording that exists only on a phone that was
+  snatched or smashed is no use to you afterwards.
+  - Only you can read it. Access is enforced by the database, not by the app.
+  - It is **deleted after 90 days** by an automated job, and you can delete it
+    yourself at any time from the incident in your History.
+  - It is never used for advertising, never used to train anything, and never
+    shared with anyone unless you share it or we are legally compelled.
+  - You can stop it entirely by denying the microphone permission. Voice SOS
+    stops working too; every other safety feature keeps working.
+
+> **We got this wrong before, and we would rather say so than quietly change it.**
+> Until 26 September 2026 this policy said all SOS audio stayed on your device.
+> That was not true: the clip has always been uploaded. Nobody's audio was
+> shared, sold or used for anything other than being kept for you, but you were
+> told something inaccurate about the most sensitive thing this app touches, and
+> you should know that we found it and fixed the wording rather than the
+> recording.
 
 **Push notification token**
 - A device token (via Expo / Google Firebase Cloud Messaging) so we can notify
@@ -128,7 +154,10 @@ Standard carrier charges may apply.
   from an authority, that record is kept until the matter ends.
 - **Live-location history (circle breadcrumbs): automatically deleted after 48
   hours.** We do not keep a long-term trail of where you have been.
-- On-device audio: stays on your device until you delete it or uninstall.
+- Voice SOS listening audio: never stored at all, by us or on your phone.
+- SOS clips: the copy on your phone stays until you delete it or uninstall. **The
+  copy we hold is deleted after 90 days**, and you can delete it sooner from the
+  incident in your History.
 - Diagnostics: kept for a limited period to fix issues.
 - When you delete your account (Settings → Delete my account & data), your
   personal data is erased without undue delay.
@@ -151,12 +180,12 @@ As a Data Principal you have the right to:
   contacts directly in the app.
 - **Erasure:** delete your account and all associated data yourself in the app
   (**Settings → Delete my account & data**), or by emailing
-  **privacy@orbii.in**. This erases your profile, circles, contacts, and
+  **orbiisafety@gmail.com**. This erases your profile, circles, contacts, and
   location history.
 - **Withdraw consent** at any time (turn off location sharing, revoke
   permissions, or delete your account). Withdrawing does not affect processing
   already carried out.
-- **Grievance redressal:** contact our Grievance Officer at **privacy@orbii.in**.
+- **Grievance redressal:** contact our Grievance Officer at **orbiisafety@gmail.com**.
   We aim to respond within the timelines set by the DPDP Act.
 - **Nominate** another individual to exercise your rights in the event of death
   or incapacity — email us to register a nominee.

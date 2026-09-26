@@ -65,7 +65,8 @@ account you create in Supabase and give those credentials here instead.)
 **Is all data encrypted in transit?** → **Yes.**
 **Do you provide a way to request data deletion?** → **Yes** (in-app: Profile →
 Delete account; and email orbiisafety@gmail.com). Deletion URL:
-`https://orbii.in/privacy-policy`.
+**`https://www.orbii.in/delete-account`** — the dedicated page, not the privacy
+policy. Google wants a page whose subject is deletion, and that page exists.
 
 **Data collected (mark each: Collected = Yes, Shared = No, Processed
 ephemerally = No unless noted, Required/Optional as shown, Purpose = App
@@ -78,6 +79,7 @@ functionality unless noted):**
 | Personal info | Name | Yes | Required | App functionality, Account management |
 | Personal info | Email address | Yes | Required | App functionality, Account management |
 | Personal info | Phone number | Yes | Optional | App functionality |
+| Personal info | **Address** | **Yes** | **Optional** | App functionality (your home address, so an SOS can tell responders and your circle where home is) |
 | Personal info | Other (emergency contacts you add) | Yes | Optional | App functionality (who to alert) |
 | Photos and videos | Photos | Yes | Optional | App functionality (profile photo; responder ID verification) |
 | Audio | Voice or sound recordings | Yes | Optional | App functionality (audio recorded during an active SOS to document the incident) |
@@ -95,6 +97,27 @@ with third-party companies.)
 listening is processed entirely on-device and is never uploaded or collected.**
 Only audio recorded during an *active* SOS is stored. Make sure your listing
 copy says this too.
+
+**Be exact about the SOS clip, because the privacy policy was not.** Until
+26 September 2026 PRIVACY_POLICY.md claimed all SOS audio stayed on the device.
+It never did: every real SOS uploads the clip, plus a short pre-roll, to the
+private `sos-recordings` bucket. This table was already right; the policy was
+wrong, and both now say the same thing. Two consequences for the form:
+
+- **"Optional" is the right answer but for one specific reason:** denying the
+  microphone permission stops the recording and the app still works. It is not
+  optional in the sense of a toggle, because there is no toggle — with the
+  permission granted it happens on every real SOS.
+- **Retention:** our copy is deleted after 90 days by `purge-sos-audio`
+  (sql/149), and the owner can delete it from the incident in History. If a
+  reviewer asks how long audio is kept, that is the answer, and it is enforced
+  by a scheduled job rather than a promise.
+
+**One row above still needs checking, and it is not mine to settle:** *Financial
+info — payout UPI/bank*. The ORBII Helper app collects no payment details at all
+(`request_coin_redemption()` takes no arguments), so if the main app does not
+collect them either, this row is an over-declaration and should be removed.
+Over-declaring is the safe direction, so it is not urgent, but it should be true.
 
 ---
 

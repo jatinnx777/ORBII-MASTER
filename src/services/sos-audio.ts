@@ -155,3 +155,67 @@ export async function flushPendingSosAudio(): Promise<void> {
   }
   await writePending(stillPending);
 }
+
+/**
+ * Delete an SOS recording from the server, at the owner's request.
+ *
+ * WHY THIS EXISTS. The clip is uploaded automatically on every real SOS, and
+ * until now nothing could remove it: no expiry, no account deletion (that
+ * deletes the row, not the file), and no control anywhere in the app. That is a
+ * DPDP erasure right on the most sensitive thing ORBII holds, and the privacy
+ * policy now promises it, so it has to work.
+ *
+ * TWO FILES, NOT ONE. Every SOS can leave `<uid>/<sosId>.m4a` and
+ * `<uid>/<sosId>-preroll.wav`, and the pre-roll is often the more sensitive of
+ * the two because it caught the moments before she started shouting. Deleting
+ * only the clip would leave the worse recording behind while telling her it was
+ * gone. Both go, always.
+ *
+ * ORDER: file first, pointer second. A pointer cleared while the file survives
+ * is the orphan case, and here the orphan is audio of a person. If the remove
+ * fails we clear nothing and report false, so the UI can say it did not work
+ * instead of showing a recording as deleted while it sits in the bucket.
+ *
+ * The local copy on the phone is deliberately untouched. It is hers, on her own
+ * device, and this function is about what WE hold.
+ */
+export async function deleteSosRecording(
+  userId: string,
+  sosId: string,
+): Promise<boolean> {
+  try {
+    const { error } = await supabase.storage
+      .from(BUCKET)
+      .remove([storagePath(userId, sosId), `${userId}/${sosId}-preroll.wav`]);
+    // remove() does not fail on a path that is not there, so a genuine error
+    // here means permission or network, and neither is safe to treat as done.
+    if (error) {
+      addBreadcrumb({
+        category: 'sos.recording',
+        severity: 'warn',
+        message: `audio delete failed: ${error.message}`,
+      });
+      return false;
+    }
+
+    const { error: rpcErr } = await supabase.rpc('forget_sos_audio', { p_sos: sosId });
+    if (rpcErr) {
+      // The files ARE gone, which is the part that matters for her privacy. A
+      // stale pointer is a cosmetic bug that the nightly purge also clears, so
+      // this reports success rather than telling her the deletion failed.
+      addBreadcrumb({
+        category: 'sos.recording',
+        severity: 'warn',
+        message: `audio deleted but pointer not cleared: ${rpcErr.message}`,
+      });
+    }
+    return true;
+  } catch (err) {
+    reportError(err, {
+      category: 'sos.recording',
+      message: 'audio delete threw',
+      tags: { sosId },
+    });
+    return false;
+  }
+}

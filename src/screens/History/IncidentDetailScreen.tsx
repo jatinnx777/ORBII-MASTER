@@ -23,6 +23,7 @@ import {
 import { colors, fontFamilies, radius, spacing, typography } from '@/theme';
 import { useAppSelector } from '@/redux/store';
 import { hasSosRecording, sosRecordingUri } from '@/services/sos-recording';
+import { deleteSosRecording } from '@/services/sos-audio';
 import { exportIncidentReport } from '@/services/incident-report';
 import type { AppStackParamList } from '@/navigation/types';
 
@@ -248,15 +249,28 @@ export function IncidentDetailScreen() {
   );
 }
 
-// On-device SOS audio: play it back, or share it with your circle. Only shown
-// when a recording was captured + saved for this incident.
+// SOS audio: play it back, share it with your circle, or delete the copy we
+// hold.
+//
+// The card used to say "Saved on this phone", which was only half true and was
+// the same half the privacy policy got wrong: a copy is also uploaded to private
+// storage on every real SOS, so that evidence survives a phone that was snatched
+// or smashed. Saying so here is the honest version, and deleting it has to be
+// possible from the same place it is described.
 function RecordingCard({ sosId }: { sosId: string }) {
   const exists = useMemo(() => hasSosRecording(sosId), [sosId]);
   const uri = useMemo(() => sosRecordingUri(sosId), [sosId]);
   const player = useAudioPlayer(exists ? uri : null);
   const [playing, setPlaying] = useState(false);
+  const uid = useAppSelector((s) => s.user.profile?.uid ?? null);
+  const [deleted, setDeleted] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  if (!exists) return null;
+  // Rendered when there is a local file OR when a signed-in person could have a
+  // server copy. Gating the whole card on the local file would mean somebody who
+  // reinstalled the app could never delete the recording we still hold, which is
+  // exactly the person most likely to want it gone.
+  if (!exists && !uid) return null;
 
   const toggle = () => {
     if (playing) {
@@ -286,36 +300,83 @@ function RecordingCard({ sosId }: { sosId: string }) {
     }
   };
 
+  const removeServerCopy = () => {
+    appAlert(
+      'Delete the copy we hold?',
+      'This permanently deletes the recording, and the few seconds captured just before it, from our storage. It cannot be undone, and it would no longer be available as evidence.\n\nThe copy on this phone is yours and stays.',
+      [
+        { text: 'Keep it', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (!uid) return;
+            setDeleting(true);
+            const ok = await deleteSosRecording(uid, sosId);
+            setDeleting(false);
+            if (ok) {
+              setDeleted(true);
+              return;
+            }
+            appAlert(
+              "Couldn't delete it",
+              'Nothing was deleted. Check your connection and try again, or email orbiisafety@gmail.com and we will do it for you.',
+            );
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <>
       <SectionHeader title="Voice recording" />
       <Card style={styles.card}>
         <Text style={styles.muted}>
-          Saved on this phone. Play it back, or share it with the people in your
-          circle.
+          {deleted
+            ? 'Deleted from our storage. If a copy was saved on this phone, it is still here and still yours.'
+            : 'A copy is saved on this phone, and a copy is kept in private storage only you can read, so it survives if this phone does not. We delete ours after 90 days.'}
         </Text>
-        <View style={styles.recRow}>
+        {exists ? (
+          <View style={styles.recRow}>
+            <Pressable
+              onPress={toggle}
+              style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+            >
+              <Ionicons
+                name={playing ? 'pause' : 'play'}
+                size={20}
+                color={colors.textInverse}
+              />
+              <Text style={styles.playText}>{playing ? 'Pause' : 'Play recording'}</Text>
+            </Pressable>
+            <Pressable
+              onPress={share}
+              style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+            >
+              <Ionicons name="share-social" size={18} color={colors.brandDeep} />
+              <Text style={styles.shareText}>Share</Text>
+            </Pressable>
+          </View>
+        ) : null}
+        {!deleted && uid ? (
           <Pressable
-            onPress={toggle}
-            style={({ pressed }) => [styles.playBtn, pressed && { opacity: 0.9 }]}
+            onPress={removeServerCopy}
+            disabled={deleting}
+            style={({ pressed }) => [
+              styles.forgetBtn,
+              (pressed || deleting) && { opacity: 0.6 },
+            ]}
             accessibilityRole="button"
           >
-            <Ionicons
-              name={playing ? 'pause' : 'play'}
-              size={20}
-              color={colors.textInverse}
-            />
-            <Text style={styles.playText}>{playing ? 'Pause' : 'Play recording'}</Text>
+            <Ionicons name="trash-outline" size={16} color={colors.coralDeep} />
+            <Text style={styles.forgetText}>
+              {deleting ? 'Deleting…' : 'Delete the copy we hold'}
+            </Text>
           </Pressable>
-          <Pressable
-            onPress={share}
-            style={({ pressed }) => [styles.shareBtn, pressed && { opacity: 0.9 }]}
-            accessibilityRole="button"
-          >
-            <Ionicons name="share-social" size={18} color={colors.brandDeep} />
-            <Text style={styles.shareText}>Share</Text>
-          </Pressable>
-        </View>
+        ) : null}
       </Card>
     </>
   );
@@ -413,6 +474,22 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.poppinsSemiBold,
     fontSize: 14,
     color: colors.brandDeep,
+  },
+  // Deliberately the quietest control on the card. Deleting evidence of an
+  // emergency is a real choice and it should not sit under a filled button that
+  // invites a thumb.
+  forgetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: spacing.sm,
+    paddingVertical: 10,
+  },
+  forgetText: {
+    fontFamily: fontFamilies.poppinsMedium,
+    fontSize: 13,
+    color: colors.coralDeep,
   },
   helperRow: {
     flexDirection: 'row',
