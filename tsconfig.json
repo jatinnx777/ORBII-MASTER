@@ -17,6 +17,7 @@
     "node_modules",
     "supabase/functions",
     "website",
-    "web"
+    "web",
+    "ios-circle"
   ]
 }
