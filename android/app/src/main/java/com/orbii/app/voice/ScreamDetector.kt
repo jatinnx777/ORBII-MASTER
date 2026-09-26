@@ -41,8 +41,11 @@ class ScreamDetector(
     val index: Int,
     val fireOnce: Float,   // single-window score that fires immediately
     val fireTwice: Float,  // score that fires when seen twice in a row
-    // Never fires alone. Only corroborates a soft word heard nearby in time.
-    val corroborate: Float = 0.40f,
+    // Never fires alone. Only corroborates a distress word heard nearby in
+    // time. Raised from 0.40: at that score YAMNet was flagging a television,
+    // a laugh and ordinary loud conversation as weak evidence of danger, which
+    // then sat waiting for any word to pair with.
+    val corroborate: Float = 0.62f,
   )
 
   private var interpreter: Interpreter? = null
@@ -80,10 +83,33 @@ class ScreamDetector(
           }
         }
       }
+      // RETUNED 26 September 2026, after Voice SOS was reported firing by
+      // itself from the moment it was switched on.
+      //
+      // WHAT YAMNET ACTUALLY CONFUSES. "Screaming" is not a rare class. It sits
+      // next to shouting, laughing, cheering, singing and children playing, and
+      // a television in the same room produces all of them. At the old 0.55
+      // two-window threshold an excited living room cleared it regularly.
+      //
+      // NOTHING FIRES ON A SINGLE WINDOW ANY MORE. A window is 0.975 seconds. A
+      // real scream lasts longer than that; a laugh or a clatter often does
+      // not. Requiring two consecutive windows costs about three quarters of a
+      // second in a real emergency, where the countdown is five, and removes
+      // the entire class of one-off spikes. fireOnce is set above 1.0, which no
+      // score can reach, rather than deleted, so the shape of the rule stays
+      // visible.
+      //
+      // CRYING AND GLASS NO LONGER FIRE AT ALL. Both are now corroboration
+      // only. A baby, a sad film, a dropped plate and a slammed door are
+      // ordinary domestic sounds, and neither one is evidence somebody is in
+      // danger. They can still strengthen a distress WORD heard seconds later,
+      // which is the only use that was ever defensible.
       targets = listOfNotNull(
-        byName["Screaming"]?.let { Target("scream", it, 0.80f, 0.55f) },
-        byName["Crying, sobbing"]?.let { Target("crying", it, 0.90f, 0.65f) },
-        byName["Shatter"]?.let { Target("glass", it, 0.70f, 0.55f) },
+        // Two consecutive windows at 0.80. Was one window at 0.80, or two at
+        // 0.55.
+        byName["Screaming"]?.let { Target("scream", it, 1.1f, 0.80f, 0.62f) },
+        byName["Crying, sobbing"]?.let { Target("crying", it, 1.1f, 1.1f, 0.75f) },
+        byName["Shatter"]?.let { Target("glass", it, 1.1f, 1.1f, 0.70f) },
       )
       enabled = targets.isNotEmpty()
       Log.i(TAG, "ready targets=${targets.map { "${it.name}@${it.index}" }} in2d=$inputIs2d out=$outputLen")
