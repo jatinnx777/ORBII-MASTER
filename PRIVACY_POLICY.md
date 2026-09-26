@@ -122,8 +122,10 @@ Standard carrier charges may apply.
 ## 6. How long we keep it
 - Account info, emergency contacts, and circles: until you delete them or your
   account.
-- SOS records (location/time): retained as your safety history; active alerts
-  are limited to a short window for nearby users.
+- SOS records (location/time): kept as your safety history for **3 years**, then
+  deleted automatically. Active alerts are limited to a short window for nearby
+  users. If an incident is subject to a legal proceeding or a lawful request
+  from an authority, that record is kept until the matter ends.
 - **Live-location history (circle breadcrumbs): automatically deleted after 48
   hours.** We do not keep a long-term trail of where you have been.
 - On-device audio: stays on your device until you delete it or uninstall.
