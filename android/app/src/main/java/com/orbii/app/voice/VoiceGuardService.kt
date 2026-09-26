@@ -116,10 +116,21 @@ class VoiceGuardService : Service() {
     // with a weak distress sound (a scream YAMNet scored below its own firing
     // bar) they are strong evidence. This lets BOTH thresholds drop without
     // raising false positives, because neither signal is ever trusted alone.
+    // FUSION WORDS. Reported 26 September 2026: Voice SOS was firing on its
+    // own, repeatedly, from the moment it was switched on.
+    //
+    // This set was the main cause. It used to hold "no", "stop", "please",
+    // "leave", "nahi", "chodo" and "mummy", which are not distress words, they
+    // are ordinary conversation. Paired with a weak scream score (a TV, a
+    // laugh, somebody talking loudly nearby) or a motion spike (a phone
+    // shifting in a bag), somebody saying "no" or "please" within six seconds
+    // fired a countdown at four people.
+    //
+    // What is left are words nobody says by accident in a calm room. Fusion
+    // still exists, and still lets a weak-but-real shout corroborate, but it
+    // can no longer be reached by normal speech.
     private val SOFT_WORDS = setOf(
-      "help", "no", "stop", "please", "leave",
-      "bachao", "madad", "chodo", "nahi", "mummy",
-      "बचाओ", "मदद", "नहीं",
+      "help", "bachao", "madad", "बचाओ", "मदद",
     )
     private const val FUSION_WINDOW_MS = 6000L
 
@@ -172,8 +183,12 @@ class VoiceGuardService : Service() {
     // the recogniser is confident it really heard it. A mumbled, low-confidence
     // "help" still needs the two-shout / fusion paths below. The 5-second
     // countdown is the guard against the rare false single trigger.
+    // Near misses removed here too. "bacho" is an ordinary Hindi word (बच्चों,
+    // children) and "madat" is just a spelling of madad the model sometimes
+    // emits from unrelated speech. Both could fire an SOS on their own at high
+    // confidence, which is the worst shape a false positive can take.
     private val SINGLE_DISTRESS = setOf(
-      "help", "bachao", "bacho", "madad", "madat", "बचाओ", "मदद",
+      "help", "bachao", "madad", "बचाओ", "मदद",
     )
     // A single distress word fires on its own only when the recogniser is VERY
     // sure it heard it. Raised from 0.62 → 0.88: at 0.62 the small model was
@@ -194,14 +209,39 @@ class VoiceGuardService : Service() {
     // transcribed as "hell"/"held" by the small model, and Hindi "bachao" as
     // "bacho". A single near-miss does nothing; the same distress sound twice
     // in seconds is what fires, so ordinary speech stays safe.
+    // REPEAT GROUPS, WITHOUT THE NEAR MISSES.
+    //
+    // These used to carry "hell", "held", "yelp", "bacho" and "madat" on the
+    // reasoning that a shouted "help" is often transcribed as one of them. The
+    // reasoning is true and the cost was unacceptable: "held" is an ordinary
+    // English word, and hearing it twice in twelve seconds ("I held it, I held
+    // it") fired an SOS. The same for "no" through the fusion path above.
+    //
+    // A real distress word repeated still fires. A word that merely sounds
+    // like one no longer does, at any repetition.
     private val REPEAT_GROUPS = listOf(
-      listOf("help", "hell", "held", "yelp"),
-      listOf("बचाओ", "bachao", "bacho"),
-      listOf("मदद", "madad", "madat"),
+      listOf("help"),
+      listOf("बचाओ", "bachao"),
+      listOf("मदद", "madad"),
     )
     // Widened: a scared, muffled "help ... help" often has a long gap between
     // the two shouts, and short read frames mean each is a separate final.
     private const val REPEAT_WINDOW_MS = 12000L
+
+    /**
+     * How long after one trigger before another can fire.
+     *
+     * Was six seconds, which is why a single false detection did not read as
+     * one mistake but as the app firing over and over: every six seconds it
+     * could open another countdown. Somebody who has just cancelled a
+     * countdown she did not ask for should not be handed another one before
+     * she has put the phone back in her pocket.
+     *
+     * Thirty seconds costs nothing in a real emergency. The countdown from the
+     * first trigger is already running and sending; re-firing during it does
+     * not make help arrive faster, and the SOS button is always there.
+     */
+    private const val FIRE_DEBOUNCE_MS = 30000L
   }
 
   @Volatile private var running = false
@@ -997,7 +1037,7 @@ class VoiceGuardService : Service() {
    */
   private fun triggerFromSensor(source: String) {
     val now = System.currentTimeMillis()
-    if (now - lastFire < 6000) return // debounce, shared with the word paths
+    if (now - lastFire < FIRE_DEBOUNCE_MS) return // shared with the word paths
     lastFire = now
     VoiceMetrics.lastTriggerPhrase = "[$source]"
     VoiceMetrics.lastTriggerAtMs = now
@@ -1014,7 +1054,7 @@ class VoiceGuardService : Service() {
 
   private fun triggerNow(hit: String, speechStart: Long) {
     val now = System.currentTimeMillis()
-    if (now - lastFire < 6000) return // debounce
+    if (now - lastFire < FIRE_DEBOUNCE_MS) return
     lastFire = now
     VoiceMetrics.lastTriggerPhrase = hit
     VoiceMetrics.lastTriggerAtMs = now
