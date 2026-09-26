@@ -100,9 +100,11 @@ For each: **what it is** → **why we chose it** → **the investor one-liner**.
   Hindi equivalents) using a speech model that runs **entirely on the phone** —
   the English + Hindi models are bundled inside the app.
 - **Why:** Cloud speech (Google/Amazon) costs per minute and needs internet. Ours
-  is free forever, works with no signal, and is private (audio never leaves the phone).
+  is free forever, works with no signal, and is private (the listening audio is
+  never uploaded or stored; the SOS evidence clip is a separate, deliberate upload).
 - **One-liner:** *"Voice detection runs offline on the phone — no internet needed,
-  no per-use cost, and the audio never leaves the device, so it's private by design."*
+  no per-use cost, and the listening never leaves the device, so it's private by
+  design."*
   **This is your strongest technical talking point. Lead with it.**
 
 ### 3.6 Notifications: Firebase Cloud Messaging (FCM)
@@ -203,7 +205,8 @@ Investors in a *safety* app will probe security. You have real answers.
    only ever see their own folder.
 4. **Secrets are server-side only:** payment keys and admin keys live in protected
    server environments, never in the app or in our code repository.
-5. **Voice is private:** audio is processed on-device and never uploaded.
+5. **Voice is private:** the listening is processed on-device and never uploaded.
+   Audio is kept only as evidence of an SOS, deleted after 90 days.
 
 > **SAY THIS:** "For a safety app, a data leak isn't a bug — it's a danger. So the
 > database enforces access per-row, victims' locations are only ever served to

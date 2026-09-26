@@ -181,7 +181,15 @@ grievance officer, not a generic mailbox.
 > terms, and you cannot read theirs. You can turn relaying off in Settings.
 >
 > Voice audio is never part of this or any other transmission. Speech
-> recognition runs entirely on your device and audio is never uploaded.
+> recognition runs entirely on your device, and that listening audio is never
+> stored and never uploaded.
+>
+> The one exception, stated here so this clause is not read as wider than it is:
+> a short clip recorded **during an active SOS** is uploaded to private storage
+> only you can read, as evidence, and deleted after 90 days. That clip is the
+> only audio ORBII keeps, and it is kept only as evidence of an SOS. It is never
+> relayed to another phone, never part of a mesh transmission, and never shown to
+> a helper. Nothing else is recorded and nothing else is kept.
 
 ---
 

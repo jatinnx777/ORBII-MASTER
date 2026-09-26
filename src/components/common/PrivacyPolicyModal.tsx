@@ -67,8 +67,22 @@ export function PrivacyPolicyModal({ visible, onAccept, onDecline }: Props) {
                 active{'\n'}
               • A timestamped record of each SOS you trigger (for your own
                 history){'\n'}
-              • Voice-detection runs on-device; the audio stays on your phone,
-                except any clip you explicitly choose to donate to help train ORBII
+              • Voice-detection runs on-device. That listening audio is never
+                stored and never uploaded, not by us and not on your phone{'\n'}
+              • A short clip recorded during an SOS, kept as evidence only. Only
+                you can read it, we delete it after 90 days, and you can delete it
+                sooner from the incident in your History{'\n'}
+              • Any clip you explicitly choose to donate to help train ORBII
+            </Text>
+
+            {/* Said positively and in one line, because the absence is the point:
+                the app holds the microphone open all day and this is the only
+                sentence that tells her what that does and does not produce. */}
+            <Text style={styles.body}>
+              {'\n'}Those are the only recordings that exist. Audio is kept as
+              evidence during an SOS and for nothing else: no ambient recording,
+              no background recording, no listening audio, nothing when you are
+              not in an emergency.
             </Text>
 
             <Text style={styles.sectionHeader}>How we use it</Text>

@@ -71,10 +71,24 @@ disclosed in the policy — you generally answer **No** to "shared" but you MUST
 describe the user-to-user visibility in the privacy policy (it is, in
 PRIVACY_POLICY.md §4).
 
-**DO NOT declare audio/voice as collected.** Voice detection and SOS recordings
-are processed and stored **only on the device and never sent off it**, so under
-Play's definition that audio is **not "collected."** (Don't over-declare — it
-must match reality, and reality is on-device only.)
+**DO declare audio as collected. The opposite instruction used to sit here and it
+was wrong.** It said SOS recordings never leave the device. They always have: every
+real SOS uploads the clip, plus a short pre-roll, to the private `sos-recordings`
+bucket. Following the old advice would have been a Data Safety misdeclaration,
+which is the kind Google removes apps for.
+
+The correct split, and say it this way:
+
+- **Voice-trigger listening: NOT collected.** Processed on-device, never uploaded,
+  never stored, not even on the phone. Under Play's definition that is not
+  collection.
+- **SOS clip: COLLECTED.** Audio → Voice or sound recordings. Shared: No. Optional
+  (denying the microphone stops it and the app still works). Purpose: App
+  functionality. Retention: 90 days, enforced by `purge-sos-audio` (sql/149), and
+  the owner can delete it sooner from History.
+
+PLAY_CONSOLE_ANSWERS.md already had this right. This file was the one that
+disagreed.
 
 ---
 
@@ -86,7 +100,9 @@ must match reality, and reality is on-device only.)
 - **Foreground service:** declare the **microphone** foreground service. Use
   case: *"User-initiated, opt-in voice-activated emergency SOS. The app listens
   on-device for the user's chosen safety phrase and triggers an emergency alert.
-  No audio leaves the device."*
+  The listening audio is never uploaded or stored. During an active SOS only, a
+  short clip is uploaded to private storage the user alone can read, as evidence,
+  and is deleted after 90 days."*
 - **Full-screen intent (`USE_FULL_SCREEN_INTENT`):** *"To show the SOS countdown
   over the lock screen when a voice trigger fires, so the user can cancel or let
   it dispatch without unlocking."*
@@ -99,8 +115,12 @@ must match reality, and reality is on-device only.)
 through the system composer). Nothing to declare.
 
 **`RECORD_AUDIO` + microphone foreground service:**
-> Used only for opt-in, on-device voice-activated SOS. Audio is never recorded
-> to a server or shared. The user explicitly enables Voice SOS.
+> Used for opt-in voice-activated SOS. Trigger-word detection runs entirely
+> on-device and that audio is never uploaded or stored. During an active SOS the
+> app records a short clip and uploads it to a private bucket readable only by the
+> user who raised it, as evidence; it is deleted after 90 days and the user can
+> delete it sooner. Audio is kept for that purpose and no other: no ambient
+> recording, nothing between emergencies. The user explicitly enables Voice SOS.
 
 ---
 

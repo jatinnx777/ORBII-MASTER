@@ -64,8 +64,8 @@ this is the university's duty of care, and you are handing them a way to meet it
 
 ## 3. What ORBII is — 30 seconds
 
-> "ORBII listens for the word 'help.' On the phone itself. The audio never leaves
-> the device, never touches a server, never gets sold, because it never goes
+> "ORBII listens for the word 'help.' On the phone itself. That listening never
+> leaves the device, never touches a server, never gets sold, because it never goes
 > anywhere. She says 'help,' and a ten-second countdown starts so a false alarm is
 > one tap to cancel. If she doesn't cancel, her circle gets her live location,
 > every ORBII user nearby gets a full-screen alert, and her phone starts recording

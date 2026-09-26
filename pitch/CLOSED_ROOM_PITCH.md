@@ -51,8 +51,8 @@ line that makes this their project, not a vendor's. Pause after it.]
 ## 2. What it does (keep it to 30 seconds, concrete)
 
 > "Here's the whole thing. She says 'help.' The phone hears it on the device
-> itself, the audio never leaves the phone, never touches a server, never gets
-> sold. A ten-second countdown starts, so a false alarm is one tap to cancel. If
+> itself. The listening never leaves the phone, never touches a server, never
+> gets sold. A ten-second countdown starts, so a false alarm is one tap to cancel. If
 > she doesn't cancel, her chosen circle gets her live location, every ORBII user
 > nearby gets a full-screen alert, and the phone starts recording. She never
 > touched the screen.

@@ -26,6 +26,10 @@ which we ask for clearly during sign-up and which you can withdraw at any time.
 - **A short clip recorded during an active SOS is uploaded** to private storage
   that only you can read, so that evidence survives if your phone does not. It
   is deleted after 90 days, and you can delete it sooner.
+- **That clip is the only audio we keep, and only as evidence of an SOS.**
+  Nothing else is recorded and nothing else is kept: no ambient audio, no
+  background recording, no listening audio, nothing at all when you are not in
+  an emergency.
 - During an SOS, your name and live location are shown to the people you chose
   (your circle / emergency contacts) and to nearby ORBII users who can help.
 - We never sell your data, and we don't use it for advertising.
@@ -70,6 +74,12 @@ described them as one. We have separated them because the difference matters.
     shared with anyone unless you share it or we are legally compelled.
   - You can stop it entirely by denying the microphone permission. Voice SOS
     stops working too; every other safety feature keeps working.
+
+**Those two are the whole picture, and the second one is the only audio we hold.**
+We keep audio as evidence of an SOS and for no other reason. There is no ambient
+recording, no background recording, no recording when the app is simply open, no
+recording between emergencies, and nothing kept from the listening that Voice SOS
+does all day. If you never fire an SOS, we hold no audio of you at all.
 
 > **We got this wrong before, and we would rather say so than quietly change it.**
 > Until 26 September 2026 this policy said all SOS audio stayed on your device.

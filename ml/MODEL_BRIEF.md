@@ -172,7 +172,10 @@ prove the training data is legally clean for a shipping product.
 
 ## 11. Ground rules (non-negotiable, this is a safety product)
 
-- **On-device and offline. Always.** Audio never leaves the phone.
+- **On-device and offline. Always.** The model runs on the phone and the audio it
+  listens to is never uploaded and never stored. (Separate from the model: during
+  an SOS the app uploads a short clip as evidence, kept 90 days. That is a product
+  decision, not an inference path, and nothing in this brief sends audio anywhere.)
 - **₹0 budget.** Free tools and free/licence-clean data only.
 - **Low false positives.** It is better to occasionally miss a word than to fire
   during normal conversation. When in doubt, tune toward fewer false alarms and

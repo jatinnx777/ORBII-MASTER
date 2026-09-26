@@ -182,7 +182,8 @@ Play Console → App content → **Full-screen intent permission**. Justify:
 > and Premium users also alert verified responders nearby.
 >
 > • Hands-free Voice SOS — say your phrase, help is triggered. Works offline;
->   the listening happens on your device and audio is never uploaded.
+>   the listening happens on your device and is never uploaded. Audio is kept only
+>   as evidence during an SOS, and deleted after 90 days.
 > • Live location to your trusted circle during an emergency.
 > • Verified responders (Premium) — real, ID-verified people near you.
 > • Safe Journey — share your trip and get help if you go off-route.

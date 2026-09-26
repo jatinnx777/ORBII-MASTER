@@ -79,7 +79,7 @@ trustworthy. Now you deliver both.]
 > "So we asked one question. What if the phone just... listened. And what if it
 > never sent a single second of that anywhere.
 >
-> ORBII listens for the word. On the phone itself. The audio never leaves the
+> ORBII listens for the word. On the phone itself. That listening never leaves the
 > device, never touches a server, never gets sold, because it never goes anywhere.
 > She says 'help,' and her phone, which was useless a second ago, becomes the
 > fastest way to get help she has."
@@ -270,7 +270,7 @@ down.]
 **The 30-second version (if you only get one breath):**
 > "Every women's safety app has the same flaw: it needs her to reach her phone in
 > the one moment she can't. ORBII gets rid of the button. It listens for the word
-> 'help,' entirely on the device so her audio is never uploaded or sold, and the
+> 'help,' entirely on the device so nothing is uploaded while it listens, and the
 > second she says it, her circle and nearby ORBII members get her live location
 > hands-free. It even works with no internet, the alert hops phone to phone over
 > Bluetooth. Free for every woman; a paid verified-responder network on top. I'm
@@ -341,8 +341,14 @@ first, scale second.
   location feed, no data handover, by design and in writing. It's what lets an
   institution buy safety from us without us becoming Life360.
 - **The one-liner if they probe compliance:** "We built privacy-first on purpose.
-  The audio never leaves the phone, and we never sell location. That's not just
+  The listening never leaves the phone, we keep audio only as evidence of an SOS
+  and delete it after ninety days, and we never sell location. That's not just
   ethics, it's our legal moat and the opposite of why people distrust Life360."
+
+  **Do not shorten that to "the audio never leaves the phone."** It is not true of
+  the SOS clip, which is uploaded on every real SOS. An investor who diligences
+  the code finds `uploadSosRecording` in ten minutes, and the cost of being caught
+  overstating one privacy claim is every other claim in this deck.
 - **If they ask about the offline / Bluetooth features:** be straight. "They're
   built and in the app, and I'm field-testing them now on real phones. The offline
   relay hops the SOS phone to phone over Bluetooth, and everything passed between

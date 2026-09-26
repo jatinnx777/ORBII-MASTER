@@ -8,7 +8,16 @@ Everything you need to start. Read it once, keep it, ask if anything is unclear.
 
 ORBII is a women's safety app built in India. The thing people notice first is
 **hands-free Voice SOS**: you say a word and your phone raises an alarm without
-you touching it. It listens on your phone, so your voice never leaves the device.
+you touching it. The listening happens on your phone, so nothing is uploaded while
+it waits for the word.
+
+**Say this accurately, because people will ask.** The listening audio is never
+stored or uploaded. During an SOS itself, a short clip is saved as evidence to
+storage only she can read, deleted after 90 days, and she can delete it sooner.
+That clip is the only audio ORBII keeps, and it is kept only as evidence of an
+SOS. Do not say "your audio never leaves your phone" — it is not true of the SOS
+clip, and being caught overstating a privacy claim costs more than the claim ever
+bought.
 
 When it fires, your trusted circle gets your live location, nearby ORBII users
 are alerted, and 112 stays one tap away.

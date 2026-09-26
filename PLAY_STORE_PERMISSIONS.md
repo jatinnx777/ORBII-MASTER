@@ -99,9 +99,11 @@ understand why a safety app holds background mic.
 - **Sensitive permissions form:** You will be asked to justify background
   location and microphone in a short text box. Reuse this:
 
-  > ORBII is a personal safety app. Background microphone is used only to detect
-  > the user's hands-free SOS trigger word, processed entirely on-device; the
-  > audio is never recorded or uploaded. Background location is shared with the
+  > ORBII is a personal safety app. Background microphone is used to detect the
+  > user's hands-free SOS trigger word, processed entirely on-device; that
+  > listening audio is never recorded or uploaded. During an active SOS only, a
+  > short clip is uploaded to a private bucket readable only by the user who
+  > raised it, as evidence, and deleted after 90 days. Background location is shared with the
   > user's own trusted contacts only during an active SOS event so help can reach
   > them. Neither permission is used for tracking, advertising, or any purpose
   > beyond the core safety feature. On-device processing is documented in our

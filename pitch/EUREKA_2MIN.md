@@ -59,8 +59,10 @@ Slow down for that last line. Pause after it.
 
 ### Slide 3 — what happens · 0:42 to 1:07
 
-> "She says help. Her phone hears it on the device itself. The audio never leaves
-> the phone, never touches a server, never gets sold, because we never have it.
+> "She says help. Her phone hears it on the device itself. That listening never
+> leaves the phone, never touches a server, never gets sold, because we never have
+> it. The only audio we ever hold is the clip from the emergency itself, kept as
+> evidence, deleted after ninety days.
 >
 > Ten second countdown, so a false alarm is one tap to cancel. If she doesn't
 > cancel: her circle gets her live location, verified helpers near her are

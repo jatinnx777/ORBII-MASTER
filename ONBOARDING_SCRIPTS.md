@@ -291,6 +291,15 @@ the alarm. The `sos-recordings` bucket has owner-only read, write, update and
 delete policies and no admin policy, so "your account opens it, nobody else" is
 literally what is enforced. Video is genuinely never uploaded.
 
+**Two things to add, both now true and both worth saying out loud.** Our copy is
+**deleted after 90 days** (`purge-sos-audio`), and she can delete it herself from
+the incident in her History. And the scope: audio is kept **only as evidence of an
+SOS** and for nothing else — no ambient recording, no background recording,
+nothing between emergencies, nothing kept from the listening. If she never fires
+an SOS, ORBII holds no audio of her at all. That sentence answers the question
+people actually have, which is not "where is it stored" but "is it listening to
+me".
+
 **Do not say "only accessed when our legal team needs it."** It is weaker and
 scarier than the truth: it tells her ORBII does look sometimes, and it invents a
 legal team that does not exist. What is written above is both stronger and true.

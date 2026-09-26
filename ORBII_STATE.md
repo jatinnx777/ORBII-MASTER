@@ -21,8 +21,14 @@ functions + realtime, free tier. Both apps use it.
 
 A women's safety app for India whose thesis is **get rid of the button**. She says
 "help" out loud and the phone acts, hands-free. Voice listening runs on-device;
-audio never leaves the phone, never hits a server, is never sold. That is the
-anti-Life360 stance and it is the product's spine, not marketing.
+that listening audio never leaves the phone, never hits a server, is never sold.
+That is the anti-Life360 stance and it is the product's spine, not marketing.
+
+**Say it with the qualifier, always.** During an SOS a short clip IS uploaded, to
+storage only she can read, as evidence, deleted after 90 days. Audio is kept only
+as evidence of an SOS and for nothing else. The unqualified line "audio never
+leaves the phone" was in the policy until 26 Sep 2026 and it was false; see
+sql/149.
 
 Free for safety. Paid for guaranteed verified response.
 
